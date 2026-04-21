@@ -558,7 +558,7 @@ class SolverAgent(BaseAgent):
             else:
                 # 执行失败但已修正多次
                 sol_result["execution_success"] = False
-                sol_result["execution_attempts"] = exec_info.get("attempts", MAX_EXEC_RETRIES)
+                sol_result["execution_attempts"] = exec_info.get("attempts", 3)
                 sol_result["execution_error"] = exec_info.get("error", "执行失败")
                 sol_result["code_files"] = [{
                     "filename": f"solver_sub{sp_id}.py",
@@ -738,7 +738,7 @@ class SolverAgent(BaseAgent):
             logger.info(f"SolverAgent[{sp_name}] 执行成功（尝试{exec_info.get('attempts')}次）")
         else:
             result["execution_success"] = False
-            result["execution_attempts"] = exec_info.get("attempts", MAX_EXEC_RETRIES)
+            result["execution_attempts"] = exec_info.get("attempts", 3)
             result["execution_error"] = exec_info.get("error", "")
             result["code_files"] = [{
                 "filename": f"solver_sub{sub_idx+1}.py",

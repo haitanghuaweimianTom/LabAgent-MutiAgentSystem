@@ -35,6 +35,9 @@ router = APIRouter(prefix="/tasks", tags=["任务管理"])
 _orchestrator = None
 DATA_DIR: Path = get_data_dir()  # 使用统一的路径管理
 
+# 项目根目录（E:/cherryClaw/math_modeling_multi_agent/）
+PROJECT_ROOT: Path = DATA_DIR.parent.parent.parent  # backend/data/uploads → backend/data → backend → 项目根
+
 
 def reset_orchestrator() -> None:
     """重置Orchestrator，下次调用时会用最新的API密钥重新初始化"""
@@ -103,10 +106,30 @@ def get_orchestrator() -> Orchestrator:
 
 
 def get_uploaded_files() -> list:
-    """获取已上传的数据文件路径"""
-    if not DATA_DIR.exists():
-        return []
-    return [str(f) for f in DATA_DIR.iterdir() if f.is_file()]
+    """获取已上传的数据文件路径（从 uploads 目录和项目根目录）"""
+    files = []
+
+    # 1. 从 uploads 目录获取
+    if DATA_DIR.exists():
+        files.extend([str(f) for f in DATA_DIR.iterdir() if f.is_file()])
+
+    # 2. 从项目根目录获取（附件1-4.xlsx 等数据文件）
+    if PROJECT_ROOT.exists():
+        for f in PROJECT_ROOT.iterdir():
+            if f.is_file() and f.suffix in [".xlsx", ".xls", ".csv", ".json"]:
+                # 跳过非数据文件
+                if f.name.startswith("附件") or f.name in ["data.json", "problem.json"]:
+                    files.append(str(f))
+
+    # 去重
+    seen = set()
+    unique_files = []
+    for fp in files:
+        if fp not in seen:
+            seen.add(fp)
+            unique_files.append(fp)
+
+    return unique_files
 
 
 @router.post("/submit")

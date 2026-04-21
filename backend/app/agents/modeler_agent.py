@@ -1,9 +1,10 @@
-"""建模Agent - 建立数学模型（支持批量建模）
+"""建模Agent - 建立数学模型（支持批量建模 + Claude Code 代码生成）
 
 参考 math_modeling_paper_system 的结构化建模：
-- 内置模型模板（优化类/预测类/评价类/网络类）
+- 内置模型模板（优化类/预测类/评价类/网络类/物理类）
 - _build_all_models：一次性为所有子问题建模
 - _smart_template_fallback：智能选择模板兜底
+- _generate_model_code：使用 Claude Code 生成模型验证/分析代码
 """
 
 import json
@@ -13,13 +14,13 @@ from .base import BaseAgent, AgentFactory
 
 logger = logging.getLogger(__name__)
 
-# 模型模板库
+# 模型模板库（包含物理类模型用于 SiC 厚度测量问题）
 MODEL_TEMPLATES = {
     "physics": {
         "interference_thickness": {
             "name": "双光束干涉厚度模型",
             "description": "基于红外薄膜干涉原理，通过反射光谱干涉条纹确定外延层厚度",
-            "formula": "2·d·√(n(ν)² - sin²θ₀) = m/ν  （干涉极小条件）",
+            "formula": r"2 \cdot d \cdot \sqrt{n(\nu)^2 - \sin^2\theta_0} = \frac{m}{\nu}",
             "constraints_note": "干涉条件 + 斯涅尔定律 + 半波损失",
             "algorithm": "FFT频域分析 + 非线性最小二乘拟合",
             "variables": [
@@ -27,11 +28,12 @@ MODEL_TEMPLATES = {
                 "n(ν): 外延层折射率(波数函数)",
                 "m: 干涉级次(整数)",
             ],
+            "code_hints": "peak_detection_fft",
         },
         "multi_beam_interference": {
             "name": "多光束干涉模型(Airy公式)",
             "description": "考虑多次反射透射的高阶干涉效应，使用Airy公式描述多光束干涉",
-            "formula": "R(λ) = (R1+R2-2√(R1R2)cosδ)/(1+R1R2-2√(R1R2)cosδ), δ=4πndcosθ/λ",
+            "formula": r"R = \frac{R_1 + R_2 - 2\sqrt{R_1 R_2}\cos\delta}{1 + R_1 R_2 - 2\sqrt{R_1 R_2}\cos\delta}, \delta = \frac{4\pi n d \cos\theta}{\lambda}",
             "constraints_note": "高反射率界面条件 + 多束相位叠加",
             "algorithm": "Airy公式拟合 + 全局优化算法",
             "variables": [
@@ -39,14 +41,16 @@ MODEL_TEMPLATES = {
                 "n: 外延层等效折射率",
                 "R1,R2: 界面反射率",
             ],
+            "code_hints": "airy_formula_fit",
         },
         "sensitivity_analysis": {
             "name": "灵敏度分析与稳健性评估",
             "description": "分析入射角、折射率等参数扰动对厚度计算的影响",
-            "formula": "S_i = (Δd/d)/(Δp_i/p_i)  灵敏度系数",
+            "formula": r"S_i = \frac{\Delta d / d}{\Delta p_i / p_i}",
             "constraints_note": "参数扰动范围 + 物理约束",
             "algorithm": "One-at-a-Time + Sobol全局敏感性分析",
             "variables": ["Δd: 厚度变化", "p_i: 输入参数(入射角/折射率等)"],
+            "code_hints": "sensitivity_oat",
         },
     },
     "optimization": {
@@ -57,6 +61,7 @@ MODEL_TEMPLATES = {
             "constraints_note": "线性不等式约束 + 非负约束",
             "algorithm": "单纯形法 / scipy.optimize.linprog",
             "variables": ["x_j: 第j个决策变量(连续)"],
+            "code_hints": "linear_programming",
         },
         "integer_programming": {
             "name": "整数规划",
@@ -65,6 +70,7 @@ MODEL_TEMPLATES = {
             "constraints_note": "整数约束 + 非负约束",
             "algorithm": "分支定界法 / PuLP",
             "variables": ["x_j ∈ Z+: 第j个整数决策变量"],
+            "code_hints": "integer_programming",
         },
         "stochastic_optimization": {
             "name": "随机规划/库存优化（报童模型）",
@@ -73,6 +79,7 @@ MODEL_TEMPLATES = {
             "constraints_note": "需求量约束 + 库存容量约束 + 保质期约束",
             "algorithm": "蒙特卡洛模拟 / 随机规划求解器",
             "variables": ["q_i: 第i种蔬菜的订货量", "d_i ~ N(μ_i, σ_i): 随机需求量", "s_i: 缺货成本系数"],
+            "code_hints": "newsvendor_monte_carlo",
         },
         "nonlinear_programming": {
             "name": "非线性规划",
@@ -81,6 +88,7 @@ MODEL_TEMPLATES = {
             "constraints_note": "非线性约束",
             "algorithm": "SLSQP / 内点法",
             "variables": ["x: 决策向量(连续)"],
+            "code_hints": "nonlinear_programming",
         },
     },
     "prediction": {
@@ -91,6 +99,7 @@ MODEL_TEMPLATES = {
             "constraints_note": "平稳性假设 + 正态分布误差",
             "algorithm": "statsmodels.tsa.arima.ARIMA / pmdarima.auto_arima",
             "variables": ["Y_t: t时刻的值", "ε_t: 白噪声"],
+            "code_hints": "arima_forecast",
         },
         "prophet": {
             "name": "Prophet时间序列预测",
@@ -99,6 +108,7 @@ MODEL_TEMPLATES = {
             "constraints_note": "趋势+季节性+节假日效应分解",
             "algorithm": "Prophet / statsmodels",
             "variables": ["g(t): 趋势函数", "s(t): 季节性函数", "h(t): 节假日效应"],
+            "code_hints": "prophet_forecast",
         },
         "neural_network": {
             "name": "LSTM神经网络预测",
@@ -107,6 +117,7 @@ MODEL_TEMPLATES = {
             "constraints_note": "数据标准化 + 时序数据划分",
             "algorithm": "PyTorch / Keras LSTM / sklearn.MLPRegressor",
             "variables": ["x_t: t时刻输入特征", "h_t: t时刻隐藏状态", "y_hat: 预测值"],
+            "code_hints": "lstm_forecast",
         },
         "regression": {
             "name": "多元回归分析",
@@ -115,6 +126,7 @@ MODEL_TEMPLATES = {
             "constraints_note": "线性假设 + 独立性假设",
             "algorithm": "最小二乘法 / sklearn.linear_model",
             "variables": ["Y: 因变量", "X_j: 第j个自变量", "β_j: 回归系数"],
+            "code_hints": "linear_regression",
         },
     },
     "evaluation": {
@@ -125,6 +137,7 @@ MODEL_TEMPLATES = {
             "constraints_note": "判断矩阵一致性检验",
             "algorithm": "特征值法 / 一致性检验",
             "variables": ["w_i: 各层指标的权重", "λ_max: 判断矩阵最大特征值"],
+            "code_hints": "ahp_analysis",
         },
         "entropy_weight": {
             "name": "熵权法",
@@ -133,6 +146,7 @@ MODEL_TEMPLATES = {
             "constraints_note": "数据归一化处理",
             "algorithm": "信息熵计算 / pandas",
             "variables": ["w_i: 第i个指标的熵权"],
+            "code_hints": "entropy_weight",
         },
         "topsis": {
             "name": "TOPSIS综合评价",
@@ -141,6 +155,7 @@ MODEL_TEMPLATES = {
             "constraints_note": "指标标准化 + 权重确定",
             "algorithm": "距离计算 / numpy.linalg.norm",
             "variables": ["D_i_plus: 到正理想解距离", "D_i_minus: 到负理想解距离", "C_i: 贴近度"],
+            "code_hints": "topsis_evaluate",
         },
     },
     "sensitivity": {
@@ -151,6 +166,7 @@ MODEL_TEMPLATES = {
             "constraints_note": "参数扰动实验设计",
             "algorithm": "One-at-a-Time / Sobol指数 / Monte Carlo",
             "variables": ["Δp_i: 参数i的扰动量", "ΔZ: 目标函数变化量"],
+            "code_hints": "sensitivity_oat",
         },
     },
     "classification": {
@@ -161,6 +177,7 @@ MODEL_TEMPLATES = {
             "constraints_note": "核函数选择 + 正则化参数",
             "algorithm": "SMO算法 / sklearn.svm",
             "variables": ["x: 输入特征向量", "y: 类别标签"],
+            "code_hints": "svm_classify",
         },
     },
 }
@@ -561,6 +578,75 @@ class ModelerAgent(BaseAgent):
 6. 模型假设、优点、局限性
 
 重要：必须为每个子问题建立独立的、针对性的模型，不能泛泛而谈！"""
+
+    async def _generate_model_code(
+        self,
+        model: Dict[str, Any],
+        data_context: str,
+        problem_text: str,
+        sp_id: int = 1,
+    ) -> Dict[str, Any]:
+        """
+        使用 Claude Code 生成模型验证/分析代码。
+
+        对于物理类问题（如 SiC 外延层厚度测量），生成：
+        - 数据预处理代码（加载 Excel、滤波）
+        - 干涉峰检测代码
+        - 厚度计算代码（FFT 频域分析或 Airy 公式拟合）
+        - 可视化代码
+        """
+        model_type = model.get("model_type", "")
+        model_name = model.get("model_name", "")
+        code_hints = model.get("code_hints", "")
+
+        # 构建任务描述
+        task_description = f"""请为以下数学建模问题生成数据处理和模型验证代码。
+
+## 问题背景
+{problem_text}
+
+## 模型信息
+- 模型类型：{model_type}
+- 模型名称：{model_name}
+- 算法：{model.get('algorithm', {}).get('name', '') if isinstance(model.get('algorithm'), dict) else ''}
+- 目标函数：{model.get('objective_function', '')}
+
+## 数据文件
+{data_context}
+
+## 代码要求
+1. 使用 Python，依赖：numpy, scipy, pandas, openpyxl, matplotlib
+2. 读取 Excel 数据文件（使用 openpyxl 或 pandas read_excel）
+3. 实现完整的{code_hints or model_name}算法
+4. 生成可视化图表
+5. 代码末尾用 json.dumps() 输出结果 JSON
+
+## 输出格式（必须为 JSON，不要有任何其他文字）
+{{
+    "code": "完整 Python 代码（包含所有 import，末尾用 json.dumps 打印结果）",
+    "file_path": "E:/cherryClaw/math_modeling_multi_agent/output/code/model_validation_sp{sp_id}.py",
+    "key_steps": ["步骤1", "步骤2"],
+    "expected_output": "输出描述"
+}}"""
+
+        try:
+            coder_result = await self._call_claude_coder(
+                task_description=task_description,
+                system_instruction="你是一个专业的算法工程师，擅长用 Python 实现数学模型的验证代码。",
+                workspace_dir=None,
+                timeout=300,
+            )
+            return {
+                "success": coder_result.get("success", False),
+                "code": coder_result.get("code", ""),
+                "file_path": coder_result.get("file_path", ""),
+                "execution_output": coder_result.get("execution_output", ""),
+                "key_findings": coder_result.get("key_findings", []),
+                "numerical_results": coder_result.get("numerical_results", {}),
+            }
+        except Exception as e:
+            logger.error(f"ModelerAgent._generate_model_code failed: {e}")
+            return {"success": False, "error": str(e)}
 
     def _smart_template_fallback(self, sub_problem: Dict, suggested_method: str, problem_type: str) -> Dict[str, Any]:
         sub_desc = sub_problem.get("description", "")
