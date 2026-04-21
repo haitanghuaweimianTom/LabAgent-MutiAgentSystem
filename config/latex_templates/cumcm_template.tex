@@ -1,0 +1,243 @@
+\documentclass[12pt,a4paper]{article}
+
+\usepackage{xeCJK}
+\usepackage{fontspec}
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{color}
+\usepackage{float}
+
+% 页面设置
+\geometry{left=2.5cm,right=2.5cm,top=2.5cm,bottom=2.5cm}
+
+% 标题设置
+\title{\LARGE\bfseries 论文标题}
+
+% 作者信息
+\author{作者姓名 \\ 所在单位 \\ 联系邮箱}
+
+% 日期
+\date{\today}
+
+\begin{document}
+
+% 生成标题
+\maketitle
+
+% 摘要
+\begin{abstract}
+此处填写摘要内容。摘要应该包括问题的简要描述、采用的主要方法、得到的主要结论等。摘要的字数一般为300-500字。
+\\[2mm]
+\textbf{关键词}: 关键词1；关键词2；关键词3；关键词4；关键词5
+\end{abstract}
+
+% 1. 问题重述
+\section{问题重述}
+
+\subsection{研究背景}
+此处填写研究背景。
+
+\subsection{问题要求}
+此处填写问题要求。
+
+\subsection{问题特点}
+此处填写问题特点。
+
+% 2. 问题分析
+\section{问题分析}
+
+\subsection{总体分析}
+此处填写总体分析。
+
+\subsection{求解流程图}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{flowchart.png}
+\caption{求解流程图}
+\end{figure}
+
+\subsection{子问题分析}
+此处填写各子问题的分析。
+
+% 3. 模型假设与符号说明
+\section{模型假设与符号说明}
+
+\subsection{模型假设}
+\begin{enumerate}
+\item 假设1：...
+\item 假设2：...
+\end{enumerate}
+
+\subsection{符号说明}
+\begin{table}[H]
+\centering
+\begin{tabular}{ccp{8cm}}
+\toprule
+符号 & 意义 & 说明 \\
+\midrule
+$x$ & 变量1 & ... \\
+$y$ & 变量2 & ... \\
+$z$ & 变量3 & ... \\
+\bottomrule
+\end{tabular}
+\caption{符号说明表}
+\end{table}
+
+% 4. 模型建立
+\section{模型建立}
+
+\subsection{模型概述}
+此处填写模型概述。
+
+\subsection{子模型1}
+此处填写子模型1的详细建立过程。
+
+\subsubsection{建模思路}
+...
+
+\subsubsection{目标函数}
+\begin{equation}
+\max \sum_{i=1}^{n} c_i x_i
+\end{equation}
+
+\subsubsection{约束条件}
+\begin{align}
+&\sum_{j=1}^{n} a_{ij} x_j \leq b_i, \quad i = 1,2,\dots,m \\
+&x_j \geq 0, \quad j = 1,2,\dots,n
+\end{align}
+
+% 5. 模型求解
+\section{模型求解}
+
+\subsection{求解方法概述}
+此处填写求解方法概述。
+
+\subsection{算法设计}
+此处填写算法设计。
+
+\subsection{算法伪代码}
+\begin 算法~\ref{alg:example}:
+\begin{enumerate}
+\item 步骤1
+\item 步骤2
+\item 步骤3
+\end{enumerate}
+
+\subsection{程序实现}
+此处填写程序实现的主要代码。
+
+% 6. 结果分析
+\section{结果分析}
+
+\subsection{主要结果}
+此处填写主要结果。
+
+\subsection{结果表格}
+\begin{table}[H]
+\centering
+\begin{tabular}{cccc}
+\toprule
+方案 & 指标1 & 指标2 & 指标3 \\
+\midrule
+方案A &  &  &  \\
+方案B &  &  &  \\
+方案C &  &  &  \\
+\bottomrule
+\end{tabular}
+\caption{结果对比表}
+\end{table}
+
+\subsection{结果分析}
+此处填写结果分析。
+
+\subsection{可视化分析}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{result.png}
+\caption{结果可视化}
+\end{figure}
+
+% 7. 灵敏度分析
+\section{灵敏度分析}
+
+\subsection{分析目的}
+此处填写灵敏度分析的目的。
+
+\subsection{单参数分析}
+此处填写单参数分析结果。
+
+\subsection{参数影响分析}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\textwidth]{sensitivity.png}
+\caption{灵敏度分析曲线}
+\end{figure}
+
+% 8. 模型评价
+\section{模型评价}
+
+\subsection{模型优点}
+\begin{enumerate}
+\item 优点1：...
+\item 优点2：...
+\end{enumerate}
+
+\subsection{模型缺点}
+\begin{enumerate}
+\item 缺点1：...
+\item 缺点2：...
+\end{enumerate}
+
+\subsection{适用范围}
+此处填写模型的适用范围。
+
+\subsection{与现有方法比较}
+此处填写与其他方法的比较。
+
+% 9. 结论与展望
+\section{结论与展望}
+
+\subsection{研究总结}
+此处填写研究总结。
+
+\subsection{主要结论}
+此处填写主要结论。
+
+\subsection{研究意义}
+此处填写研究意义。
+
+\subsection{未来展望}
+此处填写未来展望。
+
+% 10. 参考文献
+\section{参考文献}
+
+\begin{thebibliography}{99}
+\addcontentsline{toc}{section}{参考文献}
+
+bibitem{1} 作者1. 题目1[J]. 期刊名称, 年份, 卷(期): 页码.
+
+bibitem{2} 作者2. 题目2[M]. 出版地: 出版社, 年份.
+
+bibitem{3} 作者3. 题目3[R]. 报告编号, 年份.
+
+\end{thebibliography}
+
+% 附录
+\newpage
+\appendix
+\section{附录A：完整代码}
+
+\begin{lstlisting}[language=Python]
+# 代码内容
+print("Hello World")
+\end{lstlisting}
+
+\end{document}

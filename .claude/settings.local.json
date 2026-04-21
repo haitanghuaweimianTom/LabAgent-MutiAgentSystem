@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Write(output/code/**)",
+      "Read(output/**)",
+      "Bash(python:*)",
+      "Bash(powershell:*)",
+      "Bash(conda run*)",
+      "Read(output/**)",
+      "Bash(rm -rf .git)",
+      "Bash(git init *)",
+      "Bash(git remote *)",
+      "Bash(git fetch *)",
+      "Bash(git checkout *)"
+    ]
+  }
+}

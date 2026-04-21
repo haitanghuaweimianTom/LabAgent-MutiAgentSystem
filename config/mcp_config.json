@@ -1,0 +1,66 @@
+{
+  "mcpServers": {
+    "bing_search": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+      "env": {
+        "BRAVE_API_KEY": ""
+      }
+    },
+    "exa_web_search": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-exa"],
+      "env": {
+        "EXA_API_KEY": ""
+      }
+    },
+    "arxiv_papers": {
+      "command": "npx",
+      "args": ["-y", "@arxiv/mcp-server-arxiv"],
+      "env": {}
+    },
+    "sequential_thinking": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"],
+      "env": {}
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "./workspace"],
+      "env": {}
+    }
+  },
+  "tools": {
+    "bing_search": {
+      "server": "bing_search",
+      "description": "Bing网页搜索工具，用于搜索数学建模相关资料"
+    },
+    "web_search": {
+      "server": "exa_web_search",
+      "description": "网页搜索工具，用于搜索学术资料和最新研究"
+    },
+    "paper_search": {
+      "server": "arxiv_papers",
+      "description": "arXiv论文搜索工具，用于搜索学术论文"
+    },
+    "sequentialthinking": {
+      "server": "sequential_thinking",
+      "description": "链式思考工具，用于逐步深入分析复杂问题"
+    },
+    "file_read": {
+      "server": "filesystem",
+      "description": "读取文件内容"
+    },
+    "file_write": {
+      "server": "filesystem",
+      "description": "写入文件内容"
+    }
+  },
+  "agent_tools": {
+    "analyzer_agent": ["web_search", "bing_search", "sequentialthinking", "paper_search"],
+    "modeler_agent": ["sequentialthinking", "web_search", "paper_search"],
+    "solver_agent": ["file_read", "file_write", "web_search"],
+    "research_agent": ["web_search", "bing_search", "paper_search"],
+    "writer_agent": ["file_read", "file_write", "web_search"]
+  }
+}

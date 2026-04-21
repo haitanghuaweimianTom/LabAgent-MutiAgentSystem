@@ -1,0 +1,75 @@
+# 数学建模多Agent系统 - Docker Compose配置
+#
+# 启动方式:
+#   仅后端: docker-compose up -d backend
+#   完整服务: docker-compose up -d
+#   查看日志: docker-compose logs -f backend
+#
+# 前端为可选服务，仅在后端完成后端开发后构建
+version: "3.8"
+
+services:
+  # 后端API服务
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: math_agent_backend
+    ports:
+      - "8000:8000"
+    environment:
+      - MINIMAX_API_KEY=${MINIMAX_API_KEY:-}
+      - API_BASE_URL=${API_BASE_URL:-https://api.minimax.chat/v1}
+      - DEFAULT_MODEL=${DEFAULT_MODEL:-minimax-m2.7}
+      - DEBUG=${DEBUG:-false}
+      - PROJECT_ROOT=/app
+    volumes:
+      - ./backend/data:/app/backend/data
+      - ./output:/app/output
+    restart: unless-stopped
+    networks:
+      - agent_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 前端Web服务（可选，需要先构建前端）
+  # 前端构建步骤:
+  #   1. cd frontend && npm install && npm run build
+  #   2. docker-compose up -d
+  # 注释掉以下块以禁用前端服务:
+  # frontend:
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: Dockerfile
+  #   container_name: math_agent_frontend
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     - NEXT_PUBLIC_API_URL=http://backend:8000
+  #   depends_on:
+  #     - backend
+  #   restart: unless-stopped
+  #   networks:
+  #     - agent_network
+
+  # Redis缓存（可选，用于会话管理）
+  redis:
+    image: redis:7-alpine
+    container_name: math_agent_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - agent_network
+
+networks:
+  agent_network:
+    driver: bridge
+
+volumes:
+  redis_data:

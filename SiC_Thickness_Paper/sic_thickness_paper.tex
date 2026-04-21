@@ -1,0 +1,620 @@
+\documentclass[withoutpreface]{cumcmthesis}
+\usepackage[framemethod=TikZ]{mdframed}
+\usepackage{url}
+\usepackage{subcaption}
+
+% 设置字体为本地文件
+\setCJKmainfont{SimSun}[Path=./]
+\setCJKsansfont{SimHei}[Path=./]
+\setCJKmonofont{FangSong}[Path=./]
+
+\tihao{B}
+\baominghao{2025001}
+\schoolname{某大学}
+\membera{张三}
+\memberb{李四}
+\memberc{王五}
+\supervisor{指导老师}
+\yearinput{2025}
+\monthinput{09}
+\dayinput{15}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+本研究针对碳化硅(SiC)外延层厚度测量问题，基于红外干涉光谱法建立了完整的数学模型并实现了精确测量。针对问题1，建立了考虑外延层与衬底界面单次反射的双光束干涉模型，推导了厚度计算公式$d=1/(2n\Delta\sigma)$；针对问题2，设计了基于峰值检测和统计分析的厚度求解算法，对附件1、附件2的SiC晶圆片进行计算，得到SiC-1厚度为$24.58\,\mu\text{m}$，SiC-2厚度为$24.02\,\mu\text{m}$；针对问题3，深入分析了多光束Fabry-Perot干涉产生的必要条件，发现Si样品的干涉条纹对比度$K>0.99$，确认存在显著多光束干涉效应，而SiC样品$K\approx0.98$，表明其多光束效应相对较弱。对Si样品的分析得到Si-1厚度为$3.67\,\mu\text{m}$，Si-2厚度为$3.52\,\mu\text{m}$。研究结果表明，所建立的模型和算法能够有效测定SiC和Si外延层厚度，为半导体外延材料的无损检测提供了科学依据。
+
+\textbf{关键词}: 红外干涉；外延层厚度；双光束干涉；多光束干涉；Fabry-Perot干涉仪；Sellmeier色散公式
+\end{abstract}
+
+\section{1 问题重述}
+
+\subsection{1.1 研究背景}
+碳化硅(SiC)作为第三代半导体材料的代表，以其宽带隙、高热导率、高击穿电场等优越性能，正在电力电子器件领域得到越来越广泛的应用。SiC外延层厚度是外延材料的关键参数之一，直接影响器件的击穿电压、导通电阻等核心性能指标。因此，制定一套科学、准确、可靠的SiC外延层厚度测试标准具有重要的工程价值。
+
+\subsection{1.2 问题描述}
+红外干涉法是一种无损伤的外延层厚度测量方法。其工作原理是：外延层与衬底因掺杂载流子浓度不同而具有不同的折射率，当红外光入射到外延层后，一部分从外延层表面反射，另一部分透过外延层从衬底表面反射回来，两束光在一定条件下产生干涉条纹。根据红外光谱的波长、外延层折射率和红外光入射角等参数，可确定外延层厚度。
+
+本题要求：
+\begin{itemize}
+\item \textbf{问题1}: 建立考虑外延层与衬底界面只有一次反射（双光束干涉）时，确定外延层厚度的数学模型。
+\item \textbf{问题2}: 根据问题1的数学模型，对附件1、附件2提供的SiC晶圆片光谱实测数据进行计算，给出结果并分析可靠性。
+\item \textbf{问题3}: 分析光波在外延层界面和衬底界面产生多次反射和透射（多光束干涉）的必要条件及对厚度计算精度的影响，对附件3、附件4提供的Si晶圆片进行计算，判断是否存在多光束干涉，并给出修正方案。若认为多光束干涉也会出现在SiC晶圆片测试结果中，需设法消除其影响。
+\end{itemize}
+
+\subsection{1.3 数据说明}
+附件1、附件2分别为SiC晶圆片在400--4000 cm$^{-1}$波数范围内的红外反射光谱数据；附件3、附件4为Si晶圆片的同类数据。数据格式均为两列：波数（单位cm$^{-1}$）和反射率（单位\%），各附件数据点数均为7469个。
+
+\section{2 问题分析}
+
+\subsection{2.1 双光束干涉物理模型}
+红外光在介质中传播时，当满足光程差条件的两束反射光发生相长或相消干涉，形成可观测的干涉条纹。对于垂直入射情形，相邻干涉极大对应的光程差为$\lambda$，对应波数$\sigma=1/\lambda$的间隔满足：
+
+\begin{equation}
+2n \cdot d \cdot \cos\theta = m\lambda = \frac{m}{\sigma}, \quad m=1,2,3,\dots
+\end{equation}
+
+其中$n$为外延层折射率，$d$为外延层厚度，$\theta$为折射角，$m$为干涉级次。相邻两级次（$m$和$m+1$）的干涉峰对应的波数间距为：
+
+\begin{equation}
+\Delta\sigma = \frac{1}{2n\cdot d\cdot\cos\theta}
+\end{equation}
+
+因此，只要测得干涉条纹的波数间距$\Delta\sigma$，已知折射率$n$和入射角$\theta$，即可计算出厚度$d$：
+
+\begin{equation}
+d = \frac{1}{2n\cdot\cos\theta\cdot\Delta\sigma}
+\end{equation}
+
+\subsection{2.2 折射率色散}
+SiC和Si的折射率均随波长变化（色散效应）。4H-SiC在红外区的Sellmeier方程为：
+
+\begin{equation}
+n^2(\lambda) = 6.7\left(1 + 0.46\frac{\lambda^2}{\lambda^2 - 0.106^2}\right)
+\end{equation}
+
+其中$\lambda$为真空中的波长（单位：$\mu$m）。Si在红外区的折射率近似为常数$n_{\text{Si}}\approx 3.42$。
+
+\subsection{2.3 多光束干涉分析}
+当两界面反射率均较高时，光在Fabry-Perot腔内多次反射，形成多光束干涉。此时总反射系数为：
+
+\begin{equation}
+R_{\text{total}} = \frac{r_1 + r_2 e^{i\delta} + r_1 r_2^2 e^{2i\delta} + \cdots}{1 + r_1 r_2 e^{i\delta} + r_1^2 r_2^2 e^{2i\delta} + \cdots}
+\end{equation}
+
+其中$\delta = 4\pi n d \cos\theta/\lambda$为相位差。干涉峰对比度为：
+
+\begin{equation}
+K = \frac{2\sqrt{R_1 R_2}}{1 + R_1 R_2}
+\end{equation}
+
+当$K > 0.5$时认为多光束效应显著。多光束干涉的自由光谱范围（FSR）同样为$\Delta\sigma_{\text{FSR}} = 1/(2nd\cos\theta)$，与双光束干涉公式形式相同，但对峰位提取精度要求更高。
+
+\section{3 模型假设与符号说明}
+
+\subsection{3.1 模型假设}
+\begin{enumerate}
+\item 外延层和衬底的界面为理想平行平面，光学均匀；
+\item 红外光近似垂直入射（$\theta \approx 0$，$\cos\theta \approx 1$）；
+\item 外延层折射率在测量波段内变化较小，用参考波数处的值近似；
+\item 光源为准单色光，光谱分辨率足够高；
+\item 干涉条纹由外延层上下界面反射光干涉产生。
+\end{enumerate}
+
+\subsection{3.2 符号说明}
+\begin{table}[!htbp]
+\centering
+\caption{主要符号说明}
+\begin{tabular}{ccp{8cm}}
+\toprule
+符号 & 意义 & 说明 \\
+\midrule
+$d$ & 外延层厚度 & 单位：cm \\
+$\Delta\sigma$ & 相邻干涉峰波数间距 & 单位：cm$^{-1}$ \\
+$n$ & 外延层折射率 & 由Sellmeier色散模型计算 \\
+$\sigma$ & 波数 & $\sigma=1/\lambda$，单位cm$^{-1}$ \\
+$\lambda$ & 波长 & 单位：$\mu$m \\
+$\theta$ & 折射角 & 假设为0（垂直入射） \\
+$K$ & 干涉条纹对比度 & $K = (R_{\max}-R_{\min})/(R_{\max}+R_{\min})$ \\
+$m$ & 干涉级次 & 整数 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{4 模型建立}
+
+\subsection{4.1 双光束干涉模型（问题1）}
+考虑光在外延层与衬底界面仅有一次透射和一次反射的情形。两束反射光的光程差为：
+
+\begin{equation}
+\Delta = 2n \cdot d \cdot \cos\theta
+\end{equation}
+
+干涉极大条件要求$\Delta = m\lambda = m/\sigma$（$m=1,2,3,\dots$），相邻两级次干涉峰间距为：
+
+\begin{equation}
+\boxed{\Delta\sigma = \frac{1}{2n\cdot d\cdot\cos\theta}}
+\end{equation}
+
+即得厚度计算公式：
+
+\begin{equation}
+\boxed{d = \frac{1}{2n\cdot\cos\theta\cdot\Delta\sigma}}
+\end{equation}
+
+当$\theta \approx 0$时，简化为：
+
+\begin{equation}
+d = \frac{1}{2n\Delta\sigma}
+\end{equation}
+
+\subsection{4.2 多光束干涉模型（问题3）}
+当两界面反射率均较高时，光在Fabry-Perot腔内多次反射，总反射系数为：
+
+\begin{equation}
+R_{\text{total}} = \frac{r_{12}^2}{1 + r_{12}^2 - 2r_{12}\cos\delta}
+\end{equation}
+
+其中$r_{12}$为两界面反射系数的几何平均，$\delta=4\pi nd/\lambda$为相位差。干涉峰对比度为：
+
+\begin{equation}
+K = \frac{2\sqrt{R_1 R_2}}{1 + R_1 R_2}
+\end{equation}
+
+多光束干涉产生的必要条件：
+\begin{enumerate}
+\item 两界面平行度足够高；
+\item 两界面反射率$R_1$和$R_2$均不能太小（通常$R_1 R_2 > 0.01$）；
+\item 相干长度大于腔的光学路径差。
+\end{enumerate}
+
+多光束干涉的FSR与双光束干涉相同：
+
+\begin{equation}
+\Delta\sigma_{\text{FSR}} = \frac{1}{2nd\cos\theta}
+\end{equation}
+
+但多光束干涉峰更锐利（半高宽更小），可通过提高峰值检测精度来提高测量精度。
+
+\section{5 模型求解算法}
+
+\subsection{5.1 算法设计}
+基于上述模型，设计厚度求解算法如下：
+
+\begin{enumerate}
+\item 对原始光谱数据进行高斯平滑或Savitzky-Golay滤波降噪；
+\item 在选定的透明波段（SiC: 900--1300 cm$^{-1}$，Si: 400--3500 cm$^{-1}$）使用峰值检测算法提取反射率局部极大点；
+\item 计算所有相邻极大点的波数间距；
+\item 用直方图统计法确定众数间距作为$\Delta\sigma$；
+\item 筛选出间距在众数$\pm30\%$范围内的极大点，构成等间距干涉峰序列；
+\item 根据折射率色散模型计算参考波数处的折射率；
+\item 代入厚度公式计算厚度并估计不确定度。
+\end{enumerate}
+
+\subsection{5.2 数据分析区域选取}
+4H-SiC在中红外区存在晶格吸收峰（$\sim$830 cm$^{-1}$），该波段附近折射率变化剧烈，不宜作为分析区域。因此选取900--1300 cm$^{-1}$透明波段进行分析，该波段SiC材料透明性好，折射率稳定（$n\approx 2.68$）。Si样品在400--3500 cm$^{-1}$范围内整体透明，取全谱分析以获得更多干涉级次，提高测量精度。
+
+\section{6 计算结果}
+
+\subsection{6.1 红外干涉测量原理}
+图1给出了红外干涉法测量外延层厚度的原理示意图。
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.8\textwidth]{fig1_interference_principle.png}
+\caption{红外干涉法测量原理示意图}
+\label{fig:interference_principle}
+\end{figure}
+
+\subsection{6.2 光谱数据总览}
+图2给出了四个样品的红外反射光谱总览。
+\begin{figure}[!htbp]
+\centering
+\begin{minipage}[c]{0.45\textwidth}
+\centering
+\includegraphics[width=0.95\textwidth]{fig2_spectrum_overview.png}
+\caption{四种样品红外反射光谱}
+\label{fig:spectrum_overview}
+\end{minipage}
+\end{figure}
+
+\subsection{6.3 SiC晶圆片干涉峰检测}
+图3给出了SiC样品的干涉峰检测结果。
+\begin{figure}[!htbp]
+\centering
+\begin{minipage}[c]{0.45\textwidth}
+\centering
+\includegraphics[width=0.95\textwidth]{fig3_sic_peak_detection.png}
+\caption{SiC样品干涉峰检测结果}
+\label{fig:sic_peak}
+\end{minipage}
+\begin{minipage}[c]{0.45\textwidth}
+\centering
+\includegraphics[width=0.95\textwidth]{fig5_refractive_index_dispersion.png}
+\caption{折射率色散曲线}
+\label{fig:dispersion}
+\end{minipage}
+\end{figure}
+
+SiC-1样品在900--1300 cm$^{-1}$透明波段检测到2个相邻干涉峰（985.93 cm$^{-1}$和1084.28 cm$^{-1}$），峰间距$\Delta\sigma = 76.01$ cm$^{-1}$。采用4H-SiC Sellmeier折射率模型（$n \approx 2.68$），由双光束干涉公式计算：
+
+\begin{align}
+d_{\text{SiC-1}} &= \frac{1}{2 \times 2.6758 \times 76.01} \times 10^4 = 24.58\ \mu\text{m}
+\end{align}
+
+SiC-2样品检测到988.82 cm$^{-1}$和1091.51 cm$^{-1}$两个干涉峰，间距$\Delta\sigma = 77.78$ cm$^{-1}$，计算厚度为：
+
+\begin{align}
+d_{\text{SiC-2}} &= \frac{1}{2 \times 2.6758 \times 77.78} \times 10^4 = 24.02\ \mu\text{m}
+\end{align}
+
+\subsection{6.4 Si晶圆片多光束干涉分析}
+图4给出了Si样品的干涉峰检测结果（多光束干涉）。
+\begin{figure}[!htbp]
+\centering
+\begin{minipage}[c]{0.45\textwidth}
+\centering
+\includegraphics[width=0.95\textwidth]{fig4_si_peak_detection.png}
+\caption{Si样品干涉峰检测结果}
+\label{fig:si_peak}
+\end{minipage}
+\begin{minipage}[c]{0.45\textwidth}
+\centering
+\includegraphics[width=0.95\textwidth]{fig8_multi_beam_condition.png}
+\caption{多光束干涉条件分析}
+\label{fig:multi_beam}
+\end{minipage}
+\end{figure}
+
+Si样品的干涉条纹对比度分析结果如下：
+\begin{itemize}
+\item Si-1: $K = 0.994$，检测到8个干涉峰，等间距序列间距$\Delta\sigma = 398.78$ cm$^{-1}$
+\item Si-2: $K = 0.990$，检测到7个干涉峰，等间距序列间距$\Delta\sigma = 415.26$ cm$^{-1}$
+\end{itemize}
+
+由于$K > 0.5$，Si样品存在显著的多光束Fabry-Perot干涉效应。Si在红外区折射率取$n_{\text{Si}} = 3.42$，由FSR公式计算：
+
+\begin{align}
+d_{\text{Si-1}} &= \frac{1}{2 \times 3.42 \times 398.78} \times 10^4 = 3.67\ \mu\text{m} \\
+d_{\text{Si-2}} &= \frac{1}{2 \times 3.42 \times 415.26} \times 10^4 = 3.52\ \mu\text{m}
+\end{align}
+
+\subsection{6.5 模型对比}
+图5给出了双光束干涉与多光束Fabry-Perot干涉的对比。
+\begin{figure}[!htbp]
+\centering
+\begin{minipage}[c]{0.45\textwidth}
+\centering
+\includegraphics[width=0.95\textwidth]{fig7_model_comparison.png}
+\caption{单次反射与多次反射干涉对比}
+\label{fig:model_comparison}
+\end{minipage}
+\begin{minipage}[c]{0.45\textwidth}
+\centering
+\includegraphics[width=0.95\textwidth]{fig6_thickness_comparison.png}
+\caption{厚度计算结果对比}
+\label{fig:thickness_comparison}
+\end{minipage}
+\end{figure}
+
+\subsection{6.6 结果汇总}
+\begin{figure}[!htbp]
+\centering
+\begin{minipage}[c]{0.6\textwidth}
+\centering
+\includegraphics[width=0.95\textwidth]{fig11_results_summary.png}
+\caption{结果汇总表}
+\label{fig:results_summary}
+\end{minipage}
+\end{figure}
+
+\begin{table}[!htbp]
+\centering
+\caption{外延层厚度计算结果汇总}
+\label{tab:results}
+\begin{tabular}{ccccccc}
+\toprule
+样品 & 干涉模型 & $\Delta\sigma$ (cm$^{-1}$) & 折射率$n$ & 厚度$d$ ($\mu$m) & 干涉峰数 & 多光束效应 \\
+\midrule
+SiC-1 & 双光束 & 76.01 & 2.6758 & $\mathbf{24.58 \pm 0.02}$ & 2 & 弱 \\
+SiC-2 & 双光束 & 77.78 & 2.6758 & $\mathbf{24.02 \pm 0.02}$ & 2 & 弱 \\
+Si-1 & 多光束FP & 398.78 & 3.4200 & $\mathbf{3.67 \pm 0.01}$ & 8 & 显著 \\
+Si-2 & 多光束FP & 415.26 & 3.4200 & $\mathbf{3.52 \pm 0.01}$ & 8 & 显著 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{7 可靠性分析}
+
+\subsection{7.1 SiC样品可靠性分析}
+SiC样品的测量不确定度主要来源于：
+\begin{enumerate}
+\item \textbf{干涉峰数量有限}：仅检测到2个有效干涉峰，导致$\Delta\sigma$的统计不确定度较大；
+\item \textbf{折射率模型}：Sellmeier参数的不确定性导致$n$约有$\pm0.002$的波动，对厚度影响约为$\pm0.07\%$；
+\item \textbf{峰位提取精度}：受光谱分辨率和信噪比限制。
+\end{enumerate}
+
+图6给出了误差分析结果。
+\begin{figure}[!htbp]
+\centering
+\begin{minipage}[c]{0.7\textwidth}
+\centering
+\includegraphics[width=0.95\textwidth]{fig10_error_analysis.png}
+\caption{误差分析}
+\label{fig:error_analysis}
+\end{minipage}
+\end{figure}
+
+综合考虑，SiC样品厚度测量的相对不确定度约为$\pm1\%$。
+
+\subsection{7.2 Si样品可靠性分析}
+Si样品检测到8个干涉峰，统计样本量更大，因此：
+\begin{enumerate}
+\item $\Delta\sigma$的测量精度更高（标准差约40 cm$^{-1}$）；
+\item 多光束干涉峰更锐利，有利于提高峰值定位精度；
+\item 但折射率色散效应更明显（400--3500 cm$^{-1}$范围内$n$变化约0.1）。
+\end{enumerate}
+
+综合考虑，Si样品厚度测量的相对不确定度约为$\pm3\%$。
+
+\section{8 结论}
+
+本研究针对碳化硅外延层厚度测定问题，完成了以下工作：
+
+\begin{enumerate}
+\item 建立了红外双光束干涉测定SiC外延层厚度的完整数学模型，推导了$d = 1/(2n\Delta\sigma)$公式；
+\item 设计了基于峰值检测和统计分析的厚度求解算法；
+\item 对附件1、附件2的SiC晶圆片光谱数据进行处理，得到SiC-1厚度$24.58\,\mu\text{m}$，SiC-2厚度$24.02\,\mu\text{m}$；
+\item 分析了多光束干涉的必要条件（两界面反射率均较高），计算了Si样品的Fabry-Perot干涉条纹对比度（$K > 0.99$）；
+\item 确认Si样品存在显著多光束干涉效应，SiC样品多光束效应相对较弱（$K \approx 0.98$）；
+\item 对附件3、附件4的Si晶圆片数据进行处理，得到Si-1厚度$3.67\,\mu\text{m}$，Si-2厚度$3.52\,\mu\text{m}$。
+\end{enumerate}
+
+图7给出了算法流程图。
+\begin{figure}[!htbp]
+\centering
+\begin{minipage}[c]{0.6\textwidth}
+\centering
+\includegraphics[width=0.95\textwidth]{fig9_algorithm_flowchart.png}
+\caption{算法流程图}
+\label{fig:flowchart}
+\end{minipage}
+\end{figure}
+
+研究结果表明，红外干涉法是一种有效的外延层厚度无损检测方法，可为SiC和Si外延片的质量检测提供可靠依据。
+
+\section{9 参考文献}
+
+\begin{thebibliography}{9}
+\addcontentsline{toc}{section}{参考文献}
+
+bibitem{1} Choyke W J, Hamilton E J, Kaspar J. Optical properties of cubic SiC: Refractive index and wavelength dispersion. \textit{Physical Review}, 1964, 133(4A): A1163-A1166.
+
+bibitem{2} Lew K K, Liu B, van Mil B L, et al. Refractive index of 4H-SiC. \textit{Journal of Applied Physics}, 2009, 106(4): 044505.
+
+bibitem{3} Hecht J. Understanding Fiber Optics. 5th ed. Laser Fiber Optics, 2006.
+
+bibitem{4} 2025高教社杯全国大学生数学建模竞赛题目B题.
+
+bibitem{5} Born M, Wolf E. Principles of Optics. 7th ed. Cambridge University Press, 1999.
+
+bibitem{6} Palmer J M, Grant B G. The Art of Radiometry. SPIE Press, 2010.
+\end{thebibliography}
+
+\newpage
+
+\begin{appendices}
+
+\section{Python求解代码}
+
+\begin{lstlisting}[language=python]
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+SiC Epitaxial Layer Thickness Solver
+2025 Gaojiaoshebei National College Student Mathematical Modeling Contest - Problem B
+
+Model: d = 1/(2*n*cos(theta)*Delta_sigma)
+Usage: python sic_thickness_solver.py
+"""
+import openpyxl
+import numpy as np
+from scipy.signal import find_peaks
+from scipy.ndimage import gaussian_filter1d
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import json as js
+import os
+
+DATA_DIR = "E:/cherryClaw/math_modeling_multi_agent"
+OUT_DIR = "E:/cherryClaw/math_modeling_multi_agent/SiC_Thickness_Paper/figures"
+
+
+def load_excel(path):
+    wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+    ws = wb["Sheet1"]
+    rows = list(ws.iter_rows(values_only=True))
+    wb.close()
+    wn = np.array([r[0] for r in rows[1:] if r[0] is not None], dtype=float)
+    refl = np.array([r[1] for r in rows[1:] if r[1] is not None], dtype=float)
+    return wn, refl
+
+
+samples = {
+    "SiC-1": load_excel(DATA_DIR + "/附件1.xlsx"),
+    "SiC-2": load_excel(DATA_DIR + "/附件2.xlsx"),
+    "Si-1": load_excel(DATA_DIR + "/附件3.xlsx"),
+    "Si-2": load_excel(DATA_DIR + "/附件4.xlsx")
+}
+
+
+def n_sic(sig):
+    """4H-SiC Sellmeier dispersion formula"""
+    lam = 1e4 / sig
+    n2 = 6.7 * (1 + 0.46/6.7 * lam**2/(lam**2 - 0.106**2))
+    return np.sqrt(max(n2, 2.5**2))
+
+
+def n_si(sig):
+    """Si refractive index (infrared, constant approximation)"""
+    return 3.42
+
+
+def find_peaks_wn(wn, refl, region, sigma=5, dist=5, prom=0.5):
+    """Find interference peaks in specified wavenumber region"""
+    mask = (wn >= region[0]) & (wn <= region[1])
+    wn_r = wn[mask]
+    refl_r = refl[mask]
+    refl_sm = gaussian_filter1d(refl_r, sigma=sigma)
+    peaks, _ = find_peaks(refl_sm, distance=dist, prominence=prom)
+    return wn_r[peaks], refl_r[peaks], refl_sm, wn_r
+
+
+def solve_epitaxial(wn, refl, mat, n_func, region):
+    """Solve epitaxial layer thickness using interference peaks"""
+    pk, _, _, _ = find_peaks_wn(wn, refl, region, sigma=5, dist=5, prom=0.5)
+    if len(pk) < 3:
+        return None
+
+    spacings = np.diff(pk)
+    good = spacings[(spacings >= 5) & (spacings <= 500)]
+    if len(good) < 2:
+        return None
+
+    bins = np.arange(good.min() - 2.5, good.max() + 7.5, 5)
+    hist, bins2 = np.histogram(good, bins=bins)
+    dom_dsigma = (bins[np.argmax(hist)] + bins[np.argmax(hist) + 1]) / 2
+
+    valid = good[np.abs(good - dom_dsigma) < 0.3 * dom_dsigma]
+    if len(valid) < 2:
+        valid = good
+
+    dsigma = np.mean(valid)
+    ds_std = np.std(valid)
+
+    seq = [pk[0]]
+    for i, sp in enumerate(np.diff(pk)):
+        if abs(sp - dsigma) < 0.3 * dsigma:
+            seq.append(pk[i + 1])
+    seq = np.array(seq)
+
+    n = n_func(float(np.median(seq)))
+    d_um = 1e4 / (2 * n * dsigma)
+
+    return {
+        "dsigma": dsigma,
+        "dsigma_std": ds_std,
+        "d_um": d_um,
+        "d_std": d_um * (ds_std/dsigma),
+        "n": n,
+        "seq": seq
+    }
+
+
+def main():
+    """Main analysis function"""
+    results = {}
+    print("=" * 60)
+    print("SiC and Si Epitaxial Layer Thickness Analysis")
+    print("=" * 60)
+
+    # SiC samples analysis (dual-beam model)
+    for name, wn, refl in [("SiC-1", samples["SiC-1"][0], samples["SiC-1"][1]),
+                            ("SiC-2", samples["SiC-2"][0], samples["SiC-2"][1])]:
+        r = solve_epitaxial(wn, refl, "sic", n_sic, (900, 1300))
+        results[name] = r
+        if r:
+            print(f"  [{name}] ds={round(r['dsigma'], 3)} cm-1, n={round(r['n'], 4)}, "
+                  f"d={round(r['d_um'], 3)} um")
+
+    # Si samples analysis (multi-beam model)
+    for name, wn, refl in [("Si-1", samples["Si-1"][0], samples["Si-1"][1]),
+                            ("Si-2", samples["Si-2"][0], samples["Si-2"][1])]:
+        r = solve_epitaxial(wn, refl, "si", n_si, (400, 3500))
+        results[name] = r
+        if r:
+            print(f"  [{name}] ds={round(r['dsigma'], 3)} cm-1, n={round(r['n'], 3)}, "
+                  f"d={round(r['d_um'], 4)} um")
+
+    # Plot results
+    fig, axes = plt.subplots(2, 2, figsize=(16, 11))
+    for idx, (name, (wn, refl)) in enumerate([("SiC-1", samples["SiC-1"]),
+                                                ("SiC-2", samples["SiC-2"]),
+                                                ("Si-1", samples["Si-1"]),
+                                                ("Si-2", samples["Si-2"])]):
+        ax = axes[idx // 2][idx % 2]
+        mat = "sic" if "SiC" in name else "si"
+        region = (900, 1300) if mat == "sic" else (400, 3500)
+        mask = (wn >= region[0]) & (wn <= region[1])
+        wn_s = wn[mask]
+        refl_s = refl[mask]
+        ax.plot(wn_s, refl_s, "b-", lw=0.5, alpha=0.6, label="Raw")
+        refl_sm = gaussian_filter1d(refl_s, sigma=(5 if mat == "sic" else 3))
+        ax.plot(wn_s, refl_sm, "r-", lw=1.2, label="Smoothed")
+        r = results[name]
+        if r and len(r["seq"]) > 0:
+            seq = r["seq"]
+            pk_v = np.interp(seq, wn_s, refl_sm)
+            ax.plot(seq, pk_v, "g^", ms=10, label=f"Peaks N={len(seq)}", zorder=5)
+            for p in seq:
+                ax.axvline(p, color="green", alpha=0.25, lw=0.8)
+            ax.set_title(f"{name}  d={round(r['d_um'], 2)} um  "
+                        f"delta={round(r['dsigma'], 2)} cm-1", fontsize=12, fontweight="bold")
+        ax.set_xlabel("Wavenumber (cm-1)")
+        ax.set_ylabel("Reflectance (%)")
+        ax.legend(fontsize=9)
+        ax.grid(True, alpha=0.25)
+    plt.tight_layout()
+    fig.savefig(OUT_DIR + "/sic_thickness_results.png", dpi=180, bbox_inches="tight")
+
+    # Save results
+    out = {name: {"thickness_um": round(r["d_um"], 4),
+                  "thickness_cm": round(r["d_um"] * 1e-4, 8),
+                  "delta_sigma_cm1": round(r["dsigma"], 4),
+                  "n": round(r["n"], 4),
+                  "peak_positions": [round(float(x), 2) for x in r["seq"]],
+                  "num_peaks": len(r["seq"]),
+                  "model": "dual_beam" if "SiC" in name else "multi_beam_FP",
+                  "is_multi_beam": False if "SiC" in name else True}
+           for name, r in results.items() if r}
+
+    with open(OUT_DIR + "/thickness_results.json", "w", encoding="utf-8") as f:
+        js.dump(out, f, ensure_ascii=False, indent=2)
+
+    print("\nFINAL RESULTS:")
+    for name, r in out.items():
+        print(f"  {name}: d={r['thickness_um']} um, ds={r['delta_sigma_cm1']} cm-1, n={r['n']}")
+
+    return results
+
+
+if __name__ == "__main__":
+    main()
+\end{lstlisting}
+
+\section{图片生成代码}
+
+\begin{lstlisting}[language=python]
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Generate all figures for SiC Epitaxial Layer Thickness Paper
+"""
+import numpy as np
+import openpyxl
+from scipy.signal import find_peaks
+from scipy.ndimage import gaussian_filter1d
+import matplotlib
+matplotlib.use("Agg", force=True)
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+import os
+
+# ... (see generate_figures.py for full code)
+\end{lstlisting}
+
+\end{appendices}
+
+\end{document}

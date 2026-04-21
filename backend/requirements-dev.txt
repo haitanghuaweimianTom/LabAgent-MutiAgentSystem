@@ -1,0 +1,16 @@
+# 数学建模多Agent系统 - 开发依赖
+
+# 代码质量
+pytest>=7.4.0
+pytest-asyncio>=0.23.0
+pytest-cov>=4.1.0
+
+# 类型检查
+mypy>=1.7.0
+
+# 代码格式化
+black>=23.0.0
+isort>=5.12.0
+
+# Linting
+ruff>=0.1.0

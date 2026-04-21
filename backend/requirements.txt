@@ -1,0 +1,22 @@
+# 数学建模多Agent系统 - 后端依赖
+
+# FastAPI核心
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+
+# HTTP客户端
+httpx>=0.26.0
+
+# 工具库
+python-dotenv>=1.0.0
+python-multipart>=0.0.6
+
+# 数据处理（DataAgent）
+pandas>=2.0.0
+openpyxl>=3.1.0
+
+# 测试
+pytest>=7.4.0
+pytest-asyncio>=0.23.0
