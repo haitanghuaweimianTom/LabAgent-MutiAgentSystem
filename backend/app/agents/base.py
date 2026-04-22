@@ -53,11 +53,22 @@ def _find_claude_code() -> Optional[str]:
         _CLAUDE_CODE_PATH = found
         return _CLAUDE_CODE_PATH
 
-    # 3. 常见安装路径（Windows）
+    # 3. 常见安装路径（Windows）+ WinGet包
     local_app = os.path.expanduser("~\\AppData\\Local\\Programs\\claude-code\\bin\\claude-code.cmd")
     if os.path.isfile(local_app):
         _CLAUDE_CODE_PATH = local_app
         return _CLAUDE_CODE_PATH
+
+    # WinGet 安装路径 (Claude Code v2.x)
+    winget_path = os.path.join(
+        os.environ.get("LOCALAPPDATA", ""),
+        "Microsoft", "WinGet", "Packages",
+        "Anthropic.ClaudeCode_Microsoft.Winget.Source_8wekyb3d8bbwe", "claude.exe"
+    )
+    if os.path.isfile(winget_path):
+        _CLAUDE_CODE_PATH = winget_path
+        return _CLAUDE_CODE_PATH
+
     # 4. 本地 claude-code-source 目录（用户自定义路径）
     from ..config import get_settings
     settings = get_settings()
@@ -75,11 +86,11 @@ def _find_claude_code() -> Optional[str]:
 def _build_claude_cmd(claude_path: str, model: str, extra_args: Optional[List[str]] = None) -> tuple:
     """
     根据 claude_path 格式构建正确的 subprocess 命令。
-    
+
     claude_path 可能是：
-    - 普通路径如 "claude" 或 "D:\...\claude-code.cmd"
+    - 普通路径如 "claude" 或 "D:\\...\\claude-code.cmd"
     - 字符串 "node \"cli.js\"" （需要提取 cli.js 路径）
-    
+
     返回 (cmd_list, use_shell) 元组。
     """
     extra_args = extra_args or []
@@ -152,7 +163,10 @@ def _call_claude_code_direct(
         raise RuntimeError("Claude Code CLI 未找到，请确保已安装 Claude Code 并添加到 PATH")
 
     # 构建 Claude Code 调用命令
-    extra_args = ["-p", "--output-format", "json", "--input-format", "text"]
+    # --add-dir 允许访问 output 目录（用于写文件）
+    output_dir = task_dir if task_dir and os.path.isdir(task_dir) else os.getcwd()
+    extra_args = ["-p", "--output-format", "json", "--input-format", "text",
+                  "--add-dir", output_dir, "--dangerously-skip-permissions"]
     cmd_for_popen, use_shell = _build_claude_cmd(claude_path, model, extra_args)
 
     env = os.environ.copy()
@@ -233,7 +247,10 @@ def _call_claude_code_print(
     if not claude_path:
         raise RuntimeError("Claude Code CLI 未找到，请确保已安装 Claude Code 并添加到 PATH")
 
-    extra_args = ["-p", "--output-format", "json", "--input-format", "text"]
+    # --add-dir 允许访问 task_dir 目录，--dangerously-skip-permissions 跳过权限确认
+    output_dir = task_dir if task_dir and os.path.isdir(task_dir) else os.getcwd()
+    extra_args = ["-p", "--output-format", "json", "--input-format", "text",
+                  "--add-dir", output_dir, "--dangerously-skip-permissions"]
     cmd, use_shell = _build_claude_cmd(claude_path, model, extra_args)
 
     env = os.environ.copy()
@@ -262,6 +279,7 @@ def _call_claude_code_print(
             stderr=subprocess.PIPE,
             cwd=cwd,
             env=env,
+            shell=use_shell,
         )
         stdout, stderr = proc.communicate(
             input=full_prompt.encode("utf-8"),
@@ -324,7 +342,10 @@ def _call_claude_code_agent(
         raise RuntimeError("Claude Code CLI 未找到，请确保已安装 Claude Code 并添加到 PATH")
 
     # 构建命令：--agent 在 extra_args 中
-    extra_args = ["--agent", "--output-format", "json"]
+    # --add-dir 允许访问目录，--dangerously-skip-permissions 跳过权限确认
+    output_dir = task_dir if task_dir and os.path.isdir(task_dir) else os.getcwd()
+    extra_args = ["--agent", "--output-format", "json",
+                  "--add-dir", output_dir, "--dangerously-skip-permissions"]
     if mcp_config_path:
         extra_args.extend(["--mcp-config", mcp_config_path])
     if allowed_tools:
