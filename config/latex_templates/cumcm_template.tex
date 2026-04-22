@@ -1,0 +1,127 @@
+\documentclass{cumcmthesis}
+% \documentclass[withoutpreface,bwprint]{cumcmthesis} %去掉封面与编号页
+
+\usepackage[framemethod=TikZ]{mdframed}
+\usepackage{url}
+\usepackage{subcaption}
+
+% 论文标题（A/B/C/D/E题）
+\title{论文标题}
+\tihao{A}
+\baominghao{123456789012}
+\schoolname{XX大学}
+\membera{成员A}
+\memberb{成员B}
+\memberc{成员C}
+\supervisor{指导教师}
+\yearinput{2025}
+\monthinput{08}
+\dayinput{15}
+
+\begin{document}
+\maketitle
+
+% 摘要
+\begin{abstract}
+本文针对XX问题进行了系统研究。首先对问题进行了分析和假设，建立了该问题的数学模型...（此处填写具体内容）
+\begin{mdframed}[roundcorner=5pt,linecolor=gray!50,outerlinewidth=0.5pt,middlelinewidth=0.3pt,backgroundcolor=gray!2]
+本文的主要工作包括：
+\begin{enumerate}
+\item 对问题进行了深入分析，明确了问题的核心要求
+\item 建立了合理的数学模型，进行了模型的假设与符号说明
+\item 设计了有效的求解算法，得到了可靠的数值结果
+\item 进行了灵敏度分析，验证了模型的稳健性
+\end{enumerate}
+\end{mdframed}
+\keywords{关键词1\quad 关键词2\quad 关键词3\quad 关键词4\quad 关键词5}
+\end{abstract}
+
+\newpage
+
+% 1. 问题重述
+\section{问题重述}
+\subsection{问题的提出}
+请详细描述问题背景和问题要求。
+
+\subsection{问题要求}
+列出问题的具体要求。
+
+% 2. 模型假设与符号说明
+\section{模型假设与符号说明}
+\subsection{模型假设}
+\begin{enumerate}
+\item 假设1：...
+\item 假设2：...
+\end{enumerate}
+
+\subsection{符号说明}
+\begin{center}
+\begin{tabular}{cc}
+\toprule
+符号 & 意义 \\
+\midrule
+$x$ & 变量1 \\
+$y$ & 变量2 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+% 3. 问题分析
+\section{问题分析}
+\subsection{总体分析}
+\subsection{子问题分析}
+
+% 4. 模型建立
+\section{模型建立}
+\subsection{模型概述}
+\subsection{子问题1的模型}
+\subsection{子问题2的模型}
+\subsection{子问题3的模型}
+
+% 5. 模型求解
+\section{模型求解}
+\subsection{求解方法概述}
+\subsection{子问题1的求解}
+\subsection{子问题2的求解}
+\subsection{子问题3的求解}
+
+% 6. 结果分析
+\section{结果分析}
+\subsection{主要结果}
+\subsection{结果分析}
+\subsection{可视化分析}
+
+% 7. 灵敏度分析
+\section{灵敏度分析}
+\subsection{参数灵敏度分析}
+\subsection{稳健性分析}
+
+% 8. 模型评价
+\section{模型评价}
+\subsection{模型优点}
+\subsection{模型缺点}
+\subsection{适用范围}
+
+% 9. 结论与展望
+\section{结论与展望}
+\subsection{研究总结}
+\subsection{主要结论}
+\subsection{未来展望}
+
+% 参考文献
+\newpage
+\begin{thebibliography}{9}
+\addcontentsline{toc}{section}{\refname}
+\bibitem{1} 作者1. 题目1[J]. 期刊名称, 年份, 卷(期): 页码.
+\end{thebibliography}
+
+% 附录
+\newpage
+\begin{appendices}
+\section{附录A：完整代码}
+\begin{lstlisting}[language=Python]
+# 代码内容
+print("Hello World")
+\end{lstlisting}
+\end{appendices}
+\end{document}

@@ -1,0 +1,65 @@
+{
+  "SiC-1": {
+    "thickness_um": 24.5821,
+    "thickness_cm": 0.00245821,
+    "delta_sigma_cm1": 76.0138,
+    "n": 2.6758,
+    "peak_positions": [
+      985.93,
+      1084.28
+    ],
+    "num_peaks": 2,
+    "model": "dual_beam",
+    "is_multi_beam": false
+  },
+  "SiC-2": {
+    "thickness_um": 24.0234,
+    "thickness_cm": 0.00240234,
+    "delta_sigma_cm1": 77.7816,
+    "n": 2.6758,
+    "peak_positions": [
+      988.82,
+      1091.51
+    ],
+    "num_peaks": 2,
+    "model": "dual_beam",
+    "is_multi_beam": false
+  },
+  "Si-1": {
+    "thickness_um": 3.6662,
+    "thickness_cm": 0.00036662,
+    "delta_sigma_cm1": 398.7794,
+    "n": 3.42,
+    "peak_positions": [
+      418.0,
+      748.25,
+      1105.49,
+      1509.51,
+      1927.5,
+      2375.39,
+      2779.4,
+      3209.45
+    ],
+    "num_peaks": 8,
+    "model": "multi_beam_FP",
+    "is_multi_beam": true
+  },
+  "Si-2": {
+    "thickness_um": 3.5206,
+    "thickness_cm": 0.00035206,
+    "delta_sigma_cm1": 415.2632,
+    "n": 3.42,
+    "peak_positions": [
+      750.66,
+      1110.8,
+      1519.63,
+      1942.93,
+      2389.37,
+      2802.54,
+      3242.24
+    ],
+    "num_peaks": 8,
+    "model": "multi_beam_FP",
+    "is_multi_beam": true
+  }
+}

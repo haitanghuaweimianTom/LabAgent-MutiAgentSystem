@@ -1,0 +1,13 @@
+{
+  "task_id": "task_a63c031613d6",
+  "problem_text": "",
+  "problem_preview": "",
+  "status": "failed",
+  "created_at": "",
+  "completed_at": null,
+  "error": null,
+  "total_steps": 5,
+  "progress": 80.0,
+  "current_step": "solver_agent",
+  "updated_at": "2026-04-22T01:56:24.782381"
+}

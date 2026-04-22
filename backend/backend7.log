@@ -1,0 +1,238 @@
+INFO:     Started server process [189660]
+INFO:     Waiting for application startup.
+2026-04-17 15:27:22,329 - INFO - 数学建模多Agent系统 启动中...
+2026-04-17 15:27:22,330 - INFO - 从磁盘恢复 0 个历史任务
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:49348 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49362 - "GET /api/v1/tasks/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57603 - "GET /api/v1/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65023 - "GET /api/v1/tasks/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55765 - "GET /api/v1/settings HTTP/1.1" 200 OK
+INFO:     100.77.58.89:59421 - "GET /api/v1/data/files HTTP/1.1" 200 OK
+INFO:     100.77.58.89:63485 - "OPTIONS /api/v1/tasks/submit HTTP/1.1" 200 OK
+2026-04-17 15:34:20,008 - INFO - Task metadata saved: task_7481a36a40db
+2026-04-17 15:34:20,008 - INFO - Task task_7481a36a40db: found 4 data files
+INFO:     100.77.58.89:56692 - "POST /api/v1/tasks/submit HTTP/1.1" 200 OK
+2026-04-17 15:34:20,009 - INFO - Orchestrator starting workflow for task task_7481a36a40db
+2026-04-17 15:34:20,009 - INFO - Created chat room for task task_7481a36a40db
+2026-04-17 15:34:20,009 - INFO - AnalyzerAgent: 2025年高教社杯全国大学生数学建模竞赛题目
+(请先阅读"全国大学生数学建模竞赛论文格式规范")
+
+
+2026-04-17 15:34:21,098 - ERROR - [analyzer_agent] LLM call failed: 'ascii' codec can't encode characters in position 133-137: ordinal not in range(128)
+2026-04-17 15:34:22,858 - INFO - ResearchAgent searching: 2025年高教社杯全国大学生数学建模竞赛题目
+(请先阅读"全国大学生数学建模竞赛论文格式规范")
+
+B题碳化硅外延层厚度的确定
+碳化硅作为一种新兴的第三代半导体材料，以其优越的综合性能表现正在受到越来
+2026-04-17 15:34:23,930 - ERROR - [research_agent] LLM call failed: 'ascii' codec can't encode characters in position 133-137: ordinal not in range(128)
+2026-04-17 15:34:23,933 - WARNING - No sub_problems found, using default
+2026-04-17 15:34:23,933 - INFO - ModelerAgent building model for sub_problem 1/1
+2026-04-17 15:34:25,005 - ERROR - [modeler_agent] LLM call failed: 'ascii' codec can't encode characters in position 133-137: ordinal not in range(128)
+2026-04-17 15:34:25,007 - INFO - SolverAgent solving for sub_problem 1
+2026-04-17 15:34:25,960 - ERROR - [solver_agent] LLM call failed: 'ascii' codec can't encode characters in position 133-137: ordinal not in range(128)
+2026-04-17 15:34:25,963 - INFO - WriterAgent generating paper with 1 sections
+2026-04-17 15:34:27,030 - ERROR - [writer_agent] LLM call failed: 'ascii' codec can't encode characters in position 133-137: ordinal not in range(128)
+2026-04-17 15:34:27,033 - INFO - Task task_7481a36a40db completed
+2026-04-17 15:34:27,035 - INFO - Task messages saved: task_7481a36a40db (21 msgs)
+2026-04-17 15:34:27,035 - INFO - Task result saved: task_7481a36a40db
+2026-04-17 15:34:27,036 - INFO - Task metadata saved: task_7481a36a40db
+INFO:     100.77.58.89:54040 - "GET /api/v1/tasks/task_7481a36a40db/stream HTTP/1.1" 200 OK
+2026-04-17 15:34:27,077 - INFO - Task metadata saved: task_7481a36a40db
+INFO:     127.0.0.1:60712 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49679 - "GET /api/v1/tasks/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57158 - "GET /api/v1/tasks/ HTTP/1.1" 200 OK
+INFO:     100.77.58.89:62773 - "GET /api/v1/tasks/ HTTP/1.1" 200 OK
+INFO:     100.77.58.89:62773 - "GET /api/v1/tasks/task_7481a36a40db/messages HTTP/1.1" 200 OK
+INFO:     100.77.58.89:54811 - "GET /api/v1/tasks/task_7481a36a40db/result HTTP/1.1" 200 OK
+INFO:     100.77.58.89:63916 - "GET /api/v1/data/files HTTP/1.1" 200 OK
+INFO:     100.77.58.89:63916 - "OPTIONS /api/v1/tasks/submit HTTP/1.1" 200 OK
+2026-04-17 15:51:31,692 - INFO - Task metadata saved: task_4fe3b4f9681f
+2026-04-17 15:51:31,692 - INFO - Task task_4fe3b4f9681f: found 4 data files
+INFO:     100.77.58.89:64098 - "POST /api/v1/tasks/submit HTTP/1.1" 200 OK
+2026-04-17 15:51:31,692 - INFO - Orchestrator starting workflow for task task_4fe3b4f9681f
+2026-04-17 15:51:31,693 - INFO - Created chat room for task task_4fe3b4f9681f
+2026-04-17 15:51:31,693 - INFO - AnalyzerAgent: 2025年高教社杯全国大学生数学建模竞赛题目
+(请先阅读"全国大学生数学建模竞赛论文格式规范")
+
+
+2026-04-17 15:51:32,781 - ERROR - [analyzer_agent] LLM call failed: 'ascii' codec can't encode characters in position 133-137: ordinal not in range(128)
+2026-04-17 15:51:33,497 - INFO - ResearchAgent searching: 2025年高教社杯全国大学生数学建模竞赛题目
+(请先阅读"全国大学生数学建模竞赛论文格式规范")
+
+B题碳化硅外延层厚度的确定
+碳化硅作为一种新兴的第三代半导体材料，以其优越的综合性能表现正在受到越来
+2026-04-17 15:51:34,468 - ERROR - [research_agent] LLM call failed: 'ascii' codec can't encode characters in position 133-137: ordinal not in range(128)
+2026-04-17 15:51:34,470 - WARNING - No sub_problems found, using default
+2026-04-17 15:51:34,470 - INFO - ModelerAgent building model for sub_problem 1/1
+2026-04-17 15:51:35,505 - ERROR - [modeler_agent] LLM call failed: 'ascii' codec can't encode characters in position 133-137: ordinal not in range(128)
+2026-04-17 15:51:35,508 - INFO - SolverAgent solving for sub_problem 1
+2026-04-17 15:51:36,258 - ERROR - [solver_agent] LLM call failed: 'ascii' codec can't encode characters in position 133-137: ordinal not in range(128)
+2026-04-17 15:51:36,260 - INFO - WriterAgent generating paper with 1 sections
+2026-04-17 15:51:37,218 - ERROR - [writer_agent] LLM call failed: 'ascii' codec can't encode characters in position 133-137: ordinal not in range(128)
+2026-04-17 15:51:37,221 - INFO - Task task_4fe3b4f9681f completed
+2026-04-17 15:51:37,232 - INFO - Task messages saved: task_4fe3b4f9681f (21 msgs)
+2026-04-17 15:51:37,232 - INFO - Task result saved: task_4fe3b4f9681f
+2026-04-17 15:51:37,233 - INFO - Task metadata saved: task_4fe3b4f9681f
+INFO:     100.77.58.89:53954 - "GET /api/v1/tasks/task_4fe3b4f9681f/stream HTTP/1.1" 200 OK
+2026-04-17 15:51:37,324 - INFO - Task metadata saved: task_4fe3b4f9681f
+INFO:     100.77.58.89:60607 - "OPTIONS /api/v1/settings HTTP/1.1" 200 OK
+2026-04-17 15:53:25,822 - INFO - API密钥已更新，重置Orchestrator
+2026-04-17 15:53:25,822 - INFO - Orchestrator 已重置，将在下次任务时用最新配置初始化
+INFO:     100.77.58.89:65382 - "POST /api/v1/settings HTTP/1.1" 200 OK
+INFO:     100.77.58.89:65382 - "GET /api/v1/tasks/ HTTP/1.1" 200 OK
+INFO:     100.77.58.89:65382 - "GET /api/v1/tasks/task_4fe3b4f9681f/messages HTTP/1.1" 200 OK
+INFO:     100.77.58.89:55953 - "GET /api/v1/tasks/task_4fe3b4f9681f/result HTTP/1.1" 200 OK
+INFO:     100.77.58.89:55953 - "GET /api/v1/tasks/task_7481a36a40db/messages HTTP/1.1" 200 OK
+INFO:     100.77.58.89:65382 - "GET /api/v1/tasks/task_7481a36a40db/result HTTP/1.1" 200 OK
+INFO:     100.77.58.89:54620 - "GET /api/v1/tasks/task_4fe3b4f9681f/messages HTTP/1.1" 200 OK
+INFO:     100.77.58.89:58289 - "GET /api/v1/tasks/task_4fe3b4f9681f/result HTTP/1.1" 200 OK
+INFO:     100.77.58.89:58289 - "OPTIONS /api/v1/tasks/task_7481a36a40db HTTP/1.1" 200 OK
+INFO:     100.77.58.89:54620 - "DELETE /api/v1/tasks/task_7481a36a40db HTTP/1.1" 200 OK
+INFO:     100.77.58.89:60001 - "GET /api/v1/tasks/ HTTP/1.1" 200 OK
+2026-04-17 15:54:12,261 - INFO - Task metadata saved: task_b75d5d8d216c
+2026-04-17 15:54:12,261 - INFO - Task task_b75d5d8d216c: found 4 data files
+INFO:     100.77.58.89:61913 - "POST /api/v1/tasks/submit HTTP/1.1" 200 OK
+2026-04-17 15:54:12,261 - INFO - Orchestrator starting workflow for task task_b75d5d8d216c
+2026-04-17 15:54:12,261 - INFO - Created chat room for task task_b75d5d8d216c
+2026-04-17 15:54:12,262 - INFO - AnalyzerAgent: 2025年高教社杯全国大学生数学建模竞赛题目
+(请先阅读"全国大学生数学建模竞赛论文格式规范")
+
+
+2026-04-17 15:54:13,300 - ERROR - [analyzer_agent] LLM call failed: 'ascii' codec can't encode characters in position 133-137: ordinal not in range(128)
+2026-04-17 15:54:13,992 - INFO - ResearchAgent searching: 2025年高教社杯全国大学生数学建模竞赛题目
+(请先阅读"全国大学生数学建模竞赛论文格式规范")
+
+B题碳化硅外延层厚度的确定
+碳化硅作为一种新兴的第三代半导体材料，以其优越的综合性能表现正在受到越来
+2026-04-17 15:54:15,023 - ERROR - [research_agent] LLM call failed: 'ascii' codec can't encode characters in position 133-137: ordinal not in range(128)
+2026-04-17 15:54:15,026 - WARNING - No sub_problems found, using default
+2026-04-17 15:54:15,026 - INFO - ModelerAgent building model for sub_problem 1/1
+2026-04-17 15:54:16,076 - ERROR - [modeler_agent] LLM call failed: 'ascii' codec can't encode characters in position 133-137: ordinal not in range(128)
+2026-04-17 15:54:16,079 - INFO - SolverAgent solving for sub_problem 1
+2026-04-17 15:54:17,115 - ERROR - [solver_agent] LLM call failed: 'ascii' codec can't encode characters in position 133-137: ordinal not in range(128)
+2026-04-17 15:54:17,118 - INFO - WriterAgent generating paper with 1 sections
+2026-04-17 15:54:18,153 - ERROR - [writer_agent] LLM call failed: 'ascii' codec can't encode characters in position 133-137: ordinal not in range(128)
+2026-04-17 15:54:18,156 - INFO - Task task_b75d5d8d216c completed
+2026-04-17 15:54:18,156 - INFO - Task messages saved: task_b75d5d8d216c (21 msgs)
+2026-04-17 15:54:18,157 - INFO - Task result saved: task_b75d5d8d216c
+2026-04-17 15:54:18,158 - INFO - Task metadata saved: task_b75d5d8d216c
+INFO:     100.77.58.89:54619 - "GET /api/v1/tasks/task_b75d5d8d216c/stream HTTP/1.1" 200 OK
+2026-04-17 15:54:18,261 - INFO - Task metadata saved: task_b75d5d8d216c
+INFO:     100.77.58.89:54619 - "GET /api/v1/tasks/ HTTP/1.1" 200 OK
+INFO:     100.77.58.89:54619 - "GET /api/v1/tasks/task_b75d5d8d216c/messages HTTP/1.1" 200 OK
+INFO:     100.77.58.89:57544 - "GET /api/v1/tasks/task_b75d5d8d216c/result HTTP/1.1" 200 OK
+INFO:     100.77.58.89:57544 - "GET /api/v1/tasks/task_4fe3b4f9681f/messages HTTP/1.1" 200 OK
+INFO:     100.77.58.89:54619 - "GET /api/v1/tasks/task_4fe3b4f9681f/result HTTP/1.1" 200 OK
+INFO:     100.77.58.89:54619 - "OPTIONS /api/v1/tasks/task_b75d5d8d216c HTTP/1.1" 200 OK
+INFO:     100.77.58.89:57544 - "DELETE /api/v1/tasks/task_b75d5d8d216c HTTP/1.1" 200 OK
+INFO:     100.77.58.89:57739 - "GET /api/v1/tasks/ HTTP/1.1" 200 OK
+INFO:     100.77.58.89:57059 - "OPTIONS /api/v1/tasks/task_4fe3b4f9681f HTTP/1.1" 200 OK
+INFO:     100.77.58.89:60716 - "DELETE /api/v1/tasks/task_4fe3b4f9681f HTTP/1.1" 200 OK
+INFO:     100.77.58.89:64194 - "GET /api/v1/tasks/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54131 - "GET /api/v1/settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64773 - "GET /api/v1/settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64773 - "GET /api/v1/tasks/submit HTTP/1.1" 405 Method Not Allowed
+INFO:     127.0.0.1:50238 - "POST /api/v1/tasks/submit HTTP/1.1" 400 Bad Request
+2026-04-17 15:56:01,320 - INFO - Task metadata saved: task_ba1b238c2f2e
+2026-04-17 15:56:01,320 - INFO - Task task_ba1b238c2f2e: found 4 data files
+INFO:     127.0.0.1:63385 - "POST /api/v1/tasks/submit HTTP/1.1" 200 OK
+2026-04-17 15:56:01,321 - INFO - Orchestrator starting workflow for task task_ba1b238c2f2e
+2026-04-17 15:56:01,321 - INFO - Created chat room for task task_ba1b238c2f2e
+2026-04-17 15:56:01,321 - INFO - AnalyzerAgent: 测试：给定一组气温数据，建立一个线性回归模型预测未来7天的温度。
+2026-04-17 15:56:02,376 - ERROR - [analyzer_agent] LLM call failed: 'ascii' codec can't encode characters in position 133-137: ordinal not in range(128)
+2026-04-17 15:56:03,115 - INFO - ResearchAgent searching: 测试：给定一组气温数据，建立一个线性回归模型预测未来7天的温度。
+2026-04-17 15:56:04,152 - ERROR - [research_agent] LLM call failed: 'ascii' codec can't encode characters in position 133-137: ordinal not in range(128)
+2026-04-17 15:56:04,155 - WARNING - No sub_problems found, using default
+2026-04-17 15:56:04,155 - INFO - ModelerAgent building model for sub_problem 1/1
+2026-04-17 15:56:05,182 - ERROR - [modeler_agent] LLM call failed: 'ascii' codec can't encode characters in position 133-137: ordinal not in range(128)
+2026-04-17 15:56:05,185 - INFO - SolverAgent solving for sub_problem 1
+2026-04-17 15:56:06,172 - ERROR - [solver_agent] LLM call failed: 'ascii' codec can't encode characters in position 133-137: ordinal not in range(128)
+2026-04-17 15:56:06,175 - INFO - SolverAgent completed: 0 code files
+2026-04-17 15:56:06,175 - INFO - WriterAgent generating paper with 1 sections
+2026-04-17 15:56:07,216 - ERROR - [writer_agent] LLM call failed: 'ascii' codec can't encode characters in position 133-137: ordinal not in range(128)
+2026-04-17 15:56:07,219 - INFO - Task task_ba1b238c2f2e completed
+2026-04-17 15:56:07,220 - INFO - Task messages saved: task_ba1b238c2f2e (21 msgs)
+2026-04-17 15:56:07,221 - INFO - Task result saved: task_ba1b238c2f2e
+2026-04-17 15:56:07,221 - INFO - Task metadata saved: task_ba1b238c2f2e
+INFO:     127.0.0.1:64905 - "GET /api/v1/tasks/task_ba1b238c2f2e/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64905 - "GET /api/v1/tasks/task_ba1b238c2f2e/messages HTTP/1.1" 200 OK
+INFO:     100.77.58.89:49669 - "OPTIONS /api/v1/settings HTTP/1.1" 200 OK
+2026-04-17 16:22:31,712 - INFO - API密钥已更新，重置Orchestrator
+2026-04-17 16:22:31,713 - INFO - Orchestrator 已重置，将在下次任务时用最新配置初始化
+INFO:     100.77.58.89:50252 - "POST /api/v1/settings HTTP/1.1" 200 OK
+INFO:     100.77.58.89:50252 - "OPTIONS /api/v1/tasks/submit HTTP/1.1" 200 OK
+2026-04-17 16:22:34,548 - INFO - Task metadata saved: task_2f2537e46951
+2026-04-17 16:22:34,548 - INFO - Task task_2f2537e46951: found 4 data files
+INFO:     100.77.58.89:62581 - "POST /api/v1/tasks/submit HTTP/1.1" 200 OK
+2026-04-17 16:22:34,549 - INFO - Orchestrator starting workflow for task task_2f2537e46951
+2026-04-17 16:22:34,549 - INFO - Created chat room for task task_2f2537e46951
+2026-04-17 16:22:34,549 - INFO - AnalyzerAgent: 2025年高教社杯全国大学生数学建模竞赛题目
+(请先阅读"全国大学生数学建模竞赛论文格式规范")
+
+
+2026-04-17 16:22:35,616 - ERROR - [analyzer_agent] LLM call failed: 'ascii' codec can't encode characters in position 133-137: ordinal not in range(128)
+2026-04-17 16:22:36,315 - INFO - ResearchAgent searching: 2025年高教社杯全国大学生数学建模竞赛题目
+(请先阅读"全国大学生数学建模竞赛论文格式规范")
+
+B题碳化硅外延层厚度的确定
+碳化硅作为一种新兴的第三代半导体材料，以其优越的综合性能表现正在受到越来
+2026-04-17 16:22:37,335 - ERROR - [research_agent] LLM call failed: 'ascii' codec can't encode characters in position 133-137: ordinal not in range(128)
+2026-04-17 16:22:37,337 - WARNING - No sub_problems found, using default
+2026-04-17 16:22:37,338 - INFO - ModelerAgent building model for sub_problem 1/1
+2026-04-17 16:22:38,378 - ERROR - [modeler_agent] LLM call failed: 'ascii' codec can't encode characters in position 133-137: ordinal not in range(128)
+2026-04-17 16:22:38,381 - INFO - SolverAgent solving for sub_problem 1
+2026-04-17 16:22:39,446 - ERROR - [solver_agent] LLM call failed: 'ascii' codec can't encode characters in position 133-137: ordinal not in range(128)
+2026-04-17 16:22:39,449 - INFO - WriterAgent generating paper with 1 sections
+2026-04-17 16:22:40,512 - ERROR - [writer_agent] LLM call failed: 'ascii' codec can't encode characters in position 133-137: ordinal not in range(128)
+2026-04-17 16:22:40,514 - INFO - Task task_2f2537e46951 completed
+2026-04-17 16:22:40,515 - INFO - Task messages saved: task_2f2537e46951 (21 msgs)
+2026-04-17 16:22:40,516 - INFO - Task result saved: task_2f2537e46951
+2026-04-17 16:22:40,517 - INFO - Task metadata saved: task_2f2537e46951
+INFO:     100.77.58.89:61942 - "GET /api/v1/tasks/task_2f2537e46951/stream HTTP/1.1" 200 OK
+2026-04-17 16:22:40,573 - INFO - Task metadata saved: task_2f2537e46951
+INFO:     100.77.58.89:54812 - "GET /api/v1/tasks/ HTTP/1.1" 200 OK
+INFO:     100.77.58.89:54812 - "GET /api/v1/tasks/task_ba1b238c2f2e/messages HTTP/1.1" 200 OK
+INFO:     100.77.58.89:60555 - "GET /api/v1/tasks/task_ba1b238c2f2e/result HTTP/1.1" 200 OK
+INFO:     100.77.58.89:63493 - "OPTIONS /api/v1/tasks/task_ba1b238c2f2e HTTP/1.1" 200 OK
+INFO:     100.77.58.89:55520 - "DELETE /api/v1/tasks/task_ba1b238c2f2e HTTP/1.1" 200 OK
+INFO:     100.77.58.89:65077 - "GET /api/v1/tasks/ HTTP/1.1" 200 OK
+INFO:     100.77.58.89:65077 - "GET /api/v1/tasks/task_2f2537e46951/messages HTTP/1.1" 200 OK
+INFO:     100.77.58.89:55520 - "GET /api/v1/tasks/task_2f2537e46951/result HTTP/1.1" 200 OK
+INFO:     100.77.58.89:60363 - "GET /api/v1/tasks/ HTTP/1.1" 200 OK
+INFO:     100.77.58.89:61967 - "GET /api/v1/tasks/ HTTP/1.1" 200 OK
+2026-04-17 16:37:49,053 - INFO - API密钥已更新，重置Orchestrator
+2026-04-17 16:37:49,053 - INFO - Orchestrator 已重置，将在下次任务时用最新配置初始化
+INFO:     127.0.0.1:61881 - "POST /api/v1/settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51916 - "GET /api/v1/settings HTTP/1.1" 200 OK
+2026-04-17 16:39:13,358 - INFO - Task metadata saved: task_becd42faacaa
+2026-04-17 16:39:13,358 - INFO - Task task_becd42faacaa: found 4 data files
+INFO:     127.0.0.1:56255 - "POST /api/v1/tasks/submit HTTP/1.1" 200 OK
+2026-04-17 16:39:13,359 - INFO - Orchestrator starting workflow for task task_becd42faacaa
+2026-04-17 16:39:13,359 - INFO - Created chat room for task task_becd42faacaa
+2026-04-17 16:39:13,359 - INFO - AnalyzerAgent: 验证测试：求解鸡兔同笼问题，笼子里有若干只鸡和兔子，总共35个头，94只脚，求鸡和兔子各多少只？
+2026-04-17 16:39:15,542 - INFO - HTTP Request: POST https://api.minimax.chat/v1/chat/completions "HTTP/1.1 529 Unknown Status Code"
+2026-04-17 16:39:15,552 - ERROR - [analyzer_agent] HTTP 529: {"type":"error","error":{"type":"overloaded_error","message":"当前服务集群负载较高，请稍后重试，感谢您的耐心等待。 (2064)","http_code":"529"},"request_id":"063124b282e31980e3184531df366420"}
+
+2026-04-17 16:39:16,252 - INFO - ResearchAgent searching: 验证测试：求解鸡兔同笼问题，笼子里有若干只鸡和兔子，总共35个头，94只脚，求鸡和兔子各多少只？
+2026-04-17 16:39:30,496 - INFO - HTTP Request: POST https://api.minimax.chat/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-17 16:39:30,502 - WARNING - No sub_problems found, using default
+2026-04-17 16:39:30,502 - INFO - ModelerAgent building model for sub_problem 1/1
+2026-04-17 16:39:32,786 - INFO - HTTP Request: POST https://api.minimax.chat/v1/chat/completions "HTTP/1.1 529 Unknown Status Code"
+2026-04-17 16:39:32,787 - ERROR - [modeler_agent] HTTP 529: {"type":"error","error":{"type":"overloaded_error","message":"当前服务集群负载较高，请稍后重试，感谢您的耐心等待。 (2064)","http_code":"529"},"request_id":"063124c342a7b9858265607d4b61d74b"}
+
+2026-04-17 16:39:32,789 - INFO - SolverAgent solving for sub_problem 1
+2026-04-17 16:39:34,865 - INFO - HTTP Request: POST https://api.minimax.chat/v1/chat/completions "HTTP/1.1 529 Unknown Status Code"
+2026-04-17 16:39:34,866 - ERROR - [solver_agent] HTTP 529: {"type":"error","error":{"type":"overloaded_error","message":"当前服务集群负载较高，请稍后重试，感谢您的耐心等待。 (2064)","http_code":"529"},"request_id":"063124c5e7839ea1c08cec5dc06d4cd2"}
+
+2026-04-17 16:39:34,868 - INFO - SolverAgent completed: 0 code files
+2026-04-17 16:39:34,868 - INFO - WriterAgent generating paper with 1 sections
+2026-04-17 16:39:36,918 - INFO - HTTP Request: POST https://api.minimax.chat/v1/chat/completions "HTTP/1.1 529 Unknown Status Code"
+2026-04-17 16:39:36,919 - ERROR - [writer_agent] HTTP 529: {"type":"error","error":{"type":"overloaded_error","message":"当前服务集群负载较高，请稍后重试，感谢您的耐心等待。 (2064)","http_code":"529"},"request_id":"063124c76cf8830cd7b8c7eec9f9e247"}
+
+2026-04-17 16:39:36,921 - INFO - Task task_becd42faacaa completed
+2026-04-17 16:39:36,922 - INFO - Task messages saved: task_becd42faacaa (21 msgs)
+2026-04-17 16:39:36,922 - INFO - Task result saved: task_becd42faacaa
+2026-04-17 16:39:36,923 - INFO - Task metadata saved: task_becd42faacaa
+INFO:     127.0.0.1:58750 - "GET /api/v1/tasks/task_becd42faacaa/messages HTTP/1.1" 200 OK

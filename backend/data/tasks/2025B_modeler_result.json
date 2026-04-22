@@ -1,0 +1,195 @@
+{
+  "sub_problem_models": [
+    {
+      "sub_problem_id": 1,
+      "sub_problem_name": "子问题1: 建立单次反射透射干涉条件下的外延层厚度确定数学模型。",
+      "sub_problem_desc": "子问题1: 建立单次反射透射干涉条件下的外延层厚度确定数学模型。\n  类型: 综合问题\n  建议方法: 系统分析",
+      "model_type": "optimization",
+      "model_name": "线性规划",
+      "decision_variables": [
+        {
+          "name": "q_i",
+          "description": "第1种蔬菜的订货量",
+          "type": "连续",
+          "range": "q_i ≥ 0"
+        },
+        {
+          "name": "d_i",
+          "description": "第1种蔬菜的随机需求量",
+          "type": "连续",
+          "range": "d_i ≥ 0"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "p_i",
+          "description": "销售价格",
+          "source": "待从数据确定"
+        },
+        {
+          "name": "c_i",
+          "description": "采购成本",
+          "source": "待从数据确定"
+        },
+        {
+          "name": "h_i",
+          "description": "持有成本系数",
+          "source": "待从数据确定"
+        }
+      ],
+      "objective_function": "min Z = Σc_j·x_j",
+      "constraints": [
+        {
+          "name": "需求量约束",
+          "expression": "d_i ~ N(μ_i, σ_i²)",
+          "type": "等式"
+        },
+        {
+          "name": "库存容量约束",
+          "expression": "q_i ≤ Q_max",
+          "type": "不等式"
+        },
+        {
+          "name": "非负约束",
+          "expression": "q_i ≥ 0",
+          "type": "不等式"
+        }
+      ],
+      "algorithm": {
+        "name": "蒙特卡洛模拟/随机规划求解器",
+        "description": "考虑需求不确定性的随机优化模型"
+      },
+      "model_assumptions": [
+        "假设各品类的日需求量相互独立，服从正态分布",
+        "假设蔬菜的保质期为固定天数",
+        "假设缺货成本和持有成本均为线性函数"
+      ],
+      "model_advantages": [
+        "模型结构清晰，便于理解和解释",
+        "求解方法成熟，计算效率高",
+        "基于报童模型方法，结果具有较好的可解释性"
+      ],
+      "model_limitations": [
+        "假设可能过于理想化，未完全反映实际情况",
+        "对数据质量和样本量有一定要求",
+        "需要根据具体数据进行参数调优"
+      ]
+    },
+    {
+      "sub_problem_id": 2,
+      "sub_problem_name": "子问题2: 设计算法并计算附件1-2的碳化硅厚度，分析可靠性。",
+      "sub_problem_desc": "子问题2: 设计算法并计算附件1-2的碳化硅厚度，分析可靠性。\n  类型: 综合问题\n  建议方法: 系统分析",
+      "model_type": "optimization",
+      "model_name": "线性规划",
+      "decision_variables": [
+        {
+          "name": "q_i",
+          "description": "第2种蔬菜的订货量",
+          "type": "连续",
+          "range": "q_i ≥ 0"
+        },
+        {
+          "name": "d_i",
+          "description": "第2种蔬菜的随机需求量",
+          "type": "连续",
+          "range": "d_i ≥ 0"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "p_i",
+          "description": "销售价格",
+          "source": "待从数据确定"
+        },
+        {
+          "name": "c_i",
+          "description": "采购成本",
+          "source": "待从数据确定"
+        },
+        {
+          "name": "h_i",
+          "description": "持有成本系数",
+          "source": "待从数据确定"
+        }
+      ],
+      "objective_function": "min Z = Σc_j·x_j",
+      "constraints": [
+        {
+          "name": "需求量约束",
+          "expression": "d_i ~ N(μ_i, σ_i²)",
+          "type": "等式"
+        },
+        {
+          "name": "库存容量约束",
+          "expression": "q_i ≤ Q_max",
+          "type": "不等式"
+        },
+        {
+          "name": "非负约束",
+          "expression": "q_i ≥ 0",
+          "type": "不等式"
+        }
+      ],
+      "algorithm": {
+        "name": "蒙特卡洛模拟/随机规划求解器",
+        "description": "考虑需求不确定性的随机优化模型"
+      },
+      "model_assumptions": [
+        "假设各品类的日需求量相互独立，服从正态分布",
+        "假设蔬菜的保质期为固定天数",
+        "假设缺货成本和持有成本均为线性函数"
+      ],
+      "model_advantages": [
+        "模型结构清晰，便于理解和解释",
+        "求解方法成熟，计算效率高",
+        "基于报童模型方法，结果具有较好的可解释性"
+      ],
+      "model_limitations": [
+        "假设可能过于理想化，未完全反映实际情况",
+        "对数据质量和样本量有一定要求",
+        "需要根据具体数据进行参数调优"
+      ]
+    },
+    {
+      "sub_problem_id": 3,
+      "sub_problem_name": "子问题3: 分析多光束干涉必要条件，计算附件3-4的硅厚度，判断是否有多",
+      "sub_problem_desc": "分析多光束干涉必要条件，计算附件3-4的硅厚度，判断是否有多光束干涉并消除影响。",
+      "model_type": "optimization",
+      "model_name": "线性规划",
+      "decision_variables": [
+        {
+          "name": "x_j",
+          "description": "第j个决策变量(连续)",
+          "type": "连续",
+          "range": "≥0"
+        }
+      ],
+      "parameters": [],
+      "objective_function": "min Z = sum(c_j * x_j)",
+      "constraints": [
+        {
+          "name": "约束条件",
+          "expression": "线性不等式约束 + 非负约束",
+          "type": "不等式"
+        }
+      ],
+      "algorithm": {
+        "name": "单纯形法 / scipy.optimize.linprog",
+        "description": "目标函数和约束条件均为线性的优化问题"
+      },
+      "model_assumptions": [
+        "假设所有数据真实可靠",
+        "假设模型参数在研究期间保持稳定",
+        "假设各变量满足模型所要求的数学性质"
+      ],
+      "model_advantages": [
+        "模型结构清晰，基于线性规划方法",
+        "求解方法成熟"
+      ],
+      "model_limitations": [
+        "假设可能过于理想化",
+        "需要根据具体数据调整参数"
+      ]
+    }
+  ]
+}
