@@ -4,40 +4,34 @@ import json
 import os
 
 def test_claude_code():
-    """测试 claude-code-source 集成"""
-    cli_js_path = "d:/coding/MathModel-MutiAgentSyStem/claude-code-source/cli.js"
+    """测试 claude-code 集成"""
+    # WinGet 安装路径
+    claude_exe = "C:/Users/hhh/AppData/Local/Microsoft/WinGet/Packages/Anthropic.ClaudeCode_Microsoft.Winget.Source_8wekyb3d8bbwe/claude.exe"
 
-    if not os.path.isfile(cli_js_path):
-        print(f"ERROR: cli.js not found at {cli_js_path}")
+    if not os.path.isfile(claude_exe):
+        print(f"ERROR: claude.exe not found at {claude_exe}")
         return False
 
-    print(f"cli.js found at: {cli_js_path}")
+    print(f"claude.exe found at: {claude_exe}")
 
-    # Test 1: node --version
+    # Test 1: claude --version
     result = subprocess.run(
-        ["node", "--version"],
-        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10
-    )
-    print(f"node version: {result.stdout.strip()}")
-
-    # Test 2: claude --version
-    result = subprocess.run(
-        ["node", cli_js_path, "--version"],
+        [claude_exe, "--version"],
         capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10
     )
     print(f"claude version: {result.stdout.strip()}")
 
-    # Test 3: claude -p (prompt mode)
-    print("\nTest 3: Claude -p prompt mode...")
-    test_input = '返回 JSON 格式: {"test": "hello", "value": 123}'
+    # Test 2: claude -p (prompt mode)
+    print("\nTest: Claude -p prompt mode...")
+    test_input = '返回 JSON: {"test": "hello", "value": 123}'
 
     proc = subprocess.Popen(
-        ["node", cli_js_path, "-p", "--model", "claude-3-5-sonnet-20241022",
+        [claude_exe, "-p", "--model", "claude-3-5-sonnet-20241022",
          "--output-format", "json", "--input-format", "text"],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        cwd=os.path.dirname(cli_js_path),
+        cwd=os.path.dirname(claude_exe),
     )
 
     stdout, stderr = proc.communicate(
@@ -49,19 +43,24 @@ def test_claude_code():
     stderr_text = stderr.decode("utf-8", errors="replace").strip()
 
     print(f"Return code: {proc.returncode}")
-    print(f"Stdout: {stdout_text[:500]}")
-    if stderr_text:
-        print(f"Stderr: {stderr_text[:200]}")
-
     if proc.returncode == 0:
         try:
             data = json.loads(stdout_text)
-            print(f"\nParsed JSON: {data}")
-        except json.JSONDecodeError as e:
-            print(f"\nJSON parse error: {e}")
+            result_val = data.get("result", "")
+            # Extract JSON from ```json block
+            if "```json" in result_val:
+                json_str = result_val.split("```json")[1].split("```")[0].strip()
+                parsed = json.loads(json_str)
+                print(f"Parsed JSON: {parsed}")
+                print("SUCCESS!")
+                return True
+        except Exception as e:
+            print(f"Parse error: {e}")
             print(f"Raw output: {stdout_text[:300]}")
+    else:
+        print(f"Stderr: {stderr_text[:200]}")
 
-    return proc.returncode == 0
+    return False
 
 if __name__ == "__main__":
     success = test_claude_code()

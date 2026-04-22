@@ -1,0 +1,13 @@
+{
+  "task_id": "task_29eddc1d6b6d",
+  "problem_text": "测试问题：求两个数的和",
+  "problem_preview": "测试问题：求两个数的和",
+  "status": "failed",
+  "created_at": "29eddc1d6b6d",
+  "completed_at": "2026-04-22T11:01:30.447802",
+  "error": "cannot access local variable 'solve_output' where it is not associated with a value",
+  "total_steps": 0,
+  "progress": 0,
+  "current_step": "",
+  "updated_at": "2026-04-22T11:01:30.458366"
+}

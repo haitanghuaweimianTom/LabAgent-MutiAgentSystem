@@ -1,0 +1,13 @@
+{
+  "task_id": "task_c60c5e8942fd",
+  "problem_text": "简单问题：1+1等于几？用数学建模方法求解",
+  "problem_preview": "简单问题：1+1等于几？用数学建模方法求解",
+  "status": "failed",
+  "created_at": "c60c5e8942fd",
+  "completed_at": "2026-04-22T11:03:07.978505",
+  "error": "cannot access local variable 'solve_output' where it is not associated with a value",
+  "total_steps": 0,
+  "progress": 0,
+  "current_step": "",
+  "updated_at": "2026-04-22T11:03:07.987769"
+}
