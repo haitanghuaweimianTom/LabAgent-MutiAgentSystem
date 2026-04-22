@@ -4,3 +4,9 @@ __pycache__/
 .venv/
 venv/
 *.log
+output/
+claude-code-source/
+附件1.xlsx
+附件2.xlsx
+附件3.xlsx
+附件4.xlsx
