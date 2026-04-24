@@ -818,6 +818,8 @@ class BaseAgent(ABC):
                 blocks = [(bid, b.strip()) for bid, b in blocks[:5]]
 
             # 检测问题领域
+            sp_type_str = " ".join(sp_types) if sp_types else ""
+            sp_method_str = " ".join(sp_methods) if sp_methods else ""
             combined = (sp_type_str + " " + sp_method_str + " " + block_content[:300]).lower()
 
             # ===== 检测领域类型 =====

@@ -1,0 +1,70 @@
+def _extract_sub_problems(text: str) -> List[Tuple[int, str]]:
+    """从文本中提取多个子问题/任务/要求
+
+    策略：先用 finditer 精确找"问题N"边界，再用边界切分
+    - 支持: 问题1 ... 问题2 ... 问题3 ...
+    - 也支持: （1）...（2）...（3）...
+    """
+    tasks: List[Tuple[int, str]] = []
+
+    try:
+        # ===== 格式A: 问题1 ... 问题2 ... 问题3 ... (用 finditer 精确切分) =====
+        pattern_a = r'问题(\d+)\s+'
+        matches_a = list(re.finditer(pattern_a, text))
+        for i, m in enumerate(matches_a):
+            num = int(m.group(1))
+            start = m.start() + len(m.group(0))  # after "问题N" + whitespace
+            end = matches_a[i + 1].start() if i + 1 < len(matches_a) else len(text)
+            desc = text[start:end].strip()
+            if len(desc) >= 5:
+                tasks.append((num, desc[:300]))
+
+        # ===== 格式B: （1）...（2）...（3）... =====
+        pattern_b = r'（(\d+)）'
+        matches_b = list(re.finditer(pattern_b, text))
+        for i, m in enumerate(matches_b):
+            num = int(m.group(1))
+            start = m.start() + len(m.group(0))
+            end = matches_b[i + 1].start() if i + 1 < len(matches_b) else len(text)
+            desc = text[start:end].strip()
+            if len(desc) >= 5:
+                tasks.append((num, desc[:300]))
+
+        # ===== 格式C: （一）(二)(三)... =====
+        chinese_nums_map = {
+            '一': 1, '二': 2, '三': 3, '四': 4, '五': 5,
+            '六': 6, '七': 7, '八': 8, '九': 9, '十': 10,
+            '甲': 1, '乙': 2, '丙': 3, '丁': 4
+        }
+        pattern_c = r'（([一二三四五六七八九十甲乙丙丁]+)）'
+        matches_c = list(re.finditer(pattern_c, text))
+        for i, m in enumerate(matches_c):
+            key = m.group(1)
+            if key in chinese_nums_map:
+                num = chinese_nums_map[key]
+                start = m.start() + len(m.group(0))
+                end = matches_c[i + 1].start() if i + 1 < len(matches_c) else len(text)
+                desc = text[start:end].strip()
+                if len(desc) >= 5:
+                    tasks.append((num, desc[:300]))
+
+    except Exception:
+        pass
+
+    # 去重（按编号，保留第一次出现的）
+    seen = {}
+    for num, desc in tasks:
+        if num not in seen:
+            seen[num] = desc
+    result = [(k, v) for k, v in sorted(seen.items(), key=lambda x: x[0])]
+
+    # 如果没找到任何任务，尝试整体扫描（备用方案）
+    if not result:
+        try:
+            req_match = re.search(r'(?:要求|问题)[:：]\s*(.{50,1000})', text)
+            if req_match:
+                result = [(1, req_match.group(1).strip()[:500])]
+        except Exception:
+            pass
+
+    return result
