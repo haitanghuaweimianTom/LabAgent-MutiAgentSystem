@@ -1,0 +1,30 @@
+{
+  "SiC_Sample_1": {
+    "thickness": 12.27,
+    "thickness_uncertainty": 0.46,
+    "fringe_spacing": 153.8,
+    "contrast": 0.943,
+    "correction_factor": 0.998
+  },
+  "SiC_Sample_2": {
+    "thickness": 11.86,
+    "thickness_uncertainty": 0.43,
+    "fringe_spacing": 159.1,
+    "contrast": 0.941,
+    "correction_factor": 0.998
+  },
+  "Si_Sample_1": {
+    "thickness": 9.16,
+    "thickness_uncertainty": 0.32,
+    "fringe_spacing": 157.65,
+    "contrast": 0.913,
+    "correction_factor": 0.999
+  },
+  "Si_Sample_2": {
+    "thickness": 3.41,
+    "thickness_uncertainty": 0.06,
+    "fringe_spacing": 425.23,
+    "contrast": 0.921,
+    "correction_factor": 0.999
+  }
+}

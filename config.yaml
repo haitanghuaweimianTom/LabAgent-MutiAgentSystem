@@ -1,0 +1,74 @@
+# SiC Epitaxial Layer Thickness Measurement - Mathematical Modeling Project
+
+project:
+  name: "SiC_Epitaxial_Thickness_Measurement"
+  task: "2025B"
+  date: "2025-09"
+
+# Model Configuration
+model:
+  name: "gpt-4o"  # LLM model for analysis and paper generation
+  temperature: 0.7
+  max_tokens: 4096
+
+# Paths
+paths:
+  data: "./data"
+  attachments:
+    - "./附件1.xlsx"
+    - "./附件2.xlsx"
+    - "./附件3.xlsx"
+    - "./附件4.xlsx"
+  problem: "./2025B-Problem.md"
+  output: "./output"
+  figures: "./output/figures"
+  paper: "./output/paper"
+  code: "./output/code"
+
+# Problem Configuration
+problem:
+  type: "regression"  # regression, classification, optimization, etc.
+  tasks:
+    - id: 1
+      name: "Double-beam Interference Model"
+      description: "Establish mathematical model for single reflection interference"
+    - id: 2
+      name: "Algorithm Design"
+      description: "Design algorithm and calculate SiC samples"
+    - id: 3
+      name: "Multi-beam Interference Analysis"
+      description: "Analyze multi-beam interference and calculate Si samples"
+
+# Algorithm Configuration
+algorithm:
+  smoothing:
+    window: 31
+    order: 3
+  peak_detection:
+    distance: 30
+    prominence: 3
+  regions:
+    sic: [700, 1000]
+    si_reststrahlen: [400, 700]
+    si_transparent: [1100, 2000]
+  refractive_index:
+    sic: 2.65
+    si: 3.45
+
+# Visualization Configuration
+visualization:
+  dpi: 150
+  figure_size: [14, 10]
+  style: "seaborn-v0_8-darkgrid"
+  color_scheme:
+    sic: "#1f77b4"
+    si: "#2ca02c"
+
+# Paper Configuration
+paper:
+  language: "zh"
+  format: "markdown"
+  min_pages: 18
+  max_pages: 35
+  include_code: true
+  include_tables: true

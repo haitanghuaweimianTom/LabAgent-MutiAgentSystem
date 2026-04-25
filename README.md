@@ -2,281 +2,221 @@
 
 ## 概述
 
-这是一个基于多Agent协作的数学建模论文自动生成系统。系统通过多个专业Agent的协作，自动完成从问题分析、数学建模、编程求解到论文写作的全流程。
+通用数学建模框架，采用多Agent协作工作流，支持上传赛题和数据文件后自动生成15000-25000字的完整数学建模论文。
 
-## 核心架构
+### 核心特性
 
+- **多Agent协作**：问题分析Agent、数学建模Agent、算法设计Agent、代码编写Agent、结果分析Agent、论文撰写Agent
+- **全自动生成**：只需提供赛题（Markdown格式）和数据文件（Excel格式），自动完成全部工作
+- **LLM驱动**：集成Claude Code CLI，使用大语言模型生成高质量论文内容
+- **通用框架**：可用于任意数学建模问题，不局限于特定领域
+
+## 快速开始
+
+### 环境要求
+
+- Python 3.8+
+- Claude Code CLI (需安装并配置)
+- 依赖包: numpy, scipy, matplotlib, openpyxl, pandas
+
+### 安装依赖
+
+```bash
+pip install numpy scipy matplotlib openpyxl pandas
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                      Orchestrator (主编排器)                      │
-├──────────┬──────────┬──────────┬──────────┬──────────────────────┤
-│ Research │ Analyzer │ Modeler  │  Solver  │      Writer         │
-│  Agent   │  Agent   │  Agent   │  Agent   │       Agent         │
-│  (研究)  │  (分析)  │  (建模)  │  (求解)  │       (写作)        │
-└────┬─────┴────┬─────┴────┬─────┴────┬─────┴──────────┬─────────┘
-     │          │          │          │                │
-     └──────────┴──────────┴──────────┴────────────────┘
-                              │
-                        MCP Tools
-              (Web Search / Code Execute / File I/O)
+
+### 安装Claude Code CLI
+
+确保已安装Claude Code并添加到PATH：
+
+```bash
+# 检查是否已安装
+which claude-code
+
+# 如果未安装，请参考Claude Code官方文档进行安装
 ```
 
-## Agent说明
+### 运行
 
-| Agent | 职责 | 默认模型 | 主要MCP工具 |
-|-------|------|----------|-------------|
-| ResearchAgent | 搜集资料、文献、数据 | minimax-m2.7 | web_search, paper_search |
-| AnalyzerAgent | 问题分析、任务分解 | minimax-m2.7 | web_search |
-| ModelerAgent | 建立数学模型、设计算法 | minimax-m2.7 | - |
-| SolverAgent | 编程求解、结果验证 | minimax-m2.7 | code_execute, file_write |
-| WriterAgent | 生成完整LaTeX论文 | minimax-m2.7 | file_write, latex_compile |
+```bash
+# 全自动生成论文（推荐）
+python main.py --auto
+
+# 查看生成的论文
+cat work/final/MathModeling_Paper.md
+```
+
+## 使用方法
+
+### 1. 准备文件
+
+将以下文件放在项目根目录：
+
+- `problem.md` 或 `2025B-Problem.md` 或 `题目.md` - 赛题/问题描述（Markdown格式）
+- `附件1.xlsx`, `附件2.xlsx`, ... - 数据文件（Excel格式）
+
+赛题文件应为Markdown格式，包含：
+- 问题背景描述
+- 具体问题要求
+- 数据文件说明
+
+### 2. 运行生成
+
+```bash
+python main.py --auto
+```
+
+系统会自动：
+- 检测并加载赛题文件
+- 检测并加载数据文件
+- 依次完成问题分析、数学建模、算法设计、代码编写
+- 执行计算获得结果
+- 生成图表设计
+- 撰写完整论文
+
+### 3. 查看结果
+
+- 最终论文：`work/final/MathModeling_Paper.md`
+- 各阶段输出：`work/stage_X/` 目录
+- 求解代码：`work/stage_4_coding/solve.py`
 
 ## 工作流程
 
-1. **研究阶段** - 搜索相关文献和数据
-2. **分析阶段** - 理解问题，分解任务
-3. **建模阶段** - 建立数学模型
-4. **求解阶段** - 编写代码，求解模型
-5. **写作阶段** - 生成完整LaTeX论文
+```
+┌─────────────────────────────────────────────────────────────┐
+│                 多Agent协作工作流程                          │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  问题分析Agent → 数学建模Agent → 算法设计Agent             │
+│         ↓              ↓              ↓                   │
+│    问题分析         数学模型         算法设计                │
+│         ↓              ↓              ↓                   │
+│  代码编写Agent → 执行计算Agent → 结果分析Agent              │
+│         ↓              ↓              ↓                   │
+│      代码          计算结果        结果分析                 │
+│                                                             │
+│                           ↓                                 │
+│                    论文撰写Agent                             │
+│                           ↓                                 │
+│                    完整论文（15000-25000字）                 │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 阶段说明
+
+| 阶段 | Agent | 说明 | 输出 |
+|------|-------|------|------|
+| 1. 问题分析 | problem_analyzer | 分析赛题，提取关键信息 | 结构化分析结果 |
+| 2. 数学建模 | model_designer | 建立数学模型 | 模型公式 |
+| 3. 算法设计 | algorithm_designer | 设计求解算法 | 算法伪代码 |
+| 4. 代码编写 | code_writer | 编写Python代码 | solve.py |
+| 5. 执行计算 | executor | 运行代码 | 计算结果 |
+| 6. 结果分析 | result_analyzer | 分析结果 | 分析报告 |
+| 7. 图表设计 | chart_designer | 设计论文图表 | 图表方案 |
+| 8. 论文撰写 | paper_writer | 生成完整论文 | MathModeling_Paper.md |
 
 ## 项目结构
 
 ```
-math_modeling_multi_agent/
-├── backend/                      # 后端服务
-│   ├── app/
-│   │   ├── agents/              # Agent实现
-│   │   │   ├── base.py          # Agent基类
-│   │   │   ├── orchestrator.py  # 主编排器
-│   │   │   ├── research_agent.py
-│   │   │   ├── analyzer_agent.py
-│   │   │   ├── modeler_agent.py
-│   │   │   ├── solver_agent.py
-│   │   │   └── writer_agent.py
-│   │   ├── routers/             # API路由
-│   │   ├── schemas/             # Pydantic模型
-│   │   ├── mcp/                 # MCP配置
-│   │   ├── config.py            # 配置管理
-│   │   └── main.py              # FastAPI入口
-│   ├── requirements.txt
-│   └── Dockerfile
-│
-├── frontend/                     # 前端应用
-│   ├── src/
-│   │   └── app/                 # Next.js页面
-│   └── package.json
-│
-├── config/                      # 配置文件
-│   ├── mcp_config.json          # MCP工具配置
-│   └── latex_templates/         # LaTeX模板
-│
-├── docker-compose.yml           # Docker编排
-├── .env.example                 # 环境变量示例
+MathModel-MutiAgentSystem/
+├── main.py                    # 主入口
+├── src/
+│   ├── agent_workflow.py      # Agent工作流引擎（集成LLM调用）
+│   ├── prompts.py             # Agent提示词模板
+│   ├── workflow.py            # 分步骤工作流程框架
+│   ├── framework.py           # 通用框架
+│   ├── data/                  # 数据加载模块
+│   ├── models/                # 数学模型
+│   ├── solver/                # 求解器
+│   ├── visualization/         # 可视化
+│   ├── paper/                 # 论文生成
+│   └── agents/                # Agent模块
+├── work/                      # 工作目录（生成后）
+│   ├── stage_1_analysis/      # 问题分析
+│   ├── stage_2_modeling/      # 数学建模
+│   ├── stage_3_algorithm/     # 算法设计
+│   ├── stage_4_coding/        # 代码编写
+│   ├── stage_5_execution/     # 执行计算
+│   ├── stage_6_result_analysis/ # 结果分析
+│   ├── stage_7_charts/        # 图表设计
+│   └── final/                 # 最终论文
+│       └── MathModeling_Paper.md
+├── 2025B-Problem.md          # 赛题示例
+├── 附件1.xlsx                 # 数据文件示例
 └── README.md
 ```
 
-## 快速开始
+## 论文输出规格
 
-### 1. 环境准备
+生成的论文满足以下规格：
 
-```bash
-# 克隆项目
-cd E:/cherryClaw/math_modeling_multi_agent
+- **字数**：正文15000-25000字
+- **结构**：包含摘要、问题重述、问题分析、模型假设、模型建立、模型求解、结果分析、灵敏度分析、模型评价、参考文献、附录
+- **格式**：使用标准数学建模论文格式
+- **公式**：使用LaTeX格式，完整推导
+- **图表**：清晰的图表设计和说明
 
-# 安装后端依赖
-cd backend
-pip install -r requirements.txt
+## 提示词模板
 
-# 安装前端依赖
-cd ../frontend
-npm install
+系统使用精心设计的提示词模板，包括：
+
+- **problem_analyzer**：问题分析Agent提示词
+- **model_designer**：数学建模Agent提示词
+- **algorithm_designer**：算法设计Agent提示词
+- **code_writer**：代码编写Agent提示词
+- **result_analyzer**：结果分析Agent提示词
+- **paper_writer**：论文撰写Agent提示词
+
+这些提示词经过优化，确保生成的论文内容详尽、分析深入。
+
+## 依赖说明
+
 ```
-
-### 2. 配置环境变量
-
-```bash
-# 复制环境变量模板
-cp .env.example .env
-
-# 编辑.env，填入你的API Key
-MINIMAX_API_KEY=your_api_key_here
+numpy>=1.20.0      # 数值计算
+scipy>=1.7.0       # 科学计算
+matplotlib>=3.4.0  # 图表生成
+openpyxl>=3.0.0   # Excel数据读取
+pandas>=1.3.0     # 数据处理
 ```
-
-### 3. 启动服务
-
-#### 开发模式
-
-```bash
-# 启动后端
-cd backend
-uvicorn app.main:app --reload --port 8000
-
-# 启动前端（新终端）
-cd frontend
-npm run dev
-```
-
-#### Docker部署
-
-```bash
-# 构建并启动所有服务
-docker-compose up -d
-
-# 查看日志
-docker-compose logs -f
-```
-
-### 4. 访问系统
-
-- 前端界面: http://localhost:3000
-- API文档: http://localhost:8000/docs
-- 健康检查: http://localhost:8000/health
-
-## API接口
-
-### 任务管理
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | /api/v1/tasks | 创建任务 |
-| POST | /api/v1/tasks/submit | 提交并执行任务 |
-| GET | /api/v1/tasks/{task_id}/status | 获取任务状态 |
-| GET | /api/v1/tasks/{task_id}/result | 获取任务结果 |
-| GET | /api/v1/tasks/{task_id}/stream | SSE流式进度 |
-| POST | /api/v1/tasks/{task_id}/cancel | 取消任务 |
-
-### Agent管理
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | /api/v1/agents | 列出所有Agent |
-| GET | /api/v1/agents/{name} | 获取Agent详情 |
-| GET | /api/v1/agents/{name}/tools | 获取Agent工具列表 |
-| PUT | /api/v1/agents/{name}/model | 更新Agent模型 |
-
-## MCP工具集成
-
-系统支持通过MCP（Model Context Protocol）集成各种工具：
-
-### 内置工具
-
-- `web_search` - 网页搜索
-- `paper_search` - 学术论文搜索
-- `code_execute` - 代码执行
-- `file_write` - 文件写入
-- `latex_compile` - LaTeX编译
-
-### 添加自定义工具
-
-编辑 `config/mcp_config.json`:
-
-```json
-{
-  "servers": {
-    "custom_server": {
-      "name": "custom_server",
-      "command": "npx",
-      "args": ["-y", "@custom/mcp-server"],
-      "enabled": true
-    }
-  },
-  "tools": {
-    "custom_tool": {
-      "name": "custom_tool",
-      "server": "custom_server",
-      "description": "自定义工具"
-    }
-  }
-}
-```
-
-## 模型配置
-
-每个Agent可以使用不同的模型。修改Agent配置：
-
-```bash
-curl -X PUT http://localhost:8000/api/v1/agents/solver_agent/model \
-  -H "Content-Type: application/json" \
-  -d '{"model": "minimax-m2.1"}'
-```
-
-## 配置说明
-
-### 环境变量
-
-| 变量 | 说明 | 默认值 |
-|------|------|--------|
-| MINIMAX_API_KEY | MiniMax API密钥 | - |
-| API_BASE_URL | API基础URL | https://api.minimax.chat/v1 |
-| DEFAULT_MODEL | 默认模型 | minimax-m2.7 |
-| DEBUG | 调试模式 | false |
-
-### CORS配置
-
-在生产环境中，请修改 `CORS_ORIGINS` 为具体的域名列表。
-
-## 开发指南
-
-### 添加新的Agent
-
-1. 继承 `BaseAgent` 类
-2. 实现 `execute()` 和 `get_system_prompt()` 方法
-3. 使用 `@AgentFactory.register("agent_name")` 注册
-
-```python
-from .base import BaseAgent, AgentFactory
-
-@AgentFactory.register("new_agent")
-class NewAgent(BaseAgent):
-    name = "new_agent"
-    description = "新Agent"
-    default_model = "minimax-m2.7"
-
-    def get_system_prompt(self) -> str:
-        return "你的系统提示词..."
-
-    async def execute(self, task_input, context):
-        # 执行逻辑
-        return {"result": "..."}
-```
-
-### 自定义工作流
-
-```python
-custom_workflow = [
-    {"agent": "research_agent", "input": {"action": "search"}},
-    {"agent": "analyzer_agent", "input": {"action": "analyze"}},
-    # 添加更多步骤...
-]
-```
-
-## 论文结构
-
-生成的论文包含以下章节：
-
-1. 摘要
-2. 问题重述
-3. 问题分析
-4. 模型假设与符号说明
-5. 模型建立
-6. 模型求解
-7. 结果分析
-8. 灵敏度分析
-9. 模型评价
-10. 参考文献
 
 ## 注意事项
 
-1. **API Key**: 请确保正确配置MiniMax API Key
-2. **LaTeX编译**: 如需编译LaTeX，需安装xelatex
-3. **网络问题**: 部分MCP工具需要访问外网
-4. **并发限制**: 建议同时运行的任务不超过3个
+1. **Claude Code CLI**：必须安装并配置好API密钥
+2. **数据文件格式**：Excel (.xlsx)，支持多列数据
+3. **赛题文件格式**：Markdown (.md)
+4. **生成时间**：完整论文生成可能需要5-10分钟
+5. **论文输出**：为Markdown格式，可转换为LaTeX或Word
 
-## License
+## 故障排除
 
-MIT License
+### LLM调用失败
+
+如果遇到"Claude Code CLI未找到"错误：
+1. 确认已安装Claude Code
+2. 确认Claude Code在PATH中
+3. 确认已配置API密钥
+
+### 论文字数不足
+
+确保：
+1. 赛题文件内容详尽
+2. 数据文件有效
+3. LLM调用正常
+
+### 数据加载失败
+
+检查Excel文件：
+1. 文件格式是否为.xlsx
+2. 数据是否在第一个工作表
+3. 数据是否包含数值列
 
 ## 版本历史
 
-- **v2.0.0** (2026-04-16) - 多Agent架构重构，支持MCP工具集成
-- **v1.0.0** (2026-04-10) - 基础论文生成功能
+- **v2.1.0** (2026-04-25) - 集成LLM调用，支持全自动论文生成
+- **v2.0.0** (2026-04-25) - 通用分步骤工作流程框架
+- **v1.0.0** - 初始SiC专用版本
+
+## 许可证
+
+MIT License
