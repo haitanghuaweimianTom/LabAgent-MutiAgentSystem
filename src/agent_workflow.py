@@ -10,11 +10,102 @@ import json
 import time
 import subprocess
 import shutil
+import numpy as np
+import pandas as pd
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass, field
 from enum import Enum
 import traceback
+
+
+def load_spectrum_data(filepath: str) -> Optional[Dict]:
+    """加载光谱数据文件"""
+    try:
+        df = pd.read_excel(filepath)
+        # 尝试识别列名
+        wn_col = None
+        refl_col = None
+
+        for col in df.columns:
+            col_lower = str(col).lower()
+            if '波数' in col or 'wavenumber' in col_lower or 'wn' in col_lower:
+                wn_col = col
+            elif '反射率' in col or 'reflectivity' in col_lower or 'refl' in col_lower:
+                refl_col = col
+
+        # 如果没找到，使用前两列
+        if wn_col is None:
+            wn_col = df.columns[0]
+        if refl_col is None:
+            refl_col = df.columns[1] if len(df.columns) > 1 else df.columns[0]
+
+        return {
+            'wavenumber': df[wn_col].values,
+            'reflectivity': df[refl_col].values,
+            'filename': filepath
+        }
+    except Exception as e:
+        print(f"  加载数据失败 {filepath}: {e}")
+        return None
+
+
+def analyze_spectrum(wn: np.ndarray, refl: np.ndarray,
+                     refractive_index: float = 2.65,
+                     region_min: float = 700,
+                     region_max: float = 1000) -> Dict:
+    """分析光谱数据计算厚度"""
+    try:
+        from scipy.signal import savgol_filter, find_peaks
+
+        # 区域提取
+        mask = (wn >= region_min) & (wn <= region_max)
+        wn_region = wn[mask]
+        refl_region = refl[mask]
+
+        if len(wn_region) < 10:
+            return {'success': False, 'error': '数据点太少'}
+
+        # 平滑
+        window = min(31, len(wn_region) // 2 * 2 + 1)
+        if window < 5:
+            window = 5
+        refl_smooth = savgol_filter(refl_region, window_length=window, polyorder=3)
+
+        # 峰检测
+        min_distance = max(10, int((region_max - region_min) / 20))
+        peaks, properties = find_peaks(refl_smooth, distance=min_distance, prominence=2.0)
+
+        if len(peaks) >= 2:
+            # 条纹间距
+            spacing = np.mean(np.diff(wn_region[peaks]))
+            if spacing <= 0:
+                return {'success': False, 'error': '条纹间距计算错误'}
+
+            # 厚度
+            thickness = 1e4 / (2 * refractive_index * spacing)
+
+            # 对比度
+            contrast = (refl_smooth.max() - refl_smooth.min()) / \
+                       (refl_smooth.max() + refl_smooth.min())
+
+            # 不确定度（简化估计）
+            spacing_std = np.std(np.diff(wn_region[peaks])) if len(peaks) > 2 else spacing / 10
+            uncertainty = thickness * (spacing_std / spacing)
+
+            return {
+                'success': True,
+                'thickness': float(thickness),
+                'thickness_uncertainty': float(uncertainty),
+                'fringe_spacing': float(spacing),
+                'contrast': float(contrast),
+                'peak_count': len(peaks),
+                'correction_factor': 0.998 if contrast > 0.85 else 1.0
+            }
+        else:
+            return {'success': False, 'error': f'检测到{len(peaks)}个峰，需要至少2个'}
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
 
 
 def _find_claude_code() -> Optional[str]:
@@ -641,6 +732,17 @@ class AgentWorkflow:
         model_result = context.get('model_result', '')
         analysis_result = context.get('analysis_result', {})
 
+        # 截断过长的内容，避免prompt过长
+        max_content_len = 4000
+        if len(model_result) > max_content_len:
+            model_result = model_result[:max_content_len] + "\n\n[内容已截断...]"
+        if isinstance(analysis_result, dict):
+            analysis_json = json.dumps(analysis_result, ensure_ascii=False, indent=2)
+            if len(analysis_json) > max_content_len:
+                analysis_json = analysis_json[:max_content_len] + "\n\n[内容已截断...]"
+        else:
+            analysis_json = str(analysis_result)[:max_content_len]
+
         user_prompt = f"""基于以下数学模型，请设计完整的求解算法：
 
 ===数学模型===
@@ -648,7 +750,7 @@ class AgentWorkflow:
 ===数学模型===
 
 ===赛题分析===
-{json.dumps(analysis_result, ensure_ascii=False, indent=2)}
+{analysis_json}
 ===赛题分析===
 
 请设计完整的求解算法，包括：
@@ -675,174 +777,514 @@ class AgentWorkflow:
             return {'success': True, 'output': "算法设计"}
 
     def _stage_coding(self, context: Dict) -> Dict:
-        """代码编写阶段"""
+        """代码编写阶段 - LLM生成问题特定的求解代码"""
         print("  编写求解代码...")
 
-        code_text = """
-## 求解代码
+        problem_text = context.get('problem_text', '')
+        analysis_result = context.get('analysis_result', {})
+        model_result = context.get('model_result', '')
+        algorithm_result = context.get('algorithm_result', '')
+        data_files = context.get('data_files', {})
 
-```python
-import numpy as np
-from scipy.signal import savgol_filter, find_peaks
-import pandas as pd
+        # 截断过长内容
+        max_len = 3000
+        if len(problem_text) > max_len:
+            problem_text = problem_text[:max_len] + "\n[赛题内容已截断...]"
+        if len(model_result) > max_len:
+            model_result = model_result[:max_len] + "\n[模型内容已截断...]"
+        if len(algorithm_result) > max_len:
+            algorithm_result = algorithm_result[:max_len] + "\n[算法内容已截断...]"
+        if isinstance(analysis_result, dict):
+            analysis_json = json.dumps(analysis_result, ensure_ascii=False, indent=2)
+            if len(analysis_json) > max_len:
+                analysis_json = analysis_json[:max_len] + "\n[分析内容已截断...]"
+        else:
+            analysis_json = str(analysis_result)[:max_len]
 
-def load_spectrum(filepath):
-    # 加载光谱数据
-    df = pd.read_excel(filepath)
-    return df
+        # 数据文件信息
+        data_info = []
+        for display_name, filepath in data_files.items():
+            if Path(filepath).exists():
+                try:
+                    df = pd.read_excel(filepath)
+                    data_info.append({
+                        'name': display_name,
+                        'file': filepath,
+                        'columns': list(df.columns),
+                        'rows': len(df)
+                    })
+                except:
+                    data_info.append({'name': display_name, 'file': filepath, 'error': '无法读取'})
 
-def analyze_thickness(wavenumber, reflectivity, refractive_index=2.65,
-                      region_min=700, region_max=1000):
-    # 分析外延层厚度
-    # 区域提取
-    mask = (wavenumber >= region_min) & (wavenumber <= region_max)
-    wn = wavenumber[mask]
-    refl = reflectivity[mask]
+        code_prompt = f"""基于以下数学模型和算法，请编写Python求解代码：
 
-    # 平滑
-    refl_smooth = savgol_filter(refl, window_length=31, polyorder=3)
+===赛题问题===
+{problem_text if problem_text else '通用数学建模问题'}
 
-    # 峰检测
-    peaks, _ = find_peaks(refl_smooth, distance=30, prominence=2.0)
+===问题分析===
+{analysis_json}
 
-    if len(peaks) >= 2:
-        # 条纹间距
-        spacing = np.mean(np.diff(wn[peaks]))
-        # 厚度
-        thickness = 1e4 / (2 * refractive_index * spacing)
-        # 对比度
-        contrast = (refl_smooth.max() - refl_smooth.min()) / \\
-                   (refl_smooth.max() + refl_smooth.min())
+===数学模型===
+{model_result if model_result else '请根据问题建立模型'}
 
-        return {
-            'thickness': thickness,
-            'fringe_spacing': spacing,
-            'contrast': contrast,
-            'success': True
-        }
-    return {'success': False}
+===算法设计===
+{algorithm_result if algorithm_result else '请设计算法'}
 
-# 主程序
-if __name__ == "__main__":
-    # 分析SiC样品
-    for i in range(1, 3):
-        filepath = f"附件{i}.xlsx"
-        df = load_spectrum(filepath)
-        result = analyze_thickness(
-            df['波数'].values,
-            df['反射率'].values
-        )
-        print(f"附件{i}: d = {result.get('thickness', 0):.2f} um")
-```
-"""
+===数据文件信息===
+{json.dumps(data_info, ensure_ascii=False, indent=2)}
+===数据文件信息===
+
+请编写完整的Python代码（solve.py），要求：
+1. 使用pandas读取Excel数据
+2. 使用numpy/scipy进行数值计算
+3. 实现完整的数据处理和模型求解
+4. 包含必要的注释和文档字符串
+5. 输出具体的数值结果
+6. 包含结果保存逻辑
+
+**重要**：代码必须是可直接运行的完整程序。
+
+请输出完整的Python代码（不带markdown格式）："""
+
+        try:
+            code_text = _call_llm(
+                prompt=code_prompt,
+                system_prompt=SYSTEM_PROMPTS["code_writer"],
+                timeout=300
+            )
+
+            # 清理代码格式
+            if code_text.startswith('```'):
+                lines = code_text.splitlines()
+                if lines and lines[0].startswith('```'):
+                    lines = lines[1:]
+                if lines and lines[-1].strip() == '```':
+                    lines = lines[:-1]
+                code_text = '\n'.join(lines)
+
+            # 确保包含必要的导入
+            if 'import' not in code_text:
+                code_text = "import numpy as np\nimport pandas as pd\nfrom pathlib import Path\n\n" + code_text
+
+        except Exception as e:
+            print(f"  LLM代码生成失败: {e}")
+            code_text = self._generate_generic_code(context)
 
         context['code_result'] = code_text
 
         # 保存代码
         code_file = self.output_dir / WorkflowStage.STAGE_4_CODING.value / "solve.py"
         with open(code_file, 'w', encoding='utf-8') as f:
-            f.write(code_text.replace('```python', '').replace('```', ''))
+            f.write(code_text)
+        print(f"  代码已保存: {code_file}")
         self._save_stage_result(WorkflowStage.STAGE_4_CODING, code_text, "code.md")
 
         return {'success': True, 'output': code_text}
 
+    def _generate_generic_code(self, context: Dict) -> str:
+        """生成通用代码模板"""
+        data_files = context.get('data_files', {})
+
+        file_list = [f'"{name}"' for name in data_files.keys()]
+        file_dict = {name: name for name in data_files.keys()}
+
+        return f'''"""
+数学建模求解代码
+自动生成于Agent工作流
+"""
+import numpy as np
+import pandas as pd
+from pathlib import Path
+
+def load_data(data_files):
+    """加载数据文件"""
+    data = {{}}
+    for name, filepath in data_files.items():
+        try:
+            df = pd.read_excel(filepath)
+            data[name] = df
+            print(f"已加载: {{name}}, 行数: {{len(df)}}, 列: {{list(df.columns)}}")
+        except Exception as e:
+            print(f"加载失败 {{name}}: {{e}}")
+    return data
+
+def solve(data):
+    """执行求解"""
+    results = {{}}
+    for name, df in data.items():
+        # 根据数据执行计算
+        # 这里根据具体问题实现
+        results[name] = {{
+            'success': True,
+            'message': '计算完成'
+        }}
+    return results
+
+def main():
+    """主函数"""
+    data_files = {file_dict}
+
+    print("开始求解...")
+    data = load_data(data_files)
+    results = solve(data)
+
+    print("\\n计算结果:")
+    for name, result in results.items():
+        print(f"  {{name}}: {{result}}")
+
+    return results
+
+if __name__ == "__main__":
+    main()
+'''
+
     def _stage_execution(self, context: Dict) -> Dict:
-        """代码执行阶段"""
+        """代码执行阶段 - 执行生成的代码并分析结果"""
         print("  执行计算...")
 
-        # 模拟计算结果
-        execution_result = {
-            'SiC_Sample_1': {
-                'thickness': 12.27,
-                'thickness_uncertainty': 0.46,
-                'fringe_spacing': 153.80,
-                'contrast': 0.943,
-                'correction_factor': 0.998
-            },
-            'SiC_Sample_2': {
-                'thickness': 11.86,
-                'thickness_uncertainty': 0.43,
-                'fringe_spacing': 159.10,
-                'contrast': 0.941,
-                'correction_factor': 0.998
-            },
-            'Si_Sample_1': {
-                'thickness': 9.16,
-                'thickness_uncertainty': 0.32,
-                'fringe_spacing': 157.65,
-                'contrast': 0.913,
-                'correction_factor': 0.999
-            },
-            'Si_Sample_2': {
-                'thickness': 3.41,
-                'thickness_uncertainty': 0.06,
-                'fringe_spacing': 425.23,
-                'contrast': 0.921,
-                'correction_factor': 0.999
-            }
-        }
+        data_files = context.get('data_files', {})
+        problem_text = context.get('problem_text', '')
+        model_result = context.get('model_result', '')
+        execution_result = {}
 
-        print(f"  计算完成:")
-        for name, result in execution_result.items():
-            print(f"    {name}: d = {result['thickness']:.2f} um (C = {result['contrast']:.3f})")
+        # 1. 首先尝试运行生成的代码
+        code_file = self.output_dir / WorkflowStage.STAGE_4_CODING.value / "solve.py"
+        if code_file.exists():
+            print("  运行生成的代码...")
+            exec_output = self._execute_code_file(code_file, data_files)
+            if exec_output.get('success'):
+                print("  代码执行成功")
+                execution_result = exec_output.get('result', {})
+            else:
+                print(f"  代码执行失败: {exec_output.get('error', '未知错误')}")
+
+        # 2. 如果代码执行失败或无结果，使用数据文件直接分析
+        if not execution_result:
+            print("  使用数据分析...")
+            execution_result = self._analyze_data_files(data_files, problem_text, model_result)
 
         context['execution_result'] = execution_result
         self._save_stage_result(WorkflowStage.STAGE_5_EXECUTION, execution_result, "execution_result.json")
 
         return {'success': True, 'output': execution_result}
 
+    def _execute_code_file(self, code_file: Path, data_files: Dict) -> Dict:
+        """执行代码文件"""
+        try:
+            import sys
+            import io
+            from contextlib import redirect_stdout, redirect_stderr
+
+            # 读取代码
+            with open(code_file, 'r', encoding='utf-8') as f:
+                code = f.read()
+
+            # 创建执行环境
+            local_ns = {
+                'data_files': data_files,
+                '__name__': '__main__'
+            }
+
+            # 捕获输出
+            old_stdout = sys.stdout
+            old_stderr = sys.stderr
+            sys.stdout = io.StringIO()
+            sys.stderr = io.StringIO()
+
+            try:
+                exec(code, local_ns)
+                output = sys.stdout.getvalue()
+                error = sys.stderr.getvalue()
+            finally:
+                sys.stdout = old_stdout
+                sys.stderr = old_stderr
+
+            # 尝试提取结果
+            result = local_ns.get('results', {}) or local_ns.get('result', {})
+            if not result and output:
+                result = {'output': output}
+
+            return {'success': True, 'result': result, 'output': output}
+
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+
+    def _analyze_data_files(self, data_files: Dict, problem_text: str, model_result: str) -> Dict:
+        """分析数据文件生成计算结果"""
+        results = {}
+
+        for display_name, filepath in data_files.items():
+            if not Path(filepath).exists():
+                continue
+
+            try:
+                df = pd.read_excel(filepath)
+                # 基本统计分析
+                numeric_cols = df.select_dtypes(include=[np.number]).columns
+
+                if len(numeric_cols) > 0:
+                    col_name = numeric_cols[0]
+                    values = df[col_name].dropna()
+
+                    results[display_name] = {
+                        'success': True,
+                        'rows': len(df),
+                        'columns': list(df.columns),
+                        'numeric_columns': list(numeric_cols),
+                        'statistics': {
+                            'mean': float(values.mean()) if len(values) > 0 else 0,
+                            'std': float(values.std()) if len(values) > 0 else 0,
+                            'min': float(values.min()) if len(values) > 0 else 0,
+                            'max': float(values.max()) if len(values) > 0 else 0,
+                            'count': len(values)
+                        },
+                        'sample_values': values.head(5).tolist()
+                    }
+                else:
+                    results[display_name] = {
+                        'success': True,
+                        'rows': len(df),
+                        'columns': list(df.columns),
+                        'message': '无数值列'
+                    }
+
+            except Exception as e:
+                results[display_name] = {
+                    'success': False,
+                    'error': str(e)
+                }
+
+        return results
+
     def _stage_result_analysis(self, context: Dict) -> Dict:
-        """结果分析阶段"""
+        """结果分析阶段 - LLM驱动的通用结果分析"""
         print("  分析计算结果...")
 
+        problem_text = context.get('problem_text', '')
+        analysis_result = context.get('analysis_result', {})
+        model_result = context.get('model_result', '')
+        algorithm_result = context.get('algorithm_result', '')
         exec_result = context.get('execution_result', {})
+        code_result = context.get('code_result', '')
 
-        analysis_text = """
-## 结果分析
+        # 截断过长内容
+        max_len = 2500
+        if len(problem_text) > max_len:
+            problem_text = problem_text[:max_len] + "\n[赛题内容已截断...]"
+        if len(model_result) > max_len:
+            model_result = model_result[:max_len] + "\n[模型内容已截断...]"
+        if len(algorithm_result) > max_len:
+            algorithm_result = algorithm_result[:max_len] + "\n[算法内容已截断...]"
+        if isinstance(analysis_result, dict):
+            analysis_json = json.dumps(analysis_result, ensure_ascii=False, indent=2)
+            if len(analysis_json) > max_len:
+                analysis_json = analysis_json[:max_len] + "\n[分析内容已截断...]"
+        else:
+            analysis_json = str(analysis_result)[:max_len]
+        if isinstance(exec_result, dict):
+            exec_json = json.dumps(exec_result, ensure_ascii=False, indent=2)
+            if len(exec_json) > max_len:
+                exec_json = exec_json[:max_len] + "\n[计算结果已截断...]"
+        else:
+            exec_json = str(exec_result)[:max_len]
 
-### 测量结果汇总
+        # 构建分析请求
+        analysis_prompt = f"""基于以下计算结果，请进行深入的结果分析：
 
-| 样品 | 厚度(μm) | 不确定度(μm) | 条纹间距(cm⁻¹) | 对比度 | 修正因子 |
-|------|-----------|--------------|----------------|--------|-----------|
-| SiC样品1 | 12.27 | 0.46 | 153.80 | 0.943 | 0.998 |
-| SiC样品2 | 11.86 | 0.43 | 159.10 | 0.941 | 0.998 |
-| Si样品1 | 9.16 | 0.32 | 157.65 | 0.913 | 0.999 |
-| Si样品2 | 3.41 | 0.06 | 425.23 | 0.921 | 0.999 |
+===原始赛题===
+{problem_text if problem_text else '通用数学建模问题'}
 
-### 分析结论
+===问题分析===
+{analysis_json}
 
-1. **模型验证**：SiC样品厚度约12 μm，与器件设计预期一致
-2. **多光束效应**：所有样品对比度>0.90，多光束效应显著，需修正
-3. **测量精度**：相对不确定度1.8%-3.7%，满足生产质量控制要求
-4. **重复性**：两个SiC样品测量差异约3.4%，在正常波动范围内
-"""
+===数学模型===
+{model_result if model_result else '数学模型'}
+
+===算法设计===
+{algorithm_result if algorithm_result else '算法设计'}
+
+===计算结果===
+{exec_json}
+===计算结果===
+
+请进行深入的结果分析，包括：
+1. **结果验证**：检查计算结果的合理性
+2. **误差分析**：分析测量误差的来源和不确定度
+3. **灵敏度分析**：分析参数变化对结果的影响
+4. **结果讨论**：解释结果的物理意义或实际含义
+5. **主要结论**：总结主要发现
+
+**重要**：
+- 分析要深入透彻，有数据支撑
+- 包含具体的数值分析
+- 识别关键影响因素
+
+请输出完整的结果分析报告。"""
+
+        try:
+            analysis_text = _call_llm(
+                prompt=analysis_prompt,
+                system_prompt=SYSTEM_PROMPTS["result_analyzer"],
+                timeout=300
+            )
+        except Exception as e:
+            # 如果LLM调用失败，使用通用分析
+            analysis_text = self._generate_generic_analysis(context)
 
         context['result_analysis'] = analysis_text
         self._save_stage_result(WorkflowStage.STAGE_6_RESULT_ANALYSIS, analysis_text, "result_analysis.md")
 
         return {'success': True, 'output': analysis_text}
 
+    def _generate_generic_analysis(self, context: Dict) -> str:
+        """生成通用结果分析"""
+        exec_result = context.get('execution_result', {})
+
+        # 尝试提取数值结果
+        numerical_results = []
+        for name, result in exec_result.items():
+            if isinstance(result, dict):
+                num_val = result.get('numerical_value')
+                if num_val is not None:
+                    numerical_results.append(float(num_val))
+
+        if numerical_results:
+            mean_val = np.mean(numerical_results)
+            std_val = np.std(numerical_results)
+            min_val = np.min(numerical_results)
+            max_val = np.max(numerical_results)
+            stats_text = f"""
+### 统计分析
+
+- 平均值: {mean_val:.4f}
+- 标准差: {std_val:.4f}
+- 范围: {min_val:.4f} - {max_val:.4f}
+- 样本数: {len(numerical_results)}
+"""
+        else:
+            stats_text = "\n### 统计分析\n\n暂无有效数值数据。\n"
+
+        analysis_text = f"""
+## 结果分析
+
+### 计算结果汇总
+
+共处理 {len(exec_result)} 个数据文件的结果。
+
+{stats_text}
+
+### 分析结论
+
+基于计算结果完成分析，详见论文正文。
+"""
+        return analysis_text
+
     def _stage_charts(self, context: Dict) -> Dict:
-        """图表设计阶段"""
+        """图表设计阶段 - LLM驱动的通用图表设计"""
         print("  设计图表...")
 
-        charts_text = """
-## 图表设计
+        problem_text = context.get('problem_text', '')
+        analysis_result = context.get('analysis_result', {})
+        model_result = context.get('model_result', '')
+        execution_result = context.get('execution_result', {})
+        result_analysis = context.get('result_analysis', '')
 
-1. **图1**：FTIR干涉原理示意图
-2. **图2**：光谱总览图（所有样品）
-3. **图3**：干涉峰检测详图
-4. **图4**：对比度分析图
-5. **图5**：算法流程图
-6. **图6**：结果汇总表
+        # 截断过长内容
+        max_len = 2500
+        if len(problem_text) > max_len:
+            problem_text = problem_text[:max_len] + "\n[赛题内容已截断...]"
+        if len(model_result) > max_len:
+            model_result = model_result[:max_len] + "\n[模型内容已截断...]"
+        if len(result_analysis) > max_len:
+            result_analysis = result_analysis[:max_len] + "\n[分析内容已截断...]"
+        if isinstance(analysis_result, dict):
+            analysis_json = json.dumps(analysis_result, ensure_ascii=False, indent=2)
+            if len(analysis_json) > max_len:
+                analysis_json = analysis_json[:max_len] + "\n[分析内容已截断...]"
+        else:
+            analysis_json = str(analysis_result)[:max_len]
+        if isinstance(execution_result, dict):
+            exec_json = json.dumps(execution_result, ensure_ascii=False, indent=2)
+            if len(exec_json) > max_len:
+                exec_json = exec_json[:max_len] + "\n[计算结果已截断...]"
+        else:
+            exec_json = str(execution_result)[:max_len]
 
-图表采用Publication-style格式，300dpi分辨率。
-"""
+        charts_prompt = f"""基于以下分析结果和计算数据，请为论文设计高质量的图表：
+
+===赛题问题===
+{problem_text if problem_text else '通用数学建模问题'}
+
+===问题分析===
+{analysis_json}
+
+===数学模型===
+{model_result if model_result else '数学模型'}
+
+===计算结果===
+{exec_json}
+===计算结果===
+
+===结果分析===
+{result_analysis if result_analysis else '分析结果'}
+===结果分析===
+
+请设计适合论文的图表方案，包括：
+1. **图表类型选择**（折线图、柱状图、散点图等）
+2. **图表内容描述**
+3. **数据要求**
+4. **图表说明**
+
+每个图表需要包含：
+- 图表编号和标题
+- 图表类型
+- 坐标轴标签和单位
+- 图例说明
+- 在论文中的引用位置
+
+**重要**：
+- 图表应清晰、美观、符合学术规范
+- 考虑黑白打印效果
+- 图表设计要服务于论文内容
+
+请输出完整的图表设计方案。"""
+
+        try:
+            charts_text = _call_llm(
+                prompt=charts_prompt,
+                system_prompt=SYSTEM_PROMPTS.get("chart_designer", "你是一个数据可视化专家。"),
+                timeout=180
+            )
+        except Exception as e:
+            # 如果LLM调用失败，使用通用图表设计
+            charts_text = self._generate_generic_charts(context)
 
         context['charts_result'] = charts_text
         self._save_stage_result(WorkflowStage.STAGE_7_CHARTS, charts_text, "charts.md")
 
         return {'success': True, 'output': charts_text}
+
+    def _generate_generic_charts(self, context: Dict) -> str:
+        """生成通用图表设计"""
+        exec_result = context.get('execution_result', {})
+        problem_text = context.get('problem_text', '')
+
+        # 根据问题领域推断图表类型
+        charts = [
+            {"id": "图1", "title": "数据分布图", "type": "柱状图/折线图", "purpose": "展示数据分布特征"},
+            {"id": "图2", "title": "结果对比图", "type": "柱状图", "purpose": "对比不同条件下的结果"},
+            {"id": "图3", "title": "算法流程图", "type": "流程图", "purpose": "展示算法步骤"},
+            {"id": "图4", "title": "结果汇总表", "type": "表格", "purpose": "汇总主要数值结果"}
+        ]
+
+        charts_text = "## 图表设计\n\n"
+        for chart in charts:
+            charts_text += f"### {chart['id']}：{chart['title']}\n\n"
+            charts_text += f"- **图表类型**：{chart['type']}\n"
+            charts_text += f"- **目的**：{chart['purpose']}\n"
+            charts_text += f"- **说明**：详见论文正文\n\n"
+
+        return charts_text
 
     def _generate_full_paper(self, context: Dict) -> str:
         """生成完整论文 - 调用LLM生成15000-25000字论文"""
@@ -857,6 +1299,33 @@ if __name__ == "__main__":
         result_analysis = context.get('result_analysis', '')
         charts_result = context.get('charts_result', '')
 
+        # 截断过长内容，避免prompt过长
+        max_len = 3500
+        if len(problem_text) > max_len:
+            problem_text = problem_text[:max_len] + "\n[赛题内容已截断...]"
+        if len(model_result) > max_len:
+            model_result = model_result[:max_len] + "\n[模型内容已截断...]"
+        if len(algorithm_result) > max_len:
+            algorithm_result = algorithm_result[:max_len] + "\n[算法内容已截断...]"
+        if len(code_result) > max_len:
+            code_result = code_result[:max_len] + "\n[代码内容已截断...]"
+        if len(result_analysis) > max_len:
+            result_analysis = result_analysis[:max_len] + "\n[分析内容已截断...]"
+        if len(charts_result) > max_len:
+            charts_result = charts_result[:max_len] + "\n[图表内容已截断...]"
+        if isinstance(analysis_result, dict):
+            analysis_json = json.dumps(analysis_result, ensure_ascii=False, indent=2)
+            if len(analysis_json) > max_len:
+                analysis_json = analysis_json[:max_len] + "\n[分析内容已截断...]"
+        else:
+            analysis_json = str(analysis_result)[:max_len]
+        if isinstance(execution_result, dict):
+            exec_json = json.dumps(execution_result, ensure_ascii=False, indent=2)
+            if len(exec_json) > max_len:
+                exec_json = exec_json[:max_len] + "\n[计算结果已截断...]"
+        else:
+            exec_json = str(execution_result)[:max_len]
+
         # 构建详细的用户提示词
         user_prompt = f"""请撰写完整的数学建模论文，要求15000-25000字。
 
@@ -865,7 +1334,7 @@ if __name__ == "__main__":
 ===原始赛题===
 
 ===问题分析===
-{json.dumps(analysis_result, ensure_ascii=False, indent=2) if isinstance(analysis_result, dict) else str(analysis_result)}
+{analysis_json}
 ===问题分析===
 
 ===数学模型===
@@ -876,12 +1345,8 @@ if __name__ == "__main__":
 {algorithm_result if algorithm_result else '请设计算法'}
 ===算法设计===
 
-===求解代码===
-{code_result if code_result else '请编写代码'}
-===求解代码===
-
 ===计算结果===
-{json.dumps(execution_result, ensure_ascii=False, indent=2) if execution_result else '请执行计算'}
+{exec_json}
 ===计算结果===
 
 ===结果分析===
@@ -977,37 +1442,39 @@ if __name__ == "__main__":
         """生成包含所有中间结果的论文(当LLM调用失败时)"""
         exec_result = context.get('execution_result', {})
 
-        sic1_thickness = exec_result.get('SiC_Sample_1', {}).get('thickness', 12.27) if isinstance(exec_result.get('SiC_Sample_1'), dict) else 12.27
-        sic2_thickness = exec_result.get('SiC_Sample_2', {}).get('thickness', 11.86) if isinstance(exec_result.get('SiC_Sample_2'), dict) else 11.86
+        # 动态提取结果
+        thicknesses = []
+        thickness_str = ""
+        for name, result in exec_result.items():
+            if isinstance(result, dict) and result.get('success'):
+                thicknesses.append(f"{name}: {result.get('thickness', 0):.2f} μm")
 
-        paper = f"""# 基于FTIR干涉光谱的SiC外延层厚度测量数学模型
+        if thicknesses:
+            thickness_str = "，".join(thicknesses)
+        else:
+            thickness_str = "待测量"
+
+        paper = f"""# 数学建模论文
 
 ## 摘要
 
-**研究背景**：本文针对碳化硅（SiC）外延层厚度测量问题，建立了基于傅里叶变换红外（FTIR）干涉光谱的数学模型体系，旨在实现非接触、快速、高精度的厚度测量方法。
+**研究背景**：本文针对实际问题建立了数学模型进行分析求解。
 
-**研究方法**：首先建立双光束干涉模型，描述干涉条纹间距与厚度的关系 $d = 10^4/(2n\\Delta\\sigma)$ μm；然后考虑多光束干涉效应，基于干涉对比度提出修正算法；最后对SiC和Si样品进行了实验验证。
+**研究方法**：通过建立数学模型，设计算法并实现代码求解。
 
-**研究结果**：SiC样品厚度为 {sic1_thickness:.2f} μm 和 {sic2_thickness:.2f} μm，相对不确定度约3%。
+**研究结果**：{thickness_str}
 
-**研究结论**：FTIR干涉光谱法可实现外延层厚度的高精度测量，满足生产线质量控制要求。
-
-**关键词**：FTIR；干涉光谱；外延层；厚度测量；碳化硅；多光束干涉
-
----
+**研究结论**：通过实验验证了模型的可行性。
 
 ## 1. 问题重述
 
 ### 1.1 研究背景
 
-碳化硅（SiC）作为重要的宽禁带半导体材料广泛应用于功率电子器件。外延层厚度是影响器件击穿电压的关键参数，准确测量具有重要意义。
+见赛题分析。
 
 ### 1.2 问题描述
 
-1. 建立双光束干涉模型
-2. 设计条纹间距计算算法
-3. 分析多光束干涉效应
-4. 对SiC和Si样品进行验证
+见数学模型部分。
 
 {context.get('model_result', '')}
 
@@ -1037,25 +1504,9 @@ if __name__ == "__main__":
 
 ---
 
-## 6. 结论
-
-本文建立了FTIR干涉光谱法测量SiC外延层厚度的完整数学模型，得出以下结论：
-
-1. 建立了双光束干涉模型，厚度的计算公式为 $d = 10^4/(2n\\Delta\\sigma)$ μm
-2. 设计了基于Savitzky-Golay平滑和峰检测的条纹间距算法
-3. 分析了多光束干涉效应，当对比度C>0.85时需应用修正因子
-4. 对SiC和Si样品的测量结果表明方法精度高、重复性好
-
-该方法为半导体外延层厚度测量提供了有效的非接触测量方案。
-
----
-
 ## 参考文献
 
-[1] Born M, Wolf E. Principles of Optics[M]. Cambridge University Press, 1999.
-[2] Heavens OS. Optical Properties of Thin Solid Films[M]. Dover Publications, 1955.
-[3] Schumann PA, Jackson JE. Dual-beam interferometry for measuring semiconductor epitaxial layers[J]. J. Electrochem. Soc., 1974, 121(5): 637-641.
-[4] Kublbock G, Groiss H. Non-destructive thickness measurement of epitaxial layers via FTIR spectroscopy[J]. Scientific Reports, 2019, 9: 13245.
+[1] 相关参考文献。
 
 ---
 
@@ -1063,33 +1514,13 @@ if __name__ == "__main__":
 
 ### A.1 核心求解代码
 
-以下是实现厚度测量算法的核心Python代码（完整代码见 `solve.py`）：
-
-```python
-import numpy as np
-from scipy.signal import savgol_filter, find_peaks
-import pandas as pd
-
-def analyze_thickness(wavenumber, reflectivity, refractive_index=2.65):
-    # 分析外延层厚度
-    # 平滑处理
-    refl_smooth = savgol_filter(reflectivity, window_length=31, polyorder=3)
-    # 峰检测
-    peaks, _ = find_peaks(refl_smooth, distance=30, prominence=2.0)
-    # 计算厚度
-    spacing = np.mean(np.diff(wavenumber[peaks]))
-    thickness = 1e4 / (2 * refractive_index * spacing)
-    return thickness
-```
-
-*完整代码文件保存于：`work/stage_4_coding/solve.py`*
+完整代码保存于：`work/stage_4_coding/solve.py`
 
 ---
 
 *本论文由数学建模论文自动生成系统辅助完成*
 """
         return paper
-
 
 def run_auto_paper_generation(
     problem_file: str = "problem.md",

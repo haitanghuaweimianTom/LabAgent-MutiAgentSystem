@@ -153,37 +153,34 @@ def run_stepwise_workflow(output_dir: str = 'work'):
 
 
 def detect_data_files() -> dict:
-    """检测数据文件"""
+    """检测数据文件 - 自动识别所有xlsx文件"""
     data_files = {}
 
-    candidates = [
-        ('附件1.xlsx', '附件1'),
-        ('附件2.xlsx', '附件2'),
-        ('附件3.xlsx', '附件3'),
-        ('附件4.xlsx', '附件4'),
-        ('attachment1.xlsx', '附件1'),
-        ('attachment2.xlsx', '附件2'),
-    ]
-
-    for filename, display_name in candidates:
-        if Path(filename).exists():
+    # 自动检测所有xlsx文件
+    for filepath in Path('.').glob('*.xlsx'):
+        filename = filepath.name
+        # 排除明显不是数据的文件（如配置文件）
+        if filename.lower() not in ['config.xlsx', 'settings.xlsx']:
+            # 提取显示名称
+            display_name = filename.replace('.xlsx', '').replace('附件', '附件').replace('result', '结果')
             data_files[display_name] = filename
 
     return data_files
 
 
 def detect_problem_file() -> str:
-    """检测赛题文件"""
-    candidates = [
-        '2025B-Problem.md',
-        'problem.md',
-        '题目.md',
-        '赛题.md'
-    ]
+    """检测赛题文件 - 自动识别所有problem.md文件"""
+    # 优先查找包含problem的md文件（不区分大小写）
+    for filepath in Path('.').glob('*.md'):
+        filename = filepath.name.lower()
+        if 'problem' in filename:
+            return filepath.name
 
-    for filename in candidates:
-        if Path(filename).exists():
-            return filename
+    # 查找其他md文件作为备选
+    for filepath in Path('.').glob('*.md'):
+        filename = filepath.name.lower()
+        if '题目' in filename or '赛题' in filename:
+            return filepath.name
 
     return ""
 
@@ -193,38 +190,29 @@ def _load_data_files() -> list:
     from data import SpectrumLoader
 
     attachment_data = []
-    data_files = [
-        '附件1.xlsx', '附件2.xlsx', '附件3.xlsx', '附件4.xlsx',
-        'attachment1.xlsx', 'attachment2.xlsx', 'attachment3.xlsx', 'attachment4.xlsx'
-    ]
+    data_files = detect_data_files()
 
-    for filename in data_files:
+    for display_name, filename in data_files.items():
         if Path(filename).exists():
             try:
-                data = SpectrumLoader.load_from_excel(filename, filename.replace('.xlsx', ''))
+                data = SpectrumLoader.load_from_excel(filename, display_name)
                 attachment_data.append(data)
             except:
                 attachment_data.append(None)
-        else:
-            if '附件' in filename:
-                pass  # 不显示中文附件的not found
-            else:
-                pass
 
     return attachment_data
 
 
 def _load_problem_text() -> str:
     """加载问题文本"""
-    candidates = ['2025B-Problem.md', 'problem.md', '题目.md']
+    problem_file = detect_problem_file()
 
-    for filename in candidates:
-        if Path(filename).exists():
-            try:
-                with open(filename, 'r', encoding='utf-8') as f:
-                    return f.read()
-            except:
-                pass
+    if problem_file and Path(problem_file).exists():
+        try:
+            with open(problem_file, 'r', encoding='utf-8') as f:
+                return f.read()
+        except:
+            pass
 
     return ""
 
