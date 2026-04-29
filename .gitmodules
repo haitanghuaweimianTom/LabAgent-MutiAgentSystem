@@ -1,0 +1,3 @@
+[submodule "cherry-studio"]
+	path = cherry-studio
+	url = https://github.com/haitanghuaweimianTom/cherry-studio.git
