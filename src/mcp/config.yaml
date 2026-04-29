@@ -1,0 +1,34 @@
+# MCP (Model Context Protocol) 服务器配置
+# 配置外部 MCP 服务器，让 Agent 能够调用外部工具
+
+# 文件系统 MCP 服务器
+filesystem:
+  name: "filesystem"
+  command: "npx"
+  args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+
+# Python 代码执行 MCP 服务器
+python:
+  name: "python"
+  command: "npx"
+  args: ["-y", "@modelcontextprotocol/server-python"]
+
+# 获取网页内容 MCP 服务器
+fetch:
+  name: "fetch"
+  command: "npx"
+  args: ["-y", "@modelcontextprotocol/server-fetch"]
+
+# Brave 搜索 MCP 服务器 (需要 BRAVE_API_KEY)
+brave_search:
+  name: "brave_search"
+  command: "npx"
+  args: ["-y", "@modelcontextprotocol/server-brave-search"]
+  env:
+    BRAVE_API_KEY: ""
+
+# 内存 MCP 服务器
+memory:
+  name: "memory"
+  command: "npx"
+  args: ["-y", "@modelcontextprotocol/server-memory"]
