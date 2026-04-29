@@ -12,6 +12,17 @@ httpx>=0.26.0
 # LLM 多提供商支持
 # (使用原生 httpx 调用各平台 API，无需额外 SDK)
 
+# MCP 支持
+mcp>=1.0.0
+
+# 知识库/RAG
+sentence-transformers>=2.0.0
+scikit-learn>=1.3.0
+
+# 文档处理
+python-docx>=0.8.0
+PyPDF2>=3.0.0
+
 # 工具库
 python-dotenv>=1.0.0
 python-multipart>=0.0.6
