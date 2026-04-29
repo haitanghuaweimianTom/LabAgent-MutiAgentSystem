@@ -9,6 +9,9 @@ pydantic-settings>=2.1.0
 # HTTP客户端
 httpx>=0.26.0
 
+# LLM 多提供商支持
+# (使用原生 httpx 调用各平台 API，无需额外 SDK)
+
 # 工具库
 python-dotenv>=1.0.0
 python-multipart>=0.0.6
