@@ -50,7 +50,7 @@ class CodeExecutor:
         prompt: str,
         system_prompt: Optional[str] = None,
         model: str = "sonnet",
-        timeout: int = 600,
+        timeout: int = 180,
     ) -> str:
         """
         使用 Claude Code CLI 生成代码
@@ -170,6 +170,9 @@ class CodeExecutor:
                 env.update(env_vars)
 
             work_dir = self.output_dir.resolve()
+
+            # 将输出目录通过环境变量传递，便于代码使用绝对路径
+            env["OUTPUT_DIR"] = str(self.output_dir.resolve())
 
             proc = subprocess.run(
                 [sys.executable, str(code_file.resolve())],
@@ -333,9 +336,17 @@ class CodeExecutor:
 
         # 1. 生成代码
         print(f"    [CodeExecutor] 生成代码...")
+        raw_code = ""
         if use_claude_cli and self._claude_path:
             try:
                 raw_code = self.generate_code_with_claude_cli(prompt, system_prompt)
+                print(f"    [CodeExecutor] Claude CLI 代码生成成功")
+            except subprocess.TimeoutExpired:
+                print(f"    [CodeExecutor] Claude CLI 超时({180}s)，回退到 API...")
+                if self.call_llm:
+                    raw_code = self.call_llm(prompt, system_prompt)
+                else:
+                    raise RuntimeError("Claude CLI 超时且无可用的 API 回退")
             except Exception as e:
                 print(f"    [CodeExecutor] Claude CLI 失败: {e}，回退到 API")
                 if self.call_llm:

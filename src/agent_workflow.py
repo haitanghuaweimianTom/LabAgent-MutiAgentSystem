@@ -491,10 +491,15 @@ class UnifiedWorkflow:
         if not sub_problems:
             sub_problems = [{"id": "task_1", "description": "建立模型求解"}]
 
+        # 为加快执行速度，最多处理3个子任务的详细建模
+        tasks_to_model = self.coordinator.dag_order[:3]
+        if len(self.coordinator.dag_order) > 3:
+            print(f"  注意: 共有 {len(self.coordinator.dag_order)} 个子任务，本次详细建模前3个")
+
         all_formulas = []
         all_models = []
 
-        for task_id in self.coordinator.dag_order:
+        for task_id in tasks_to_model:
             task_node = self.coordinator.tasks.get(task_id)
             if not task_node:
                 continue
@@ -515,25 +520,18 @@ class UnifiedWorkflow:
                 if kb_results:
                     kb_context = f"【相关知识】\n{kb_results}\n\n"
 
-            # 1. 任务分析
-            analysis_prompt = f"""对以下子任务进行深入分析：
+            # 1. 任务分析（缩短prompt以加快响应）
+            analysis_prompt = f"""对以下子任务进行数学分析：
 
-任务描述: {task_node.description}
+任务: {task_node.description}
 
-整体问题背景:
-{self.problem_text[:2000]}
+背景: {self.problem_text[:1500]}
 
 {dep_context}
 
 {kb_context}
 
-请分析：
-1. 该任务的核心数学结构
-2. 适合的建模方法及选择理由
-3. 关键变量和参数
-4. 与前置任务的衔接点
-
-输出详细分析（至少800字）。"""
+分析核心数学结构、建模方法、关键变量。输出至少600字。"""
 
             task_analysis = _call_llm(
                 analysis_prompt,
@@ -541,19 +539,18 @@ class UnifiedWorkflow:
             )
 
             # 2. 公式生成（Actor）
-            formulas_prompt = f"""基于以下分析，建立完整的数学模型。
+            formulas_prompt = f"""基于以下分析建立数学模型。
 
 任务分析:
-{task_analysis[:1500]}
+{task_analysis[:1200]}
 
 要求：
-1. 明确定义所有变量和参数（用表格形式）
-2. 建立核心数学公式（LaTeX格式），公式必须编号
-3. 说明每个公式的物理/数学意义
-4. 列出模型假设及其合理性
-5. 讨论模型的适用条件和局限性
+1. 定义变量和参数（表格形式）
+2. 建立核心数学公式（LaTeX格式，公式编号）
+3. 说明公式物理意义
+4. 列出模型假设
 
-输出完整的建模过程（至少1500字）。"""
+输出至少1200字的完整建模过程。"""
 
             formulas = _call_llm(
                 formulas_prompt,
@@ -601,47 +598,55 @@ class UnifiedWorkflow:
         明确使用 Claude CLI 生成代码
         使用 CodeExecutor 执行与调试
         """
-        print("  生成求解代码...")
+        print("  [Stage 3] 开始计算求解...")
 
         formulas = modeling.get("formulas", "")
+
+        # 设计算法
+        print("  [Stage 3.1] 设计求解算法...")
         algorithm_desc = self._design_algorithm(modeling)
         self.context["algorithm"] = algorithm_desc
+        print(f"  [Stage 3.1] 算法设计完成 ({len(algorithm_desc)} 字符)")
 
         # 构建代码生成 Prompt
-        code_prompt = f"""请编写完整的Python求解代码，解决以下数学建模问题。
+        # 注：要求代码精简，避免输出被截断
+        code_prompt = f"""请编写精简的Python求解代码，解决以下数学建模问题。
 
-【数学模型】
-{formulas[:3000]}
+【数学模型核心】
+{formulas[:1500]}
 
 【算法设计】
-{algorithm_desc[:2000]}
+{algorithm_desc[:1000]}
 
-【赛题】
-{self.problem_text[:2000]}
+【赛题摘要】
+{self.problem_text[:1000]}
 
 【数据文件】
 {json.dumps(self.data_files, ensure_ascii=False, indent=2)}
 
 硬性要求：
-1. 代码开头必须是 import 语句，不要有任何中文说明
-2. 代码必须能够读取上述数据文件（使用 pandas 读取 Excel）
-3. 代码运行后必须在 {self.output_dir}/execution/results.json 写入结构化结果
-4. 代码中必须包含 main() 函数
-5. 所有数值结果使用 Python 原生 float/int
-6. 不得使用 input() 等交互式函数
-7. 结果必须包含具体的数值，不能是空值或占位符
+1. 代码必须精简（不超过250行），不要定义不必要的类，用函数即可
+2. 代码开头必须是 import 语句，不要有任何中文说明文字
+3. 代码必须能够读取上述数据文件（使用 pandas 读取 Excel）
+4. 代码运行后必须在 os.environ.get('OUTPUT_DIR', '.') + '/execution/results.json' 路径写入结构化结果
+5. 代码中必须包含 main() 函数，且 if __name__ == '__main__': main()
+6. 所有数值结果使用 Python 原生 float/int，不要嵌套numpy类型
+7. 不得使用 input() 等交互式函数
+8. 结果必须包含具体的数值，不能是空值或占位符
 
-输出纯Python代码，不要包含 markdown 代码块标记。"""
+输出纯Python代码，不要包含 markdown 代码块标记，不要任何解释。"""
 
-        # 使用 CodeExecutor（明确使用 Claude CLI）
-        print("  调用 Claude CLI 生成代码...")
+        # 使用 CodeExecutor 生成代码
+        # 注：代码生成使用 API（输出更稳定、长度限制宽松），代码修复使用 Claude CLI
+        print("  [Stage 3.2] 生成求解代码...")
         result = self.code_executor.generate_and_run(
             prompt=code_prompt,
-            system_prompt="你是Python编程专家，擅长数值计算和数据处理。",
+            system_prompt="你是Python编程专家，只输出代码，不输出任何解释。",
             data_files=self.data_files,
             filename="solve.py",
-            use_claude_cli=True,
+            use_claude_cli=False,
         )
+        print(f"  [Stage 3.2] 代码生成完成，success={result.get('success', False)}")
 
         code = result.get("code", "")
         execution_result = result.get("execution_result", {})
@@ -669,7 +674,7 @@ class UnifiedWorkflow:
         prompt = f"""基于以下数学模型，设计详细的求解算法。
 
 【数学模型】
-{formulas[:3000]}
+{formulas[:2000]}
 
 要求：
 1. 选择合适的数值方法或优化算法
@@ -678,13 +683,15 @@ class UnifiedWorkflow:
 4. 讨论算法的收敛性和稳定性
 5. 设置关键参数及其选择依据
 
-输出至少1000字的算法设计文档。"""
+输出至少800字的算法设计文档。"""
 
+        print("    调用LLM设计算法...")
         return _call_llm(prompt, "你是算法设计专家。")
 
     def _interpret_results(self, execution_result: Dict, modeling: Dict) -> str:
         """解读计算结果"""
         result_text = json.dumps(execution_result, ensure_ascii=False, indent=2)
+        print(f"    计算结果大小: {len(result_text)} 字符")
 
         prompt = f"""请对以下计算结果进行专业解读。
 
@@ -719,19 +726,23 @@ class UnifiedWorkflow:
         - 相关性过滤，避免上下文过长
         - Critique-Improvement 质量保障
         """
+        print("  [Stage 4] 开始论文生成...")
+
         # 生成图表
-        print("  生成图表...")
+        print("  [Stage 4.1] 生成图表...")
         charts = self._generate_charts()
         self.context["charts"] = charts
 
         # 使用 PaperGenerator 生成论文
+        print("  [Stage 4.2] 逐章生成论文内容...")
         paper = self.paper_generator.generate_paper(
             context=self.context,
             use_critique=self.use_critique,
         )
 
         # 保存
-        self.paper_generator.save_paper(paper, "MathModeling_Paper.md")
+        paper_path = self.paper_generator.save_paper(paper, "MathModeling_Paper.md")
+        print(f"  [Stage 4.2] 论文已保存: {paper_path}")
 
         return paper
 
