@@ -26,7 +26,7 @@ import traceback
 # =============================================================================
 
 try:
-    from src.llm import get_provider_manager, ProviderType, LLMProviderFactory
+    from src.llm import get_provider_manager, ProviderType, LLMProviderFactory, ProviderConfig
     _LLM_PROVIDER_AVAILABLE = True
 except ImportError:
     _LLM_PROVIDER_AVAILABLE = False
@@ -51,9 +51,16 @@ def _get_llm_provider():
             manager.register(ProviderType.OPENAI)
             _llm_provider_instance = manager
             print(f"[LLM] 使用 OpenAI Provider (model={manager.get().config.model})")
-        elif os.getenv("ANTHROPIC_API_KEY"):
+        elif os.getenv("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN"):
             manager = get_provider_manager()
-            manager.register(ProviderType.ANTHROPIC)
+            config = ProviderConfig.from_env(ProviderType.ANTHROPIC)
+            # 兼容 ANTHROPIC_AUTH_TOKEN
+            if not config.api_key and os.getenv("ANTHROPIC_AUTH_TOKEN"):
+                config.api_key = os.getenv("ANTHROPIC_AUTH_TOKEN")
+            # 兼容自定义 base_url
+            if os.getenv("ANTHROPIC_BASE_URL"):
+                config.api_host = os.getenv("ANTHROPIC_BASE_URL")
+            manager.register(ProviderType.ANTHROPIC, config)
             _llm_provider_instance = manager
             print(f"[LLM] 使用 Anthropic Provider (model={manager.get().config.model})")
         elif os.getenv("GEMINI_API_KEY"):
