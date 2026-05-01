@@ -1,0 +1,89 @@
+{
+  "FY1": {
+    "effective_time": 0.0,
+    "alpha_deg": 0.0,
+    "t1": 0.0,
+    "drop_point": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "burst_point": [
+      0.0,
+      0.0,
+      0.0
+    ]
+  },
+  "FY2": {
+    "effective_time": 0.0,
+    "alpha_deg": 0.0,
+    "t1": 0.0,
+    "drop_point": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "burst_point": [
+      0.0,
+      0.0,
+      0.0
+    ]
+  },
+  "FY3": {
+    "effective_time": 0.0,
+    "alpha_deg": 0.0,
+    "t1": 0.0,
+    "drop_point": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "burst_point": [
+      0.0,
+      0.0,
+      0.0
+    ]
+  },
+  "FY4": {
+    "effective_time": 0.0,
+    "alpha_deg": 0.0,
+    "t1": 0.0,
+    "drop_point": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "burst_point": [
+      0.0,
+      0.0,
+      0.0
+    ]
+  },
+  "FY5": {
+    "effective_time": 0.0,
+    "alpha_deg": 0.0,
+    "t1": 0.0,
+    "drop_point": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "burst_point": [
+      0.0,
+      0.0,
+      0.0
+    ]
+  },
+  "best_for_M1": {
+    "fy": "",
+    "effective_time": 0.0
+  },
+  "best_for_M2": {
+    "fy": "",
+    "effective_time": 0.0
+  },
+  "best_for_M3": {
+    "fy": "",
+    "effective_time": 0.0
+  }
+}

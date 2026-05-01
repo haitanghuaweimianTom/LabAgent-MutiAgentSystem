@@ -24,7 +24,8 @@
       "Bash(curl -s http://localhost:8000/health)",
       "Bash(pkill -f \"uvicorn\")",
       "Bash(mkdir -p backend/data/uploads backend/data/tasks output/papers output/code output/figures)",
-      "Bash(nohup python *)"
+      "Bash(nohup python *)",
+      "Bash(git -C /home/tomgame/projects/MathModel-MutiAgentSystem log --oneline -20)"
     ]
   }
 }
