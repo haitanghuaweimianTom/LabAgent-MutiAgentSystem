@@ -23,6 +23,11 @@ import os
 import argparse
 from pathlib import Path
 
+# 禁用输出缓冲，确保日志实时可见
+os.environ["PYTHONUNBUFFERED"] = "1"
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(line_buffering=True)
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
 

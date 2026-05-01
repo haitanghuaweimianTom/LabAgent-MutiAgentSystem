@@ -281,15 +281,34 @@ class UnifiedWorkflow:
         self.problem_text = ""
         self.data_files: Dict[str, str] = {}
 
+        # ======================================================================
+        # 显式记忆池：每个阶段完成后生成结构化摘要，供下一阶段调用
+        # ======================================================================
+        self.memory_pool: Dict[str, str] = {
+            "analysis_summary": "",      # 阶段1摘要
+            "modeling_summary": "",      # 阶段2摘要
+            "algorithm_summary": "",     # 阶段3算法摘要
+            "results_summary": "",       # 阶段3结果摘要
+            "chapter_summaries": {},     # 论文各章摘要，key=chapter_id
+        }
+
     def run_full_workflow(
         self,
         problem_text: str,
         data_files: Dict[str, str],
         problem_name: str = "数学建模问题",
     ) -> str:
-        """运行完整工作流"""
+        """
+        运行完整工作流（分段生成 + 显式记忆传递）
+
+        核心改进：
+        1. 每个阶段完成后，调用LLM生成结构化摘要，存入 memory_pool
+        2. 下一阶段只接收摘要，而非原始长文本，避免上下文过载
+        3. 论文生成阶段，先预生成大纲，再逐章生成，每章基于前几章摘要 + 阶段摘要
+        """
         print("\n" + "=" * 70)
-        print("数学建模论文自动生成系统 v2.0")
+        print("数学建模论文自动生成系统 v2.1")
+        print("架构: 分段生成 + 显式记忆池")
         print(f"模板: {self.template_name}")
         print("=" * 70)
 
@@ -304,15 +323,21 @@ class UnifiedWorkflow:
         print(f"{'='*60}")
         analysis = self._stage_problem_analysis()
         self.context["analysis"] = analysis
+        # 生成阶段1摘要
+        self.memory_pool["analysis_summary"] = self._summarize_analysis(analysis)
+        self._save_text("stage_1_analysis/analysis_summary.md", self.memory_pool["analysis_summary"])
 
-        # Stage 2: 数学建模（按DAG拓扑序）
+        # Stage 2: 数学建模
         print(f"\n{'='*60}")
         print("Stage 2: 数学建模")
         print(f"{'='*60}")
         modeling = self._stage_mathematical_modeling(analysis)
         self.context["modeling"] = modeling
+        # 生成阶段2摘要
+        self.memory_pool["modeling_summary"] = self._summarize_modeling(modeling)
+        self._save_text("stage_2_modeling/modeling_summary.md", self.memory_pool["modeling_summary"])
 
-        # Stage 3: 计算求解（Claude CLI代码）
+        # Stage 3: 计算求解
         print(f"\n{'='*60}")
         print("Stage 3: 计算求解")
         print(f"{'='*60}")
@@ -320,12 +345,17 @@ class UnifiedWorkflow:
         self.context["execution_result"] = solving.get("execution_result", {})
         self.context["code"] = solving.get("code", "")
         self.context["result_analysis"] = solving.get("interpretation", "")
+        # 生成阶段3摘要
+        self.memory_pool["algorithm_summary"] = self._summarize_algorithm(solving)
+        self.memory_pool["results_summary"] = self._summarize_results(solving)
+        self._save_text("stage_3_algorithm/algorithm_summary.md", self.memory_pool["algorithm_summary"])
+        self._save_text("stage_6_result_analysis/results_summary.md", self.memory_pool["results_summary"])
 
-        # Stage 4: 论文生成
+        # Stage 4: 论文生成（分段 + 记忆传递）
         print(f"\n{'='*60}")
-        print("Stage 4: 论文生成")
+        print("Stage 4: 论文生成（分段逐章 + 记忆衔接）")
         print(f"{'='*60}")
-        paper = self._stage_paper_generation()
+        paper = self._stage_paper_generation_v2()
 
         # 保存结果
         paper_path = self.output_dir / "final" / "MathModeling_Paper.md"
@@ -344,6 +374,12 @@ class UnifiedWorkflow:
         # 导出解决方案
         solution_path = self.output_dir / "final" / "solution.json"
         self.coordinator.export_solution(solution_path)
+
+        # 导出 docx
+        self._convert_to_docx(paper_path)
+
+        # 导出记忆池
+        self._save_json("final/memory_pool.json", self.memory_pool)
 
         return paper
 
@@ -491,10 +527,9 @@ class UnifiedWorkflow:
         if not sub_problems:
             sub_problems = [{"id": "task_1", "description": "建立模型求解"}]
 
-        # 为加快执行速度，最多处理3个子任务的详细建模
-        tasks_to_model = self.coordinator.dag_order[:3]
-        if len(self.coordinator.dag_order) > 3:
-            print(f"  注意: 共有 {len(self.coordinator.dag_order)} 个子任务，本次详细建模前3个")
+        # 处理所有子任务的详细建模（确保不遗留pending任务）
+        tasks_to_model = self.coordinator.dag_order
+        print(f"  共 {len(tasks_to_model)} 个子任务，将全部进行详细建模")
 
         all_formulas = []
         all_models = []
@@ -625,14 +660,22 @@ class UnifiedWorkflow:
 {json.dumps(self.data_files, ensure_ascii=False, indent=2)}
 
 硬性要求：
-1. 代码必须精简（不超过250行），不要定义不必要的类，用函数即可
+1. 代码必须精简（不超过200行），不要定义不必要的类，用函数即可
 2. 代码开头必须是 import 语句，不要有任何中文说明文字
 3. 代码必须能够读取上述数据文件（使用 pandas 读取 Excel）
-4. 代码运行后必须在 os.environ.get('OUTPUT_DIR', '.') + '/execution/results.json' 路径写入结构化结果
+4. 代码运行后必须使用以下代码写入结果：
+   import os, json
+   output_dir = os.environ.get('OUTPUT_DIR', '.')
+   out_path = os.path.join(output_dir, 'execution', 'results.json')
+   os.makedirs(os.path.dirname(out_path), exist_ok=True)
+   with open(out_path, 'w') as f:
+       json.dump(results, f, indent=2)
 5. 代码中必须包含 main() 函数，且 if __name__ == '__main__': main()
 6. 所有数值结果使用 Python 原生 float/int，不要嵌套numpy类型
 7. 不得使用 input() 等交互式函数
 8. 结果必须包含具体的数值，不能是空值或占位符
+9. 代码必须在60秒内运行完成。禁止使用大规模网格搜索或复杂全局优化。如需搜索，网格点总数不得超过200个。
+10. 优先使用解析解或简化公式，避免复杂数值积分和迭代优化。
 
 输出纯Python代码，不要包含 markdown 代码块标记，不要任何解释。"""
 
@@ -716,35 +759,122 @@ class UnifiedWorkflow:
     # Stage 4: 论文生成
     # ========================================================================
 
-    def _stage_paper_generation(self) -> str:
+    def _stage_paper_generation_v2(self) -> str:
         """
-        论文生成阶段
+        论文生成阶段 v2.1（分段生成 + 显式记忆传递）
 
-        使用 PaperGenerator：
-        - 根据模板类型选择大纲
-        - 逐章生成，每章完整详实
-        - 相关性过滤，避免上下文过长
-        - Critique-Improvement 质量保障
+        核心改进：
+        1. 预生成论文章节大纲（每章列出必须覆盖的要点）
+        2. 逐章生成时，prompt 中明确包含：本章大纲 + 相关阶段摘要 + 前几章摘要
+        3. 每章生成后，生成该章结构化摘要，存入记忆池，供后续章节衔接
         """
-        print("  [Stage 4] 开始论文生成...")
+        print("  [Stage 4] 开始论文生成（分段逐章 + 记忆衔接）...")
 
         # 生成图表
         print("  [Stage 4.1] 生成图表...")
         charts = self._generate_charts()
         self.context["charts"] = charts
 
-        # 使用 PaperGenerator 生成论文
-        print("  [Stage 4.2] 逐章生成论文内容...")
-        paper = self.paper_generator.generate_paper(
+        # 组装记忆池给 PaperGenerator
+        memory_for_paper = {
+            "analysis_summary": self.memory_pool.get("analysis_summary", ""),
+            "modeling_summary": self.memory_pool.get("modeling_summary", ""),
+            "algorithm_summary": self.memory_pool.get("algorithm_summary", ""),
+            "results_summary": self.memory_pool.get("results_summary", ""),
+        }
+
+        # 使用 PaperGenerator v2 生成论文
+        print("  [Stage 4.2] 预生成大纲，再逐章生成...")
+        paper = self.paper_generator.generate_paper_v2(
             context=self.context,
+            memory_pool=memory_for_paper,
             use_critique=self.use_critique,
         )
 
+        # 保存章节摘要
+        self.memory_pool["chapter_summaries"] = self.paper_generator.chapter_summaries
+        self._save_json("final/chapter_summaries.json", self.paper_generator.chapter_summaries)
+
         # 保存
         paper_path = self.paper_generator.save_paper(paper, "MathModeling_Paper.md")
-        print(f"  [Stage 4.2] 论文已保存: {paper_path}")
+        print(f"  [Stage 4.3] 论文已保存: {paper_path}")
 
         return paper
+
+    def _summarize_analysis(self, analysis: Dict) -> str:
+        """生成阶段1的结构化摘要（供阶段2/4使用）"""
+        analysis_text = json.dumps(analysis, ensure_ascii=False, indent=2)
+        prompt = f"""请对以下问题分析结果进行结构化提炼，生成一份"分析摘要"（严格控制在400-500字）。
+
+【原始分析】
+{analysis_text[:2000]}
+
+【摘要要求】
+1. 问题背景（1句话）
+2. 关键子问题（每题1句话，只列目标）
+3. 核心假设（3条）
+4. 解决思路（2-3句话）
+5. 关键数值约束（列出3个最重要的）
+
+输出纯文本，不要JSON。"""
+        return _call_llm(prompt, "你是数学建模专家，擅长提炼问题要点。")
+
+    def _summarize_modeling(self, modeling: Dict) -> str:
+        """生成阶段2的结构化摘要（供阶段3/4使用）"""
+        formulas = modeling.get("formulas", "")[:1500]
+        prompt = f"""请对以下数学建模结果进行结构化提炼，生成一份"建模摘要"（严格控制在400-500字）。
+
+【原始建模内容】
+{formulas}
+
+【摘要要求】
+1. 核心变量（列出5个最重要的变量、符号、单位）
+2. 核心公式（1-2个最关键的LaTeX公式）
+3. 求解策略（1句话）
+4. 与子问题的映射（每子问题1句话）
+
+输出纯文本，不要JSON。"""
+        return _call_llm(prompt, "你是数学建模专家，擅长提炼数学模型要点。")
+
+    def _summarize_algorithm(self, solving: Dict) -> str:
+        """生成阶段3算法摘要"""
+        code = solving.get("code", "")[:1000]
+        prompt = f"""请对以下求解算法进行结构化提炼（严格控制在200-300字）。
+
+【代码片段】
+{code}
+
+【摘要要求】
+1. 算法名称
+2. 输入数据
+3. 核心步骤（3步）
+4. 输出格式
+
+输出纯文本。"""
+        return _call_llm(prompt, "你是算法专家。")
+
+    def _summarize_results(self, solving: Dict) -> str:
+        """生成阶段3结果摘要（供论文阶段使用）"""
+        result = solving.get("execution_result", {})
+        result_text = json.dumps(result, ensure_ascii=False, indent=2)[:1500]
+        interpretation = solving.get("interpretation", "")[:1000]
+
+        prompt = f"""请对以下计算结果进行结构化提炼，生成一份"结果摘要"（严格控制在400-500字）。
+
+【计算结果】
+{result_text}
+
+【结果解读】
+{interpretation}
+
+【摘要要求】
+1. 关键数值结果（用表格列出最重要的5个数值）
+2. 主要发现（2-3句话）
+3. 与模型的对应（1句话）
+4. 可视化建议（1句话）
+
+输出纯文本，不要JSON。"""
+        return _call_llm(prompt, "你是数据分析专家，擅长提炼数值结果。")
 
     def _generate_charts(self) -> str:
         """生成论文图表"""
@@ -758,6 +888,7 @@ class UnifiedWorkflow:
             import matplotlib
             matplotlib.use('Agg')
             import matplotlib.pyplot as plt
+            import numpy as np
             plt.rcParams['font.sans-serif'] = [
                 'Noto Sans CJK SC', 'SimHei', 'DejaVu Sans'
             ]
@@ -765,29 +896,89 @@ class UnifiedWorkflow:
 
             chart_count = 0
 
-            # 如果有多个子问题结果，生成对比图
-            if isinstance(execution_result, dict) and len(execution_result) > 0:
-                numeric_keys = []
-                numeric_vals = []
-                for k, v in execution_result.items():
-                    if isinstance(v, dict) and 'result' in v:
-                        try:
-                            val = float(v['result'])
-                            numeric_keys.append(str(k))
-                            numeric_vals.append(val)
-                        except:
-                            pass
+            # 深度提取数值数据
+            def extract_numeric_data(data, prefix=""):
+                """递归提取字典中的数值数据"""
+                keys, vals = [], []
+                if isinstance(data, dict):
+                    for k, v in data.items():
+                        key_path = f"{prefix}_{k}" if prefix else k
+                        if isinstance(v, (int, float)) and not isinstance(v, bool):
+                            keys.append(key_path)
+                            vals.append(float(v))
+                        elif isinstance(v, dict):
+                            sub_k, sub_v = extract_numeric_data(v, key_path)
+                            keys.extend(sub_k)
+                            vals.extend(sub_v)
+                return keys, vals
 
-                if len(numeric_keys) > 1:
-                    fig, ax = plt.subplots(figsize=(10, 6))
-                    ax.bar(numeric_keys, numeric_vals, color='steelblue')
-                    ax.set_xlabel('问题', fontsize=12)
-                    ax.set_ylabel('结果值', fontsize=12)
-                    ax.set_title('各问题计算结果对比', fontsize=14)
-                    plt.tight_layout()
-                    fig.savefig(str(charts_dir / 'fig_01_comparison.png'), dpi=300)
-                    plt.close(fig)
-                    chart_count += 1
+            numeric_keys, numeric_vals = extract_numeric_data(execution_result)
+
+            # 策略1：如果有多个数值结果，生成对比柱状图
+            if len(numeric_keys) > 1 and len(numeric_vals) > 1:
+                # 限制数量避免图表过密
+                if len(numeric_keys) > 20:
+                    numeric_keys = numeric_keys[:20]
+                    numeric_vals = numeric_vals[:20]
+
+                fig, ax = plt.subplots(figsize=(max(10, len(numeric_keys)*0.5), 6))
+                colors = plt.cm.viridis(np.linspace(0, 0.8, len(numeric_keys)))
+                ax.bar(range(len(numeric_keys)), numeric_vals, color=colors)
+                ax.set_xticks(range(len(numeric_keys)))
+                ax.set_xticklabels(numeric_keys, rotation=45, ha='right', fontsize=8)
+                ax.set_xlabel('指标', fontsize=12)
+                ax.set_ylabel('数值', fontsize=12)
+                ax.set_title('计算结果数值对比', fontsize=14)
+                plt.tight_layout()
+                fig.savefig(str(charts_dir / 'fig_01_comparison.png'), dpi=300)
+                plt.close(fig)
+                chart_count += 1
+
+            # 策略2：如果结果是导弹/无人机相关数据，生成轨迹或参数图
+            # 尝试从 results.json 或 execution_result 中提取特殊结构
+            results_json_path = self.output_dir / "execution" / "results.json"
+            if results_json_path.exists():
+                try:
+                    with open(results_json_path, "r", encoding="utf-8") as f:
+                        results_data = json.load(f)
+
+                    # 如果结果是按问题组织的（如 task_1, task_2），生成饼图
+                    if isinstance(results_data, dict):
+                        task_results = {}
+                        for k, v in results_data.items():
+                            if isinstance(v, dict) and "tau_eff" in v:
+                                task_results[k] = v["tau_eff"]
+                            elif isinstance(v, dict) and "result" in v:
+                                try:
+                                    task_results[k] = float(v["result"])
+                                except:
+                                    pass
+
+                        if len(task_results) > 1:
+                            fig, ax = plt.subplots(figsize=(8, 8))
+                            labels = list(task_results.keys())
+                            sizes = list(task_results.values())
+                            ax.pie(sizes, labels=labels, autopct='%1.1f%%', startangle=90)
+                            ax.set_title('各任务有效遮蔽时间占比', fontsize=14)
+                            plt.tight_layout()
+                            fig.savefig(str(charts_dir / 'fig_02_pie.png'), dpi=300)
+                            plt.close(fig)
+                            chart_count += 1
+                except Exception as e:
+                    print(f"    读取 results.json 生成图表失败: {e}")
+
+            # 策略3：生成流程图/示意图（如果没有任何数值图表）
+            if chart_count == 0:
+                fig, ax = plt.subplots(figsize=(10, 6))
+                ax.text(0.5, 0.5, "图表生成依赖于数值计算结果\n\n"
+                       "请确保代码执行产生了有效的数值结果",
+                       ha='center', va='center', fontsize=14, color='gray')
+                ax.set_xlim(0, 1)
+                ax.set_ylim(0, 1)
+                ax.axis('off')
+                fig.savefig(str(charts_dir / 'fig_placeholder.png'), dpi=150)
+                plt.close(fig)
+                chart_count += 1
 
             print(f"  生成 {chart_count} 个图表")
         except ImportError:
@@ -795,9 +986,114 @@ class UnifiedWorkflow:
 
         return f"图表保存于: {charts_dir}"
 
+
     # ========================================================================
     # 工具方法
     # ========================================================================
+
+    def _convert_to_docx(self, md_path: Path):
+        """将Markdown论文转换为docx格式"""
+        docx_path = md_path.parent / "数学建模论文.docx"
+
+        # 方法1: 使用 pandoc（质量最好）
+        try:
+            import subprocess
+            result = subprocess.run(
+                ["pandoc", str(md_path), "-o", str(docx_path), "--resource-path", str(md_path.parent)],
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            if result.returncode == 0 and docx_path.exists():
+                print(f"  论文已导出为Word: {docx_path}")
+                return
+        except FileNotFoundError:
+            pass
+        except Exception as e:
+            print(f"  pandoc导出失败: {e}")
+
+        # 方法2: 使用 python-docx
+        try:
+            from docx import Document
+            from docx.shared import Pt, Inches, RGBColor
+            from docx.enum.text import WD_ALIGN_PARAGRAPH
+            from docx.oxml.ns import qn
+
+            doc = Document()
+
+            # 设置中文字体支持
+            style = doc.styles['Normal']
+            style.font.name = '宋体'
+            style.font.size = Pt(12)
+            style._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+
+            # 读取markdown内容
+            text = md_path.read_text(encoding="utf-8")
+
+            # 简单的markdown到docx转换
+            lines = text.split("\n")
+            i = 0
+            while i < len(lines):
+                line = lines[i]
+
+                # 标题
+                if line.startswith("# "):
+                    p = doc.add_heading(line[2:], level=0)
+                    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                elif line.startswith("## "):
+                    doc.add_heading(line[3:], level=1)
+                elif line.startswith("### "):
+                    doc.add_heading(line[4:], level=2)
+                elif line.startswith("#### "):
+                    doc.add_heading(line[5:], level=3)
+                # 表格（简单处理）
+                elif line.startswith("|"):
+                    # 收集表格行
+                    table_lines = []
+                    while i < len(lines) and lines[i].startswith("|"):
+                        table_lines.append(lines[i])
+                        i += 1
+                    i -= 1  # 回退一行，外层循环会+1
+
+                    if len(table_lines) >= 2:
+                        # 解析表头
+                        header_cells = [c.strip() for c in table_lines[0].split("|")[1:-1]]
+                        # 创建表格
+                        table = doc.add_table(rows=1, cols=len(header_cells))
+                        table.style = 'Light Grid Accent 1'
+                        hdr_cells = table.rows[0].cells
+                        for j, cell_text in enumerate(header_cells):
+                            hdr_cells[j].text = cell_text
+                        # 添加数据行（跳过第二行的分隔符）
+                        for row_line in table_lines[2:]:
+                            cells = [c.strip() for c in row_line.split("|")[1:-1]]
+                            if len(cells) == len(header_cells):
+                                row_cells = table.add_row().cells
+                                for j, cell_text in enumerate(cells):
+                                    row_cells[j].text = cell_text
+                # 图片
+                elif line.startswith("!["):
+                    # 尝试提取图片路径
+                    match = re.search(r'!\[.*?\]\((.*?)\)', line)
+                    if match:
+                        img_path = md_path.parent / match.group(1)
+                        if img_path.exists():
+                            try:
+                                doc.add_picture(str(img_path), width=Inches(5.5))
+                            except Exception:
+                                pass
+                # 普通段落
+                elif line.strip():
+                    doc.add_paragraph(line)
+
+                i += 1
+
+            doc.save(str(docx_path))
+            print(f"  论文已导出为Word: {docx_path}")
+        except ImportError:
+            print("  未安装 python-docx，跳过Word导出。可运行: pip install python-docx")
+        except Exception as e:
+            print(f"  Word导出失败: {e}")
 
     def _save_json(self, rel_path: str, data: Any):
         """保存JSON文件"""

@@ -135,10 +135,55 @@ class CodeExecutor:
             else:
                 raise ValueError("无法从输出中提取有效Python代码")
 
+        # 后处理：确保代码使用 OUTPUT_DIR 环境变量写入结果
+        code = self._ensure_output_dir_usage(code)
+
         # 保存
         save_path.parent.mkdir(parents=True, exist_ok=True)
         save_path.write_text(code, encoding="utf-8")
         return code
+
+    def _ensure_output_dir_usage(self, code: str) -> str:
+        """
+        确保代码使用 OUTPUT_DIR 环境变量作为输出路径，
+        防止硬编码相对路径导致结果写入错误位置。
+        """
+        import re
+
+        # 如果代码已经使用了 OUTPUT_DIR，则不需要修改
+        if "OUTPUT_DIR" in code:
+            return code
+
+        # 检测常见的硬编码输出目录模式
+        patterns = [
+            r'out_dir\s*=\s*["\']work[^"\']*["\']',
+            r'out_dir\s*=\s*["\']execution["\']',
+            r'output_dir\s*=\s*["\']work[^"\']*["\']',
+            r'output_dir\s*=\s*["\']execution["\']',
+            r'os\.makedirs\(["\']work[^"\']*["\']',
+            r'os\.makedirs\(["\']execution["\']',
+        ]
+
+        modified = code
+        for pattern in patterns:
+            modified = re.sub(pattern, lambda m: m.group(0).replace(m.group(0).split("=")[-1].strip().strip('"').strip("'"), "os.environ.get('OUTPUT_DIR', '.') + '/execution'"), modified)
+
+        # 更通用的替换：如果代码中直接写了 open("work_... 或 open("execution/...
+        # 替换为使用 os.path.join(os.environ.get('OUTPUT_DIR', '.'), 'execution', ...)
+        if "OUTPUT_DIR" not in modified:
+            # 在代码开头插入 OUTPUT_DIR 的使用
+            lines = modified.split("\n")
+            import_idx = 0
+            for i, line in enumerate(lines):
+                if line.strip().startswith(("import ", "from ")):
+                    import_idx = i + 1
+
+            output_dir_line = "_OUTPUT_DIR = os.environ.get('OUTPUT_DIR', '.')"
+            if output_dir_line not in modified:
+                lines.insert(import_idx, output_dir_line)
+                modified = "\n".join(lines)
+
+        return modified
 
     def execute_code(
         self,
@@ -283,15 +328,29 @@ class CodeExecutor:
             exec_output = self.execute_code(code_file, data_files)
 
             if exec_output["success"]:
-                # 检查结果JSON
-                if results_json_path and results_json_path.exists():
-                    try:
-                        with open(results_json_path, "r", encoding="utf-8") as f:
-                            execution_result = json.load(f)
-                        print(f"    [CodeExecutor] 成功读取结果文件")
-                        break
-                    except Exception as e:
-                        print(f"    [CodeExecutor] 结果JSON解析失败: {e}")
+                # 检查结果JSON - 尝试多个可能的路径
+                found_result = False
+                possible_paths = []
+                if results_json_path:
+                    possible_paths.append(results_json_path)
+                    # 添加可能的fallback路径（处理硬编码双重路径问题）
+                    possible_paths.append(self.output_dir / self.output_dir.name / "execution" / "results.json")
+                    possible_paths.append(self.output_dir / "results.json")
+                    possible_paths.append(Path("results.json"))
+
+                for path in possible_paths:
+                    if path.exists():
+                        try:
+                            with open(path, "r", encoding="utf-8") as f:
+                                execution_result = json.load(f)
+                            print(f"    [CodeExecutor] 成功读取结果文件: {path}")
+                            found_result = True
+                            break
+                        except Exception as e:
+                            print(f"    [CodeExecutor] 结果JSON解析失败 ({path}): {e}")
+
+                if found_result:
+                    break
 
                 if exec_output["output"]:
                     execution_result = {"stdout": exec_output["output"]}

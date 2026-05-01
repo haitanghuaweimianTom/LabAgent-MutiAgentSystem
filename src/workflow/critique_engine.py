@@ -194,7 +194,7 @@ class CritiqueEngine:
 
         suggestions_text = "\n".join([f"- {s}" for s in suggestions[:5]])
 
-        prompt = f"""请基于以下要求，重新撰写一篇高质量的内容。
+        prompt = f"""请基于以下要求，重新撰写本论文章节的高质量内容。
 
 {context if context else ''}
 
@@ -208,7 +208,9 @@ class CritiqueEngine:
 1. 直接输出改进后的完整内容，不要提及"原版本"或"之前的问题"
 2. 不要解释你做了什么改进，只输出最终内容
 3. 内容必须比原始版本更加充实、深入、严谨
-4. 确保所有数学公式使用 LaTeX 格式，公式编号连续"""
+4. 确保所有数学公式使用 LaTeX 格式，公式编号连续
+5. 严禁输出题目原文、摘要或其他章节的标题
+6. 只输出本章的正文内容，不要输出章节标题"""
 
         if min_chars > 0:
             prompt += f"\n5. 内容至少 {min_chars} 个中文字符"
