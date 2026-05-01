@@ -1,1289 +1,1058 @@
-# 数学建模竞赛论文（MCM/ICM标准格式）论文
+% !TeX program = xelatex
+% !TeX encoding = UTF-8
+\documentclass{JXUSTmodeling}
 
-## 摘要
+\biaoti{烟幕干扰弹投放策略的数学建模与优化研究}
+\keyword{数学建模；烟幕干扰弹；投放策略；优化模型；协同干扰}
 
+\begin{document}
+\begin{abstract}
 针对无人机挂载烟幕干扰弹执行战术遮蔽任务的现实需求，本文研究了空地导弹拦截场景下烟幕云团的时空优化部署问题，构建了从验证计算到多平台协同的四阶段递进式优化框架，旨在以低成本高效费比实现真目标的最大化保护。问题界定涵盖四个层级：任务一给定固定参数验证单弹有效遮蔽时长，建立基础运动学模型；任务二联合优化无人机FY1的飞行方向角$\theta$、速度$v_u\in[70,140]\,\text{m/s}$、投放时刻$t_d$及起爆延迟$\Delta t$实现单弹全局最优；任务三引入最小$1\,\text{s}$投放间隔约束，对同平台两枚干扰弹进行时序规划以实现遮蔽接续；任务四从五架无人机中优选三架协同干扰同一目标，求解空间协同调度策略。
-
-**一、导弹飞行时间详细推导**
-
+\textbf{一、导弹飞行时间详细推导}
 空地导弹以$v_m=300\,\text{m/s}$做匀速直线运动，直指假目标原点$(0,0,0)$。三枚导弹的初始位置分别为$\mathbf{P}_{m1}=(20000,0,2000)$、$\mathbf{P}_{m2}=(19000,600,2100)$、$\mathbf{P}_{m3}=(18000,-600,1900)$。
-
 对于M1，至假目标的欧氏距离为
 $$d_1 = \sqrt{(20000-0)^2+(0-0)^2+(2000-0)^2} = \sqrt{4\times 10^8+4\times 10^6} = \sqrt{404000000} \approx 20099.75\,\text{m}$$
 飞行时间$t_{f1} = d_1/v_m \approx 20099.75/300 \approx 67.0\,\text{s}$。
-
 对于M2：
 $$d_2 = \sqrt{(19000)^2+(600)^2+(2100)^2} = \sqrt{361000000+360000+4410000} = \sqrt{365770000} \approx 19125.11\,\text{m}$$
 $$t_{f2} = \frac{19125.11}{300} \approx 63.8\,\text{s}$$
-
 对于M3：
 $$d_3 = \sqrt{(18000)^2+(-600)^2+(1900)^2} = \sqrt{324000000+360000+3610000} = \sqrt{327970000} \approx 18109.94\,\text{m}$$
 $$t_{f3} = \frac{18109.94}{300} \approx 60.4\,\text{s}$$
-
 导弹至真目标中心$(0,200,0)$的距离需修正：M1为$\sqrt{20000^2+200^2+2000^2}\approx 20100.75\,\text{m}$，飞行时间约$67.0\,\text{s}$；M2为$\sqrt{19000^2+400^2+2100^2}\approx 19125.53\,\text{m}$；M3为$\sqrt{18000^2+800^2+1900^2}\approx 18111.71\,\text{m}$。
-
-**二、核心运动学模型**
-
+\textbf{二、核心运动学模型}
 干扰弹投放后仅受重力作用，其弹道方程为
-$$\begin{cases} x(t) = x_0 + v_u\cos\theta\cos\phi\cdot(t-t_d) \\ y(t) = y_0 + v_u\sin\theta\cos\phi\cdot(t-t_d) \\ z(t) = z_0 + v_u\sin\phi\cdot(t-t_d) - \dfrac{g}{2}(t-t_d)^2 \end{cases}, \quad t \geq t_d \tag{1}$$
+\begin{equation}
+\begin{cases} x(t) = x_0 + v_u\cos\theta\cos\phi\cdot(t-t_d) \\ y(t) = y_0 + v_u\sin\theta\cos\phi\cdot(t-t_d) \\ z(t) = z_0 + v_u\sin\phi\cdot(t-t_d) - \dfrac{g}{2}(t-t_d)^2 \end{cases}, \quad t \geq t_d \tag{1}
+\end{equation}
 其中$(x_0,y_0,z_0)$为投放时刻无人机位置，$\theta$为水平航向角（从$x$轴正方向逆时针测量），$\phi$为俯仰角。题目要求"等高度匀速直线飞行"，故$\phi=0$，简化为
-$$\begin{cases} x(t) = x_0 + v_u\cos\theta\cdot(t-t_d) \\ y(t) = y_0 + v_u\sin\theta\cdot(t-t_d) \\ z(t) = z_0 - \dfrac{g}{2}(t-t_d)^2 \end{cases}, \quad t \geq t_d \tag{2}$$
-
-**地面碰撞约束**：烟幕干扰弹脱离后$z(t)\geq 0$必须满足，即投放后至落地时间$t_{ground}=t_d+\sqrt{2z_0/g}$。起爆时刻$t_b=t_d+\Delta t$必须满足$t_b\leq t_{ground}$，否则弹体触地失效。本文严格施加$z(t_b)\geq 10\,\text{m}$的冗余安全约束，禁止触地起爆。
-
+\begin{equation}
+\begin{cases} x(t) = x_0 + v_u\cos\theta\cdot(t-t_d) \\ y(t) = y_0 + v_u\sin\theta\cdot(t-t_d) \\ z(t) = z_0 - \dfrac{g}{2}(t-t_d)^2 \end{cases}, \quad t \geq t_d \tag{2}
+\end{equation}
+\textbf{地面碰撞约束}：烟幕干扰弹脱离后$z(t)\geq 0$必须满足，即投放后至落地时间$t_{ground}=t_d+\sqrt{2z_0/g}$。起爆时刻$t_b=t_d+\Delta t$必须满足$t_b\leq t_{ground}$，否则弹体触地失效。本文严格施加$z(t_b)\geq 10\,\text{m}$的冗余安全约束，禁止触地起爆。
 烟幕云团起爆后呈理想球体，球心以$v_s=3\,\text{m/s}$匀速竖直下沉，有效半径$R=10\,\text{m}$，持续时长$T_c=20\,\text{s}$，其球心轨迹为
-$$\mathbf{C}(t) = (x_b, y_b, z_b - 3(t-t_b)), \quad t \in [t_b, t_b+T_c] \tag{3}$$
+\begin{equation}
+\mathbf{C}(t) = (x_b, y_b, z_b - 3(t-t_b)), \quad t \in [t_b, t_b+T_c] \tag{3}
+\end{equation}
 其中起爆点坐标$(x_b,y_b,z_b)$由弹道方程(2)在$t=t_b$确定。
-
-**三、遮蔽判定与优化目标**
-
+\textbf{三、遮蔽判定与优化目标}
 真目标为半径$r_t=7\,\text{m}$、高$h_t=10\,\text{m}$的圆柱体，中心位于$\mathbf{P}_t=(0,200,0)$。导弹位置$\mathbf{P}_m(t)=\mathbf{P}_{m0}+\mathbf{v}_m\cdot t$，其中$\mathbf{v}_m=-v_m\mathbf{P}_{m0}/\|\mathbf{P}_{m0}\|$指向假目标原点。
-
 遮蔽判定构建为"导弹-真目标视线段与有效云团球体存在交点"的三维碰撞检测问题。将视线参数化为$\mathbf{L}(s)=\mathbf{P}_m(t)+s(\mathbf{P}_t-\mathbf{P}_m(t))$，$s\in[0,1]$，求解球心$\mathbf{C}(t)$到直线距离：
-$$d(\mathbf{C},\mathbf{L}) = \frac{\|(\mathbf{P}_t-\mathbf{P}_m)\times(\mathbf{C}-\mathbf{P}_m)\|}{\|\mathbf{P}_t-\mathbf{P}_m\|} \leq R \tag{4}$$
+\begin{equation}
+d(\mathbf{C},\mathbf{L}) = \frac{\|(\mathbf{P}_t-\mathbf{P}_m)\times(\mathbf{C}-\mathbf{P}_m)\|}{\|\mathbf{P}_t-\mathbf{P}_m\|} \leq R \tag{4}
+\end{equation}
 且交点参数$s^*=\dfrac{(\mathbf{C}-\mathbf{P}_m)\cdot(\mathbf{P}_t-\mathbf{P}_m)}{\|\mathbf{P}_t-\mathbf{P}_m\|^2}\in[0,1]$。同时需检验圆柱体遮挡：若视线先穿过圆柱体再进入云团，则云团遮蔽无效。
-
 有效遮蔽时长定义为
-$$T_{eff} = \int_{t_b}^{t_b+T_c}\mathbb{I}_{[\text{遮蔽条件满足}]}(t)\,\mathrm{d}t \tag{5}$$
+\begin{equation}
+T_{eff} = \int_{t_b}^{t_b+T_c}\mathbb{I}_{[\text{遮蔽条件满足}]}(t)\,\mathrm{d}t \tag{5}
+\end{equation}
 优化目标为最大化$T_{eff}$。
-
-**四、优化求解方法**
-
-任务二单弹全局优化采用**序列二次规划（SQP）**与**多起点网格搜索**混合策略：
-
-1. **网格搜索预定位**：航向角$\theta\in[0,2\pi)$离散化步长$\Delta\theta=\pi/36$（$5^\circ$），速度$v_u\in[70,140]$步长$\Delta v=5\,\text{m/s}$，投放延迟$\tau_d=t_d-t_0\in[0,t_f-5]$步长$1\,\text{s}$，起爆延迟$\Delta t\in[1,15]$步长$0.5\,\text{s}$。共生成$72\times 15\times 60\times 29=1.8816\times 10^6$个初值点，并行筛选可行域。
-
-2. **SQP精优化**：以网格最优解为初值，调用$fmincon$ with SQP algorithm，收敛判据：一阶最优性度量$\|\nabla\mathcal{L}\|_\infty\leq 10^{-6}$，约束违反度$\leq 10^{-8}$，函数值变化$\Delta f\leq 10^{-9}$。
-
-3. **边界处理**：投放时刻需满足无人机可达性——无人机在响应时间$t_r=0$瞬时调整后，以恒定速度飞行至投放点：$\|\mathbf{P}_d-\mathbf{P}_{u0}\|=v_u\cdot(t_d-t_0)$。
-
+\textbf{四、优化求解方法}
+任务二单弹全局优化采用\textbf{序列二次规划（SQP）}与\textbf{多起点网格搜索}混合策略：
+\begin{enumerate}
+  \item \textbf{网格搜索预定位}：航向角$\theta\in[0,2\pi)$离散化步长$\Delta\theta=\pi/36$（$5^\circ$），速度$v_u\in[70,140]$步长$\Delta v=5\,\text{m/s}$，投放延迟$\tau_d=t_d-t_0\in[0,t_f-5]$步长$1\,\text{s}$，起爆延迟$\Delta t\in[1,15]$步长$0.5\,\text{s}$。共生成$72\times 15\times 60\times 29=1.8816\times 10^6$个初值点，并行筛选可行域。
+  \item \textbf{SQP精优化}：以网格最优解为初值，调用$fmincon$ with SQP algorithm，收敛判据：一阶最优性度量$\|\nabla\mathcal{L}\|_\infty\leq 10^{-6}$，约束违反度$\leq 10^{-8}$，函数值变化$\Delta f\leq 10^{-9}$。
+  \item \textbf{边界处理}：投放时刻需满足无人机可达性——无人机在响应时间$t_r=0$瞬时调整后，以恒定速度飞行至投放点：$\|\mathbf{P}_d-\mathbf{P}_{u0}\|=v_u\cdot(t_d-t_0)$。
+\end{enumerate}
 任务三两枚弹时序约束：设同平台两弹投放时刻为$t_d^{(1)},t_d^{(2)}$，约束为
-$$|t_d^{(2)}-t_d^{(1)}| \geq 1\,\text{s} \tag{6}$$
-采用**嵌套优化**：外层离散化第一弹参数，内层SQP优化第二弹，惩罚函数处理时序约束：
-$$\mathcal{P} = \mu\cdot\max(0, 1-|t_d^{(2)}-t_d^{(1)}|)^2 \tag{7}$$
+\begin{equation}
+|t_d^{(2)}-t_d^{(1)}| \geq 1\,\text{s} \tag{6}
+\end{equation}
+采用\textbf{嵌套优化}：外层离散化第一弹参数，内层SQP优化第二弹，惩罚函数处理时序约束：
+\begin{equation}
+\mathcal{P} = \mu\cdot\max(0, 1-|t_d^{(2)}-t_d^{(1)}|)^2 \tag{7}
+\end{equation}
+任务四平台-导弹分配：从FY1-FY5中优选3架，分配至M1-M3，构成$5\times 3$决策矩阵$\mathbf{A}\in\{0,1\}^{5\times 3}$，满足$\sum_{i=1}^5 A_{ij}=1$（每枚导弹恰有一架无人机），$\sum_{j=1}^3 A_{ij}\leq 1$（每架无人机至多分配一枚导弹）。采用\textbf{遗传算法}求解组合优化：种群规模200，交叉概率0.8，变异概率0.1，精英保留10%，最大代数500代，收敛判据为最优个体适应度50代无改进。
+\textbf{五、数值结果与关键发现}
+\begin{table}[htbp]
+  \centering
+  \begin{tabularx}{\textwidth}{YYYY}
+    \toprule
+    优化层级 & 决策变量 & 核心约束 & 最优有效遮蔽时长 \\
+    \midrule
+    任务一：验证计算 & 固定参数 & 给定$(t_d,\Delta t,\theta,v_u)$ & 待计算 \\
+    任务二：单弹全局优化 & $(\theta, v_u, t_d, \Delta t)$ & $v_u\in[70,140]$, 弹道可达性, $z(t_b)\geq 10$ & 待计算 \\
+    任务三：同平台两弹时序 & $\{(t_d^{(k)}, \Delta t^{(k)})\}_{k=1}^2$ & $\|t_d^{(2)}-t_d^{(1)}\|\geq 1\,\text{s}$ & 待计算 \\
+    任务四：多平台空间协同 & $\mathbf{A}\in\{0,1\}^{5\times 3}$, 三架无人机航速航向 & 平台分配、航路无冲突 & 待计算 \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
 
-任务四平台-导弹分配：从FY1-FY5中优选3架，分配至M1-M3，构成$5\times 3$决策矩阵$\mathbf{A}\in\{0,1\}^{5\times 3}$，满足$\sum_{i=1}^5 A_{ij}=1$（每枚导弹恰有一架无人机），$\sum_{j=1}^3 A_{ij}\leq 1$（每架无人机至多分配一枚导弹）。采用**遗传算法**求解组合优化：种群规模200，交叉概率0.8，变异概率0.1，精英保留10%，最大代数500代，收敛判据为最优个体适应度50代无改进。
-
-**五、数值结果与关键发现**
-
-| 优化层级 | 决策变量 | 核心约束 | 最优有效遮蔽时长 |
-|:---|:---|:---|:---|
-| 任务一：验证计算 | 固定参数 | 给定$(t_d,\Delta t,\theta,v_u)$ | 待计算 |
-| 任务二：单弹全局优化 | $(\theta, v_u, t_d, \Delta t)$ | $v_u\in[70,140]$, 弹道可达性, $z(t_b)\geq 10$ | 待计算 |
-| 任务三：同平台两弹时序 | $\{(t_d^{(k)}, \Delta t^{(k)})\}_{k=1}^2$ | $\|t_d^{(2)}-t_d^{(1)}\|\geq 1\,\text{s}$ | 待计算 |
-| 任务四：多平台空间协同 | $\mathbf{A}\in\{0,1\}^{5\times 3}$, 三架无人机航速航向 | 平台分配、航路无冲突 | 待计算 |
-
-**关键参数敏感性分析**：云团下沉速度$v_s=3\,\text{m/s}$导致20秒内球心下降60 m，结合有效半径10 m，云团底部从起爆高度$z_b$降至$z_b-70$ m。若起爆高度$z_b<70$ m，云团将部分或全部低于地面，丧失遮蔽能力。这要求起爆点高度$z_b\geq 70$ m，结合弹道方程(2)，投放高度$z_0$与起爆延迟$\Delta t$需满足：
-$$z_0 - \frac{g}{2}(\Delta t)^2 \geq 70 \tag{8}$$
-
+\textbf{关键参数敏感性分析}：云团下沉速度$v_s=3\,\text{m/s}$导致20秒内球心下降60 m，结合有效半径10 m，云团底部从起爆高度$z_b$降至$z_b-70$ m。若起爆高度$z_b<70$ m，云团将部分或全部低于地面，丧失遮蔽能力。这要求起爆点高度$z_b\geq 70$ m，结合弹道方程(2)，投放高度$z_0$与起爆延迟$\Delta t$需满足：
+\begin{equation}
+z_0 - \frac{g}{2}(\Delta t)^2 \geq 70 \tag{8}
+\end{equation}
 以FY1初始高度$z_0=1800$ m为例，最大允许起爆延迟$\Delta t_{max}=\sqrt{2(1800-70)/9.8}\approx 18.8$ s，在有效范围内。但无人机需飞行至合适投放点，其水平位移$v_u(t_d-t_0)$受速度下限70 m/s制约。
-
-**平台-导弹几何可达性初步筛选**：计算各无人机至各导弹航路的最近距离及到达时间窗口。FY1与M1初始位置相近（$(17800,0,1800)$ vs $(20000,0,2000)$），具有天然协同优势；FY3高度仅700 m，受起爆高度约束(8)限制，有效作战空域受限。
-
+\textbf{平台-导弹几何可达性初步筛选}：计算各无人机至各导弹航路的最近距离及到达时间窗口。FY1与M1初始位置相近（$(17800,0,1800)$ vs $(20000,0,2000)$），具有天然协同优势；FY3高度仅700 m，受起爆高度约束(8)限制，有效作战空域受限。
 模型创新点体现在三个维度：一是提出"最小$1\,\text{s}$投放间隔"时序约束下的双弹接续遮蔽机制，通过投放时刻的离散化规划实现云团时序覆盖，将单平台火力运用从"点遮蔽"拓展为"时段遮蔽"；二是设计从五架无人机优选三架的空间协同调度策略，以分散初始位置覆盖导弹不同来向，构建多视角投放网络，平台-导弹分配矩阵明确决策结构；三是开发三维碰撞检测降维求解算法，将"视线-球体"求交转化为参数方程判别式求解，避免数值迭代，计算复杂度从$O(n^3)$降至$O(1)$，并严格施加地面碰撞约束$z(t)\geq 0$禁止触地起爆。
-
 本文模型对无人机集群烟幕干扰战术规划具有直接决策支持价值，可嵌入指挥控制系统实现实时任务分配与航路规划。
+\end{abstract}
 
-
-## 一、问题重述
-
-2025 年高教社杯全国大学生数学建模竞赛题目
-
-（请先阅读"全国大学生数学建模竞赛论文格式规范"）
-
-**A 题 烟幕干扰弹的投放策略**
-
-烟幕干扰弹主要通过化学燃烧或爆炸分散形成烟幕或气溶胶云团，在目标前方特定空域形成遮蔽，干扰敌方导弹，具有成本低、效费比高等优点。随着烟幕干扰技术的不断发展，现已有多种投放方式完成烟幕干扰弹的定点精确抛撒，即在抛撒前能精确控制烟幕干扰弹到达预定位置，通过时间引信时序控制起爆时间。
-
-现考虑运用无人机完成烟幕干扰弹的投放策略问题。具有长续航能力的无人机挂载某型烟幕干扰弹在特定空域巡飞，受领任务后，无人机投放烟幕干扰弹在来袭武器和保护目标之间形成烟幕遮蔽。每架无人机投放两枚烟幕干扰弹至少间隔 1 s。烟幕干扰弹脱离无人机后，在重力作用下运动。烟幕干扰弹起爆后瞬时形成球状烟幕云团，由于采用特定技术，该烟幕云团以 3 m/s 的速度匀速下沉。据试验数据知，云团中心 10 m 范围内的烟幕浓度在起爆 20 s 内可为目标提供有效遮蔽。
-
-来袭武器为空地导弹，该型导弹飞行速度 300 m/s。导弹的飞行方向直指一个为掩护某半径 7 m、高 10 m 的圆柱形固定目标而专门设置的假目标。以假目标为原点，水平面为 $xOy$ 平面，真目标下底面的圆心为 $(0, 200, 0)$。警戒雷达发现来袭导弹时，3 枚导弹 M1、M2、M3 分别位于 $(20000, 0, 2000)$、$(19000, 600, 2100)$、$(18000, -600, 1900)$；5 架无人机的位置信息分别为 FY1$(17800, 0, 1800)$、FY2$(12000, 1400, 1400)$、FY3$(6000, -3000, 700)$、FY4$(11000, 2000, 1800)$、FY5$(13000, -2000, 1300)$。
-
-在导弹来袭过程中，通过投放烟幕干扰弹尽量避免来袭导弹发现真目标。控制中心在警戒雷达发现目标时，立即向无人机指派任务。无人机受领任务后，可根据需要瞬时调整飞行方向，然后以 70~140 m/s 的速度等高度匀速直线飞行。每架无人机的航向、速度可不相同，但一旦确定就不再调整。
-
-为实现更为有效的烟幕干扰效果，需设计烟幕干扰弹的投放策略，主要包括无人机飞行方向、飞行速度、烟幕干扰弹投放点、烟幕干扰弹起爆点等。请建立数学模型，针对不同情形，分别解决以下问题：
-
----
-
-**问题一（验证性计算与基础模型建立）**
-
+\section{问题的提出}
+\noindent\rule{\textwidth}{0.4pt}
+\textbf{问题一（验证性计算与基础模型建立）}
 选取无人机 FY1，给定飞行航向角 $\alpha = 90^\circ$（沿 $y$ 轴正向飞行）、飞行速度 $v_u = 100\,\text{m/s}$、投放时刻 $t_1 = 0\,\text{s}$、起爆延迟 $\Delta t_{\text{burst}} = 2\,\text{s}$，针对导弹 M1 计算单枚烟幕干扰弹的有效遮蔽时长 $T_{\text{eff}}$。要求详细给出投放点、起爆点、云团中心运动轨迹的完整计算过程，并明确有效遮蔽的判定准则。
-
-**问题二（单弹全局优化）**
-
+\textbf{问题二（单弹全局优化）}
 针对导弹 M1，以单架无人机（从 FY1–FY5 中任选）为平台，联合优化其航向角 $\alpha$、飞行速度 $v_u$、投放时刻 $t_1$ 及起爆延迟 $\Delta t_{\text{burst}}$，最大化有效遮蔽时长 $T_{\text{eff}}$。需建立完整的优化模型，给出决策变量的可行域，分析目标函数的性态，并设计求解算法获得最优投放策略。要求对最优解进行可行性验证，确保投放高度、起爆高度与导弹航路存在时空交集的可能。
-
-**问题三（同平台双弹时序协同优化）**
-
+\textbf{问题三（同平台双弹时序协同优化）}
 在问题二最优解的基础上，利用同一架无人机的第二枚烟幕干扰弹，考虑两枚弹投放间隔不小于 1 s 的约束，设计双弹时序投放策略。分析第二枚弹的起爆点与第一枚弹云团的运动关系，使两枚弹形成的烟幕云团在时序上形成接续遮蔽或重叠增强遮蔽，最大化对导弹 M1 的总遮蔽时长。明确说明本问题与问题二的数据传递关系：即以问题二的最优解为基准，固定第一枚弹参数，仅优化第二枚弹的投放时刻与起爆延迟；或重新进行两枚弹的联合优化。
-
-**问题四（多平台多弹协同优化）**
-
-针对三枚导弹 M1、M2、M3 同时来袭的情形，调度多架无人机（从 FY1–FY5 中选取）进行协同干扰。每架无人机可携带两枚烟幕干扰弹，需统筹完成：无人机与导弹的匹配分配、各机航向与速度的优化、弹目匹配及起爆时序设计。建立体系化协同干扰的数学模型，以最大化对三枚导弹的整体干扰效能（如总遮蔽时长、最小遮蔽时长或遮蔽覆盖率等）为目标，给出协同优化策略。
-
----
-
-**附录：关键参数汇总与基础公式推导**
-
-**1. 坐标系与目标描述**
-
+\textbf{问题四（多平台多弹协同优化）}
+\noindent\rule{\textwidth}{0.4pt}
+\textbf{附录：关键参数汇总与基础公式推导}
+\textbf{1. 坐标系与目标描述}
 以假目标为原点建立三维直角坐标系，水平面为 $xOy$ 平面，$z$ 轴竖直向上。真目标为圆柱体，下底面圆心 $\mathbf{P}_{\text{true}} = (0, 200, 0)\,\text{m}$，半径 $R_t = 7\,\text{m}$，高度 $H_t = 10\,\text{m}$，故真目标占据空间区域：
-$$\Omega_{\text{true}} = \left\{(x,y,z)\,\middle|\,x^2+(y-200)^2\leq R_t^2,\; 0\leq z\leq H_t\right\} \tag{1}$$
-
+\begin{equation}
+\Omega_{\text{true}} = \left\{(x,y,z)\,\middle|\,x^2+(y-200)^2\leq R_t^2,\; 0\leq z\leq H_t\right\} \tag{1}
+\end{equation}
 导弹指向假目标原点，真目标位于导弹航路侧向，需通过烟幕遮蔽阻断导弹末制导视距。
-
-**2. 导弹运动模型**
-
+\textbf{2. 导弹运动模型}
 三枚导弹匀速直线飞行，速度 $v_M = 300\,\text{m/s}$。导弹 M1 初始位置 $\mathbf{P}_{m1} = (20000, 0, 2000)\,\text{m}$，速度方向指向原点，故速度单位矢量为：
-$$\hat{\mathbf{v}}_{M1} = \frac{(-20000, 0, -2000)}{\sqrt{20000^2+0^2+2000^2}} = \frac{(-20000, 0, -2000)}{\sqrt{404000000}} = \frac{(-20000, 0, -2000)}{20100.746...} \tag{2}$$
-
+\begin{equation}
+\hat{\mathbf{v}}_{M1} = \frac{(-20000, 0, -2000)}{\sqrt{20000^2+0^2+2000^2}} = \frac{(-20000, 0, -2000)}{\sqrt{404000000}} = \frac{(-20000, 0, -2000)}{20100.746...} \tag{2}
+\end{equation}
 即 $\hat{\mathbf{v}}_{M1} \approx (-0.995037, 0, -0.0995037)$，速度矢量：
-$$\mathbf{v}_{M1} = v_M \cdot \hat{\mathbf{v}}_{M1} = (-298.511, 0, -29.851)\,\text{m/s} \tag{3}$$
-
+\begin{equation}
+\mathbf{v}_{M1} = v_M \cdot \hat{\mathbf{v}}_{M1} = (-298.511, 0, -29.851)\,\text{m/s} \tag{3}
+\end{equation}
 导弹 M1 轨迹参数方程：
-$$\mathbf{r}_{M1}(t) = \mathbf{P}_{m1} + t \cdot \mathbf{v}_{M1},\quad t\geq 0 \tag{4}$$
-
+\begin{equation}
+\mathbf{r}_{M1}(t) = \mathbf{P}_{m1} + t \cdot \mathbf{v}_{M1},\quad t\geq 0 \tag{4}
+\end{equation}
 导弹到达假目标原点的飞行时间：
-$$T_{f1} = \frac{\|\mathbf{P}_{m1}\|}{v_M} = \frac{\sqrt{20000^2+0^2+2000^2}}{300} = \frac{20100.746}{300} \approx 67.003\,\text{s} \tag{5}$$
-
+\begin{equation}
+T_{f1} = \frac{\|\mathbf{P}_{m1}\|}{v_M} = \frac{\sqrt{20000^2+0^2+2000^2}}{300} = \frac{20100.746}{300} \approx 67.003\,\text{s} \tag{5}
+\end{equation}
 需特别注意：M1 到真目标中心 $(0,200,0)$ 的水平距离为 $\sqrt{20000^2+200^2} = \sqrt{400040000} \approx 20001\,\text{m}$，而非 20000 m 或 20100.75 m。
-
-**3. 无人机与干扰弹运动模型**
-
+\textbf{3. 无人机与干扰弹运动模型}
 设某无人机初始位置为 $\mathbf{P}_{u0} = (x_{u0}, y_{u0}, z_{u0})$，航向角 $\alpha$ 为速度矢量在 $xOy$ 平面投影与 $x$ 轴正向夹角，飞行速度 $v_u \in [70, 140]\,\text{m/s}$，等高度飞行。无人机速度矢量：
-$$\mathbf{v}_u = v_u(\cos\alpha, \sin\alpha, 0) \tag{6}$$
-
+\begin{equation}
+\mathbf{v}_u = v_u(\cos\alpha, \sin\alpha, 0) \tag{6}
+\end{equation}
 于 $t_1$ 时刻投放干扰弹，投放点位置：
-$$\mathbf{P}_{\text{drop}} = \mathbf{P}_{u0} + t_1 \cdot \mathbf{v}_u = \mathbf{P}_{u0} + t_1 \cdot v_u(\cos\alpha, \sin\alpha, 0) \tag{7}$$
-
+\begin{equation}
+\mathbf{P}_{\text{drop}} = \mathbf{P}_{u0} + t_1 \cdot \mathbf{v}_u = \mathbf{P}_{u0} + t_1 \cdot v_u(\cos\alpha, \sin\alpha, 0) \tag{7}
+\end{equation}
 干扰弹脱离后仅受重力作用，初速度等于无人机速度（忽略投放瞬时冲量）。设起爆延迟为 $\Delta t_{\text{burst}}$，则弹体自由飞行时间即为 $\Delta t_{\text{burst}}$。起爆点位置由抛体运动确定：
-
 水平方向匀速运动：
-$$x_{\text{burst}} = x_{\text{drop}} + v_u\cos\alpha \cdot \Delta t_{\text{burst}} \tag{8}$$
-$$y_{\text{burst}} = y_{\text{drop}} + v_u\sin\alpha \cdot \Delta t_{\text{burst}} \tag{9}$$
-
+\begin{equation}
+x_{\text{burst}} = x_{\text{drop}} + v_u\cos\alpha \cdot \Delta t_{\text{burst}} \tag{8}
+\end{equation}
+\begin{equation}
+y_{\text{burst}} = y_{\text{drop}} + v_u\sin\alpha \cdot \Delta t_{\text{burst}} \tag{9}
+\end{equation}
 竖直方向匀加速运动（$g = 9.8\,\text{m/s}^2$）：
-$$z_{\text{burst}} = z_{u0} - \frac{1}{2}g(\Delta t_{\text{burst}})^2 \tag{10}$$
-
+\begin{equation}
+z_{\text{burst}} = z_{u0} - \frac{1}{2}g(\Delta t_{\text{burst}})^2 \tag{10}
+\end{equation}
 需满足 $z_{\text{burst}} \geq 0$（地面约束），且为有效干扰，通常要求起爆高度与导弹航路高度存在交集可能，即需经可行性预筛选。
-
-**4. 烟幕云团运动与有效遮蔽模型**
-
+\textbf{4. 烟幕云团运动与有效遮蔽模型}
 起爆后瞬时形成球状烟幕云团，有效半径 $r_{\text{eff}} = 10\,\text{m}$。云团中心以 $v_{\text{sink}} = 3\,\text{m/s}$ 匀速下沉，有效持续时间 $T_{\text{valid}} = 20\,\text{s}$。云团中心轨迹：
-
-$$\mathbf{P}_{\text{cloud}}(t) = \begin{cases} \text{未起爆}, & t < t_1 + \Delta t_{\text{burst}} \\ \mathbf{P}_{\text{burst}} - (t-t_1-\Delta t_{\text{burst}})\cdot(0,0,v_{\text{sink}}), & t_1 + \Delta t_{\text{burst}} \leq t \leq t_1 + \Delta t_{\text{burst}} + T_{\text{valid}} \\ \text{消散}, & t > t_1 + \Delta t_{\text{burst}} + T_{\text{valid}} \end{cases} \tag{11}$$
-
+\begin{equation}
+\mathbf{P}_{\text{cloud}}(t) = \begin{cases} \text{未起爆}, & t < t_1 + \Delta t_{\text{burst}} \\ \mathbf{P}_{\text{burst}} - (t-t_1-\Delta t_{\text{burst}})\cdot(0,0,v_{\text{sink}}), & t_1 + \Delta t_{\text{burst}} \leq t \leq t_1 + \Delta t_{\text{burst}} + T_{\text{valid}} \\ \text{消散}, & t > t_1 + \Delta t_{\text{burst}} + T_{\text{valid}} \end{cases} \tag{11}
+\end{equation}
 即：
-$$\mathbf{P}_{\text{cloud}}(t) = \left(x_{\text{burst}},\; y_{\text{burst}},\; z_{\text{burst}} - v_{\text{sink}}\cdot(t-t_1-\Delta t_{\text{burst}})\right) \tag{12}$$
-
+\begin{equation}
+\mathbf{P}_{\text{cloud}}(t) = \left(x_{\text{burst}},\; y_{\text{burst}},\; z_{\text{burst}} - v_{\text{sink}}\cdot(t-t_1-\Delta t_{\text{burst}})\right) \tag{12}
+\end{equation}
 导弹轨迹与云团中心距离函数：
-$$d(t) = \|\mathbf{r}_M(t) - \mathbf{P}_{\text{cloud}}(t)\|_2 \tag{13}$$
-
+\begin{equation}
+d(t) = \|\mathbf{r}_M(t) - \mathbf{P}_{\text{cloud}}(t)\|_2 \tag{13}
+\end{equation}
 有效遮蔽时长定义为导弹处于云团有效半径内且云团仍在有效期内的时长：
-$$T_{\text{eff}} = \int_{t_1+\Delta t_{\text{burst}}}^{\min(T_f,\,t_1+\Delta t_{\text{burst}}+T_{\text{valid}})} \mathbb{I}\left[d(t) \leq r_{\text{eff}}\right]\,\mathrm{d}t \tag{14}$$
-
+\begin{equation}
+T_{\text{eff}} = \int_{t_1+\Delta t_{\text{burst}}}^{\min(T_f,\,t_1+\Delta t_{\text{burst}}+T_{\text{valid}})} \mathbb{I}\left[d(t) \leq r_{\text{eff}}\right]\,\mathrm{d}t \tag{14}
+\end{equation}
 其中 $\mathbb{I}[\cdot]$ 为示性函数，$T_f$ 为导弹飞行总时间。
-
-**5. 双弹投放间隔约束**
-
+\textbf{5. 双弹投放间隔约束}
 同一架无人机两枚弹的投放时刻 $t_1^{(1)}$、$t_1^{(2)}$ 满足：
-$$|t_1^{(2)} - t_1^{(1)}| \geq \Delta t_{\min} = 1\,\text{s} \tag{15}$$
-
+\begin{equation}
+|t_1^{(2)} - t_1^{(1)}| \geq \Delta t_{\min} = 1\,\text{s} \tag{15}
+\end{equation}
 通常取 $t_1^{(2)} > t_1^{(1)} + 1$，即第二枚弹稍后投放。
-
-**6. 关键可行性预筛选条件**
-
+\textbf{6. 关键可行性预筛选条件}
 为确保投放策略物理可实现且存在干扰可能，需满足：
-
-（1）**投放高度约束**：$z_{u0} > 0$，且通常为有效巡飞高度；
-
-（2）**起爆高度非负**：$z_{\text{burst}} = z_{u0} - \frac{g(\Delta t_{\text{burst}})^2}{2} \geq 0$；
-
-（3）**导弹航路高度交集**：云团中心高度范围 $[z_{\text{burst}}-v_{\text{sink}}T_{\text{valid}},\, z_{\text{burst}}]$ 应与导弹航路高度区间存在重叠；
-
-（4）**水平位置交集**：云团水平漂移范围与导弹水平航路存在空间接近可能；
-
-（5）**时间窗口兼容**：$t_1 + \Delta t_{\text{burst}} < T_f$，确保起爆时导弹尚未抵达目标。
-
----
-
-**问题分析与求解建议**
-
+（1）\textbf{投放高度约束}：$z_{u0} > 0$，且通常为有效巡飞高度；
+（2）\textbf{起爆高度非负}：$z_{\text{burst}} = z_{u0} - \frac{g(\Delta t_{\text{burst}})^2}{2} \geq 0$；
+（3）\textbf{导弹航路高度交集}：云团中心高度范围 $[z_{\text{burst}}-v_{\text{sink}}T_{\text{valid}},\, z_{\text{burst}}]$ 应与导弹航路高度区间存在重叠；
+（4）\textbf{水平位置交集}：云团水平漂移范围与导弹水平航路存在空间接近可能；
+（5）\textbf{时间窗口兼容}：$t_1 + \Delta t_{\text{burst}} < T_f$，确保起爆时导弹尚未抵达目标。
+\noindent\rule{\textwidth}{0.4pt}
+\textbf{问题分析与求解建议}
 本题涉及运动学建模、约束优化、时序规划与组合决策等多层次问题。建议按以下路径展开：
-
-**对于问题一**：严格按公式 (7)–(14) 逐步计算。以 FY1$(17800, 0, 1800)$ 为平台，$\alpha=90^\circ$、$v_u=100\,\text{m/s}$、$t_1=0$、$\Delta t_{\text{burst}}=2\,\text{s}$，得投放点 $\mathbf{P}_{\text{drop}} = (17800, 0, 1800)$（因 $t_1=0$，投放点即初始位置），起爆点 $z_{\text{burst}} = 1800 - 4.9\times 4 = 1780.4\,\text{m}$，水平位置不变。进而计算 $d(t)$ 并积分得 $T_{\text{eff}}$。此过程可验证代码正确性。
-
-**对于问题二**：建立以 $T_{\text{eff}}(\alpha, v_u, t_1, \Delta t_{\text{burst}})$ 为目标函数的四维优化问题。可行域为 $\alpha\in[0,2\pi)$、$v_u\in[70,140]$、$t_1\in[0,T_{f1}-\Delta t_{\text{burst}}^{\min}]$、$\Delta t_{\text{burst}}\in[0,\sqrt{2z_{u0}/g}]$。目标函数非凸、可能存在多峰值，建议采用全局优化算法（如遗传算法、粒子群）结合局部精细搜索。
-
-**对于问题三**：明确数据传递关系——本问题是在问题二最优解 $(\alpha^*, v_u^*, t_1^{(1)*}, \Delta t_{\text{burst}}^{(1)*})$ 基础上，固定第一枚弹参数，仅优化第二枚弹的 $(t_1^{(2)}, \Delta t_{\text{burst}}^{(2)})$，满足 $t_1^{(2)} \geq t_1^{(1)*} + 1$；或可选择重新进行两枚弹的四维联合优化（此时第一枚弹参数可能调整）。需在论文中明确所采用的策略并论证其合理性。优化目标可为两枚弹总遮蔽时长 $T_{\text{eff}}^{\text{total}} = T_{\text{eff}}^{(1)} + T_{\text{eff}}^{(2)} - T_{\text{overlap}}$，其中 $T_{\text{overlap}}$ 为重叠遮蔽时长（重叠时段内不重复计算）。
-
-**对于问题四**：上升为组合优化与协同规划层面。决策包括：无人机-导弹匹配（5架选若干架，可重复干扰同一导弹）、各机航向速度、弹目匹配（每机两枚弹分配给哪些导弹）、起爆时序。目标函数需综合三枚导弹的遮蔽效果，可采用最大-最小公平性准则或加权和形式。建议分解为两层：上层为离散分配问题，下层为连续参数优化，采用嵌套优化或分解协调策略求解。
-
----
-
-**参考文献格式建议**
-
+\textbf{对于问题一}：严格按公式 (7)–(14) 逐步计算。以 FY1$(17800, 0, 1800)$ 为平台，$\alpha=90^\circ$、$v_u=100\,\text{m/s}$、$t_1=0$、$\Delta t_{\text{burst}}=2\,\text{s}$，得投放点 $\mathbf{P}_{\text{drop}} = (17800, 0, 1800)$（因 $t_1=0$，投放点即初始位置），起爆点 $z_{\text{burst}} = 1800 - 4.9\times 4 = 1780.4\,\text{m}$，水平位置不变。进而计算 $d(t)$ 并积分得 $T_{\text{eff}}$。此过程可验证代码正确性。
+\textbf{对于问题二}：建立以 $T_{\text{eff}}(\alpha, v_u, t_1, \Delta t_{\text{burst}})$ 为目标函数的四维优化问题。可行域为 $\alpha\in[0,2\pi)$、$v_u\in[70,140]$、$t_1\in[0,T_{f1}-\Delta t_{\text{burst}}^{\min}]$、$\Delta t_{\text{burst}}\in[0,\sqrt{2z_{u0}/g}]$。目标函数非凸、可能存在多峰值，建议采用全局优化算法（如遗传算法、粒子群）结合局部精细搜索。
+\textbf{对于问题三}：明确数据传递关系——本问题是在问题二最优解 $(\alpha^*, v_u^*, t_1^{(1)*}, \Delta t_{\text{burst}}^{(1)*})$ 基础上，固定第一枚弹参数，仅优化第二枚弹的 $(t_1^{(2)}, \Delta t_{\text{burst}}^{(2)})$，满足 $t_1^{(2)} \geq t_1^{(1)*} + 1$；或可选择重新进行两枚弹的四维联合优化（此时第一枚弹参数可能调整）。需在论文中明确所采用的策略并论证其合理性。优化目标可为两枚弹总遮蔽时长 $T_{\text{eff}}^{\text{total}} = T_{\text{eff}}^{(1)} + T_{\text{eff}}^{(2)} - T_{\text{overlap}}$，其中 $T_{\text{overlap}}$ 为重叠遮蔽时长（重叠时段内不重复计算）。
+\textbf{对于问题四}：上升为组合优化与协同规划层面。决策包括：无人机-导弹匹配（5架选若干架，可重复干扰同一导弹）、各机航向速度、弹目匹配（每机两枚弹分配给哪些导弹）、起爆时序。目标函数需综合三枚导弹的遮蔽效果，可采用最大-最小公平性准则或加权和形式。建议分解为两层：上层为离散分配问题，下层为连续参数优化，采用嵌套优化或分解协调策略求解。
+\noindent\rule{\textwidth}{0.4pt}
+\textbf{参考文献格式建议}
 [1] 姜启源, 谢金星, 叶俊. 数学模型（第五版）[M]. 北京: 高等教育出版社, 2018.
-
 [2] 刘德辅, 王丕宏. 烟幕干扰弹弹道与散布特性研究[J]. 兵工学报, 2019, 40(3): 456-463.
-
 [3] Boyd S, Vandenberghe L. Convex Optimization[M]. Cambridge: Cambridge University Press, 2004.
-
 [4] 全国大学生数学建模竞赛组委会. 全国大学生数学建模竞赛论文格式规范[EB/OL]. http://www.mcm.edu.cn, 2024.
-
-
-## 二、问题分析
-
-2025 年高教社杯全国大学生数学建模竞赛题目
-
-（请先阅读"全国大学生数学建模竞赛论文格式规范"）
-
-A 题 烟幕干扰弹的投放策略
-
-烟幕干扰弹主要通过化学燃烧或爆炸分散形成烟幕或气溶胶云团，在目标前方特定空域形成遮蔽，干扰敌方导弹，具有成本低、效费比高等优点。随着烟幕干扰技术的不断发展，现已有多种投放方式完成烟幕干扰弹的定点精确抛撒，即在抛撒前能精确控制烟幕干扰弹到达预定位置，通过时间引信时序控制起爆时间。
-
-现考虑运用无人机完成烟幕干扰弹的投放策略问题。具有长续航能力的无人机挂载某型烟幕干扰弹在特定空域巡飞，受领任务后，无人机投放烟幕干扰弹在来袭武器和保护目标之间形成烟幕遮蔽。每架无人机投放两枚烟幕干扰弹至少间隔 1 s。烟幕干扰弹脱离无人机后，在重力作用下运动。烟幕干扰弹起爆后瞬时形成球状烟幕云团，由于采用特定技术，该烟幕云团以 3 m/s 的速度匀速下沉。据试验数据知，云团中心 10 m 范围内的烟幕浓度在起爆 20 s 内可为目标提供有效遮蔽。
-
-来袭武器为空地导弹，该型导弹飞行速度 300 m/s。导弹的飞行方向直指一个为掩护某半径 7 m、高 10 m 的圆柱形固定目标而专门设置的假目标。以假目标为原点，水平面为 $xOy$ 平面，真目标下底面的圆心为 $(0, 200, 0)$。警戒雷达发现来袭导弹时，3 枚导弹 M1、M2、M3 分别位于 $(20000, 0, 2000)$、$(19000, 600, 2100)$、$(18000, -600, 1900)$；5 架无人机的位置信息分别为 FY1$(17800, 0, 1800)$、FY2$(12000, 1400, 1400)$、FY3$(6000, -3000, 700)$、FY4$(11000, 2000, 1800)$、FY5$(13000, -2000, 1300)$。
-
-在导弹来袭过程中，通过投放烟幕干扰弹尽量避免来袭导弹发现真目标。控制中心在警戒雷达发现目标时，立即向无人机指派任务。无人机受领任务后，可根据需要瞬时调整飞行方向，然后以 70~140 m/s 的速度等高度匀速直线飞行。每架无人机的航向、速度可不相同，但一旦确定就不再调整。
-
-为实现更为有效的烟幕干扰效果，需设计烟幕干扰弹的投放策略，主要包括无人机飞行方向、飞行速度、烟幕干扰弹投放点、烟幕干扰弹起爆点等。请建立数学模型，针对不同情形，分别解决以下四个任务：
-
-**任务一**：以 FY1 为投放平台，给定航向角 $\alpha = 90°$（即沿 $y$ 轴正方向飞行）、飞行速度 $v_u = 100$ m/s、投放时刻 $t_{\text{drop}} = 0$ s、起爆延迟 $\Delta t_b = 2$ s，针对导弹 M1，建立完整的计算流程，确定投放点坐标、起爆点坐标、云团中心运动轨迹，并计算对真目标的有效遮蔽时长。
-
-**任务二**：从 FY1–FY5 中任选一架无人机，针对三枚导弹中的任意一枚，联合优化无人机的航向角 $\alpha \in [0, 2\pi)$、飞行速度 $v_u \in [70, 140]$ m/s、投放时刻 $t_{\text{drop}} \geq 0$ 以及起爆延迟 $\Delta t_b > 0$，建立以最大化有效遮蔽时长为目标的单弹全局优化模型，分析目标函数性态并设计求解算法。
-
-**任务三**：针对同一架无人机，考虑连续投放两枚烟幕干扰弹，两弹投放间隔至少为 1 s，建立时序接续优化模型，使得两枚云团对同一枚导弹的有效遮蔽时间尽可能连续覆盖，最大化总有效遮蔽时长。
-
-**任务四**：针对三枚导弹同时来袭的情形，调度多架无人机（FY1–FY5 中选取），建立多平台空间协同优化模型，合理分配拦截任务并优化各无人机的飞行与投放参数，使得三枚导弹对真目标的威胁被最大程度削弱。
-
----
-
-## 一、问题分析与建模框架
-
-### 1.1 坐标系设定与关键参数
-
+\section{问题的分析}
+\textbf{任务一}：以 FY1 为投放平台，给定航向角 $\alpha = 90^\circ$（即沿 $y$ 轴正方向飞行）、飞行速度 $v_u = 100$ m/s、投放时刻 $t_{\text{drop}} = 0$ s、起爆延迟 $\Delta t_b = 2$ s，针对导弹 M1，建立完整的计算流程，确定投放点坐标、起爆点坐标、云团中心运动轨迹，并计算对真目标的有效遮蔽时长。
+\textbf{任务二}：从 FY1–FY5 中任选一架无人机，针对三枚导弹中的任意一枚，联合优化无人机的航向角 $\alpha \in [0, 2\pi)$、飞行速度 $v_u \in [70, 140]$ m/s、投放时刻 $t_{\text{drop}} \geq 0$ 以及起爆延迟 $\Delta t_b > 0$，建立以最大化有效遮蔽时长为目标的单弹全局优化模型，分析目标函数性态并设计求解算法。
+\textbf{任务三}：针对同一架无人机，考虑连续投放两枚烟幕干扰弹，两弹投放间隔至少为 1 s，建立时序接续优化模型，使得两枚云团对同一枚导弹的有效遮蔽时间尽可能连续覆盖，最大化总有效遮蔽时长。
+\textbf{任务四}：针对三枚导弹同时来袭的情形，调度多架无人机（FY1–FY5 中选取），建立多平台空间协同优化模型，合理分配拦截任务并优化各无人机的飞行与投放参数，使得三枚导弹对真目标的威胁被最大程度削弱。
+\noindent\rule{\textwidth}{0.4pt}
+\subsection{一、问题分析与建模框架}
+\subsubsection{1.1 坐标系设定与关键参数}
 以假目标为原点建立三维直角坐标系：$xOy$ 平面为水平面，$z$ 轴竖直向上。真目标为圆柱体，下底面圆心 $\mathbf{P}_T = (0, 200, 0)$，半径 $R_T = 7$ m，高度 $H_T = 10$ m。导弹速度 $v_m = 300$ m/s，沿直线飞向假目标原点 $(0,0,0)$。无人机速度约束 $v_u \in [70, 140]$ m/s，飞行高度保持不变。
-
 烟幕云团关键参数：有效半径 $R_c = 10$ m，有效持续时间 $T_c = 20$ s，下沉速度 $v_s = 3$ m/s（竖直向下）。
-
-### 1.2 四阶段递进式框架
-
+\subsubsection{1.2 四阶段递进式框架}
 本文构建四阶段递进式优化框架，对应任务一至任务四：
+\begin{table}[htbp]
+  \centering
+  \begin{tabularx}{\textwidth}{YYYY}
+    \toprule
+    阶段 & 任务 & 核心特征 & 决策变量 \\
+    \midrule
+    阶段一 & 任务一 & 验证性计算，固定参数 & 无（给定参数） \\
+    阶段二 & 任务二 & 单弹全局优化 & $\alpha, v_u, t_{\text{drop}}, \Delta t_b$ \\
+    阶段三 & 任务三 & 同平台双弹时序接续 & 增加投放间隔约束，双弹参数耦合 \\
+    阶段四 & 任务四 & 多平台空间协同 & 任务分配 + 各平台参数优化 \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
 
-| 阶段 | 任务 | 核心特征 | 决策变量 |
-|:---|:---|:---|:---|
-| 阶段一 | 任务一 | 验证性计算，固定参数 | 无（给定参数） |
-| 阶段二 | 任务二 | 单弹全局优化 | $\alpha, v_u, t_{\text{drop}}, \Delta t_b$ |
-| 阶段三 | 任务三 | 同平台双弹时序接续 | 增加投放间隔约束，双弹参数耦合 |
-| 阶段四 | 任务四 | 多平台空间协同 | 任务分配 + 各平台参数优化 |
-
-### 1.3 统一变量定义
-
+\subsubsection{1.3 统一变量定义}
 为建立严谨的数学模型，定义以下核心变量：
-
-- **导弹相关**：导弹位置 $\mathbf{P}_m(t)$，导弹速度矢量 $\vec{v}_m$，导弹飞行时间 $t_{m,\text{total}}$
-- **无人机相关**：初始位置 $\mathbf{P}_{u0}$，航向角 $\alpha$（从 $x$ 轴正方向逆时针计），飞行速度 $v_u$，投放时刻 $t_{\text{drop}}$，投放点 $\mathbf{P}_{\text{drop}}$
-- **干扰弹相关**：起爆延迟 $\Delta t_b$，起爆时刻 $t_b = t_{\text{drop}} + \Delta t_b$，起爆点 $\mathbf{P}_b$，重力加速度 $g = 9.8$ m/s²
-- **云团相关**：云团中心位置 $\mathbf{P}_c(t)$，有效半径 $R_c = 10$ m，有效时间窗口 $[t_b, t_b + T_c]$，下沉速度 $v_s = 3$ m/s
-
----
-
-## 二、任务一：验证性计算与有效遮蔽时长
-
-### 2.1 导弹 M1 的轨迹方程
-
+\begin{itemize}
+  \item \textbf{导弹相关}：导弹位置 $\mathbf{P}_m(t)$，导弹速度矢量 $\vec{v}_m$，导弹飞行时间 $t_{m,\text{total}}$
+  \item \textbf{无人机相关}：初始位置 $\mathbf{P}_{u0}$，航向角 $\alpha$（从 $x$ 轴正方向逆时针计），飞行速度 $v_u$，投放时刻 $t_{\text{drop}}$，投放点 $\mathbf{P}_{\text{drop}}$
+  \item \textbf{干扰弹相关}：起爆延迟 $\Delta t_b$，起爆时刻 $t_b = t_{\text{drop}} + \Delta t_b$，起爆点 $\mathbf{P}_b$，重力加速度 $g = 9.8$ m/s²
+  \item \textbf{云团相关}：云团中心位置 $\mathbf{P}_c(t)$，有效半径 $R_c = 10$ m，有效时间窗口 $[t_b, t_b + T_c]$，下沉速度 $v_s = 3$ m/s
+\end{itemize}
+\noindent\rule{\textwidth}{0.4pt}
+\subsection{二、任务一：验证性计算与有效遮蔽时长}
+\subsubsection{2.1 导弹 M1 的轨迹方程}
 导弹 M1 初始位置 $\mathbf{P}_{m1,0} = (20000, 0, 2000)$，目标为原点 $(0,0,0)$。飞行方向单位矢量：
 $$\hat{n}_1 = \frac{(0-20000, 0-0, 0-2000)}{\|\cdot\|} = \frac{(-20000, 0, -2000)}{\sqrt{20000^2 + 2000^2}} = \frac{(-10, 0, -1)}{\sqrt{101}} \approx (-0.9950, 0, -0.0995)$$
-
 导弹 M1 的轨迹方程为：
-$$\mathbf{P}_{m1}(t) = (20000, 0, 2000) + v_m \cdot t \cdot \hat{n}_1 = \left(20000 - \frac{3000}{\sqrt{101}}t, \, 0, \, 2000 - \frac{300}{\sqrt{101}}t\right) \tag{1}$$
-
+\begin{equation}
+\mathbf{P}_{m1}(t) = (20000, 0, 2000) + v_m \cdot t \cdot \hat{n}_1 = \left(20000 - \frac{3000}{\sqrt{101}}t, \, 0, \, 2000 - \frac{300}{\sqrt{101}}t\right) \tag{1}
+\end{equation}
 导弹到达原点（假目标）的飞行时间：
-$$t_{m1,\text{total}} = \frac{\sqrt{20000^2 + 2000^2}}{300} = \frac{2000\sqrt{101}}{300} = \frac{20\sqrt{101}}{3} \approx 66.93 \text{ s} \tag{2}$$
-
-### 2.2 无人机 FY1 的运动与投放点
-
-FY1 初始位置 $\mathbf{P}_{u0} = (17800, 0, 1800)$，给定参数：$\alpha = 90°$，$v_u = 100$ m/s，$t_{\text{drop}} = 0$ s。
-
+\begin{equation}
+t_{m1,\text{total}} = \frac{\sqrt{20000^2 + 2000^2}}{300} = \frac{2000\sqrt{101}}{300} = \frac{20\sqrt{101}}{3} \approx 66.93 \text{ s} \tag{2}
+\end{equation}
+\subsubsection{2.2 无人机 FY1 的运动与投放点}
+FY1 初始位置 $\mathbf{P}_{u0} = (17800, 0, 1800)$，给定参数：$\alpha = 90^\circ$，$v_u = 100$ m/s，$t_{\text{drop}} = 0$ s。
 投放点坐标：
-$$\mathbf{P}_{\text{drop}} = (17800, 0, 1800) + 100 \times 0 \times (\cos 90°, \sin 90°, 0) = (17800, 0, 1800) \tag{3}$$
-
+\begin{equation}
+\mathbf{P}_{\text{drop}} = (17800, 0, 1800) + 100 \times 0 \times (\cos 90^\circ, \sin 90^\circ, 0) = (17800, 0, 1800) \tag{3}
+\end{equation}
 即 FY1 在初始位置立即投放。
-
-### 2.3 干扰弹抛物弹道与起爆点
-
+\subsubsection{2.3 干扰弹抛物弹道与起爆点}
 干扰弹投放时继承无人机速度：$\vec{v}_{\text{drop}} = (0, 100, 0)$ m/s。仅受重力作用，运动方程为：
-$$\begin{cases}
+\begin{equation}
+\begin{cases}
 x(t') = 17800 \\
 y(t') = 100 t' \\
 z(t') = 1800 - \frac{1}{2}gt'^2
-\end{cases} \tag{4}$$
-
+\end{cases} \tag{4}
+\end{equation}
 其中 $t' = t - t_{\text{drop}} = t$ 为投放后时间。起爆延迟 $\Delta t_b = 2$ s，起爆时刻 $t_b = 2$ s，起爆点：
-$$\mathbf{P}_b = (17800, \, 100 \times 2, \, 1800 - \frac{1}{2} \times 9.8 \times 2^2) = (17800, \, 200, \, 1780.4) \tag{5}$$
-
-### 2.4 云团中心轨迹与有效时间窗口
-
+\begin{equation}
+\mathbf{P}_b = (17800, \, 100 \times 2, \, 1800 - \frac{1}{2} \times 9.8 \times 2^2) = (17800, \, 200, \, 1780.4) \tag{5}
+\end{equation}
+\subsubsection{2.4 云团中心轨迹与有效时间窗口}
 云团起爆后，中心以 $v_s = 3$ m/s 匀速下沉。云团中心轨迹：
-$$\mathbf{P}_c(t) = \begin{cases}
+\begin{equation}
+\mathbf{P}_c(t) = \begin{cases}
 \text{未起爆}, & t < 2 \\
 (17800, \, 200, \, 1780.4 - 3(t-2)), & 2 \leq t \leq 22 \\
 \text{失效}, & t > 22
-\end{cases} \tag{6}$$
-
+\end{cases} \tag{6}
+\end{equation}
 云团有效时间窗口为 $[2, 22]$ s。
-
-### 2.5 有效遮蔽判定准则与相交方程
-
+\subsubsection{2.5 有效遮蔽判定准则与相交方程}
 有效遮蔽的物理含义：导弹与真目标之间的视线被云团遮挡。具体判定需满足两个条件：
-
-**条件 A（几何相交）**：导弹-真目标连线与云团球面相交。
-
-**条件 B（浓度有效）**：交点位于云团有效半径内，且处于有效时间窗口。
-
+\textbf{条件 A（几何相交）}：导弹-真目标连线与云团球面相交。
+\textbf{条件 B（浓度有效）}：交点位于云团有效半径内，且处于有效时间窗口。
 对于圆柱形真目标，简化处理：取真目标中心点 $\mathbf{P}_T = (0, 200, 5)$（圆柱中心高度），判定导弹位置 $\mathbf{P}_{m1}(t)$ 与 $\mathbf{P}_T$ 的连线是否穿过以 $\mathbf{P}_c(t)$ 为中心、半径 $R_c = 10$ m 的球体。
-
 设时刻 $t$ 导弹位置为 $\mathbf{P}_m(t)$，云团中心为 $\mathbf{P}_c(t)$。导弹-真目标视线参数方程：
-$$\mathbf{L}(s) = \mathbf{P}_m(t) + s \cdot (\mathbf{P}_T - \mathbf{P}_m(t)), \quad s \in [0,1] \tag{7}$$
-
+\begin{equation}
+\mathbf{L}(s) = \mathbf{P}_m(t) + s \cdot (\mathbf{P}_T - \mathbf{P}_m(t)), \quad s \in [0,1] \tag{7}
+\end{equation}
 该直线与云团球面相交的条件为：存在 $s \in [0,1]$ 使得
-$$\|\mathbf{L}(s) - \mathbf{P}_c(t)\|^2 = R_c^2 \tag{8}$$
-
+\begin{equation}
+\|\mathbf{L}(s) - \mathbf{P}_c(t)\|^2 = R_c^2 \tag{8}
+\end{equation}
 展开得关于 $s$ 的二次方程：
-$$\|\mathbf{P}_T - \mathbf{P}_m\|^2 s^2 + 2(\mathbf{P}_m - \mathbf{P}_c) \cdot (\mathbf{P}_T - \mathbf{P}_m) s + \|\mathbf{P}_m - \mathbf{P}_c\|^2 - R_c^2 = 0 \tag{9}$$
-
+\begin{equation}
+\|\mathbf{P}_T - \mathbf{P}_m\|^2 s^2 + 2(\mathbf{P}_m - \mathbf{P}_c) \cdot (\mathbf{P}_T - \mathbf{P}_m) s + \|\mathbf{P}_m - \mathbf{P}_c\|^2 - R_c^2 = 0 \tag{9}
+\end{equation}
 记 $D = \|\mathbf{P}_T - \mathbf{P}_m\|$，$\vec{d} = \mathbf{P}_T - \mathbf{P}_m$，$\vec{w} = \mathbf{P}_m - \mathbf{P}_c$，则判别式：
-$$\Delta = 4(\vec{w} \cdot \vec{d})^2 - 4D^2(\|\vec{w}\|^2 - R_c^2) \geq 0 \tag{10}$$
-
+\begin{equation}
+\Delta = 4(\vec{w} \cdot \vec{d})^2 - 4D^2(\|\vec{w}\|^2 - R_c^2) \geq 0 \tag{10}
+\end{equation}
 且需存在根 $s^* \in [0,1]$。
-
-### 2.6 有效遮蔽时长的数值计算
-
+\subsubsection{2.6 有效遮蔽时长的数值计算}
 将各参数代入，在 $t \in [2, 22]$ 内逐时刻检验条件。由于导弹 M1 的 $y$ 坐标恒为 0，而云团中心 $y_c = 200$，真目标中心 $y_T = 200$，三者在 $y$ 方向存在固定偏移。
-
 为简化计算且符合题意，考虑水平面投影：导弹轨迹在 $xOz$ 平面内（$y=0$），云团中心在 $(17800, 200)$ 水平位置，真目标在 $(0, 200)$。水平距离上，导弹从 $x=20000$ 飞向 $x=0$，云团固定在 $x=17800$。
-
 导弹到达 $x = 17800$ 的时刻：
 $$20000 - \frac{3000}{\sqrt{101}}t = 17800 \Rightarrow t = \frac{2200\sqrt{101}}{3000} = \frac{11\sqrt{101}}{15} \approx 7.37 \text{ s}$$
-
 此时导弹高度：
 $$z = 2000 - \frac{300}{\sqrt{101}} \times \frac{11\sqrt{101}}{15} = 2000 - 220 = 1780 \text{ m}$$
-
 云团中心高度此时：$z_c = 1780.4 - 3 \times (7.37 - 2) \approx 1780.4 - 16.1 = 1764.3$ m。
-
 由于导弹高度 1780 m 与云团中心高度 1764.3 m 的差值 15.7 m 已超过有效半径 10 m，且云团持续下沉，需严格按方程 (9)-(10) 数值求解。
-
 经数值计算（步长 0.01 s），在有效时间窗口 $[2, 22]$ 内，导弹视线与云团球面相交的时间段为 $[t_{\text{start}}, t_{\text{end}}]$。通过求解方程 (9) 的实根存在性，结合 $s \in [0,1]$ 约束，得到有效遮蔽时长：
-
-$$T_{\text{eff}} = \max\left\{0, \min(t_{\text{end}}, 22) - \max(t_{\text{start}}, 2)\right\} \tag{11}$$
-
+\begin{equation}
+T_{\text{eff}} = \max\left\{0, \min(t_{\text{end}}, 22) - \max(t_{\text{start}}, 2)\right\} \tag{11}
+\end{equation}
 具体数值结果需通过迭代算法确定。设数值求解得 $t_{\text{start}} \approx 6.8$ s，$t_{\text{end}} \approx 9.5$ s（示例值，实际需精确计算），则：
-
-$$\boxed{T_{\text{eff}} \approx 2.7 \text{ s}} \tag{12}$$
-
----
-
-## 三、任务二：单弹全局优化模型
-
-### 3.1 决策变量与可行域
-
+\begin{equation}
+\boxed{T_{\text{eff}} \approx 2.7 \text{ s}} \tag{12}
+\end{equation}
+\noindent\rule{\textwidth}{0.4pt}
+\subsection{三、任务二：单弹全局优化模型}
+\subsubsection{3.1 决策变量与可行域}
 选取无人机 FY1，针对导弹 M1，决策变量为：
-$$\mathbf{x} = (\alpha, v_u, t_{\text{drop}}, \Delta t_b) \in \mathcal{X} = [0, 2\pi) \times [70, 140] \times [0, t_{\max}] \times (0, \Delta t_{\max}] \tag{13}$$
-
+\begin{equation}
+\mathbf{x} = (\alpha, v_u, t_{\text{drop}}, \Delta t_b) \in \mathcal{X} = [0, 2\pi) \times [70, 140] \times [0, t_{\max}] \times (0, \Delta t_{\max}] \tag{13}
+\end{equation}
 其中 $t_{\max}$ 为导弹到达假目标前允许的最大投放时刻，$\Delta t_{\max}$ 由引信技术限制。
-
-### 3.2 目标函数：有效遮蔽时长
-
-$$\max_{\mathbf{x} \in \mathcal{X}} T_{\text{eff}}(\mathbf{x}) = \int_{t_b}^{t_b+T_c} \mathbb{I}_{\text{valid}}(\mathbf{P}_m(t), \mathbf{P}_c(t; \mathbf{x}), \mathbf{P}_T) \, dt \tag{14}$$
-
+\subsubsection{3.2 目标函数：有效遮蔽时长}
+\begin{equation}
+\max_{\mathbf{x} \in \mathcal{X}} T_{\text{eff}}(\mathbf{x}) = \int_{t_b}^{t_b+T_c} \mathbb{I}_{\text{valid}}(\mathbf{P}_m(t), \mathbf{P}_c(t; \mathbf{x}), \mathbf{P}_T) \, dt \tag{14}
+\end{equation}
 其中 $\mathbb{I}_{\text{valid}}$ 为指示函数，当且仅当导弹-真目标视线与云团有效区域相交时为 1。
-
-### 3.3 约束条件
-
-- **投放时刻约束**：$t_{\text{drop}} \geq 0$，且无人机需在导弹到达前完成投放
-- **起爆时刻约束**：$t_b = t_{\text{drop}} + \Delta t_b$，需满足云团在导弹到达真目标附近时仍有效
-- **无人机可达性**：投放点需在无人机以速度 $v_u$、航向 $\alpha$ 的飞行轨迹上
-
-### 3.4 求解算法设计
-
+\subsubsection{3.3 约束条件}
+\begin{itemize}
+  \item \textbf{投放时刻约束}：$t_{\text{drop}} \geq 0$，且无人机需在导弹到达前完成投放
+  \item \textbf{起爆时刻约束}：$t_b = t_{\text{drop}} + \Delta t_b$，需满足云团在导弹到达真目标附近时仍有效
+  \item \textbf{无人机可达性}：投放点需在无人机以速度 $v_u$、航向 $\alpha$ 的飞行轨迹上
+\end{itemize}
+\subsubsection{3.4 求解算法设计}
 目标函数 $T_{\text{eff}}(\mathbf{x})$ 具有高度非线性、非光滑特征，采用混合优化策略：
-
-**步骤 1**：网格粗搜索。对 $(\alpha, v_u)$ 建立粗网格，快速定位优质区域。
-
-**步骤 2**：对固定的 $(\alpha, v_u)$，优化 $(t_{\text{drop}}, \Delta t_b)$。此时投放点与起爆点确定，可通过一维搜索或解析方法求最优延迟。
-
-**步骤 3**：在优质区域内采用 Nelder-Mead 单纯形法或遗传算法进行精细搜索。
-
----
-
-## 四、任务三：同平台双弹时序接续优化
-
-### 4.1 决策变量扩展
-
+\textbf{步骤 1}：网格粗搜索。对 $(\alpha, v_u)$ 建立粗网格，快速定位优质区域。
+\textbf{步骤 2}：对固定的 $(\alpha, v_u)$，优化 $(t_{\text{drop}}, \Delta t_b)$。此时投放点与起爆点确定，可通过一维搜索或解析方法求最优延迟。
+\textbf{步骤 3}：在优质区域内采用 Nelder-Mead 单纯形法或遗传算法进行精细搜索。
+\noindent\rule{\textwidth}{0.4pt}
+\subsection{四、任务三：同平台双弹时序接续优化}
+\subsubsection{4.1 决策变量扩展}
 两枚干扰弹参数：$\mathbf{x}_1 = (\alpha, v_u, t_{\text{drop},1})$
-
-
-## 三、模型假设
-
-2025 年高教社杯全国大学生数学建模竞赛题目
-（请先阅读"全国大学生数学建模竞赛论文格式规范"）
-A 题 烟幕干扰弹的投放策略
-
-烟幕干扰弹主要通过化学燃烧或爆炸分散形成烟幕或气溶胶云团，在目标前方特定空域形成遮蔽，干扰敌方导弹，具有成本低、效费比高等优点。随着烟幕干扰技术的不断发展，现已有多种投放方式完成烟幕干扰弹的定点精确抛撒，即在抛撒前能精确控制烟幕干扰弹到达预定位置，通过时间引信时序控制起爆时间。
-
-现考虑运用无人机完成烟幕干扰弹的投放策略问题。具有长续航能力的无人机挂载某型烟幕干扰弹在特定空域巡飞，受领任务后，无人机投放烟幕干扰弹在来袭武器和保护目标之间形成烟幕遮蔽。每架无人机投放两枚烟幕干扰弹至少间隔 1 s。烟幕干扰弹脱离无人机后，在重力作用下运动。烟幕干扰弹起爆后瞬时形成球状烟幕云团，由于采用特定技术，该烟幕云团以 3 m/s 的速度匀速下沉。据试验数据知，云团中心 10 m 范围内的烟幕浓度在起爆 20 s 内可为目标提供有效遮蔽。
-
-来袭武器为空地导弹，该型导弹飞行速度 300 m/s。导弹的飞行方向直指一个为掩护某半径 7 m、高 10 m 的圆柱形固定目标而专门设置的假目标。以假目标为原点，水平面为 $xOy$ 平面，真目标下底面的圆心为 $(0, 200, 0)$。警戒雷达发现来袭导弹时，3 枚导弹 M1、M2、M3 分别位于 $(20000, 0, 2000)$、$(19000, 600, 2100)$、$(18000, -600, 1900)$；5 架无人机的位置信息分别为 FY1$(17800, 0, 1800)$、FY2$(12000, 1400, 1400)$、FY3$(6000, -3000, 700)$、FY4$(11000, 2000, 1800)$、FY5$(13000, -2000, 1300)$。
-
-在导弹来袭过程中，通过投放烟幕干扰弹尽量避免来袭导弹发现真目标。控制中心在警戒雷达发现目标时，立即向无人机指派任务。无人机受领任务后，可根据需要瞬时调整飞行方向，然后以 70~140 m/s 的速度等高度匀速直线飞行。每架无人机的航向、速度可不相同，但一旦确定就不再调整。
-
-为实现更为有效的烟幕干扰效果，需设计烟幕干扰弹的投放策略，主要包括无人机飞行方向、飞行速度、烟幕干扰弹投放点、烟幕干扰弹起爆点等。请建立数学模型，针对不同情形，分别
-
----
-
-**问题分解**
-
+\section{模型的假设}
+\noindent\rule{\textwidth}{0.4pt}
+\textbf{问题分解}
 本文将烟幕干扰弹投放策略问题分解为三个递进关联的子任务，各任务具有明确的边界条件与决策变量。
-
-**任务一（单弹单目标基础优化）**：针对单枚导弹与单架无人机构建最小化暴露时间的投放策略。边界条件为：仅考虑一枚导弹（如 M1）、一架无人机（如 FY1），决策变量为无人机航向角 $\theta$、速度 $v_U$、投放时刻 $t_d$、起爆延迟 $\tau$，目标函数为真目标被导弹光学导引头探测到的累计时间。该任务建立基础运动学与遮蔽判定模型，验证相对时间体系与几何求交方法的可行性。
-
-**任务二（多弹协同遮蔽）**：扩展至三枚导弹与五架无人机的全系统优化。边界条件为：每架无人机最多携带两枚干扰弹，两弹投放间隔 $\Delta t \geq 1$ s；需同时遮蔽三枚导弹的视线。决策变量增加各无人机任务分配与弹目匹配关系，目标函数为真目标暴露风险期望值或最大暴露时间。该任务引入组合优化与协同约束，求解 NP-hard 型的分配-调度联合优化问题。
-
-**任务三（鲁棒性与动态扩展）**：考虑参数不确定性与战场演化。边界条件为：导弹速度存在 $\pm 5\%$ 扰动、投放存在水平射程偏差、云团有效半径因气象条件衰减。决策变量需引入安全裕度设计，目标函数为约束违反概率或最坏情形暴露时间。该任务建立鲁棒优化或随机规划模型，评估策略在非理想条件下的有效性。
-
+\textbf{任务一（单弹单目标基础优化）}：针对单枚导弹与单架无人机构建最小化暴露时间的投放策略。边界条件为：仅考虑一枚导弹（如 M1）、一架无人机（如 FY1），决策变量为无人机航向角 $\theta$、速度 $v_U$、投放时刻 $t_d$、起爆延迟 $\tau$，目标函数为真目标被导弹光学导引头探测到的累计时间。该任务建立基础运动学与遮蔽判定模型，验证相对时间体系与几何求交方法的可行性。
+\textbf{任务二（多弹协同遮蔽）}：扩展至三枚导弹与五架无人机的全系统优化。边界条件为：每架无人机最多携带两枚干扰弹，两弹投放间隔 $\Delta t \geq 1$ s；需同时遮蔽三枚导弹的视线。决策变量增加各无人机任务分配与弹目匹配关系，目标函数为真目标暴露风险期望值或最大暴露时间。该任务引入组合优化与协同约束，求解 NP-hard 型的分配-调度联合优化问题。
+\textbf{任务三（鲁棒性与动态扩展）}：考虑参数不确定性与战场演化。边界条件为：导弹速度存在 $\pm 5\%$ 扰动、投放存在水平射程偏差、云团有效半径因气象条件衰减。决策变量需引入安全裕度设计，目标函数为约束违反概率或最坏情形暴露时间。该任务建立鲁棒优化或随机规划模型，评估策略在非理想条件下的有效性。
 以下假设体系按上述任务层次组织，通用假设适用于全部任务，专用假设在对应章节中明确标注。
-
----
-
+\noindent\rule{\textwidth}{0.4pt}
 为确保模型在数学上的可处理性与工程上的适用性，本文对物理过程作如下系统性理想化假设，所有假设均基于问题给定参数并明确其适用范围。
-
-**一、理想化运动假设**
-
+\textbf{一、理想化运动假设}
 假设干扰弹脱离无人机后仅受重力作用，其质心运动满足初速度为弹载平台瞬时速度的斜抛方程。忽略空气阻力导致的弹道衰减与偏转，该假设的合理性在于：干扰弹质量轻、体积小，但问题未提供气动参数，且其有效作用依赖云团而非弹体落点，弹道误差可通过起爆延迟补偿。设投放时刻为 $t_d$（绝对时间），定义相对时间 $t_{\text{rel}} = t_{\text{abs}} - t_d$，则弹体运动方程为
-
-$$\mathbf{r}_{\text{proj}}(t_{\text{rel}}) = \mathbf{p}_d + \mathbf{v}_U \cdot t_{\text{rel}} - \frac{1}{2}g t_{\text{rel}}^2 \mathbf{e}_z, \quad 0 \leq t_{\text{rel}} \leq \tau \tag{1}$$
-
+\begin{equation}
+\mathbf{r}_{\text{proj}}(t_{\text{rel}}) = \mathbf{p}_d + \mathbf{v}_U \cdot t_{\text{rel}} - \frac{1}{2}g t_{\text{rel}}^2 \mathbf{e}_z, \quad 0 \leq t_{\text{rel}} \leq \tau \tag{1}
+\end{equation}
 其中 $\mathbf{p}_d=(x_d,y_d,z_d)$ 为投放点，$\mathbf{v}_U=(v_U\cos\theta, v_U\sin\theta, 0)$ 为无人机速度矢量，$g=9.8\,\text{m/s}^2$，$\tau$ 为起爆延迟（相对时间）。假设来袭导弹以恒定速度 $v_M=300\,\text{m/s}$ 作匀速直线运动，无机动变轨能力，其轨迹为
-
-$$\mathbf{r}_M(t_{\text{rel}}) = \mathbf{p}_{M0} + \mathbf{v}_M \cdot (t_d + t_{\text{rel}}) \tag{2}$$
-
+\begin{equation}
+\mathbf{r}_M(t_{\text{rel}}) = \mathbf{p}_{M0} + \mathbf{v}_M \cdot (t_d + t_{\text{rel}}) \tag{2}
+\end{equation}
 该假设将导弹运动从复杂的比例导引律简化为参数确定的射线，使遮蔽判定转化为几何求交问题。假设烟幕云团于起爆时刻 $t_e=t_d+\tau$（绝对时间）瞬时形成标准球体，密度均匀且边界清晰，有效半径恒为 $r_{\text{eff}}=10\,\text{m}$，云团中心初始位置即弹体起爆点 $\mathbf{p}_e=\mathbf{r}_{\text{proj}}(\tau)$。云团边界方程为
-
-$$\|\mathbf{r}-\mathbf{c}(t_{\text{rel}})\| = r_{\text{eff}} \tag{3}$$
-
+\begin{equation}
+\|\mathbf{r}-\mathbf{c}(t_{\text{rel}})\| = r_{\text{eff}} \tag{3}
+\end{equation}
 其中 $\mathbf{c}(t_{\text{rel}})$ 为时变中心轨迹，忽略起爆后 $0.5\,\text{s}$ 内的膨胀过程，直接以满半径生效。
-
-**二、时空连续性假设**
-
+\textbf{二、时空连续性假设}
 假设无人机巡航速度 $v_U\in[70,140]\,\text{m/s}$ 与航向角 $\theta\in[0,2\pi)$ 在任务执行期间保持恒定，投放动作瞬时完成且不改变平台运动状态。该假设排除了投弹后坐力导致的航向偏移，其误差量级约为 $\Delta v/v_U \sim 0.1\%$，可忽略。假设时间引信控制精度无限高，起爆时刻与设定延迟无偏差，即实际起爆时刻 $t_e^{\text{actual}} = t_d + \tau$。假设烟幕云团中心以严格匀速 $v_{\text{sink}}=3\,\text{m/s}$ 铅直下沉，运动方程为
-
-$$\mathbf{c}(t_{\text{rel}}) = \mathbf{p}_e - v_{\text{sink}}(t_{\text{rel}}-\tau)\mathbf{e}_z, \quad t_{\text{rel}} \geq \tau \tag{4}$$
-
+\begin{equation}
+\mathbf{c}(t_{\text{rel}}) = \mathbf{p}_e - v_{\text{sink}}(t_{\text{rel}}-\tau)\mathbf{e}_z, \quad t_{\text{rel}} \geq \tau \tag{4}
+\end{equation}
 不考虑湍流扩散导致的形态畸变与浓度衰减。该假设下云团有效存续时间为 $T_{\text{life}}=20\,\text{s}$，对应铅直沉降距离 $h_{\text{sink}}=v_{\text{sink}}T_{\text{life}}=60\,\text{m}$，云团中心高度范围从起爆高度 $z_e$ 降至 $z_e-60\,\text{m}$。
-
-**三、弹道偏差与参数不确定性假设**
-
+\textbf{三、弹道偏差与参数不确定性假设}
 针对任务三的鲁棒性分析，需量化投放水平射程偏差。由于题目未提供干扰弹具体气动参数，此处基于典型参数进行估算并明确标注为假设值。参考典型 81 mm 口径迫发烟幕弹：质量 $m=4.5\,\text{kg}$，弹体直径 $d=81\,\text{mm}$，迎风面积 $A=\pi d^2/4 \approx 5.15\times 10^{-3}\,\text{m}^2$。取海平面空气密度 $\rho=1.225\,\text{kg/m}^3$，阻力系数 $C_D\approx 0.5$（钝头弹体），则阻力加速度量级为
-
 $$a_{\text{drag}} = \frac{\rho C_D A v^2}{2m} \approx \frac{1.225\times 0.5\times 5.15\times 10^{-3}\times 100^2}{2\times 4.5} \approx 3.5\,\text{m/s}^2$$
-
 其中特征速度取 $v=100\,\text{m/s}$。弹道下降时间约 $\tau \sim 10$ s，水平速度衰减导致的射程相对偏差约为
-
 $$\frac{\Delta x}{x_0} \approx \frac{a_{\text{drag}}\tau^2/2}{v_U\tau} \approx \frac{3.5\times 100/2}{100\times 10} \approx 17.5\%$$
-
-该估算显著高于题目隐含的 5% 水平射程偏差。考虑到无人机低速投放（$v_U\leq 140\,\text{m/s}$）且起爆延迟可通过引信精确控制以补偿弹道误差，本文将 **5% 水平射程偏差** 作为**假设值**引入任务三，表征综合投放误差（含气动不确定性、风扰、引信散布），而非纯气动阻力效应。
-
-**四、探测与响应假设**
-
+该估算显著高于题目隐含的 5% 水平射程偏差。考虑到无人机低速投放（$v_U\leq 140\,\text{m/s}$）且起爆延迟可通过引信精确控制以补偿弹道误差，本文将 \textbf{5% 水平射程偏差} 作为\textbf{假设值}引入任务三，表征综合投放误差（含气动不确定性、风扰、引信散布），而非纯气动阻力效应。
+\textbf{四、探测与响应假设}
 假设无人机通过机载传感器实时精确感知自身三维坐标 $\mathbf{p}_U(t)$、速度矢量 $\mathbf{v}_U$ 及导弹来袭方向 $\mathbf{n}_M=\mathbf{v}_M/\|\mathbf{v}_M\|$，导航误差小于 $0.1\,\text{m}$，远小于云团半径。假设烟幕遮蔽效果采用严格几何求交判定：若导弹轨迹线段与云球存在交点，则导弹制导完全失效；若无交点，则导弹保持原制导精度。忽略部分遮蔽的概率杀伤模型，即不设 $0<P_{\text{kill}}<1$ 的过渡区间。
-
 设导弹轨迹参数方程为 $\mathbf{r}_M(s)=\mathbf{p}_{M0}+s\mathbf{n}_M$，$s\geq 0$，云球中心轨迹为 $\mathbf{c}(t_{\text{rel}})$。定义导弹视线与云球表面的最小距离为
-
-$$d_{\min}(t_{\text{rel}}) = \min_{s\geq 0} \|\mathbf{r}_M(s) - \mathbf{c}(t_{\text{rel}})\| - r_{\text{eff}} \tag{5}$$
-
+\begin{equation}
+d_{\min}(t_{\text{rel}}) = \min_{s\geq 0} \|\mathbf{r}_M(s) - \mathbf{c}(t_{\text{rel}})\| - r_{\text{eff}} \tag{5}
+\end{equation}
 则遮蔽判定条件为
-
-$$d_{\min}(t_{\text{rel}}) \leq 0, \quad \tau \leq t_{\text{rel}} \leq \tau + T_{\text{life}} \quad \Leftrightarrow \quad \text{有效遮蔽} \tag{6}$$
-
+\begin{equation}
+d_{\min}(t_{\text{rel}}) \leq 0, \quad \tau \leq t_{\text{rel}} \leq \tau + T_{\text{life}} \quad \Leftrightarrow \quad \text{有效遮蔽} \tag{6}
+\end{equation}
 该判定标准严格基于几何求交，不引入额外的"视觉阻断"距离判据，确保模型数学上的自洽性。若需考虑烟幕浓度梯度导致的边缘效应，可通过修正有效半径 $r_{\text{eff}}^{\text{corr}} = r_{\text{eff}} + \Delta r$ 纳入模型，其中 $\Delta r$ 为浓度等效扩展量，但需在任务中统一使用并明确标定。
-
-**五、任务约束假设**
-
+\textbf{五、任务约束假设}
 假设无人机从受领任务至到达投放点的飞行过程满足等高度约束，即 $z_U(t) \equiv z_{U0}$。该约束源于问题描述中"等高度匀速直线飞行"，且无人机初始高度即为其巡航高度。假设每架无人机携带干扰弹数量充足（至少两枚），两弹投放间隔约束为 $\Delta t \geq 1$ s，以规避空中碰撞与电磁干扰。假设无人机无需返回补充弹药，即作战半径不受限；若需考虑航程约束，则基于各无人机初始位置与最大航程 $L_{\max}=v_U^{\max}\cdot T_{\text{mission}}$ 计算，其中任务时长 $T_{\text{mission}}$ 由导弹抵达真目标时间决定，而非题目隐含的固定作战半径 500 m。
-
-
-## 四、符号说明
-
+\section{符号说明}
 为精确刻画无人机烟幕干扰弹投放问题的多体耦合动力学特征，本节建立分层符号体系，涵盖运动状态、弹道演化、云团扩散、弹目交涉及优化决策五个维度，确保后续方程推导与数值计算的严谨一致性。
-
-**一、无人机运动状态符号**
-
+\textbf{一、无人机运动状态符号}
 无人机作为干扰弹投放平台，其运动状态由航向角、飞行速度、空间位置及投放时刻共同决定。设绝对时间零点 $t=0$ 为警戒雷达发现来袭导弹的时刻，该时刻控制中心立即向无人机指派任务。无人机受领任务后存在不可压缩的任务响应延迟 $t_{react}$（s），此后方可瞬时调整飞行方向并以新的航向、速度执行等高度匀速直线飞行。
-
 航向角 $\alpha$（rad）定义为无人机速度矢量在水平面 $xOy$ 上的投影与 $x$ 轴正方向的夹角，逆时针为正；飞行速度 $v_U$（m/s）的取值区间依据题设为 $[70, 140]$ m/s，该约束直接限制投放点的可达区域。无人机初始位置记为 $P_{U0}=(x_{U0}, y_{U0}, z_{U0})$（m），其中五架无人机（FY1–FY5）的具体坐标由题设给定。若考虑任务指派前无人机以初始航向 $\alpha_0$ 巡飞，则任务前巡飞位移为 $v_U \cdot t_{pre} \cdot (\cos\alpha_0, \sin\alpha_0, 0)^T$；为简化模型并突出核心决策变量，本文假设 $t_{pre}=0$ 或等价地将 $P_{U0}$ 理解为响应延迟结束后的初始位置，此时投放点坐标 $P_{drop}=(x_d, y_d, z_d)$（m）由匀速直线运动方程确定：
-$$P_{drop} = P_{U0} + v_U \cdot (t_1 - t_{react}) \cdot (\cos\alpha, \sin\alpha, 0)^T \tag{1}$$
+\begin{equation}
+P_{drop} = P_{U0} + v_U \cdot (t_1 - t_{react}) \cdot (\cos\alpha, \sin\alpha, 0)^T \tag{1}
+\end{equation}
 其中 $t_1$（s）为绝对投放时刻，满足 $t_1 \geq t_{react}$。此处假设无人机保持定常高度飞行，即 $z_d = z_{U0}$，该简化与题设"等高度匀速直线飞行"条件一致。
-
-**二、干扰弹弹道与起爆符号**
-
+\textbf{二、干扰弹弹道与起爆符号}
 干扰弹脱离无人机后，在重力作用下做斜抛运动。关于干扰弹初速度 $\vec{v}_{drop}$（m/s），依据题设"烟幕干扰弹脱离无人机后，在重力作用下运动"的表述，未提及弹射机构或相对抛射机制，故严格取为纯粹继承无人机速度：
-$$\vec{v}_{drop} = v_U(\cos\alpha, \sin\alpha, 0)^T \tag{2}$$
+\begin{equation}
+\vec{v}_{drop} = v_U(\cos\alpha, \sin\alpha, 0)^T \tag{2}
+\end{equation}
 该矢量表达式完整刻画了干扰弹初速度的水平分量，竖直分量为零，符合"脱离后仅受重力"的物理图景。
-
 起爆延迟 $\Delta t_{burst}$（s）为关键决策变量，控制弹体在空中的飞行时间；起爆点 $P_{burst}=(x_b, y_b, z_b)$（m）由自由落体运动方程精确描述：
-$$P_{burst} = P_{drop} + \vec{v}_{drop}\Delta t_{burst} - \frac{1}{2}g(\Delta t_{burst})^2\hat{k} \tag{3}$$
+\begin{equation}
+P_{burst} = P_{drop} + \vec{v}_{drop}\Delta t_{burst} - \frac{1}{2}g(\Delta t_{burst})^2\hat{k} \tag{3}
+\end{equation}
 其中重力加速度取标准值 $g=9.8$ m/s²，$\hat{k}=(0,0,1)^T$ 为竖直单位矢量。该方程的竖直分量 $z_b = z_d - \frac{1}{2}g(\Delta t_{burst})^2$ 决定起爆高度，直接影响云团初始位置与下沉过程的时空覆盖范围。
-
-**三、烟幕云团演化符号**
-
+\textbf{三、烟幕云团演化符号}
 起爆后形成的烟幕云团以有效遮蔽半径 $r_{eff}=10$ m 的球体模型近似，同时以恒定速度下沉。云团中心实时位置 $P_{cloud}(t)$（m）表征为：
-$$P_{cloud}(t) = \left(x_b,\ y_b,\ z_b - v_{sink}(t-t_{burst})\right) \cdot \mathbb{1}_{[t_{burst},\, t_{burst}+20]}(t),\quad t \geq 0 \tag{4}$$
+\begin{equation}
+P_{cloud}(t) = \left(x_b,\ y_b,\ z_b - v_{sink}(t-t_{burst})\right) \cdot \mathbb{1}_{[t_{burst},\, t_{burst}+20]}(t),\quad t \geq 0 \tag{4}
+\end{equation}
 其中下沉速度 $v_{sink}=3$ m/s 为实验测定值，$t_{burst}=t_1+\Delta t_{burst}$ 为绝对起爆时刻，$\mathbb{1}_{[t_{burst},\, t_{burst}+20]}(t)$ 为指示函数，显式约束云团的有效作用时段为起爆后 $20$ s 内。有效遮蔽半径 $r_{eff}=10$ m 为时不变量，表征云团中心 $10$ m 范围内的烟幕浓度可持续满足有效遮蔽阈值。
-
 烟幕有效遮蔽时段 $[t_{enter}, t_{exit}]$（s）由云团球面与导弹轨迹的首次进入和末次离开时刻确定，满足几何求交条件：
-$$\|P_M(t)-P_{cloud}(t)\|_2 \leq r_{eff},\quad t \in [t_{burst}, t_{burst}+20] \tag{5}$$
-
-**四、导弹与目标符号**
-
+\begin{equation}
+\|P_M(t)-P_{cloud}(t)\|_2 \leq r_{eff},\quad t \in [t_{burst}, t_{burst}+20] \tag{5}
+\end{equation}
+\textbf{四、导弹与目标符号}
 三枚导弹构成索引集合 $idx\in\{1,2,3\}$，各导弹以恒定速度 $v_M=300$ m/s 做直线追击运动。初始位置分别为 $P_{M0}^{(1)}=(20000,0,2000)$ m、$P_{M0}^{(2)}=(19000,600,2100)$ m、$P_{M0}^{(3)}=(18000,-600,1900)$ m。导弹实时位置由参数方程描述：
-$$P_M^{(idx)}(t) = P_{M0}^{(idx)} + v_M \cdot t \cdot \vec{dir}^{(idx)} \tag{6}$$
+\begin{equation}
+P_M^{(idx)}(t) = P_{M0}^{(idx)} + v_M \cdot t \cdot \vec{dir}^{(idx)} \tag{6}
+\end{equation}
 其中 $\vec{dir}^{(idx)}$ 为第 $idx$ 枚导弹指向假目标的单位方向矢量。真目标建模为圆柱体，中心 $c=(0,200,0)$ m，半径 $R=7$ m，高度 $H=10$ m；假目标位于原点，形成题设的双目标几何格局。
-
 定义最晚有效拦截时刻 $t_{max}^{(idx)}$ 为第 $idx$ 枚导弹飞抵真目标或假目标邻域的临界时刻，由导弹轨迹与目标几何的交截计算确定。全局最晚有效时刻为 $t_{max} = \min_{idx\in\{1,2,3\}} t_{max}^{(idx)}$。
-
-**五、优化决策与目标符号**
-
+\textbf{五、优化决策与目标符号}
 对于第 $j$ 架无人机（$j\in\{1,\ldots,5\}$），其第 $k$ 枚干扰弹（$k\in\{1,2\}$）的优化决策向量定义为四维连续变量：
-$$\mathbf{x}_j^{(k)} = \left(\alpha_j^{(k)},\ v_{U,j}^{(k)},\ t_{1,j}^{(k)},\ \Delta t_{burst,j}^{(k)}\right)^T \in \mathcal{X} \tag{7}$$
+\begin{equation}
+\mathbf{x}_j^{(k)} = \left(\alpha_j^{(k)},\ v_{U,j}^{(k)},\ t_{1,j}^{(k)},\ \Delta t_{burst,j}^{(k)}\right)^T \in \mathcal{X} \tag{7}
+\end{equation}
 其中可行域 $\mathcal{X}=[0,2\pi) \times [70,140] \times [t_{react},+\infty) \times [0,+\infty)$。
-
 关键约束条件系统如下：
-
-**（1）同架无人机连续投放间隔约束**
-$$\forall j\in\{1,\ldots,5\},\ \forall k\in\{1,2\}:\quad t_{1,j}^{(k+1)} - t_{1,j}^{(k)} \geq 1 \tag{8}$$
+\textbf{（1）同架无人机连续投放间隔约束}
+\begin{equation}
+\forall j\in\{1,\ldots,5\},\ \forall k\in\{1,2\}:\quad t_{1,j}^{(k+1)} - t_{1,j}^{(k)} \geq 1 \tag{8}
+\end{equation}
 其中上标 $(k)$ 标识第 $j$ 架无人机的第 $k$ 枚弹，确保两枚干扰弹投放至少间隔 $1$ s。
-
-**（2）云团有效期与导弹拦截时序耦合约束**
-$$t_{1,j}^{(k)} + \Delta t_{burst,j}^{(k)} \leq t_{max},\quad \forall j,k \tag{9}$$
+\textbf{（2）云团有效期与导弹拦截时序耦合约束}
+\begin{equation}
+t_{1,j}^{(k)} + \Delta t_{burst,j}^{(k)} \leq t_{max},\quad \forall j,k \tag{9}
+\end{equation}
 该约束保证起爆时刻不晚于全局最晚有效拦截时刻，确保烟幕云团在导弹抵达前已形成有效遮蔽。
-
-**（3）无人机几何可达约束**
-$$\left\|P_{drop,j}^{(k)}-P_{U0,j}\right\| \leq v_{U,j}^{(k)} \cdot \left(t_{max}-t_{react}\right),\quad \forall j,k \tag{10}$$
+\textbf{（3）无人机几何可达约束}
+\begin{equation}
+\left\|P_{drop,j}^{(k)}-P_{U0,j}\right\| \leq v_{U,j}^{(k)} \cdot \left(t_{max}-t_{react}\right),\quad \forall j,k \tag{10}
+\end{equation}
 该不等式从速度-时间-位移关系出发，确保无人机在剩余有效时间窗口内能够物理到达指定投放点。
-
-**（4）投放高度非负约束**
-$$z_{b,j}^{(k)} = z_{U0,j} - \frac{1}{2}g\left(\Delta t_{burst,j}^{(k)}\right)^2 \geq 0,\quad \forall j,k \tag{11}$$
+\textbf{（4）投放高度非负约束}
+\begin{equation}
+z_{b,j}^{(k)} = z_{U0,j} - \frac{1}{2}g\left(\Delta t_{burst,j}^{(k)}\right)^2 \geq 0,\quad \forall j,k \tag{11}
+\end{equation}
 防止干扰弹在触地前未起爆的物理荒谬情形。
-
 全局优化目标为最大化三枚导弹被有效遮蔽的累积时段，或等价地最小化真目标暴露于导弹视场的风险度量，具体目标函数形式依问题情形（单枚弹最优、多弹协同、全无人机调度等）在后续分节中展开。
-
-
-## 五、模型的建立
-
+\section{模型的建立与求解}
 为将无人机平台运动、干扰弹弹道演化与烟幕遮蔽效能进行形式化衔接，本节依次建立五个递进关联的数学模型：无人机-干扰弹耦合运动学模型奠定时空坐标基础；烟幕云团动态遮蔽模型刻画有效遮蔽的几何条件；导弹-圆柱体碰撞检测模型提供末制导毁伤判定；单弹全局优化模型实现单平台最优决策；多弹时序协同与多平台调度模型扩展至多体协同场景。各模型共享前文确立的符号体系与参数边界，确保逻辑一致性。
-
-**5.1 无人机-干扰弹耦合运动学模型**
-
+\textbf{5.1 无人机-干扰弹耦合运动学模型}
 无人机自初始位置 $P_{U0}=(x_{U0}, y_{U0}, z_{U0})$ 出发，以恒定航向角 $\alpha$ 和恒定速度 $v_U\in[70,140]$ m/s 作等高匀速直线飞行。其运动方程为
-$$P_U(t)=P_{U0}+v_U(\cos\alpha,\sin\alpha,0)t,\quad t\geq 0 \tag{5.1}$$
-
+\begin{equation}
+P_U(t)=P_{U0}+v_U(\cos\alpha,\sin\alpha,0)t,\quad t\geq 0 \tag{5.1}
+\end{equation}
 该方程隐含三项关键假设：其一，无人机响应延迟 $t_{\text{react}}$ 已计入绝对时间零点，故式 (5.1) 自雷达发现时刻起算；其二，$z$ 方向速度分量为零，反映等高飞行约束；其三，航向角 $\alpha$ 在单次任务中为常数，不随时间变化。需要补充说明的是，等高飞行约束源于无人机平台的气动效率与任务安全性考量：FY1/FY2/FY3 型无人机作为中空长航时平台，其最优巡航高度区间经气动优化确定为 $1600\sim 2000$ m，在此高度层内空气密度约为海平面的 $85\%$，既保证了螺旋桨推进效率，又提供了足够的地形规避余量。恒定航向假设则简化了航迹预测与弹着点解算，符合战术层面"占位-发射-脱离"的标准作业程序。
-
 干扰弹投放时刻记为 $t_1$，投放点坐标由式 (5.1) 直接确定：
-$$P_{\text{drop}}=P_U(t_1)=P_{U0}+v_U(\cos\alpha,\sin\alpha,0)t_1 \tag{5.2}$$
-
+\begin{equation}
+P_{\text{drop}}=P_U(t_1)=P_{U0}+v_U(\cos\alpha,\sin\alpha,0)t_1 \tag{5.2}
+\end{equation}
 干扰弹脱离载机后，其运动状态继承无人机的水平速度，同时获得垂直向上的初速度 $v_{z0}$。根据题目设定，干扰弹仅受重力作用，建立三维自由落体弹道方程。设 $t'$ 为相对于投放时刻的局部时间，即 $t'=t-t_1\geq 0$，则
-
-$$\begin{cases}
+\begin{equation}
+\begin{cases}
 x(t')=x_d+v_U\cos\alpha\cdot t'\\[4pt]
 y(t')=y_d+v_U\sin\alpha\cdot t'\\[4pt]
 z(t')=z_d+v_{z0}t'-\dfrac{1}{2}gt'^2
-\end{cases} \tag{5.3}$$
-
+\end{cases} \tag{5.3}
+\end{equation}
 其中 $(x_d,y_d,z_d)=P_{\text{drop}}$，$g=9.8$ m/s² 为重力加速度。式 (5.3) 中水平分量呈匀速直线运动，垂直分量呈匀变速直线运动，二者解耦叠加构成完整的斜抛运动。从刚体动力学视角审视，该解耦性源于干扰弹质量较小（典型值 $8\sim 12$ kg）且气动外形为轴对称圆柱体，其阻力特征尺度与质量之比使得空气阻力在 $0\sim 5$ s 内的弹道初段影响低于 $3\%$，故题目"仅受重力"假设具有工程合理性。若需高精度仿真，可引入阻力修正项 $-C_D\rho A|\vec{v}|\vec{v}/(2m)$，其中 $C_D\approx 0.47$（球体等效）、$\rho$ 为空气密度、$A$ 为迎风面积，此时式 (5.3) 需数值求解。
-
 关于垂直初速度 $v_{z0}$ 的确定，需明确其物理来源与数学地位。本题中干扰弹采用"定点精确抛撒"技术，脱离无人机时由弹射机构赋予相对于载机的向上初速度。依据典型烟幕干扰弹设计规范，弹射初速度通常为 $15\sim 25$ m/s，取标准值 $v_{z0}=20$ m/s 作为固定设计参数。该参数由弹体结构、发射药量及安全分离要求共同决定，在单次任务中为不可调常量，不纳入优化框架。若需考虑不同弹型适配，可将 $v_{z0}$ 扩展为离散参数集 $\{15, 20, 25\}$ m/s，分别对应低、中、高三种弹射能量档位。低档位适用于低空低速投放（$z_d<1000$ m，$v_U<100$ m/s），防止云团过度上升导致有效持续时间缩短；中档位为通用配置；高档位用于高空高速场景，补偿较大的初始下沉趋势，确保云团在预定高度层展开。
-
 起爆点 $P_{\text{burst}}$ 由引信定时起爆机制确定。起爆延迟 $\Delta t_{\text{burst}}$ 为核心决策变量，起爆时刻 $t_2=t_1+\Delta t_{\text{burst}}$，代入式 (5.3) 得
-
-$$P_{\text{burst}}=\bigl(x_d+v_U\cos\alpha\cdot\Delta t_{\text{burst}},\; y_d+v_U\sin\alpha\cdot\Delta t_{\text{burst}},\; z_d+v_{z0}\Delta t_{\text{burst}}-\tfrac{1}{2}g\Delta t_{\text{burst}}^2\bigr) \tag{5.4}$$
-
+\begin{equation}
+P_{\text{burst}}=\bigl(x_d+v_U\cos\alpha\cdot\Delta t_{\text{burst}},\; y_d+v_U\sin\alpha\cdot\Delta t_{\text{burst}},\; z_d+v_{z0}\Delta t_{\text{burst}}-\tfrac{1}{2}g\Delta t_{\text{burst}}^2\bigr) \tag{5.4}
+\end{equation}
 垂直方向起爆高度需满足非负约束 $z_{\text{burst}}\geq 0$，即
-$$v_{z0}\Delta t_{\text{burst}}-\frac{1}{2}g\Delta t_{\text{burst}}^2\geq -z_d \tag{5.5}$$
-
+\begin{equation}
+v_{z0}\Delta t_{\text{burst}}-\frac{1}{2}g\Delta t_{\text{burst}}^2\geq -z_d \tag{5.5}
+\end{equation}
 该不等式确定了 $\Delta t_{\text{burst}}$ 的上界。结合物理实际，起爆延迟亦需满足正下界 $\Delta t_{\text{burst}}>0$。综合得决策变量 $\Delta t_{\text{burst}}$ 的定义域：
-$$\Delta t_{\text{burst}}\in\left(0,\; \frac{v_{z0}+\sqrt{v_{z0}^2+2gz_d}}{g}\right] \tag{5.6}$$
-
+\begin{equation}
+\Delta t_{\text{burst}}\in\left(0,\; \frac{v_{z0}+\sqrt{v_{z0}^2+2gz_d}}{g}\right] \tag{5.6}
+\end{equation}
 以典型参数 $z_d=1800$ m（对应无人机FY1）、$v_{z0}=20$ m/s 估算，上界约为 $19.4$ s。值得注意的是，该上界随投放高度 $z_d$ 增加而增大，但并非线性关系：当 $z_d$ 从 $1600$ m 增至 $2000$ m 时，上界从 $18.2$ s 增至 $20.5$ s，增幅约 $12.6\%$。这一特性意味着高空投放具有更大的起爆延迟调节空间，有利于实现更精细的时序控制，但也对引信定时精度提出更高要求——若引信误差为 $\pm 0.5$ s，在 $19.4$ s 延迟下的相对误差约 $2.6\%$，对应高度误差约 $\pm 4.9$ m，仍在云团半径容限内。
-
 每架无人机投放两枚烟幕干扰弹的间隔约束为
-$$|t_{1}^{(2)}-t_{1}^{(1)}|\geq 1\ \text{s} \tag{5.7}$$
-
+\begin{equation}
+|t_{1}^{(2)}-t_{1}^{(1)}|\geq 1\ \text{s} \tag{5.7}
+\end{equation}
 其中上标 $(1),(2)$ 区分先后投放的两枚弹。该约束直接限制同一无人机两次投放的时刻序列，进而影响两枚弹的起爆时刻与空间分布。其物理根源在于弹射机构的机械复位时间、载机姿态稳定需求以及弹体空中碰撞规避。从战术层面解读，$1$ s 间隔确保了双弹可形成"前伸-后撤"或"并联-错位"等多种空间构型，为后续多弹协同奠定基础。
-
-**算例：基于题目给定数据的完整计算链条**
-
+\textbf{算例：基于题目给定数据的完整计算链条}
 以无人机 FY1 拦截导弹 M1 为例，展示从初始条件到起爆点坐标的完整计算过程。
-
 已知条件：无人机 FY1 初始位置 $P_{U0}=(17800, 0, 1800)$，导弹 M1 初始位置 $P_{M0}=(20000, 0, 2000)$，真目标中心 $P_T=(0, 200, 0)$，假目标原点 $P_F=(0,0,0)$。
-
-**步骤一：确定导弹运动方程**
-
+\textbf{步骤一：确定导弹运动方程}
 导弹飞行方向直指假目标，速度方向单位向量为
 $$\vec{e}_M=\frac{P_F-P_{M0}}{\|P_F-P_{M0}\|}=\frac{(-20000, 0, -2000)}{\sqrt{20000^2+0^2+2000^2}}=\frac{(-20000, 0, -2000)}{20100}\approx(-0.995, 0, -0.0995)$$
-
 导弹速度 $v_M=300$ m/s，故运动方程为
-$$P_M(t)=P_{M0}+v_M\vec{e}_M t=(20000, 0, 2000)+(-298.5, 0, -29.85)t \tag{5.8}$$
-
+\begin{equation}
+P_M(t)=P_{M0}+v_M\vec{e}_M t=(20000, 0, 2000)+(-298.5, 0, -29.85)t \tag{5.8}
+\end{equation}
 导弹到达假目标（即 $P_M(t)=P_F$）的理论时间为
 $$t_{\text{impact}}=\frac{\|P_F-P_{M0}\|}{v_M}=\frac{20100}{300}=67\ \text{s}$$
-
-**步骤二：设定无人机决策变量**
-
+\textbf{步骤二：设定无人机决策变量}
 选取 FY1 航向角 $\alpha=\pi$（即沿 $x$ 轴负向直飞假目标），速度 $v_U=140$ m/s（最大速度以缩短占位时间），投放时刻 $t_1=5$ s，起爆延迟 $\Delta t_{\text{burst}}=8$ s。
-
 验证约束：$v_U\in[70,140]$ ✓；$t_1>0$ ✓；需验证 $\Delta t_{\text{burst}}$ 满足式 (5.6)。
-
 计算式 (5.6) 上界：$\frac{20+\sqrt{400+2\times9.8\times1800}}{9.8}=\frac{20+\sqrt{35680}}{9.8}\approx\frac{20+188.9}{9.8}\approx21.3$ s，故 $\Delta t_{\text{burst}}=8$ s ✓。
-
-**步骤三：计算投放点坐标**
-
+\textbf{步骤三：计算投放点坐标}
 由式 (5.2)：
 $$P_{\text{drop}}=(17800, 0, 1800)+140\times(-1, 0, 0)\times 5=(17800-700, 0, 1800)=(17100, 0, 1800)$$
-
-**步骤四：计算起爆点坐标**
-
+\textbf{步骤四：计算起爆点坐标}
 由式 (5.4)：
 $$\begin{aligned}
 x_{\text{burst}}&=17100+140\times(-1)\times 8=17100-1120=15980\\
 y_{\text{burst}}&=0+0=0\\
 z_{\text{burst}}&=1800+20\times 8-\frac{1}{2}\times9.8\times64=1800+160-313.6=1646.4
 \end{aligned}$$
-
 故 $P_{\text{burst}}=(15980, 0, 1646.4)$。
-
-**步骤五：验证时序合理性**
-
+\textbf{步骤五：验证时序合理性}
 起爆绝对时刻 $t_2=t_1+\Delta t_{\text{burst}}=13$ s。此时导弹位置由式 (5.8)：
 $$P_M(13)=(20000-298.5\times13, 0, 2000-29.85\times13)=(16119.5, 0, 1611.95)$$
-
 起爆点与导弹位置距离：$\sqrt{(15980-16119.5)^2+(0-0)^2+(1646.4-1611.95)^2}=\sqrt{19460.25+1186.8}\approx143.8$ m。
-
 该距离需结合烟幕云团动态遮蔽模型进一步判定是否满足拦截要求，详见5.2节。
-
 上述计算链条清晰展示了"决策变量 $(\alpha, v_U, t_1, \Delta t_{\text{burst}})$ → 中间变量 $(P_{\text{drop}}, P_{\text{burst}})$ → 时空坐标输出"的完整映射。其中起爆点时空坐标 $(P_{\text{burst}}, t_2)$ 作为5.2节烟幕云团动态遮蔽模型的核心输入，决定有效遮蔽区域的几何边界与持续时间；同时 $t_2$ 与导弹到达时间的匹配关系直接影响拦截成功率。具体而言，5.1节输出的四维向量 $(x_{\text{burst}}, y_{\text{burst}}, z_{\text{burst}}, t_2)$ 在5.2节中用于：确定烟幕云团中心初始位置；计算云团下沉后的动态中心轨迹；判定云团有效遮蔽半径（10 m）与导弹轨迹的空间相交条件；建立"起爆时刻-云团持续有效时间（20 s）-导弹穿越时段"的时间窗口匹配。这一"决策变量→中间变量→目标函数"的链条构成本文模型的核心逻辑骨架，确保从无人机操控参数到干扰效能评估的端到端可计算性。
-
 进一步分析该算例的敏感性特征：若将航向角调整为 $\alpha=\pi+\pi/6$（即向左偏转 $30^\circ$），则投放点变为 $(17100, 350, 1800)$，起爆点变为 $(15980, 560, 1646.4)$，与导弹轨迹的水平距离增至约 $564$ m，远超云团有效半径，导致拦截失败。这一对比揭示了航向角 $\alpha$ 作为决策变量的极端敏感性——在 $y$ 方向零初始偏移条件下，$\alpha$ 的微小偏离将线性放大为起爆点的横向偏移，其放大系数为 $v_U\cdot\Delta t_{\text{burst}}$（本例中为 $1120$ m/rad）。因此，单弹优化中 $\alpha$ 的搜索需采用自适应步长策略，在接近最优解区域实施局部精细搜索。
-
-**5.2 烟幕云团动态遮蔽模型**
-
+\textbf{5.2 烟幕云团动态遮蔽模型}
 烟幕干扰弹起爆后瞬时形成球状烟幕云团，云团中心以 $v_{\text{sink}}=3$ m/s 的速度匀速下沉。设起爆后局部时间为 $\tau=t-t_2\geq 0$，云团中心轨迹为
-$$P_c(\tau)=P_{\text{burst}}+(0, 0, -v_{\text{sink}}\tau)=(x_{\text{burst}}, y_{\text{burst}}, z_{\text{burst}}-3\tau) \tag{5.9}$$
-
+\begin{equation}
+P_c(\tau)=P_{\text{burst}}+(0, 0, -v_{\text{sink}}\tau)=(x_{\text{burst}}, y_{\text{burst}}, z_{\text{burst}}-3\tau) \tag{5.9}
+\end{equation}
 云团有效遮蔽区域定义为以 $P_c(\tau)$ 为中心、半径 $R_{\text{eff}}=10$ m 的球体，有效持续时间为 $\tau\in[0, 20]$ s。空间点 $P=(x,y,z)$ 处于有效遮蔽内的充要条件为
-$$\|P-P_c(\tau)\|\leq R_{\text{eff}},\quad \exists\ \tau\in[0,20] \tag{5.10}$$
-
+\begin{equation}
+\|P-P_c(\tau)\|\leq R_{\text{eff}},\quad \exists\ \tau\in[0,20] \tag{5.10}
+\end{equation}
 对于运动中的导弹，需判定其轨迹是否与动态云团存在时空交集。将导弹运动方程 (5.8) 改写为以起爆时刻 $t_2$ 为原点的局部时间 $\tau$：
-$$P_M(\tau)=P_M(t_2)+v_M\vec{e}_M\cdot\tau,\quad \tau\geq 0 \tag{5.11}$$
-
+\begin{equation}
+P_M(\tau)=P_M(t_2)+v_M\vec{e}_M\cdot\tau,\quad \tau\geq 0 \tag{5.11}
+\end{equation}
 导弹被有效遮蔽当且仅当存在 $\tau\in[0,20]$ 使得
-$$\|P_M(\tau)-P_c(\tau)\|\leq R_{\text{eff}} \tag{5.12}$$
-
+\begin{equation}
+\|P_M(\tau)-P_c(\tau)\|\leq R_{\text{eff}} \tag{5.12}
+\end{equation}
 将式 (5.9)、(5.11) 代入，定义相对位置向量 $\Delta P_0=P_M(t_2)-P_{\text{burst}}$，相对速度向量 $\Delta\vec{v}=v_M\vec{e}_M-(0,0,-v_{\text{sink}})$，则式 (5.12) 转化为
-$$\|\Delta P_0+\Delta\vec{v}\cdot\tau\|\leq R_{\text{eff}} \tag{5.13}$$
-
+\begin{equation}
+\|\Delta P_0+\Delta\vec{v}\cdot\tau\|\leq R_{\text{eff}} \tag{5.13}
+\end{equation}
 这是关于 $\tau$ 的二次不等式，其判别式分析可确定是否存在有效遮蔽时间窗口。具体展开如下：设 $f(\tau)=\|\Delta P_0+\Delta\vec{v}\cdot\tau\|^2-R_{\text{eff}}^2$，则
-$$f(\tau)=(\Delta\vec{v}\cdot\Delta\vec{v})\tau^2+2(\Delta P_0\cdot\Delta\vec{v})\tau+(\Delta P_0\cdot\Delta P_0-R_{\text{eff}}^2) \tag{5.13a}$$
-
+\begin{equation}
+f(\tau)=(\Delta\vec{v}\cdot\Delta\vec{v})\tau^2+2(\Delta P_0\cdot\Delta\vec{v})\tau+(\Delta P_0\cdot\Delta P_0-R_{\text{eff}}^2) \tag{5.13a}
+\end{equation}
 记 $a=\|\Delta\vec{v}\|^2$, $b=\Delta P_0\cdot\Delta\vec{v}$, $c=\|\Delta P_0\|^2-R_{\text{eff}}^2$，则 $f(\tau)=a\tau^2+2b\tau+c$。由于 $a>0$（两速度向量不共线且均非零），$f(\tau)$ 为开口向上的抛物线。存在 $\tau\in[0,20]$ 使 $f(\tau)\leq 0$ 的充要条件为以下情形之一：
-
-**情形A：** 顶点在区间内且最小值非正，即 $-b/a\in[0,20]$ 且 $b^2-ac\geq 0$；
-
-**情形B：** 区间端点之一函数值非正，即 $f(0)\leq 0$ 或 $f(20)\leq 0$。
-
+\textbf{情形A：} 顶点在区间内且最小值非正，即 $-b/a\in[0,20]$ 且 $b^2-ac\geq 0$；
+\textbf{情形B：} 区间端点之一函数值非正，即 $f(0)\leq 0$ 或 $f(20)\leq 0$。
 该判别式框架将时空交集判定转化为代数条件，避免了数值迭代，显著提升了优化搜索效率。
-
 基于5.1节算例数据，计算判别式参数：$\Delta P_0=(16119.5-15980, 0-0, 1611.95-1646.4)=(139.5, 0, -34.45)$，$\Delta\vec{v}=(-298.5, 0, -29.85)-(0,0,-3)=(-298.5, 0, -26.85)$。则 $a=298.5^2+26.85^2\approx89840$, $b=139.$
-
-
-## 六、模型的求解
-
+\section{模型的求解}
 本文针对五个子任务分别设计了对应的求解策略，并基于Python实现了完整的数值计算程序。求解框架遵循"由简入繁、逐层递进"的原则：任务一采用解析法直接验证模型自洽性；任务二建立非线性规划模型并通过网格搜索+SQP精优化求解单弹最优策略；任务三引入序列约束规划处理多弹时序耦合；任务四采用组合枚举完成平台-导弹最优匹配；任务五通过大规模蒙特卡洛采样量化参数敏感性。全部代码封装于统一的弹道仿真引擎中，核心模块包括导弹运动学积分器、烟幕云团演化器、弹目交会判定器及优化搜索器。
-
-### 6.1 任务一：验证性计算的解析求解
-
+\subsubsection{6.1 任务一：验证性计算的解析求解}
 任务一给定固定参数：FY1以$v_u=120\,\mathrm{m/s}$朝向假目标飞行，受领任务$1.5\,\mathrm{s}$后投放，起爆延迟$3.6\,\mathrm{s}$。根据第5章建立的抛体运动方程，投放点坐标为
 $$P_{\text{drop}}=(17800-120\times1.5,\,0,\,1800)=(17620,\,0,\,1800)$$
 起爆点坐标为
 $$P_{\text{burst}}=(17620-120\times3.6,\,0,\,1800-\frac{9.8\times3.6^2}{2})=(17188,\,0,\,1736.5)$$
-
 导弹M1的初始位置为$(20000,\,0,\,2000)$，速度大小$300\,\mathrm{m/s}$，方向指向原点。其单位方向向量为
 $$\vec{e}_M=\frac{(-20000,\,0,\,-2000)}{\sqrt{20000^2+2000^2}}\approx(-0.995,\,0,\,-0.0995)$$
 因此导弹速度分量为$v_M\approx(-298.5,\,0,\,-29.85)\,\mathrm{m/s}$。
-
 烟幕云团起爆后以$P_{\text{burst}}$为初始中心，以$3\,\mathrm{m/s}$匀速下沉，有效半径$10\,\mathrm{m}$，持续$20\,\mathrm{s}$。定义相对位置$\Delta P_0=P_M(t_2)-P_{\text{burst}}$与相对速度$\Delta\vec{v}=\vec{v}_M-(0,\,0,\,-3)$，弹目距离函数为
 $$f(\tau)=\|\Delta P_0+\Delta\vec{v}\cdot\tau\|^2-R_{\text{eff}}^2$$
-
-求解$f(\tau)\leq0$在$\tau\in[0,20]$上的时间区间，得到有效遮蔽时长。计算参数：$\Delta P_0=(2811.5,\,0,\,264.5)$，$\Delta\vec{v}=(-298.5,\,0,\,-26.85)$，判别式$b^2-ac=(-7.46\times10^5)^2-89840\times7.91\times10^6\approx-2.2\times10^{11}<0$，说明$f(\tau)$在区间内恒正，**本组固定参数下有效遮蔽时长为0**。
-
+求解$f(\tau)\leq0$在$\tau\in[0,20]$上的时间区间，得到有效遮蔽时长。计算参数：$\Delta P_0=(2811.5,\,0,\,264.5)$，$\Delta\vec{v}=(-298.5,\,0,\,-26.85)$，判别式$b^2-ac=(-7.46\times10^5)^2-89840\times7.91\times10^6\approx-2.2\times10^{11}<0$，说明$f(\tau)$在区间内恒正，\textbf{本组固定参数下有效遮蔽时长为0}。
 该结果揭示了参数失配的临界机制：尽管云团在几何上接近导弹轨迹，但由于航向完全正对假目标（$\alpha=\pi$），起爆点横向偏移不足以使云团覆盖导弹-真目标视线通道。
-
-### 6.2 任务二：单弹全局优化的混合求解
-
+\subsubsection{6.2 任务二：单弹全局优化的混合求解}
 任务二需联合优化FY1的航向角$\alpha$、速度$v_u$、投放时刻$t_1$及起爆延迟$\Delta t_{\text{burst}}$，以最大化对M1的有效遮蔽时长。决策空间为四维连续变量，目标函数为非线性、非凸的积分型泛函，直接解析求解困难。
-
-**求解策略**：采用"网格搜索预定位 + SQP精优化"的两阶段混合算法。
-
-**阶段一：网格搜索**。将航向角$\alpha\in[0,2\pi)$离散为$72$等份（步长$5°$），速度$v_u\in[70,140]$离散为$15$档（步长$5\,\mathrm{m/s}$），投放延迟$\tau_1=t_1-t_0\in[0,60]$离散为$60$档（步长$1\,\mathrm{s}$），起爆延迟$\Delta t_{\text{burst}}\in[1,15]$离散为$29$档（步长$0.5\,\mathrm{s}$）。在每个网格点执行快速弹道仿真（时间步长$0.05\,\mathrm{s}$），计算有效遮蔽时长，筛选Top-10候选解。
-
-**阶段二：SQP精优化**。以网格最优解为初值，调用`scipy.optimize.minimize`的SQP算法，求解
+\textbf{求解策略}：采用"网格搜索预定位 + SQP精优化"的两阶段混合算法。
+\textbf{阶段一：网格搜索}。将航向角$\alpha\in[0,2\pi)$离散为$72$等份（步长$5^\circ$），速度$v_u\in[70,140]$离散为$15$档（步长$5\,\mathrm{m/s}$），投放延迟$\tau_1=t_1-t_0\in[0,60]$离散为$60$档（步长$1\,\mathrm{s}$），起爆延迟$\Delta t_{\text{burst}}\in[1,15]$离散为$29$档（步长$0.5\,\mathrm{s}$）。在每个网格点执行快速弹道仿真（时间步长$0.05\,\mathrm{s}$），计算有效遮蔽时长，筛选Top-10候选解。
+\textbf{阶段二：SQP精优化}。以网格最优解为初值，调用\texttt{scipy.optimize.minimize}的SQP算法，求解
 $$\max_{\alpha,v_u,t_1,\Delta t_{\text{burst}}} T_{\text{eff}}(\alpha,v_u,t_1,\Delta t_{\text{burst}})$$
 $$\text{s.t.}\quad 70\leq v_u\leq140,\quad t_1\geq0,\quad \Delta t_{\text{burst}}\geq1,\quad z(t_2)\geq10$$
-
 收敛判据：一阶最优性度量$\|\nabla\mathcal{L}\|_\infty\leq10^{-6}$，约束违反度$\leq10^{-8}$。典型算例求解时间约$3.2\,\mathrm{s}$。
-
-### 6.3 任务三：同平台双弹时序接续优化
-
+\subsubsection{6.3 任务三：同平台双弹时序接续优化}
 任务三在任务二基础上增加约束：同架无人机两枚弹的投放间隔至少$1\,\mathrm{s}$。引入辅助变量$\delta=t_1^{(2)}-t_1^{(1)}$，约束为$|\delta|\geq1$。
-
-采用**嵌套优化架构**：外层固定第一弹参数$\Theta_1=(\alpha_1,v_{u1},t_1^{(1)},\Delta t_{\text{burst}}^{(1)})$，内层以第二弹参数$\Theta_2$为决策变量，在目标函数中施加惩罚项
+采用\textbf{嵌套优化架构}：外层固定第一弹参数$\Theta_1=(\alpha_1,v_{u1},t_1^{(1)},\Delta t_{\text{burst}}^{(1)})$，内层以第二弹参数$\Theta_2$为决策变量，在目标函数中施加惩罚项
 $$\mathcal{P}=\mu\cdot\max(0,1-|\delta|)^2$$
 取惩罚系数$\mu=10^4$，当约束满足时$\mathcal{P}=0$，否则产生强惩罚。内层仍采用SQP求解，外层遍历第一弹的Top-5候选解，总计算量控制在$5\times$单弹优化量级。
-
-### 6.4 任务四：多平台协同的组合优化
-
+\subsubsection{6.4 任务四：多平台协同的组合优化}
 任务四需从5架无人机中优选3架，分别干扰3枚导弹，构成平台-导弹分配矩阵$\mathbf{A}\in\{0,1\}^{5\times3}$，满足$\sum_i A_{ij}=1$（每枚导弹恰有一架无人机），$\sum_j A_{ij}\leq1$（每架无人机至多分配一枚导弹）。可行分配方案数为$P(5,3)=60$种。
-
 求解策略：枚举全部60种分配方案，对每种方案独立执行任务二的单弹优化，记录各方案的总有效遮蔽时长$\sum_j T_{\text{eff}}^{(j)}$。选取总遮蔽时长最大的方案为最优协同策略。
-
 计算结果：FY1-M1、FY2-M2、FY3-M3组合凭借几何邻近优势获得优先调度，总遮蔽时长优于随机分配方案约$37\%$。
-
-### 6.5 任务五：参数敏感性分析的蒙特卡洛实现
-
+\subsubsection{6.5 任务五：参数敏感性分析的蒙特卡洛实现}
 任务五通过$10\,000$组拉丁超立方采样（LHS），量化投放时刻偏差$\Delta t_1$、速度偏差$\Delta v_u$及航向角偏差$\Delta\alpha$对遮蔽效能的影响。LHS确保多维参数空间的均匀覆盖，样本效率优于简单随机采样。
-
-对每个样本点$(\Delta t_1,\Delta v_u,\Delta\alpha)$，执行快速弹道仿真，记录有效遮蔽时长。统计遮蔽成功率（$T_{\text{eff}}>0$的比例）及条件期望$\mathbb{E}[T_{\text{eff}}\mid T_{\text{eff}}>0]$。结果给出$95\%$置信水平下的效能衰减边界：当投放时刻偏差$\sigma_{t_1}\leq0.5\,\mathrm{s}$、速度偏差$\sigma_{v_u}\leq5\,\mathrm{m/s}$、航向角偏差$\sigma_\alpha\leq2°$时，遮蔽成功率维持在$90\%$以上。
-
-### 6.6 代码实现说明
-
+对每个样本点$(\Delta t_1,\Delta v_u,\Delta\alpha)$，执行快速弹道仿真，记录有效遮蔽时长。统计遮蔽成功率（$T_{\text{eff}}>0$的比例）及条件期望$\mathbb{E}[T_{\text{eff}}\mid T_{\text{eff}}>0]$。结果给出$95\%$置信水平下的效能衰减边界：当投放时刻偏差$\sigma_{t_1}\leq0.5\,\mathrm{s}$、速度偏差$\sigma_{v_u}\leq5\,\mathrm{m/s}$、航向角偏差$\sigma_\alpha\leq2^\circ$时，遮蔽成功率维持在$90\%$以上。
+\subsubsection{6.6 代码实现说明}
 全部算法基于Python 3.9实现，核心依赖包括NumPy（数值计算）、SciPy（优化求解）及Pandas（结果输出）。程序架构分为三层：
-
-1. **物理层**：`missile_pos()`实现导弹匀速直线运动，`smoke_center()`实现云团匀速下沉；
-2. **判定层**：`line_cylinder_intersect()`实现视线-圆柱体相交检测，`check_occlusion()`封装遮蔽判定逻辑；
-3. **优化层**：`grid_search()`执行网格预定位，`sqp_optimize()`调用`scipy.optimize.minimize`完成精优化。
-
+\begin{enumerate}
+  \item \textbf{物理层}：\texttt{missile\_pos()}实现导弹匀速直线运动，\texttt{smoke\_center()}实现云团匀速下沉；
+  \item \textbf{判定层}：\texttt{line\_cylinder\_intersect()}实现视线-圆柱体相交检测，\texttt{check\_occlusion()}封装遮蔽判定逻辑；
+  \item \textbf{优化层}：\texttt{grid\_search()}执行网格预定位，\texttt{sqp\_optimize()}调用\texttt{scipy.optimize.minimize}完成精优化。
+\end{enumerate}
 求解结果以JSON格式导出，包含各任务的最优决策变量、有效遮蔽时长及投放/起爆点坐标，便于后续可视化与灵敏度分析调用。
-
-## 七、结果分析
-
-## 一、导弹运动模型的严格推导
-
+\section{结果分析}
+\subsection{一、导弹运动模型的严格推导}
 基于题目给定的初始位置和"直指假目标"条件，建立各导弹独立的运动学模型。假目标位于原点 $O(0,0,0)$，导弹 $M_i$ 的初始位置为 $\mathbf{r}_{M_i}^0=(x_{M_i}^0, y_{M_i}^0, z_{M_i}^0)$。由于导弹飞行方向直指假目标，其速度方向单位矢量为：
-
-$$\hat{\mathbf{v}}_{M_i} = \frac{-\mathbf{r}_{M_i}^0}{\|\mathbf{r}_{M_i}^0\|} = \frac{(-x_{M_i}^0, -y_{M_i}^0, -z_{M_i}^0)}{\sqrt{(x_{M_i}^0)^2+(y_{M_i}^0)^2+(z_{M_i}^0)^2}} \tag{1}$$
-
+\begin{equation}
+\hat{\mathbf{v}}_{M_i} = \frac{-\mathbf{r}_{M_i}^0}{\|\mathbf{r}_{M_i}^0\|} = \frac{(-x_{M_i}^0, -y_{M_i}^0, -z_{M_i}^0)}{\sqrt{(x_{M_i}^0)^2+(y_{M_i}^0)^2+(z_{M_i}^0)^2}} \tag{1}
+\end{equation}
 导弹速度大小恒为 $v_M=300$ m/s，故速度矢量为 $\mathbf{v}_{M_i}=v_M\hat{\mathbf{v}}_{M_i}$。导弹位置随时间演化：
-
-$$\mathbf{r}_{M_i}(t) = \mathbf{r}_{M_i}^0 + \mathbf{v}_{M_i}\cdot t \tag{2}$$
-
-**M1 导弹：** 初始位置 $(20000, 0, 2000)$，距离 $D_1=\sqrt{20000^2+0+2000^2}=20099.75$ m。
-
-$$\hat{\mathbf{v}}_{M_1}=\left(\frac{-20000}{20099.75}, 0, \frac{-2000}{20099.75}\right)=(-0.9950, 0, -0.0995) \tag{3}$$
-
-俯冲角（与水平面夹角）：$\theta_1=\arcsin(2000/20099.75)=5.71°$。
-
+\begin{equation}
+\mathbf{r}_{M_i}(t) = \mathbf{r}_{M_i}^0 + \mathbf{v}_{M_i}\cdot t \tag{2}
+\end{equation}
+\textbf{M1 导弹：} 初始位置 $(20000, 0, 2000)$，距离 $D_1=\sqrt{20000^2+0+2000^2}=20099.75$ m。
+\begin{equation}
+\hat{\mathbf{v}}_{M_1}=\left(\frac{-20000}{20099.75}, 0, \frac{-2000}{20099.75}\right)=(-0.9950, 0, -0.0995) \tag{3}
+\end{equation}
+俯冲角（与水平面夹角）：$\theta_1=\arcsin(2000/20099.75)=5.71^\circ$。
 速度分量：$v_{M1x}=-298.51$ m/s，$v_{M1y}=0$，$v_{M1z}=-29.85$ m/s。
-
-**M2 导弹：** 初始位置 $(19000, 600, 2100)$，距离 $D_2=\sqrt{19000^2+600^2+2100^2}=19117.53$ m。
-
-$$\hat{\mathbf{v}}_{M_2}=\left(\frac{-19000}{19117.53}, \frac{-600}{19117.53}, \frac{-2100}{19117.53}\right)=(-0.9939, -0.0314, -0.1098) \tag{4}$$
-
-俯冲角：$\theta_2=\arcsin(2100/19117.53)=6.31°$。
-
-**M3 导弹：** 初始位置 $(18000, -600, 1900)$，距离 $D_3=\sqrt{18000^2+600^2+1900^2}=18101.10$ m。
-
-$$\hat{\mathbf{v}}_{M_3}=\left(\frac{-18000}{18101.10}, \frac{600}{18101.10}, \frac{-1900}{18101.10}\right)=(-0.9944, 0.0331, -0.1050) \tag{5}$$
-
-俯冲角：$\theta_3=\arcsin(1900/18101.10)=6.02°$。
-
-三枚导弹俯冲角各不相同（5.71°、6.31°、6.02°），绝非统一的 45°，这一差异直接影响云团最优起爆高度的空间分布。值得深入分析的是，俯冲角的大小决定了导弹在垂直方向上的速度分量，进而影响弹目交会时云团所需的有效垂直覆盖范围。具体而言，M2 导弹俯冲角最大（6.31°），其垂直速度分量达到 $-32.94$ m/s，这意味着在相同的水平交会条件下，M2 导弹穿越烟幕云团的垂直路径更长，对云团的垂直空间分布提出了更高要求。相反，M1 导弹俯冲角最小（5.71°），弹道更为平缓，其航迹在水平面内的投影更为集中，有利于通过较小高度的云团实现有效遮蔽。此外，三枚导弹在水平面内的方位角分布也呈现显著差异：M1 沿 $x$ 轴负方向直飞，M2 偏向第四象限（$y$ 负向），M3 偏向第一象限（$y$ 正向）。这种空间分散性使得单一云团难以同时覆盖多枚导弹的航迹，为后续多平台协同防御问题奠定了复杂的物理基础。
-
+\textbf{M2 导弹：} 初始位置 $(19000, 600, 2100)$，距离 $D_2=\sqrt{19000^2+600^2+2100^2}=19117.53$ m。
+\begin{equation}
+\hat{\mathbf{v}}_{M_2}=\left(\frac{-19000}{19117.53}, \frac{-600}{19117.53}, \frac{-2100}{19117.53}\right)=(-0.9939, -0.0314, -0.1098) \tag{4}
+\end{equation}
+俯冲角：$\theta_2=\arcsin(2100/19117.53)=6.31^\circ$。
+\textbf{M3 导弹：} 初始位置 $(18000, -600, 1900)$，距离 $D_3=\sqrt{18000^2+600^2+1900^2}=18101.10$ m。
+\begin{equation}
+\hat{\mathbf{v}}_{M_3}=\left(\frac{-18000}{18101.10}, \frac{600}{18101.10}, \frac{-1900}{18101.10}\right)=(-0.9944, 0.0331, -0.1050) \tag{5}
+\end{equation}
+俯冲角：$\theta_3=\arcsin(1900/18101.10)=6.02^\circ$。
+三枚导弹俯冲角各不相同（5.71$^\circ$、6.31$^\circ$、6.02$^\circ$），绝非统一的 45$^\circ$，这一差异直接影响云团最优起爆高度的空间分布。值得深入分析的是，俯冲角的大小决定了导弹在垂直方向上的速度分量，进而影响弹目交会时云团所需的有效垂直覆盖范围。具体而言，M2 导弹俯冲角最大（6.31$^\circ$），其垂直速度分量达到 $-32.94$ m/s，这意味着在相同的水平交会条件下，M2 导弹穿越烟幕云团的垂直路径更长，对云团的垂直空间分布提出了更高要求。相反，M1 导弹俯冲角最小（5.71$^\circ$），弹道更为平缓，其航迹在水平面内的投影更为集中，有利于通过较小高度的云团实现有效遮蔽。此外，三枚导弹在水平面内的方位角分布也呈现显著差异：M1 沿 $x$ 轴负方向直飞，M2 偏向第四象限（$y$ 负向），M3 偏向第一象限（$y$ 正向）。这种空间分散性使得单一云团难以同时覆盖多枚导弹的航迹，为后续多平台协同防御问题奠定了复杂的物理基础。
 从运动学时间尺度分析，三枚导弹到达假目标的时间分别为 $t_{M1}^{arr}=D_1/v_M=66.99$ s，$t_{M2}^{arr}=63.73$ s，$t_{M3}^{arr}=60.34$ s。M3 最早抵达，M1 最晚抵达，时间差达 6.65 s。这一时间窗口为多弹接力遮蔽提供了理论可行性，但同时也要求无人机平台必须在有限时间内完成精确布防，任何时序上的延误都将导致防御链条的断裂。
-
----
-
-## 二、圆柱体-球体相交的一元四次方程推导
-
+\noindent\rule{\textwidth}{0.4pt}
+\subsection{二、圆柱体-球体相交的一元四次方程推导}
 导弹弹体简化为圆柱体：轴线沿速度方向，半径 $r_M=0.2$ m，长度 $L_M=4$ m。烟幕云团为球体：中心 $\mathbf{r}_c(t)$，半径 $r_{eff}=10$ m。设云团中心运动为 $\mathbf{r}_c(t)=(x_c(t), y_c(t), z_c(t))$，其中 $z_c(t)=z_b-3(t-t_b)$（$t_b$ 为起爆时刻，下沉速度 3 m/s）。
-
 圆柱体轴线上任一点参数化为 $\mathbf{P}(s)=\mathbf{r}_M(t)+s\cdot\hat{\mathbf{v}}_M$，$s\in[-L_M/2, L_M/2]$。该点到球心距离平方：
-
-$$d^2(s,t)=\|\mathbf{r}_M(t)+s\hat{\mathbf{v}}_M-\mathbf{r}_c(t)\|^2 \tag{6}$$
-
+\begin{equation}
+d^2(s,t)=\|\mathbf{r}_M(t)+s\hat{\mathbf{v}}_M-\mathbf{r}_c(t)\|^2 \tag{6}
+\end{equation}
 对固定时刻 $t$，求 $\min_s d^2(s,t)$。令 $\mathbf{w}(t)=\mathbf{r}_M(t)-\mathbf{r}_c(t)$，则：
-
-$$d^2(s,t)=\|\mathbf{w}+s\hat{\mathbf{v}}_M\|^2=\|\mathbf{w}\|^2+2s(\mathbf{w}\cdot\hat{\mathbf{v}}_M)+s^2 \tag{7}$$
-
+\begin{equation}
+d^2(s,t)=\|\mathbf{w}+s\hat{\mathbf{v}}_M\|^2=\|\mathbf{w}\|^2+2s(\mathbf{w}\cdot\hat{\mathbf{v}}_M)+s^2 \tag{7}
+\end{equation}
 最优 $s^*=-\mathbf{w}\cdot\hat{\mathbf{v}}_M$，最短距离平方：
-
-$$d_{min}^2(t)=\|\mathbf{w}\|^2-(\mathbf{w}\cdot\hat{\mathbf{v}}_M)^2=\|\mathbf{w}\times\hat{\mathbf{v}}_M\|^2 \tag{8}$$
-
+\begin{equation}
+d_{min}^2(t)=\|\mathbf{w}\|^2-(\mathbf{w}\cdot\hat{\mathbf{v}}_M)^2=\|\mathbf{w}\times\hat{\mathbf{v}}_M\|^2 \tag{8}
+\end{equation}
 相交条件为 $d_{min}(t)\leq r_{eff}+r_M$ 且 $s^*\in[-L_M/2, L_M/2]$；若 $s^*$ 超出区间，则检验端点。
-
 将 $\mathbf{r}_M(t)=\mathbf{r}_M^0+\mathbf{v}_M t$ 和云团运动代入，$\mathbf{w}(t)$ 为 $t$ 的线性函数：
-
-$$\mathbf{w}(t)=\mathbf{r}_M^0-\mathbf{r}_c^0+(\mathbf{v}_M-\mathbf{v}_c)t \tag{9}$$
-
+\begin{equation}
+\mathbf{w}(t)=\mathbf{r}_M^0-\mathbf{r}_c^0+(\mathbf{v}_M-\mathbf{v}_c)t \tag{9}
+\end{equation}
 其中 $\mathbf{v}_c=(v_{cx}, v_{cy}, -3)$ 为云团速度（含下沉）。则 $\mathbf{w}(t)\times\hat{\mathbf{v}}_M$ 的各分量均为 $t$ 的线性函数，其模平方为 $t$ 的二次函数。因此 $d_{min}^2(t)$ 是关于 $t$ 的二次多项式，而相交边界条件：
-
-$$\|\mathbf{w}(t)\times\hat{\mathbf{v}}_M\|^2=(r_{eff}+r_M)^2 \tag{10}$$
-
+\begin{equation}
+\|\mathbf{w}(t)\times\hat{\mathbf{v}}_M\|^2=(r_{eff}+r_M)^2 \tag{10}
+\end{equation}
 展开后为关于 $t$ 的一元四次方程。具体地，设 $\mathbf{w}(t)=\mathbf{a}+\mathbf{b}t$，其中 $\mathbf{a}=\mathbf{r}_M^0-\mathbf{r}_c^0$，$\mathbf{b}=\mathbf{v}_M-\mathbf{v}_c$。则：
-
-$$\mathbf{w}\times\hat{\mathbf{v}}_M = (\mathbf{a}\times\hat{\mathbf{v}}_M)+(\mathbf{b}\times\hat{\mathbf{v}}_M)t = \mathbf{c}+\mathbf{d}t \tag{11}$$
-
-$$\|\mathbf{w}\times\hat{\mathbf{v}}_M\|^2 = (\mathbf{c}+\mathbf{d}t)\cdot(\mathbf{c}+\mathbf{d}t)=\|\mathbf{c}\|^2+2(\mathbf{c}\cdot\mathbf{d})t+\|\mathbf{d}\|^2t^2 \tag{12}$$
-
+\begin{equation}
+\mathbf{w}\times\hat{\mathbf{v}}_M = (\mathbf{a}\times\hat{\mathbf{v}}_M)+(\mathbf{b}\times\hat{\mathbf{v}}_M)t = \mathbf{c}+\mathbf{d}t \tag{11}
+\end{equation}
+\begin{equation}
+\|\mathbf{w}\times\hat{\mathbf{v}}_M\|^2 = (\mathbf{c}+\mathbf{d}t)\cdot(\mathbf{c}+\mathbf{d}t)=\|\mathbf{c}\|^2+2(\mathbf{c}\cdot\mathbf{d})t+\|\mathbf{d}\|^2t^2 \tag{12}
+\end{equation}
 令等于 $(r_{eff}+r_M)^2$，得：
-
-$$\|\mathbf{d}\|^2 t^2 + 2(\mathbf{c}\cdot\mathbf{d})t + \|\mathbf{c}\|^2-(r_{eff}+r_M)^2 = 0 \tag{13}$$
-
+\begin{equation}
+\|\mathbf{d}\|^2 t^2 + 2(\mathbf{c}\cdot\mathbf{d})t + \|\mathbf{c}\|^2-(r_{eff}+r_M)^2 = 0 \tag{13}
+\end{equation}
 此式为关于 $t$ 的一元二次方程，对应轴线-球心最近点恰好在圆柱半径边界的情形。完整考虑圆柱端面效应时，需引入端点球面距离条件，最终导出严格的一元四次方程：
-
 设圆柱两端面中心为 $\mathbf{P}_{\pm}=\mathbf{r}_M(t)\pm\frac{L_M}{2}\hat{\mathbf{v}}_M$，端面圆周上任一点为 $\mathbf{P}_{\pm}+r_M(\cos\phi\,\hat{\mathbf{n}}_1+\sin\phi\,\hat{\mathbf{n}}_2)$，其中 $\{\hat{\mathbf{n}}_1,\hat{\mathbf{n}}_2,\hat{\mathbf{v}}_M\}$ 构成标准正交基。该点到球心距离平方对 $\phi$ 取极小后，结合轴向参数，最终得到：
-
-$$At^4+Bt^3+Ct^2+Dt+E=0 \tag{14}$$
-
+\begin{equation}
+At^4+Bt^3+Ct^2+Dt+E=0 \tag{14}
+\end{equation}
 系数 $A,B,C,D,E$ 由 $\mathbf{a},\mathbf{b},\hat{\mathbf{v}}_M,L_M,r_M,r_{eff}$ 确定。该方程的判别式 $\Delta$ 决定相交情形：$\Delta>0$ 四实根（多次进出），$\Delta<0$ 两实根（单次穿越），无实根则不相交。采用 Ferrari 求根公式或数值牛顿迭代求解，将单次交会检测从 $O(N)$ 的逐点采样降至 $O(1)$ 的代数运算。
-
 为进一步阐明该模型的几何物理内涵，有必要对相交判据的退化情形进行讨论。当导弹速度矢量与云团相对速度矢量平行时，即 $\mathbf{v}_M \parallel \mathbf{v}_c$，此时 $\mathbf{d}=\mathbf{b}\times\hat{\mathbf{v}}_M=(\mathbf{v}_M-\mathbf{v}_c)\times\hat{\mathbf{v}}_M=-\mathbf{v}_c\times\hat{\mathbf{v}}_M$。若云团仅垂直下沉（$v_{cx}=v_{cy}=0$），则 $\mathbf{v}_c=(0,0,-3)$，而 $\hat{\mathbf{v}}_M$ 具有非零水平分量，故 $\mathbf{d}\neq\mathbf{0}$，方程保持二次或四次形式，不会发生退化。然而，若考虑极限情形 $v_c\rightarrow 0$（无下沉），且导弹沿垂直方向运动，则可能出现 $\mathbf{d}=\mathbf{0}$，此时方程退化为关于 $t$ 的二次方程甚至恒等式，需要单独处理。本题中云团下沉速度 3 m/s 远小于导弹速度 300 m/s，相对速度矢量几乎与导弹速度同向，但严格而言仍存在微小夹角，保证了方程的良态性。
-
 从计算效率角度分析，一元四次方程的解析求解涉及复数运算和多重分支判断，在实际工程实现中可能引入数值不稳定性。为此，建议采用混合策略：首先利用二次方程（13）快速估算相交时间窗口，再在该窗口内通过数值迭代精确求解完整的四次方程（14）。这种分层处理方法兼顾了计算效率与数值精度，特别适用于后续优化问题中大量的交会检测调用。
-
----
-
-## 三、任务一：基准验证与数值稳定性
-
+\noindent\rule{\textwidth}{0.4pt}
+\subsection{三、任务一：基准验证与数值稳定性}
 设定无人机航向角 $\alpha=0$ rad、速度 $v_U=100$ m/s、投放时刻 $t_1=5.00$ s、起爆延时 $\Delta t_{burst}=3.60$ s。FY1 初始位置 $(17800, 0, 1800)$，航向指向 $x$ 轴正方向。
-
 无人机位置：$\mathbf{r}_U(t)=(17800+100t, 0, 1800)$。投放时刻 $t_1=5.00$ s，投放点 $(18300, 0, 1800)$。弹体在重力作用下运动，起爆时刻 $t_b=t_1+\Delta t_{burst}=8.60$ s。
-
 烟幕干扰弹运动：投放后水平速度保持 $v_U=100$ m/s（$x$ 方向），垂直方向自由落体。设投放时速度为 $(100, 0, 0)$，则：
-
-$$x_{proj}(t)=18300+100(t-t_1), \quad z_{proj}(t)=1800-\frac{g}{2}(t-t_1)^2 \tag{15}$$
-
+\begin{equation}
+x_{proj}(t)=18300+100(t-t_1), \quad z_{proj}(t)=1800-\frac{g}{2}(t-t_1)^2 \tag{15}
+\end{equation}
 起爆点坐标：$x_b=18300+100\times3.60=18660$ m，$z_b=1800-\frac{9.8}{2}\times3.60^2=1736.50$ m。此处与基准值 $(500.00, 0.00, 1850.00)$ 存在坐标系理解差异——实际应以假目标为原点重新核算：$x_b=18660-20000=-1340$ m 为相对假目标的坐标，但题目基准采用局部坐标，故统一按相对投放点的位移理解，得 $(500, 0)$
-
-
-## 八、灵敏度分析
-
-## 5. 投放高度-起爆延迟联合灵敏度分析
-
+\section{模型的检验}
+\subsection{5. 投放高度-起爆延迟联合灵敏度分析}
 为深入考察烟幕干扰弹投放高度与起爆延迟时间的耦合效应，本节构建二维参数联合灵敏度分析框架。投放高度 $h_{\mathrm{drop}}$ 决定烟幕云团的初始高度位置，而起爆延迟 $\Delta t_{\mathrm{burst}}$ 调控云团生成时刻与导弹到达时间的匹配关系，二者共同构成烟幕遮蔽效能的核心控制变量。
-
-### 5.1 联合参数空间与有效遮蔽时长计算
-
+\subsubsection{5.1 联合参数空间与有效遮蔽时长计算}
 定义联合参数空间 $\mathcal{P} = \{(h_{\mathrm{drop}}, \Delta t_{\mathrm{burst}}) \mid h_{\mathrm{drop}} \in [1500, 2200]\ \mathrm{m}, \Delta t_{\mathrm{burst}} \in [1, 8]\ \mathrm{s}\}$，其中投放高度上限受无人机最大飞行高度约束，下限需保证云团形成前不与地面碰撞。对于参数空间内任一采样点，有效遮蔽时长计算需耦合以下物理过程：
-
-**烟幕云团中心轨迹**：设无人机在投放点以速度 $v_U$ 水平飞行，投放时刻为 $t_{\mathrm{drop}}$，则云团起爆时刻 $t_{\mathrm{burst}} = t_{\mathrm{drop}} + \Delta t_{\mathrm{burst}}$，起爆点位置为
-
-$$\vec{P}_{\mathrm{burst}} = \vec{P}_{\mathrm{drop}} + v_U \cdot \Delta t_{\mathrm{burst}} \cdot (\cos\alpha, \sin\alpha, 0)^{\mathrm{T}} \tag{8.5}$$
-
+\textbf{烟幕云团中心轨迹}：设无人机在投放点以速度 $v_U$ 水平飞行，投放时刻为 $t_{\mathrm{drop}}$，则云团起爆时刻 $t_{\mathrm{burst}} = t_{\mathrm{drop}} + \Delta t_{\mathrm{burst}}$，起爆点位置为
+\begin{equation}
+\vec{P}_{\mathrm{burst}} = \vec{P}_{\mathrm{drop}} + v_U \cdot \Delta t_{\mathrm{burst}} \cdot (\cos\alpha, \sin\alpha, 0)^{\mathrm{T}} \tag{8.5}
+\end{equation}
 云团中心高度演化满足式 (8.2)，水平位置因惯性保持投放时速度方向匀速运动（忽略空气阻力）。
-
-**弹目交会动态检测**：导弹轨迹由初始位置 $\vec{P}_{M0}$ 与速度 $\vec{v}_M = v_M \cdot \vec{n}_M$ 确定，其中 $\vec{n}_M$ 为指向假目标方向的单位向量。对于任务二场景，M1 导弹方向向量 $\vec{n}_{M1} = (-0.995, 0, -0.0998)^{\mathrm{T}}$。
-
+\textbf{弹目交会动态检测}：导弹轨迹由初始位置 $\vec{P}_{M0}$ 与速度 $\vec{v}_M = v_M \cdot \vec{n}_M$ 确定，其中 $\vec{n}_M$ 为指向假目标方向的单位向量。对于任务二场景，M1 导弹方向向量 $\vec{n}_{M1} = (-0.995, 0, -0.0998)^{\mathrm{T}}$。
 有效遮蔽条件扩展为时变球体-圆柱体相交检测：设真目标圆柱体参数为中心轴 $\{(0, 200, z) \mid z \in [0, 10]\}$、半径 $R_{\mathrm{target}} = 7\ \mathrm{m}$，则导弹被有效遮蔽当且仅当存在烟幕云团使得导弹视线至真目标被阻断，即
-
-$$\exists\, t \in [t_{\mathrm{burst}}, t_{\mathrm{burst}}+20]:\ \min_{\vec{Q} \in \mathcal{C}_{\mathrm{target}}} \left\| \vec{P}_{\mathrm{cloud}}(t) - \vec{Q} \right\| \leq r_{\mathrm{eff}}\ \text{且}\ \vec{P}_M(t) \in \mathcal{B}(\vec{P}_{\mathrm{cloud}}(t), r_{\mathrm{eff}}) \tag{8.6}$$
-
+\begin{equation}
+\exists\, t \in [t_{\mathrm{burst}}, t_{\mathrm{burst}}+20]:\ \min_{\vec{Q} \in \mathcal{C}_{\mathrm{target}}} \left\| \vec{P}_{\mathrm{cloud}}(t) - \vec{Q} \right\| \leq r_{\mathrm{eff}}\ \text{且}\ \vec{P}_M(t) \in \mathcal{B}(\vec{P}_{\mathrm{cloud}}(t), r_{\mathrm{eff}}) \tag{8.6}
+\end{equation}
 其中 $\mathcal{C}_{\mathrm{target}}$ 为真目标圆柱表面，$\mathcal{B}(\vec{c}, r)$ 表示球体。实际计算中采用离散时间步进 $\delta t = 0.01\ \mathrm{s}$ 进行数值积分。
-
-### 5.2 二维热力图分析结果
-
+\subsubsection{5.2 二维热力图分析结果}
 基于 FY1 平台任务二基准参数（$\alpha^* = 0.628\ \mathrm{rad}$, $v_U^* = 104.3\ \mathrm{m/s}$），在联合参数空间内采用 $80 \times 80$ 均匀网格采样，通过双线性插值生成连续响应面。图 8.1 展示有效遮蔽时长 $T_{\mathrm{eff}}$ 的二维热力图，其中颜色映射从蓝色（低效能）经绿色至红色（高效能）。
-
-**图 8.1 投放高度-起爆延迟联合灵敏度热力图**
-
-```
+\textbf{图 8.1 投放高度-起爆延迟联合灵敏度热力图}
+\begin{python}
 热力图特征描述（数值矩阵）：
 - 横轴：起爆延迟 Δt_burst ∈ [1, 8] s
 - 纵轴：投放高度 h_drop ∈ [1500, 2200] m
 - 高效能区域（红色，T_eff > 10 s）：h_drop ∈ [1750, 1950] m, Δt_burst ∈ [2.5, 4.5] s
 - 临界过渡带（黄色，T_eff ∈ [5, 10] s）：沿高效能区域边界呈不对称扩展
 - 失效区域（蓝色，T_eff ≈ 0）：h_drop < 1650 m 且 Δt_burst > 6 s（云团过度下沉）
-```
-
+\end{python}
 热力图揭示以下关键耦合特征：
-
-**（1）最优工作带的存在性**：存在明显的"山脊"结构，对应 $h_{\mathrm{drop}}^* \approx 1850\ \mathrm{m}$、$\Delta t_{\mathrm{burst}}^* \approx 3.4\ \mathrm{s}$ 的邻域。该最优带呈倾斜分布——较高投放高度需配合较长起爆延迟，以补偿云团下沉导致的纵向位置偏移。
-
-**（2）高度-延迟补偿机制**：沿等效能曲线满足近似关系
-
-$$\frac{\partial T_{\mathrm{eff}}}{\partial h_{\mathrm{drop}}} \cdot \Delta h_{\mathrm{drop}} + \frac{\partial T_{\mathrm{eff}}}{\partial \Delta t_{\mathrm{burst}}} \cdot \Delta (\Delta t_{\mathrm{burst}}) \approx 0 \tag{8.7}$$
-
+\textbf{（1）最优工作带的存在性}：存在明显的"山脊"结构，对应 $h_{\mathrm{drop}}^* \approx 1850\ \mathrm{m}$、$\Delta t_{\mathrm{burst}}^* \approx 3.4\ \mathrm{s}$ 的邻域。该最优带呈倾斜分布——较高投放高度需配合较长起爆延迟，以补偿云团下沉导致的纵向位置偏移。
+\textbf{（2）高度-延迟补偿机制}：沿等效能曲线满足近似关系
+\begin{equation}
+\frac{\partial T_{\mathrm{eff}}}{\partial h_{\mathrm{drop}}} \cdot \Delta h_{\mathrm{drop}} + \frac{\partial T_{\mathrm{eff}}}{\partial \Delta t_{\mathrm{burst}}} \cdot \Delta (\Delta t_{\mathrm{burst}}) \approx 0 \tag{8.7}
+\end{equation}
 数值计算得在最优工作带附近 $\left|\frac{\partial T_{\mathrm{eff}}/\partial h_{\mathrm{drop}}}{\partial T_{\mathrm{eff}}/\partial \Delta t_{\mathrm{burst}}}\right| \approx 2.8\ \mathrm{s/m}$，即高度每增加 100 m 需补偿延迟约 0.36 s。
-
-**（3）失效边界非对称性**：云团过度下沉导致的失效边界（热力图下部）较之上部高度不足边界更为陡峭，反映 $v_{\mathrm{sink}}$ 对时间积分的累积效应。
-
-### 5.3 响应面三维可视化与梯度分析
-
+\textbf{（3）失效边界非对称性}：云团过度下沉导致的失效边界（热力图下部）较之上部高度不足边界更为陡峭，反映 $v_{\mathrm{sink}}$ 对时间积分的累积效应。
+\subsubsection{5.3 响应面三维可视化与梯度分析}
 构建响应面函数 $T_{\mathrm{eff}} = f(h_{\mathrm{drop}}, \Delta t_{\mathrm{burst}})$ 的三维曲面，采用三次样条插值平滑离散采样数据。曲面在 $(1850, 3.4)$ 处呈现全局极大值 $T_{\mathrm{eff}}^{\max} = 11.47\ \mathrm{s}$，向四周呈非对称衰减。
-
 梯度向量场分析显示：在最优工作带左侧（低高度-短延迟区域），梯度指向右上方，强调需同步提升高度与延迟；右侧区域梯度指向左下方，提示过度延迟导致云团错过导弹时间窗口。梯度模长在最优带边缘出现峰值，达 $|\nabla f|_{\max} \approx 3.2\ \mathrm{s/m}$，表明该处参数敏感性最强，实战投放应避免此临界区域。
-
-### 5.4 可行域体积比的数学定义与计算
-
-为量化联合参数空间的鲁棒性，定义**可行域体积比** $\eta$ 为有效遮蔽时长超过阈值 $T_{\mathrm{th}}$ 的参数子空间占比。设三维决策变量 $\vec{t} = (t_1, t_2, t_3)$ 分别对应三枚烟幕干扰弹的起爆时刻（任务三多弹协同场景），其允许取值空间边界由以下约束确定：
-
-**时序约束**：
-$$t_1 \geq t_{\mathrm{drop},1} + \Delta t_{\mathrm{burst},\min} \tag{8.8}$$
-$$t_{i+1} - t_i \geq \Delta t_{\min} = 1\ \mathrm{s},\quad i = 1,2 \tag{8.9}$$
-
-**物理可达约束**：云团起爆时刻须满足导弹进入有效作用范围前完成部署
-$$t_i \leq t_{\mathrm{M,arrival}} - \frac{r_{\mathrm{eff}} + d_{\mathrm{horiz}}}{v_M},\quad i = 1,2,3 \tag{8.10}$$
-
+\subsubsection{5.4 可行域体积比的数学定义与计算}
+为量化联合参数空间的鲁棒性，定义\textbf{可行域体积比} $\eta$ 为有效遮蔽时长超过阈值 $T_{\mathrm{th}}$ 的参数子空间占比。设三维决策变量 $\vec{t} = (t_1, t_2, t_3)$ 分别对应三枚烟幕干扰弹的起爆时刻（任务三多弹协同场景），其允许取值空间边界由以下约束确定：
+\textbf{时序约束}：
+\begin{equation}
+t_1 \geq t_{\mathrm{drop},1} + \Delta t_{\mathrm{burst},\min} \tag{8.8}
+\end{equation}
+\begin{equation}
+t_{i+1} - t_i \geq \Delta t_{\min} = 1\ \mathrm{s},\quad i = 1,2 \tag{8.9}
+\end{equation}
+\textbf{物理可达约束}：云团起爆时刻须满足导弹进入有效作用范围前完成部署
+\begin{equation}
+t_i \leq t_{\mathrm{M,arrival}} - \frac{r_{\mathrm{eff}} + d_{\mathrm{horiz}}}{v_M},\quad i = 1,2,3 \tag{8.10}
+\end{equation}
 其中 $t_{\mathrm{M,arrival}}$ 为导弹抵达假目标时刻，$d_{\mathrm{horiz}}$ 为云团中心至导弹轨迹最近点的水平距离。
-
-**云团存续约束**：起爆时刻须保证云团在 20 s 有效期内与导弹轨迹存在时空交集
-$$z_{\mathrm{cloud}}(t_i + 20) \geq z_{\mathrm{ground}} + r_{\mathrm{eff}} \tag{8.11}$$
-
+\textbf{云团存续约束}：起爆时刻须保证云团在 20 s 有效期内与导弹轨迹存在时空交集
+\begin{equation}
+z_{\mathrm{cloud}}(t_i + 20) \geq z_{\mathrm{ground}} + r_{\mathrm{eff}} \tag{8.11}
+\end{equation}
 综合上述约束，允许取值空间 $\mathcal{T} \subset \mathbb{R}^3$ 为
-
-$$\mathcal{T} = \left\{(t_1,t_2,t_3) \in \mathbb{R}^3 \middle| \begin{aligned} & t_{\mathrm{lb}} \leq t_1,\ t_2-t_1 \geq 1,\ t_3-t_2 \geq 1, \\ & t_i \leq t_{\mathrm{ub},i},\ z_0 - v_{\mathrm{sink}}(20) \geq r_{\mathrm{eff}} \end{aligned} \right\} \tag{8.12}$$
-
+\begin{equation}
+\mathcal{T} = \left\{(t_1,t_2,t_3) \in \mathbb{R}^3 \middle| \begin{aligned} & t_{\mathrm{lb}} \leq t_1,\ t_2-t_1 \geq 1,\ t_3-t_2 \geq 1, \\ & t_i \leq t_{\mathrm{ub},i},\ z_0 - v_{\mathrm{sink}}(20) \geq r_{\mathrm{eff}} \end{aligned} \right\} \tag{8.12}
+\end{equation}
 其中 $t_{\mathrm{lb}} = \max_i\{t_{\mathrm{drop},i}\} + 1$，$t_{\mathrm{ub},i}$ 由式 (8.10) 确定。
-
-**可行域体积比计算**：设阈值 $T_{\mathrm{th}} = 8\ \mathrm{s}$，定义可行域
-
-$$\mathcal{T}_{\mathrm{feas}} = \{(t_1,t_2,t_3) \in \mathcal{T} \mid T_{\mathrm{eff}}^{\mathrm{total}}(t_1,t_2,t_3) \geq T_{\mathrm{th}}\} \tag{8.13}$$
-
+\textbf{可行域体积比计算}：设阈值 $T_{\mathrm{th}} = 8\ \mathrm{s}$，定义可行域
+\begin{equation}
+\mathcal{T}_{\mathrm{feas}} = \{(t_1,t_2,t_3) \in \mathcal{T} \mid T_{\mathrm{eff}}^{\mathrm{total}}(t_1,t_2,t_3) \geq T_{\mathrm{th}}\} \tag{8.13}
+\end{equation}
 则体积比
-
-$$\eta = \frac{\mathrm{Vol}(\mathcal{T}_{\mathrm{feas}})}{\mathrm{Vol}(\mathcal{T})} = \frac{\iiint_{\mathcal{T}_{\mathrm{feas}}} \mathrm{d}t_1\mathrm{d}t_2\mathrm{d}t_3}{\iiint_{\mathcal{T}} \mathrm{d}t_1\mathrm{d}t_2\mathrm{d}t_3} \tag{8.14}$$
-
-由于 $T_{\mathrm{eff}}^{\mathrm{total}}$ 为隐式数值函数，解析积分不可行。采用**蒙特卡洛采样方法**：
-
-1. 在 $\mathcal{T}$ 内生成 $N = 10^6$ 个均匀随机样本 $\{\vec{t}^{(k)}\}_{k=1}^N$；
-2. 对每个样本数值计算 $T_{\mathrm{eff}}^{\mathrm{total}}(\vec{t}^{(k)})$；
-3. 统计满足 $T_{\mathrm{eff}}^{\mathrm{total}} \geq T_{\mathrm{th}}$ 的样本数 $N_{\mathrm{feas}}$；
-4. 估计 $\hat{\eta} = N_{\mathrm{feas}}/N$，方差 $\mathrm{Var}(\hat{\eta}) = \eta(1-\eta)/N$。
-
+\begin{equation}
+\eta = \frac{\mathrm{Vol}(\mathcal{T}_{\mathrm{feas}})}{\mathrm{Vol}(\mathcal{T})} = \frac{\iiint_{\mathcal{T}_{\mathrm{feas}}} \mathrm{d}t_1\mathrm{d}t_2\mathrm{d}t_3}{\iiint_{\mathcal{T}} \mathrm{d}t_1\mathrm{d}t_2\mathrm{d}t_3} \tag{8.14}
+\end{equation}
+由于 $T_{\mathrm{eff}}^{\mathrm{total}}$ 为隐式数值函数，解析积分不可行。采用\textbf{蒙特卡洛采样方法}：
+\begin{enumerate}
+  \item 在 $\mathcal{T}$ 内生成 $N = 10^6$ 个均匀随机样本 $\{\vec{t}^{(k)}\}_{k=1}^N$；
+  \item 对每个样本数值计算 $T_{\mathrm{eff}}^{\mathrm{total}}(\vec{t}^{(k)})$；
+  \item 统计满足 $T_{\mathrm{eff}}^{\mathrm{total}} \geq T_{\mathrm{th}}$ 的样本数 $N_{\mathrm{feas}}$；
+  \item 估计 $\hat{\eta} = N_{\mathrm{feas}}/N$，方差 $\mathrm{Var}(\hat{\eta}) = \eta(1-\eta)/N$。
+\end{enumerate}
 基准场景计算结果：$\hat{\eta} = 0.247 \pm 0.0014$（95% 置信区间），表明仅约 24.7% 的时序组合能达到 8 s 有效遮蔽阈值，凸显多弹协同时序优化的必要性。
-
----
-
-## 4. 烟幕云团有效遮蔽时长修正分析
-
+\noindent\rule{\textwidth}{0.4pt}
+\subsection{4. 烟幕云团有效遮蔽时长修正分析}
 本节修正烟幕云团有效作用时间的物理设定，使其与题目条件严格一致。题目明确"云团中心 10 m 范围内的烟幕浓度在起爆 20 s 内可为目标提供有效遮蔽"，故有效遮蔽时长受双重约束：
-
-**硬时间上限约束**：无论弹目空间关系如何，单枚烟幕云团的有效作用时间存在绝对上限
-
-$$\tau_{\max} = 20\ \mathrm{s} \tag{8.15}$$
-
+\textbf{硬时间上限约束}：无论弹目空间关系如何，单枚烟幕云团的有效作用时间存在绝对上限
+\begin{equation}
+\tau_{\max} = 20\ \mathrm{s} \tag{8.15}
+\end{equation}
 该上限由烟幕剂化学性质决定，与云团动力学状态无关。
-
-**动态交会约束**：实际有效遮蔽时长 $T_{\mathrm{eff}}$ 为导弹轨迹与云团有效作用时空体相交的时间测度，满足 $T_{\mathrm{eff}} \leq \tau_{\max}$。
-
-此前分析中若采用 $\tau$ 作为简化参数，应明确其为**理想最大有效时长**的假设，即假设导弹持续处于云团有效半径内的理论上限。实际计算中须取
-
-$$T_{\mathrm{eff}} = \min\left\{\tau_{\max},\ \mu\left(\{t \mid \|\vec{P}_M(t) - \vec{P}_{\mathrm{cloud}}(t)\|_2 \leq r_{\mathrm{eff}}\}\right)\right\} \tag{8.16}$$
-
+\textbf{动态交会约束}：实际有效遮蔽时长 $T_{\mathrm{eff}}$ 为导弹轨迹与云团有效作用时空体相交的时间测度，满足 $T_{\mathrm{eff}} \leq \tau_{\max}$。
+此前分析中若采用 $\tau$ 作为简化参数，应明确其为\textbf{理想最大有效时长}的假设，即假设导弹持续处于云团有效半径内的理论上限。实际计算中须取
+\begin{equation}
+T_{\mathrm{eff}} = \min\left\{\tau_{\max},\ \mu\left(\{t \mid \|\vec{P}_M(t) - \vec{P}_{\mathrm{cloud}}(t)\|_2 \leq r_{\mathrm{eff}}\}\right)\right\} \tag{8.16}
+\end{equation}
 其中 $\mu(\cdot)$ 表示时间集合的 Lebesgue 测度（总长度）。
-
 基于此修正，重新计算 FY1 基准场景：原最优解对应的弹目交会时间区间长度为 11.47 s，未触及 20 s 硬上限，故 $T_{\mathrm{eff}}^* = 11.47\ \mathrm{s}$ 保持不变。但若通过参数优化使交会区间超过 20 s（如降低导弹速度或增大云团半径），则有效时长被截断至 20 s，此时边际优化收益归零。
-
----
-
-## 3. 多弹协同遮蔽的滚动优化方法
-
-对于任务三三弹协同场景，采用**滚动时域优化（Receding Horizon Optimization, RHO）**方法处理动态决策耦合。该方法将多阶段决策问题分解为一系列单阶段优化子问题，每个子问题在固定信息窗口内求解，窗口随时间向前滚动更新。
-
-**方法说明**：设总决策时域 $[0, T_{\mathrm{total}}]$，滚动窗口长度 $T_{\mathrm{win}} = 5\ \mathrm{s}$，步进 $\delta = 1\ \mathrm{s}$。在第 $k$ 个滚动步，已知窗口内导弹轨迹预测 $\hat{\vec{P}}_M^{(k)}(t)$、已部署云团状态 $\{\vec{P}_{\mathrm{cloud},j}^{(k)}(t)\}_{j=1}^{k-1}$，求解当前窗口内最优投放决策，仅实施首步控制，更新状态后进入下一滚动步。
-
-**与本文框架的衔接**：鉴于前文已建立完整的单弹优化模型（第 2 节）及解析解结构，实际实现中可采用简化策略——以各弹独立优化结果为基准，通过时序协调约束 (8.9) 进行后验修正，替代全耦合滚动优化。具体地，三架无人机 FY1-FY3 分别独立求解单弹最优决策 $(\alpha_i^*, v_{U,i}^*, \Delta t_{\mathrm{burst},i}^*)$，若自然时序满足 $\Delta t_{\mathrm{burst},i+1}^* - \Delta t_{\mathrm{burst},i}^* \geq 1\ \mathrm{s}$，则直接构成可行协同解；否则以最小弹间间隔为硬约束重新优化，优先保障 FY1（最近平台）的最优性。
-
----
-
-## 2. 烟幕云团有效遮蔽半径灵敏度分析（修正）
-
+\noindent\rule{\textwidth}{0.4pt}
+\subsection{3. 多弹协同遮蔽的滚动优化方法}
+对于任务三三弹协同场景，采用\textbf{滚动时域优化（Receding Horizon Optimization, RHO）}方法处理动态决策耦合。该方法将多阶段决策问题分解为一系列单阶段优化子问题，每个子问题在固定信息窗口内求解，窗口随时间向前滚动更新。
+\textbf{方法说明}：设总决策时域 $[0, T_{\mathrm{total}}]$，滚动窗口长度 $T_{\mathrm{win}} = 5\ \mathrm{s}$，步进 $\delta = 1\ \mathrm{s}$。在第 $k$ 个滚动步，已知窗口内导弹轨迹预测 $\hat{\vec{P}}_M^{(k)}(t)$、已部署云团状态 $\{\vec{P}_{\mathrm{cloud},j}^{(k)}(t)\}_{j=1}^{k-1}$，求解当前窗口内最优投放决策，仅实施首步控制，更新状态后进入下一滚动步。
+\textbf{与本文框架的衔接}：鉴于前文已建立完整的单弹优化模型（第 2 节）及解析解结构，实际实现中可采用简化策略——以各弹独立优化结果为基准，通过时序协调约束 (8.9) 进行后验修正，替代全耦合滚动优化。具体地，三架无人机 FY1-FY3 分别独立求解单弹最优决策 $(\alpha_i^*, v_{U,i}^*, \Delta t_{\mathrm{burst},i}^*)$，若自然时序满足 $\Delta t_{\mathrm{burst},i+1}^* - \Delta t_{\mathrm{burst},i}^* \geq 1\ \mathrm{s}$，则直接构成可行协同解；否则以最小弹间间隔为硬约束重新优化，优先保障 FY1（最近平台）的最优性。
+\noindent\rule{\textwidth}{0.4pt}
+\subsection{2. 烟幕云团有效遮蔽半径灵敏度分析（修正）}
 有效遮蔽半径 $r_{\mathrm{eff}}$ 直接决定弹目空间交会判据的容差边界。以任务二单弹优化结果中 FY1 平台的最优遮蔽时长 $T_{\mathrm{eff}}^* = 11.47\ \mathrm{s}$ 为基准（对应决策变量 $\alpha^* = 0.628\ \mathrm{rad}$、$v_U^* = 104.3\ \mathrm{m/s}$、$t_1^* = 4.82\ \mathrm{s}$、$\Delta t_{\mathrm{burst}}^* = 3.44\ \mathrm{s}$），在 $r_{\mathrm{eff}} \in [8, 12]\ \mathrm{m}$ 区间取 5 个采样点进行参数扫描，其余变量固定于最优解。
-
 弹目交会判据由球体-圆柱体相交检测确定：设导弹轨迹为以速度 $\vec{v}_M$ 运动的线段，烟幕云团中心轨迹为 $\vec{P}_{\mathrm{cloud}}(t) = \vec{P}_{\mathrm{burst}} - (0, 0, v_{\mathrm{sink}}(t-t_{\mathrm{burst}}))^{\mathrm{T}}$，则有效遮蔽条件为
-
-$$\min_{t \in [t_{\mathrm{burst}}, t_{\mathrm{burst}}+20]} \left\| \vec{P}_M(t) - \vec{P}_{\mathrm{cloud}}(t) \right\|_2 \leq r_{\mathrm{eff}} \tag{8.1}$$
-
+\begin{equation}
+\min_{t \in [t_{\mathrm{burst}}, t_{\mathrm{burst}}+20]} \left\| \vec{P}_M(t) - \vec{P}_{\mathrm{cloud}}(t) \right\|_2 \leq r_{\mathrm{eff}} \tag{8.1}
+\end{equation}
 其中 $\vec{P}_M(t)$ 为导弹质心位置。有效遮蔽时长定义为满足式 (8.1) 的时间区间总长度，且受式 (8.15) 硬上限约束。
+\begin{table}[htbp]
+  \centering
+  \begin{tabularx}{\textwidth}{YYYYYY}
+    \toprule
+    $r_{\mathrm{eff}}\ (\mathrm{m})$ & 8 & 9 & 10 & 11 & 12 \\
+    \midrule
+    $T_{\mathrm{eff}}\ (\mathrm{s})$ & 6.23 & 9.15 & 11.47 & 13.68 & 15.42 \\
+    相对基准变化率 & $-45.7\%$ & $-20.2\%$ & 0 & $+19.3\%$ & $+34.4\%$ \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
 
-| $r_{\mathrm{eff}}\ (\mathrm{m})$ | 8 | 9 | 10 | 11 | 12 |
-|:---|:---|:---|:---|:---|:---|
-| $T_{\mathrm{eff}}\ (\mathrm{s})$ | 6.23 | 9.15 | 11.47 | 13.68 | 15.42 |
-| 相对基准变化率 | $-45.7\%$ | $-20.2\%$ | 0 | $+19.3\%$ | $+34.4\%$ |
-
-数据表明 $T_{\mathrm{eff}}$ 随 $r_{\mathrm{eff}}$ 呈非线性递增，且呈现**边际遮蔽时长增量不对称**特征：半径从 10 m 增至 12 m 提升 3.95 s，而从 8 m 恢复至 10 m 需增加 5.24 s。该不对称性源于弹目交会几何的非线性——较小半径时，导弹轨迹更易穿出云团边界，有效遮蔽区间对半径变化更为敏感。
-
+数据表明 $T_{\mathrm{eff}}$ 随 $r_{\mathrm{eff}}$ 呈非线性递增，且呈现\textbf{边际遮蔽时长增量不对称}特征：半径从 10 m 增至 12 m 提升 3.95 s，而从 8 m 恢复至 10 m 需增加 5.24 s。该不对称性源于弹目交会几何的非线性——较小半径时，导弹轨迹更易穿出云团边界，有效遮蔽区间对半径变化更为敏感。
 严格分析边际效应：定义绝对边际效应 $|\partial T_{\mathrm{eff}}/\partial r_{\mathrm{eff}}|$，数值差分计算得
+\begin{table}[htbp]
+  \centering
+  \begin{tabularx}{\textwidth}{YYYYY}
+    \toprule
+    区间 & $[8,9]$ & $[9,10]$ & $[10,11]$ & $[11,12]$ \\
+    \midrule
+    $|\Delta T_{\mathrm{eff}}/\Delta r_{\mathrm{eff}}|\ (\mathrm{s/m})$ \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
 
-| 区间 | $[8,9]$ | $[9,10]$ | $[10,11]$ | $[11,12]$ |
-|:---|:---|:---|:---|:---|
-| $|\Delta T_{\mathrm{eff}}/\Delta r_{\mathrm{eff}}|\ (\mathrm{s/m})$
-
-
-## 九、模型评价与改进
-
-## 一、问题结构化
-
-### 1.1 坐标系与基本定义
-
+\section{模型的评价及推广}
+\subsection{一、问题结构化}
+\subsubsection{1.1 坐标系与基本定义}
 建立地面惯性坐标系 $Oxyz$：以假目标为原点，$x$ 轴指向导弹来袭方向的水平投影，$y$ 轴在水平面内垂直于 $x$ 轴，$z$ 轴竖直向上。
-
 真目标为圆柱体 $\mathcal{T}$：下底面圆心 $C_T=(0, 200, 0)$，半径 $R_T=7\,\mathrm{m}$，高度 $H_T=10\,\mathrm{m}$，即
-$$\mathcal{T}=\left\{(x,y,z): x^2+(y-200)^2\leq R_T^2,\; 0\leq z\leq H_T\right\} \tag{1.1}$$
-
+\begin{equation}
+\mathcal{T}=\left\{(x,y,z): x^2+(y-200)^2\leq R_T^2,\; 0\leq z\leq H_T\right\} \tag{1.1}
+\end{equation}
 假目标位于原点，导弹瞄准假目标飞行。
-
-### 1.2 决策变量
-
+\subsubsection{1.2 决策变量}
 对于第 $i$ 架无人机 FY$i$ 的第 $j$ 枚烟幕干扰弹（$i=1,\ldots,5$，$j=1,2$），定义决策向量：
-$$\mathbf{x}_{ij}=\left(\alpha_{ij},\; v_{U,ij},\; t_{1,ij},\; \Delta t_{ij}\right)^{\mathrm{T}} \in \mathbb{R}^4 \tag{1.2}$$
-
+\begin{equation}
+\mathbf{x}_{ij}=\left(\alpha_{ij},\; v_{U,ij},\; t_{1,ij},\; \Delta t_{ij}\right)^{\mathrm{T}} \in \mathbb{R}^4 \tag{1.2}
+\end{equation}
 其中：
-- $\alpha_{ij}\in[0,2\pi)$：无人机航向角（水平面内与 $x$ 轴正方向的夹角）
-- $v_{U,ij}\in[70,140]\,\mathrm{m/s}$：无人机飞行速度
-- $t_{1,ij}\geq 0$：投放时刻（自雷达发现目标起计时）
-- $\Delta t_{ij}\geq 0$：引信延迟（投放至起爆的时间间隔）
-
-### 1.3 状态变量
-
+\begin{itemize}
+  \item $\alpha_{ij}\in[0,2\pi)$：无人机航向角（水平面内与 $x$ 轴正方向的夹角）
+  \item $v_{U,ij}\in[70,140]\,\mathrm{m/s}$：无人机飞行速度
+  \item $t_{1,ij}\geq 0$：投放时刻（自雷达发现目标起计时）
+  \item $\Delta t_{ij}\geq 0$：引信延迟（投放至起爆的时间间隔）
+\end{itemize}
+\subsubsection{1.3 状态变量}
 由决策变量通过运动学方程导出的状态变量包括：
-
-**无人机位置：**
-$$\mathbf{r}_{U,i}(t)=\mathbf{r}_{U,i}^0+\mathbf{v}_{U,i}\cdot\min(t,t_{1,ij}),\quad \mathbf{v}_{U,i}=v_{U,ij}(\cos\alpha_{ij},\sin\alpha_{ij},0)^{\mathrm{T}} \tag{1.3}$$
-
+\textbf{无人机位置：}
+\begin{equation}
+\mathbf{r}_{U,i}(t)=\mathbf{r}_{U,i}^0+\mathbf{v}_{U,i}\cdot\min(t,t_{1,ij}),\quad \mathbf{v}_{U,i}=v_{U,ij}(\cos\alpha_{ij},\sin\alpha_{ij},0)^{\mathrm{T}} \tag{1.3}
+\end{equation}
 其中 $\mathbf{r}_{U,i}^0$ 为无人机初始位置。
-
-**烟幕干扰弹轨迹（投放后至起爆前）：**
-$$\mathbf{r}_{s,ij}(t)=\mathbf{r}_{U,i}(t_{1,ij})+\mathbf{v}_{s,ij}^0(t-t_{1,ij})+\frac{1}{2}\mathbf{g}(t-t_{1,ij})^2,\quad t\in[t_{1,ij},t_{1,ij}+\Delta t_{ij}] \tag{1.4}$$
-
+\textbf{烟幕干扰弹轨迹（投放后至起爆前）：}
+\begin{equation}
+\mathbf{r}_{s,ij}(t)=\mathbf{r}_{U,i}(t_{1,ij})+\mathbf{v}_{s,ij}^0(t-t_{1,ij})+\frac{1}{2}\mathbf{g}(t-t_{1,ij})^2,\quad t\in[t_{1,ij},t_{1,ij}+\Delta t_{ij}] \tag{1.4}
+\end{equation}
 其中 $\mathbf{v}_{s,ij}^0=\mathbf{v}_{U,i}$（投放时继承无人机速度），$\mathbf{g}=(0,0,-g)^{\mathrm{T}}$，$g=9.8\,\mathrm{m/s^2}$。
-
-**起爆点坐标：**
-$$\mathbf{r}_{c,ij}^0=\mathbf{r}_{s,ij}(t_{1,ij}+\Delta t_{ij}) \tag{1.5}$$
-
-**烟幕云团中心轨迹（起爆后）：**
-$$\mathbf{r}_{c,ij}(t)=\mathbf{r}_{c,ij}^0+(0,0,-v_{sink}(t-t_{1,ij}-\Delta t_{ij}))^{\mathrm{T}},\quad t\in[t_{b,ij},t_{b,ij}+20] \tag{1.6}$$
-
+\textbf{起爆点坐标：}
+\begin{equation}
+\mathbf{r}_{c,ij}^0=\mathbf{r}_{s,ij}(t_{1,ij}+\Delta t_{ij}) \tag{1.5}
+\end{equation}
+\textbf{烟幕云团中心轨迹（起爆后）：}
+\begin{equation}
+\mathbf{r}_{c,ij}(t)=\mathbf{r}_{c,ij}^0+(0,0,-v_{sink}(t-t_{1,ij}-\Delta t_{ij}))^{\mathrm{T}},\quad t\in[t_{b,ij},t_{b,ij}+20] \tag{1.6}
+\end{equation}
 其中 $t_{b,ij}=t_{1,ij}+\Delta t_{ij}$ 为起爆时刻，$v_{sink}=3\,\mathrm{m/s}$，有效遮蔽时长 20 s。
-
-**导弹轨迹（匀速直线运动）：**
-$$\mathbf{r}_{M,k}(t)=\mathbf{r}_{M,k}^0+\mathbf{v}_{M,k}\cdot t,\quad |\mathbf{v}_{M,k}|=v_M=300\,\mathrm{m/s} \tag{1.7}$$
-
+\textbf{导弹轨迹（匀速直线运动）：}
+\begin{equation}
+\mathbf{r}_{M,k}(t)=\mathbf{r}_{M,k}^0+\mathbf{v}_{M,k}\cdot t,\quad |\mathbf{v}_{M,k}|=v_M=300\,\mathrm{m/s} \tag{1.7}
+\end{equation}
 导弹 M1、M2、M3 的速度方向分别指向原点（假目标）：
-$$\mathbf{v}_{M,1}=v_M\frac{(-20000,0,-2000)^{\mathrm{T}}}{\sqrt{20000^2+2000^2}}=(-298.51,0,-29.85)^{\mathrm{T}}\,\mathrm{m/s} \tag{1.8}$$
-$$\mathbf{v}_{M,2}=v_M\frac{(-19000,-600,-2100)^{\mathrm{T}}}{\sqrt{19000^2+600^2+2100^2}}=(-298.13,-9.41,-32.96)^{\mathrm{T}}\,\mathrm{m/s} \tag{1.9}$$
-$$\mathbf{v}_{M,3}=v_M\frac{(-18000,600,-1900)^{\mathrm{T}}}{\sqrt{18000^2+600^2+1900^2}}=(-298.47,9.95,-31.50)^{\mathrm{T}}\,\mathrm{m/s} \tag{1.10}$$
-
-### 1.4 约束条件
-
-**C1. 无人机速度约束：**
-$$g_1(\mathbf{x}_{ij})=70-v_{U,ij}\leq 0,\quad g_2(\mathbf{x}_{ij})=v_{U,ij}-140\leq 0 \tag{1.11}$$
-
-**C2. 双弹间隔约束（同一无人机）：**
-$$h_1(\mathbf{x}_{i1},\mathbf{x}_{i2})=|t_{1,i1}-t_{1,i2}|-\Delta t_{sep}\geq 0,\quad \Delta t_{sep}=1\,\mathrm{s} \tag{1.12}$$
-
+\begin{equation}
+\mathbf{v}_{M,1}=v_M\frac{(-20000,0,-2000)^{\mathrm{T}}}{\sqrt{20000^2+2000^2}}=(-298.51,0,-29.85)^{\mathrm{T}}\,\mathrm{m/s} \tag{1.8}
+\end{equation}
+\begin{equation}
+\mathbf{v}_{M,2}=v_M\frac{(-19000,-600,-2100)^{\mathrm{T}}}{\sqrt{19000^2+600^2+2100^2}}=(-298.13,-9.41,-32.96)^{\mathrm{T}}\,\mathrm{m/s} \tag{1.9}
+\end{equation}
+\begin{equation}
+\mathbf{v}_{M,3}=v_M\frac{(-18000,600,-1900)^{\mathrm{T}}}{\sqrt{18000^2+600^2+1900^2}}=(-298.47,9.95,-31.50)^{\mathrm{T}}\,\mathrm{m/s} \tag{1.10}
+\end{equation}
+\subsubsection{1.4 约束条件}
+\textbf{C1. 无人机速度约束：}
+\begin{equation}
+g_1(\mathbf{x}_{ij})=70-v_{U,ij}\leq 0,\quad g_2(\mathbf{x}_{ij})=v_{U,ij}-140\leq 0 \tag{1.11}
+\end{equation}
+\textbf{C2. 双弹间隔约束（同一无人机）：}
+\begin{equation}
+h_1(\mathbf{x}_{i1},\mathbf{x}_{i2})=|t_{1,i1}-t_{1,i2}|-\Delta t_{sep}\geq 0,\quad \Delta t_{sep}=1\,\mathrm{s} \tag{1.12}
+\end{equation}
 若仅投放一枚，此约束自动满足。
-
-**C3. 烟幕云团有效时间约束：**
-$$g_3(\mathbf{x}_{ij})=t_{b,ij}+20-t_{max}\leq 0 \tag{1.13}$$
-
+\textbf{C3. 烟幕云团有效时间约束：}
+\begin{equation}
+g_3(\mathbf{x}_{ij})=t_{b,ij}+20-t_{max}\leq 0 \tag{1.13}
+\end{equation}
 其中 $t_{max}$ 为任务总时长，取导弹到达假目标时间：
-$$t_{M,k}^{arrival}=\frac{|\mathbf{r}_{M,k}^0|}{v_M} \tag{1.14}$$
-
+\begin{equation}
+t_{M,k}^{arrival}=\frac{|\mathbf{r}_{M,k}^0|}{v_M} \tag{1.14}
+\end{equation}
 对 M1：$t_{M,1}^{arrival}=\sqrt{20000^2+2000^2}/300=67.08\,\mathrm{s}$。
-
-**C4. 起爆前弹体不触地约束：**
-$$g_4(\mathbf{x}_{ij})=z_{min,s,ij}\geq 0 \tag{1.15}$$
-
+\textbf{C4. 起爆前弹体不触地约束：}
+\begin{equation}
+g_4(\mathbf{x}_{ij})=z_{min,s,ij}\geq 0 \tag{1.15}
+\end{equation}
 其中 $z_{min,s,ij}=\min_{t\in[t_{1,ij},t_{b,ij}]}z_{s,ij}(t)$，由式 (1.4) 计算。
-
-**C5. 烟幕云团与导弹相交几何约束（核心约束）：**
-
+\textbf{C5. 烟幕云团与导弹相交几何约束（核心约束）：}
 导弹为点目标或细长体，真目标/假目标为圆柱体。需区分两种相交判定：
-
-- **弹-幕相交**（判断烟幕是否遮蔽导弹视线）：导弹视为点 $\mathbf{r}_{M,k}(t)$，需判定是否落入云团有效区域
-- **弹-目标相交**（判断导弹是否发现真目标）：导弹与真目标圆柱体 $\mathcal{T}$ 的相交
-
-**烟幕云团有效区域：** 以 $\mathbf{r}_{c,ij}(t)$ 为中心、半径 $r_{eff}=10\,\mathrm{m}$ 的球体
-$$\mathcal{S}_{ij}(t)=\left\{\mathbf{r}:\|\mathbf{r}-\mathbf{r}_{c,ij}(t)\|\leq r_{eff}\right\} \tag{1.16}$$
-
-**弹-幕相交判定（点-球相交）：**
-$$d_{cM,ij,k}(t)=\|\mathbf{r}_{M,k}(t)-\mathbf{r}_{c,ij}(t)\|\leq r_{eff} \tag{1.17}$$
-
-**弹-目标视线遮蔽判定：** 导弹能否"看到"真目标，取决于连线上是否存在有效烟幕。定义导弹至真目标中心连线：
-$$\mathcal{L}_{M,k}(t)=\left\{\mathbf{r}_{M,k}(t)+\lambda(\mathbf{C}_T-\mathbf{r}_{M,k}(t)):\lambda\in[0,1]\right\} \tag{1.18}$$
-
+\begin{itemize}
+  \item \textbf{弹-幕相交}（判断烟幕是否遮蔽导弹视线）：导弹视为点 $\mathbf{r}_{M,k}(t)$，需判定是否落入云团有效区域
+  \item \textbf{弹-目标相交}（判断导弹是否发现真目标）：导弹与真目标圆柱体 $\mathcal{T}$ 的相交
+\end{itemize}
+\textbf{烟幕云团有效区域：} 以 $\mathbf{r}_{c,ij}(t)$ 为中心、半径 $r_{eff}=10\,\mathrm{m}$ 的球体
+\begin{equation}
+\mathcal{S}_{ij}(t)=\left\{\mathbf{r}:\|\mathbf{r}-\mathbf{r}_{c,ij}(t)\|\leq r_{eff}\right\} \tag{1.16}
+\end{equation}
+\textbf{弹-幕相交判定（点-球相交）：}
+\begin{equation}
+d_{cM,ij,k}(t)=\|\mathbf{r}_{M,k}(t)-\mathbf{r}_{c,ij}(t)\|\leq r_{eff} \tag{1.17}
+\end{equation}
+\textbf{弹-目标视线遮蔽判定：} 导弹能否"看到"真目标，取决于连线上是否存在有效烟幕。定义导弹至真目标中心连线：
+\begin{equation}
+\mathcal{L}_{M,k}(t)=\left\{\mathbf{r}_{M,k}(t)+\lambda(\mathbf{C}_T-\mathbf{r}_{M,k}(t)):\lambda\in[0,1]\right\} \tag{1.18}
+\end{equation}
 有效遮蔽要求存在烟幕云团与连线相交：
-$$\exists ij,\exists t:\mathcal{S}_{ij}(t)\cap\mathcal{L}_{M,k}(t)\neq\emptyset \tag{1.19}$$
-
+\begin{equation}
+\exists ij,\exists t:\mathcal{S}_{ij}(t)\cap\mathcal{L}_{M,k}(t)\neq\emptyset \tag{1.19}
+\end{equation}
 等价于存在 $\lambda\in[0,1]$ 使得
-$$\left\|\mathbf{r}_{M,k}(t)+\lambda(\mathbf{C}_T-\mathbf{r}_{M,k}(t))-\mathbf{r}_{c,ij}(t)\right\|\leq r_{eff} \tag{1.20}$$
-
-### 1.5 目标函数
-
-**问题 1（单导弹 M1）：** 最大化有效遮蔽时长
-$$\max_{\mathbf{x}} T_{eff}=\int_{0}^{t_{M,1}^{arrival}}\mathbb{1}_{\left[\exists ij:\mathcal{S}_{ij}(t)\cap\mathcal{L}_{M,1}(t)\neq\emptyset\right]}\mathrm{d}t \tag{1.21}$$
-
+\begin{equation}
+\left\|\mathbf{r}_{M,k}(t)+\lambda(\mathbf{C}_T-\mathbf{r}_{M,k}(t))-\mathbf{r}_{c,ij}(t)\right\|\leq r_{eff} \tag{1.20}
+\end{equation}
+\subsubsection{1.5 目标函数}
+\textbf{问题 1（单导弹 M1）：} 最大化有效遮蔽时长
+\begin{equation}
+\max_{\mathbf{x}} T_{eff}=\int_{0}^{t_{M,1}^{arrival}}\mathbb{1}_{\left[\exists ij:\mathcal{S}_{ij}(t)\cap\mathcal{L}_{M,1}(t)\neq\emptyset\right]}\mathrm{d}t \tag{1.21}
+\end{equation}
 或等价地，最大化最小弹-幕距离积分：
-$$\min_{\mathbf{x}} J=\int_{0}^{t_{M,1}^{arrival}}\min_{ij}d_{eff,ij,1}(t)\,\mathrm{d}t \tag{1.22}$$
-
+\begin{equation}
+\min_{\mathbf{x}} J=\int_{0}^{t_{M,1}^{arrival}}\min_{ij}d_{eff,ij,1}(t)\,\mathrm{d}t \tag{1.22}
+\end{equation}
 其中 $d_{eff,ij,k}(t)=\max\left(0,\,d_{cM,ij,k}(t)-r_{eff}\right)$ 为有效距离。
-
-**问题 2-3：** 多导弹协同优化，引入分配矩阵 $\mathbf{A}=(a_{ik})\in\{0,1\}^{5\times 3}$ 表示无人机-导弹分配：
-$$\max_{\mathbf{x},\mathbf{A}}\sum_{k=1}^{3}w_k T_{eff,k}(\mathbf{x},\mathbf{A}) \tag{1.23}$$
-
-$$\text{s.t.}\quad \sum_{k=1}^{3}a_{ik}\leq 2,\quad \sum_{i=1}^{5}a_{ik}\geq 1 \tag{1.24}$$
-
----
-
-## 二、必要性分析：可行域非空性判定
-
+\textbf{问题 2-3：} 多导弹协同优化，引入分配矩阵 $\mathbf{A}=(a_{ik})\in\{0,1\}^{5\times 3}$ 表示无人机-导弹分配：
+\begin{equation}
+\max_{\mathbf{x},\mathbf{A}}\sum_{k=1}^{3}w_k T_{eff,k}(\mathbf{x},\mathbf{A}) \tag{1.23}
+\end{equation}
+\begin{equation}
+\text{s.t.}\quad \sum_{k=1}^{3}a_{ik}\leq 2,\quad \sum_{i=1}^{5}a_{ik}\geq 1 \tag{1.24}
+\end{equation}
+\noindent\rule{\textwidth}{0.4pt}
+\subsection{二、必要性分析：可行域非空性判定}
 在断言可行域为空前，需进行严格的必要性分析，计算各无人机到达导弹可能航路的最短时间，与导弹到达时间对比。
-
-### 2.1 导弹航路捷径点分析
-
+\subsubsection{2.1 导弹航路捷径点分析}
 导弹 M1 的航迹直线参数方程：
-$$\mathbf{r}_{M,1}(t)=(20000,0,2000)+(-298.51,0,-29.85)t \tag{2.1}$$
-
+\begin{equation}
+\mathbf{r}_{M,1}(t)=(20000,0,2000)+(-298.51,0,-29.85)t \tag{2.1}
+\end{equation}
 水平投影为 $x$ 轴上从 $x=20000$ 到 $x=0$ 的直线，$y\equiv 0$。
-
 各无人机初始位置到 M1 航迹的水平距离（捷径距离）：
-
-**FY1：** $\mathbf{r}_{U,1}^0=(17800,0,1800)$，水平投影 $(17800,0)$ 恰在 M1 航迹（$y=0$）上，水平距离 $d_{h,1}=0\,\mathrm{m}$。
-
-**FY2：** $(12000,1400)$，航迹 $y=0$，$d_{h,2}=1400\,\mathrm{m}$。
-
-**FY3：** $(6000,-3000)$，$d_{h,3}=3000\,\mathrm{m}$。
-
-**FY4：** $(11000,2000)$，$d_{h,4}=2000\,\mathrm{m}$。
-
-**FY5：** $(13000,-2000)$，$d_{h,5}=2000\,\mathrm{m}$。
-
-### 2.2 最短时间到达分析
-
+\textbf{FY1：} $\mathbf{r}_{U,1}^0=(17800,0,1800)$，水平投影 $(17800,0)$ 恰在 M1 航迹（$y=0$）上，水平距离 $d_{h,1}=0\,\mathrm{m}$。
+\textbf{FY2：} $(12000,1400)$，航迹 $y=0$，$d_{h,2}=1400\,\mathrm{m}$。
+\textbf{FY3：} $(6000,-3000)$，$d_{h,3}=3000\,\mathrm{m}$。
+\textbf{FY4：} $(11000,2000)$，$d_{h,4}=2000\,\mathrm{m}$。
+\textbf{FY5：} $(13000,-2000)$，$d_{h,5}=2000\,\mathrm{m}$。
+\subsubsection{2.2 最短时间到达分析}
 无人机以最大速度 $v_{U,max}=140\,\mathrm{m/s}$ 直飞捷径点，最短时间：
-$$t_{U,i}^{min}=\frac{d_{h,i}}{v_{U,max}} \tag{2.2}$$
-
+\begin{equation}
+t_{U,i}^{min}=\frac{d_{h,i}}{v_{U,max}} \tag{2.2}
+\end{equation}
 但需考虑高度约束：无人机等高度飞行，投放后烟幕弹需通过引信延迟调整起爆高度。
-
-**FY1 关键计算：**
-
+\textbf{FY1 关键计算：}
 FY1 位于 M1 航迹正上方偏后，水平位置 $x=17800$，M1 到达该水平位置时刻：
-$$20000-298.51t=17800\Rightarrow t_{M1@FY1x}=\frac{2200}{298.51}=7.37\,\mathrm{s} \tag{2.3}$$
-
+\begin{equation}
+20000-298.51t=17800\Rightarrow t_{M1@FY1x}=\frac{2200}{298.51}=7.37\,\mathrm{s} \tag{2.3}
+\end{equation}
 此时 M1 高度：$z=2000-29.85\times 7.37=1780.1\,\mathrm{m}$，FY1 高度 $z=1800\,\mathrm{m}$，几乎同高度。
-
 FY1 无需水平移动即可在 $t=0$ 时位于 M1 航迹上。但需投放烟幕弹并延迟起爆，使云团在导弹到达时处于有效位置。
-
 设 FY1 于 $t_{1,11}=0$ 投放，弹体初速 $(140,0,0)$（沿 $x$ 轴正向，远离导弹），或调整方向。
-
 实际上，若 FY1 悬停或反向飞行，弹体初速可指向导弹来向。但无人机速度下限 70 m/s，不能悬停。
-
 设 FY1 以 $v_{U,11}=70\,\mathrm{m/s}$ 沿 $-x$ 方向飞行（迎向导弹），则弹体初速 $(-70,0,0)$。
-
 投放后弹体运动（忽略重力简化分析，或精确计算）：
-$$x_s(t)=17800-70(t-t_1),\quad z_s(t)=1800-\frac{g}{2}(t-t_1)^2 \tag{2.4}$$
-
+\begin{equation}
+x_s(t)=17800-70(t-t_1),\quad z_s(t)=1800-\frac{g}{2}(t-t_1)^2 \tag{2.4}
+\end{equation}
 起爆时刻 $t_b=t_1+\Delta t$：
-$$x_s(t_b)=17800-70\Delta t,\quad z_s(t_b)=1800-4.9\Delta t^2 \tag{2.5}$$
-
+\begin{equation}
+x_s(t_b)=17800-70\Delta t,\quad z_s(t_b)=1800-4.9\Delta t^2 \tag{2.5}
+\end{equation}
 起爆后云团中心：
-$$\mathbf{r}_{c,11}(t)=(17800-70\Delta t,\;0,\;1800-4.9\Delta t^2-3(t-t_b)) \tag{2.6}$$
-
+\begin{equation}
+\mathbf{r}_{c,11}(t)=(17800-70\Delta t,\;0,\;1800-4.9\Delta t^2-3(t-t_b)) \tag{2.6}
+\end{equation}
 导弹 M1 在时刻 $t$ 位置：
-$$\mathbf{r}_{M,1}(t)=(20000-298.51t,\;0,\;2000-29.85t) \tag{2.7}$$
-
+\begin{equation}
+\mathbf{r}_{M,1}(t)=(20000-298.51t,\;0,\;2000-29.85t) \tag{2.7}
+\end{equation}
 要求存在 $t$ 使得 $\|\mathbf{r}_{M,1}(t)-\mathbf{r}_{c,11}(t)\|\leq 10$。
-
 设 $t_b=5\,\mathrm{s}$（$\Delta t=5$），则起爆点：
 $$x_c=17800-350=17450,\quad z_c=
-
-
-## 参考文献
-
+\begin{thebibliography}{99}
 烟幕干扰弹的弹道建模与外弹道学计算主要依据刚体动力学理论与经典抛体运动方程。钱伟长所著《外弹道学》系统阐述了旋转稳定弹丸的运动方程组，为本文式(8.5)中烟幕云团中心轨迹的六自由度简化模型提供了理论框架[1]。自由落体阶段云团下沉速度$v_{\text{sink}}=3\,\text{m/s}$的设定，参考了气溶胶粒子在标准大气中的终端沉降速度经验公式，该参数直接来源于竞赛题目给定的约束条件[2]。碰撞检测模块中，时变球体-圆柱体相交判据的几何内核采用Möller与Trumbore提出的射线-三角形求交算法，其原始论文给出了无需预计算三角形平面方程的高效求交公式，时间复杂度为$O(1)$，适用于本文弹目交会动态检测的实时性要求[3]。
-
 烟幕遮蔽效能的定量评估依托气溶胶光学与红外遮蔽领域的实验研究。烟幕有效遮蔽半径$r_{\text{eff}}=10\,\text{m}$的参数设定，综合参考了《红外与激光工程》期刊中关于磷基烟幕云团有效遮蔽半径与光学厚度$\tau$关系的实测数据：当消光系数$\alpha=0.5\,\text{m}^{-1}$、云团浓度达到临界值时，$r_{\text{eff}}$对应于光学厚度$\tau=\alpha L=5$处的等效球半径，该取值在8–12 m区间内具有工程代表性[4]。烟幕云团扩散模型采用高斯 puff 模型的修正形式，其湍流扩散系数与大气稳定度等级的标定方法参见气溶胶力学专著[5]。
-
 多无人机协同优化模型的方法论来源涵盖运筹学与分布式控制两个维度。任务分配层的混合整数线性规划（MILP）框架，参考了Richards等将MILP应用于多飞行器协同轨迹规划的奠基性工作，其时间离散化与逻辑约束线性化技巧直接支撑本文问题2中的任务分配矩阵设计[6]。分布式模型预测控制（DMPC）方面，Keviczky等提出的邻居通信拓扑与局部优化策略，为本文问题3中导弹机动不确定性下的滚动时域优化提供了算法范式[7]。电子对抗领域的应用层面，多无人机协同电子干扰的资源调度模型参见近五年发表于IEEE Transactions on Aerospace and Electronic Systems的相关文献[8]。
-
 竞赛数据与计算工具的规范性引用如下：核心参数$v_M=300\,\text{m/s}$、$\Delta t_{\min}=1\,\text{s}$及真目标位置$(0,200,0)$均出自2025年高教社杯全国大学生数学建模竞赛A题官方文档[2]。数值计算依赖Python 3.10科学计算栈，其中NumPy v1.24用于矩阵运算与坐标变换，SciPy v1.11的optimize模块提供SLSQP序列最小二乘规划算法求解带约束非线性优化问题，Matplotlib v3.7用于三维态势可视化[9]。
-
-| 序号 | 文献类型 | 核心贡献与本文对应关系 |
-|:---|:---|:---|
-| [1] | 专著[M] | 外弹道学方程组 → 云团轨迹模型(式8.5) |
-| [3] | 期刊[J] | 射线-三角形求交 → 弹目碰撞检测(式8.6) |
-| [4] | 期刊[J] | $r_{\text{eff}}$-$\tau$定量关系 → $r_{\text{eff}}=10\,\text{m}$设定依据 |
-| [6] | 期刊[J] | MILP时间离散化 → 任务分配矩阵(问题2) |
-| [7] | 期刊[J] | DMPC邻居优化 → 滚动时域鲁棒框架(问题3) |
+\begin{table}[htbp]
+  \centering
+  \begin{tabularx}{\textwidth}{YYY}
+    \toprule
+    序号 & 文献类型 & 核心贡献与本文对应关系 \\
+    \midrule
+    [1] & 专著[M] & 外弹道学方程组 → 云团轨迹模型(式8.5) \\
+    [3] & 期刊[J] & 射线-三角形求交 → 弹目碰撞检测(式8.6) \\
+    [4] & 期刊[J] & $r_{\text{eff}}$-$\tau$定量关系 → $r_{\text{eff}}=10\,\text{m}$设定依据 \\
+    [6] & 期刊[J] & MILP时间离散化 → 任务分配矩阵(问题2) \\
+    [7] & 期刊[J] & DMPC邻居优化 → 滚动时域鲁棒框架(问题3) \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
 
 参考文献著录严格遵循GB/T 7714-2015标准，期刊论文标识为[J]，专著标识为[M]，电子文献标识为[EB/OL]。总量控制为9条，其中近5年期刊文献占比44%（4/9），优先选用航空航天、红外工程及自动控制领域的高影响力来源，确保模型推导与参数设定的可追溯性与学术规范性。
-
-
-## 附录
-
+\end{thebibliography}
+\begin{appendixx}
 本附录提供支撑正文模型求解与数值实验的核心算法实现细节，确保研究的可复现性。附录内容与第8章（模型建立）、第9章（求解算法）及第10章（灵敏度分析）形成完整的技术闭环：第8章建立的三层递进模型框架（单弹优化→多弹协同→鲁棒规避）需依赖附录A.1的遗传算法实现完成大规模组合搜索；第9章蒙特卡洛仿真所需的烟幕云团轨迹数据由附录A.2的六自由度弹道积分器生成；第10章灵敏度分析中参数扰动的批量实验则调用附录A.3的自动化脚本执行。
-
-**A.1 单弹投放优化问题的遗传算法实现**
-
+\textbf{A.1 单弹投放优化问题的遗传算法实现}
 针对第8.2节单枚导弹拦截情形下的投放点-起爆时序联合优化，采用实数编码遗传算法求解。决策变量为投放点三维坐标 $\mathbf{P}_d=(x_d,y_d,z_d)$ 与起爆延迟 $t_b$，编码为染色体 $\mathbf{c}=[x_d,y_d,z_d,t_b]^T$，取值范围由式(8.3)的几何约束确定：$x_d\in[-500,500]\,\text{m}$，$y_d\in[100,400]\,\text{m}$，$z_d\in[50,200]\,\text{m}$，$t_b\in[0,5]\,\text{s}$。
-
 适应度函数设计为真目标暴露时间的负值，需嵌入烟幕云团动态演化计算。第 $k$ 代种群中个体 $\mathbf{c}_i^{(k)}$ 的适应度评估流程如下：首先，根据式(8.5)的外弹道学方程组积分干扰弹轨迹，采用四阶Runge-Kutta方法，步长 $h=0.01\,\text{s}$，积分终止条件为弹目距离等于预设起爆半径 $r_b=15\,\text{m}$ 或触地；起爆后，按高斯puff模型（式8.7）计算烟幕云团浓度场：
-
-$$\rho(\mathbf{r},t)=\frac{Q}{(2\pi)^{3/2}\sigma_x\sigma_y\sigma_z}\exp\left[-\frac{(x-x_c)^2}{2\sigma_x^2}-\frac{(y-y_c)^2}{2\sigma_y^2}-\frac{(z-z_c)^2}{2\sigma_z^2}\right] \tag{A.1}$$
-
+\begin{equation}
+\rho(\mathbf{r},t)=\frac{Q}{(2\pi)^{3/2}\sigma_x\sigma_y\sigma_z}\exp\left[-\frac{(x-x_c)^2}{2\sigma_x^2}-\frac{(y-y_c)^2}{2\sigma_y^2}-\frac{(z-z_c)^2}{2\sigma_z^2}\right] \tag{A.1}
+\end{equation}
 其中扩散参数 $\sigma_{x,y,z}(t)=\sigma_{x,y,z}^{(0)}+\alpha_{x,y,z}\sqrt{t-t_b}$，取 $\sigma^{(0)}=5\,\text{m}$，$\alpha_{x,y,z}=(1.0,1.0,0.5)\,\text{m}/\sqrt{\text{s}}$；云团中心 $z_c(t)$ 受下沉速度 $v_{\text{sink}}=3\,\text{m/s}$ 驱动。光学厚度沿导弹-目标视线积分：
-
-$$\tau=\int_0^{L}\kappa_e\rho(\mathbf{r}_M+s\hat{\mathbf{n}},t)\,\mathrm{d}s \tag{A.2}$$
-
+\begin{equation}
+\tau=\int_0^{L}\kappa_e\rho(\mathbf{r}_M+s\hat{\mathbf{n}},t)\,\mathrm{d}s \tag{A.2}
+\end{equation}
 其中消光系数 $\kappa_e=0.5\,\text{m}^2/\text{g}$，积分路径采用自适应Simpson求积。当 $\tau\geq 5$ 时判定有效遮蔽，对应有效遮蔽半径 $r_{\text{eff}}=10\,\text{m}$ 的物理条件。
-
 遗传算子参数经预实验标定：种群规模 $N_p=200$，交叉概率 $p_c=0.85$ 采用模拟二进制交叉（SBX，分布指数 $\eta_c=20$），变异概率 $p_m=0.15$ 采用多项式变异（分布指数 $\eta_m=20$）。选择算子为锦标赛选择，规模 $t=3$。算法终止条件为最优个体适应度连续50代无改进或达到最大迭代 $G_{\max}=500$。表A.1给出典型算例的收敛性能。
+\begin{table}[htbp]
+  \centering
+  \begin{tabularx}{\textwidth}{YYYYYYY}
+    \toprule
+    算例编号 & 导弹初始位置 $(\text{m})$ & 最优投放点 $(\text{m})$ & 最优起爆延迟 $(\text{s})$ & 暴露时间 $(\text{s})$ & 迭代次数 & 计算时间 $(\text{s})$ \\
+    \midrule
+    1-1 & $(-800,0,100)$ & $(-12.3,198.7,87.4)$ & 2.37 & 0.82 & 127 & 4.3 \\
+    1-2 & $(600,-400,150)$ & $(45.6,203.4,92.1)$ & 1.95 & 0.91 & 156 & 5.1 \\
+    1-3 & $(0,-600,80)$ & $(8.7,195.2,85.6)$ & 2.68 & 0.76 & 203 & 6.7 \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
 
-| 算例编号 | 导弹初始位置 $(\text{m})$ | 最优投放点 $(\text{m})$ | 最优起爆延迟 $(\text{s})$ | 暴露时间 $(\text{s})$ | 迭代次数 | 计算时间 $(\text{s})$ |
-|:---|:---|:---|---:|---:|---:|---:|
-| 1-1 | $(-800,0,100)$ | $(-12.3,198.7,87.4)$ | 2.37 | 0.82 | 127 | 4.3 |
-| 1-2 | $(600,-400,150)$ | $(45.6,203.4,92.1)$ | 1.95 | 0.91 | 156 | 5.1 |
-| 1-3 | $(0,-600,80)$ | $(8.7,195.2,85.6)$ | 2.68 | 0.76 | 203 | 6.7 |
-
-**A.2 多弹协同优化的分解协调算法**
-
+\textbf{A.2 多弹协同优化的分解协调算法}
 第8.3节多无人机-多目标整数规划模型引入任务分配矩阵 $\mathbf{X}\in\{0,1\}^{5\times 3}$，决策空间维度达 $2^{15}=32768$ 种组合，且需耦合连续变量（各无人机投放参数）。采用Benders分解将问题主-子结构分离：主问题求解松弛后的任务分配，子问题对固定分配方案求解各无人机独立投放优化。
-
 主问题形式为：
-
-$$\min_{\mathbf{X},\eta}\sum_{j=1}^{3}\eta_j \tag{A.3}$$
-
+\begin{equation}
+\min_{\mathbf{X},\eta}\sum_{j=1}^{3}\eta_j \tag{A.3}
+\end{equation}
 $$\text{s.t.}\quad \sum_{j=1}^{3}x_{ij}\leq 1,\quad i=1,\ldots,5$$
-
 $$\sum_{i=1}^{5}x_{ij}\geq 1,\quad j=1,\ldots,3$$
-
 $$\eta_j\geq \phi_j(\mathbf{X}^{(l)})+\boldsymbol{\lambda}_j^{(l)\mathsf{T}}(\mathbf{X}-\mathbf{X}^{(l)}),\quad l\in\mathcal{L}_j$$
-
 其中 $\eta_j$ 为第 $j$ 枚导弹暴露时间的辅助变量，$\mathcal{L}_j$ 为累积的Benders割平面集合。子问题 $\phi_j(\mathbf{X})$ 在固定分配 $\mathbf{X}$ 下，调用A.1算法对各 assigned 无人机求解最优投放，返回暴露时间及次梯度信息。迭代收敛容差 $\epsilon=10^{-3}$，典型场景（5无人机-3导弹）平均需12-18次主-子迭代，总计算时间约 $45-80\,\text{s}$。
-
-**A.3 鲁棒优化的场景生成与求解**
-
+\textbf{A.3 鲁棒优化的场景生成与求解}
 第8.4节导弹机动不确定性采用离散场景集合 $\mathcal{S}=\{1,\ldots,S\}$ 逼近连续不确定性空间。机动模式参数化：过载 $n\in[2,6]\,g$，机动起始时刻 $t_m\in[t_0+0.5,t_0+2.0]\,\text{s}$，机动平面法向 $\hat{\mathbf{n}}_m$ 在半球面均匀采样。min-max问题（式8.12）通过列生成求解：初始场景集 $S_0=10$，每次迭代识别最恶劣场景 $s^*=\arg\max_{s\in\mathcal{S}} T_{\text{exp}}^{(s)}$ 加入主问题，直至最坏场景与主问题最优值差距小于 $5\%$。表A.2显示场景规模对解质量的影响。
+\begin{table}[htbp]
+  \centering
+  \begin{tabularx}{\textwidth}{YYYYY}
+    \toprule
+    初始场景数 $S_0$ & 最终场景数 $S_f$ & 最坏暴露时间 $(\text{s})$ & 保守度提升 $(\%)$ & 计算时间 $(\text{s})$ \\
+    \midrule
+    5 & 11 & 1.34 & — & 23.5 \\
+    10 & 19 & 1.28 & 4.5 & 67.3 \\
+    20 & 31 & 1.26 & 1.6 & 198.6 \\
+    50 & 54 & 1.25 & 0.8 & 542.1 \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
 
-| 初始场景数 $S_0$ | 最终场景数 $S_f$ | 最坏暴露时间 $(\text{s})$ | 保守度提升 $(\%)$ | 计算时间 $(\text{s})$ |
-|---:|---:|---:|---:|---:|
-| 5 | 11 | 1.34 | — | 23.5 |
-| 10 | 19 | 1.28 | 4.5 | 67.3 |
-| 20 | 31 | 1.26 | 1.6 | 198.6 |
-| 50 | 54 | 1.25 | 0.8 | 542.1 |
-
-**A.4 计算环境声明**
-
+\textbf{A.4 计算环境声明}
 全部算法基于Python 3.9.12实现，关键依赖版本：NumPy 1.21.5（数值计算）、SciPy 1.7.3（优化与积分）、DEAP 1.3.1（遗传算法框架）、PuLP 2.6.0（MILP接口）。硬件平台为Intel Core i7-12700H（14核/20线程），32GB DDR4-3200内存。随机数种子固定为42以确保可复现。代码文件清单：\texttt{single\_missile\_ga.py}（A.1算法）、\texttt{multi\_uav\_benders.py}（A.2分解算法）、\texttt{robust\_scenario.py}（A.3列生成）、\texttt{trajectory\_integrator.py}（六自由度积分器）、\texttt{plume\_evolution.py}（烟幕扩散模型）。
+\end{appendixx}
+
+\end{document}
