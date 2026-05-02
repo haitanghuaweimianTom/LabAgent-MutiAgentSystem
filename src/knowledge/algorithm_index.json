@@ -1,0 +1,833 @@
+{
+  "meta": {
+    "source": "https://github.com/HuangCongQing/Algorithms_MathModels",
+    "version": "1.0",
+    "total_categories": 15,
+    "description": "数学建模常用算法MATLAB实现知识库"
+  },
+  "categories": [
+    {
+      "id": "AHP层次分析法",
+      "name_cn": "AHP层次分析法",
+      "name_en": "Analytic Hierarchy Process (AHP)",
+      "description": "层次分析法，用于多准则决策分析，通过构建判断矩阵计算各因素权重。",
+      "tags": [
+        "评价",
+        "权重",
+        "决策",
+        "层次",
+        "多准则",
+        "排序"
+      ],
+      "applicable_scenarios": [
+        "多因素综合评价",
+        "方案优选排序",
+        "指标权重确定",
+        "决策问题分析"
+      ],
+      "mathematical_model": "构造判断矩阵 A，计算最大特征值 λ_max 及对应特征向量 w，一致性检验 CR = CI/RI < 0.1",
+      "advantages": [
+        "系统性强",
+        "定性定量结合",
+        "简洁实用"
+      ],
+      "limitations": [
+        "判断矩阵主观性强",
+        "因素过多时一致性难保证"
+      ],
+      "subtypes": {},
+      "source_files": [
+        "AHP层次分析法/tolsortvec.m",
+        "AHP层次分析法/main.m",
+        "AHP层次分析法/sglsortexamine.m",
+        "AHP层次分析法/CalculationRI.m",
+        "AHP层次分析法/ahp.m",
+        "AHP层次分析法/test1.txt",
+        "AHP层次分析法/test1.m",
+        "AHP层次分析法/ahp_usage.m",
+        "AHP层次分析法/ahp_common.m",
+        "AHP层次分析法/data.txt"
+      ],
+      "code_snippets": [
+        {
+          "filename": "tolsortvec.m",
+          "path": "AHP层次分析法/tolsortvec.m",
+          "snippet": "function tw=tolsortvec(utw,dw,CIC,RIC)\n%ȨزһԼ\n%utwΪһصȨ\n%dwΪһһصĲεȨؾ\n%CICΪһָ\n%RICΪһָ\n    tw=dw*utw;\n    CR=utw'*CIC/(utw'*RIC);\n    CR\n    if CR>=0.10\n        disp('ûͨһԼ飬µжϾ');\n    else\n        disp('ͨһԼ');\n    end\nend",
+          "language": "matlab"
+        },
+        {
+          "filename": "main.m",
+          "path": "AHP层次分析法/main.m",
+          "snippet": "%% η\nclc, clear\n\nfid = fopen('data.txt', 'r');\nn1 = 6;  %׼ָ\nn2 = 3;  %ָ\na = [];\n% ȡ׼жϾ\nfor i = 1:n1\n    tmp = str2num(fgetl(fid));\n    a = [a;tmp];\nend\n% ȡжϾжϾb1~b6\nfor i = 1:n1\n    str1 = char(['b', int2str(i), '=[];']);\n    str2 = char(['b', int2str(i), '=[b', int2str(i), ';tmp];']);\n    eval(str1);\n    for j = 1:n2\n        tmp = str2num(fgetl(fid));\n        eval(str2);\n    end\nend\n\n% ֵӦĹһ\n[max(1),wA]=ahp(a);\nfor i = 1:n1\n    str = char(['[max(', int2str(i+1), '),wb', int2str(i), ']=ahp(', 'b', int2str(i), ')']);\n    eval(str);\nend\n\n%ƽһָ\nRIT=CalculationRI();\n\n% дѭ\n[RIA,CIA]=sglsortexamine(max(1),a,RIT);\n[RIb1,CIb1]=sglsortexamine(max(2),b1,RIT);\n[RIb2,CIb2]=sglsortexamine(max(3),b2,RIT);\n[RIb3,CIb3]=sglsortexamine(max(4),b3,RIT);\n[RIb4,CIb4]=sglsortexamine(max(5),b4,RIT);\n[RIb5,CIb5]=sglsortexamine(max(6),b5,RIT);",
+          "language": "matlab"
+        },
+        {
+          "filename": "sglsortexamine.m",
+          "path": "AHP层次分析法/sglsortexamine.m",
+          "snippet": "function [RI,CI]=sglsortexamine(maxeigval,A,RIT)\n    %ηһԼ\n    %maxeigvalΪֵAΪжϾ\n    n=size(A,1);\n    % RIT=[0,0,0.58,0.90,1.12,1.24,1.32,1.41,1.49,1.51];\n    RI=RIT(n);\n    CI=(maxeigval-n)/(n-1);\n    CR=CI/RI;\n    CI\n    CR\n    if CR>=0.10\n        disp('ûͨһԼ飬µжϾ');\n    else\n        disp('ͨһԼ');\n    end\nend",
+          "language": "matlab"
+        },
+        {
+          "filename": "CalculationRI.m",
+          "path": "AHP层次分析法/CalculationRI.m",
+          "snippet": "function ri=CalculationRI()\nri=zeros(1,30); %ʽʼRI(1)ֱӸֵΪ0\nfor n=3:30    %ѭ330RI\n    %n=20;    %20׾Ϊ\n    times=1000;    %10000\n    enum=[9 8 7 6 5 4 3 2 1 1/2 1/3 1/4 1/5 1/6 1/7 1/8 1/9];%Ԫشenumȡ\n    lamda = zeros(1, times);    %ֵʼ\n    A=ones(n,n);                %ʼӦľ\n\n    for num=1:times             %ѭ\n        for i=1:n               %ѾAֵΪ\n            for j=i+1:n\n                A(i,j)=enum(ceil(17*rand(1))); %ϰ벿ִenumȡֵ\n                A(j,i)=1/A(i,j);               %°벿ϰ벿ֳɵ\n                A(i,i)=1;                      %ԽΪ1\n            end\n        end\n        V=eig(A);               %A\n        lamda(num)=max(V);      %ֵlamdaֵ\n    end\n\n    k=sum(lamda)/times;   %ֵƽֵ\n    ri(n)=(k-n)/(n-1);    %óӦRI(n)\nend\nri %RI130׾ƽһָ\n",
+          "language": "matlab"
+        },
+        {
+          "filename": "ahp.m",
+          "path": "AHP层次分析法/ahp.m",
+          "snippet": "function [maxeigval,w]=ahp(A)\n    %AΪжϾ\n    [eigvec,eigval]=eig(A);\n    eigval=diag(eigval);   %\n    eigvalmag=imag(eigval);\n    realind=find(eigvalmag<eps);\n    realeigval=eigval(realind) %ʵ\n    maxeigval=max(realeigval) %ֵ\n    index=find(eigval==maxeigval);\n    vecinit=eigvec(:,index); %ֵӦ\n    w=vecinit./sum(vecinit); %һ\nend",
+          "language": "matlab"
+        }
+      ]
+    },
+    {
+      "id": "CellularAutomata元胞向量机",
+      "name_cn": "CellularAutomata元胞向量机",
+      "name_en": "Cellular Automata",
+      "description": "元胞自动机，离散化的时空动力学模型，通过局部规则演化模拟复杂系统行为。",
+      "tags": [
+        "模拟",
+        "演化",
+        "空间",
+        "离散",
+        "复杂系统",
+        "动力学"
+      ],
+      "applicable_scenarios": [
+        "交通流模拟",
+        "森林火灾蔓延",
+        "传染病传播",
+        "生物种群演化",
+        "物理过程模拟"
+      ],
+      "mathematical_model": "状态转移函数 s(t+1) = f(s(t), 邻居状态), 局部规则驱动全局模式",
+      "advantages": [
+        "并行计算",
+        "直观易懂",
+        "可模拟复杂涌现行为"
+      ],
+      "limitations": [
+        "规则设计依赖经验",
+        "计算量大",
+        "难以解析分析"
+      ],
+      "subtypes": {
+        "生命游戏": "经典二维元胞自动机，模拟生命诞生、存活、死亡过程",
+        "森林火灾": "模拟森林中树木生长、雷击起火、火势蔓延的动态过程",
+        "气体动力学": "模拟气体分子运动和碰撞过程",
+        "扩散限制聚集": "模拟粒子随机扩散并聚集形成分形结构",
+        "表面张力": "模拟液体表面张力和毛细现象",
+        "激发介质": "模拟心脏电信号传导或化学反应波",
+        "砂堆规则": "自组织临界性研究，模拟沙堆崩塌",
+        "渗流集群": "研究多孔介质中的渗透现象"
+      },
+      "source_files": [
+        "CellularAutomata元胞向量机/初等元胞自动机/basic_CA.m",
+        "CellularAutomata元胞向量机/表面张力/main.m",
+        "CellularAutomata元胞向量机/森林火灾/main.m",
+        "CellularAutomata元胞向量机/森林火灾/foreset_fire.m",
+        "CellularAutomata元胞向量机/扩散限制聚集/main.m",
+        "CellularAutomata元胞向量机/生命游戏/main.m",
+        "CellularAutomata元胞向量机/生命游戏/game_of_life.m",
+        "CellularAutomata元胞向量机/渗流集群/main.m",
+        "CellularAutomata元胞向量机/砂堆规则/main.m",
+        "CellularAutomata元胞向量机/气体动力学/main.m",
+        "CellularAutomata元胞向量机/激发介质/main.m"
+      ],
+      "code_snippets": [
+        {
+          "filename": "basic_CA.m",
+          "path": "CellularAutomata元胞向量机/初等元胞自动机/basic_CA.m",
+          "snippet": "%% άԪԶ\n%imagesc(a)ɫȾa0->256\n% ȰмΪ1ÿһʱÿһ\n%Χ˸ΪżΪ0ΪΪ 1\n% ɫ\nclc, clear\n\nMap = [1 1 1; 0 0 0];% [0 0 0] is black, [1 1 1] is white,\ncolormap(Map);\n% С\nS = 121;\nL = zeros(S);\n% мһΪ 1 ΪԪ\nM = (S+1)/2;\ndisplay(M)\nL(M, M) =1;\nTemp = L;\n% imagesc(L);\n\n% \nLayer = (S-1)/2 + 1;\ndisplay(Layer)\nfor t=2:Layer\n    for x=M-t+1:M+t-1  % 60-62,59-63...1-121\n        if x==M-t+1 || x==M+t-1\n            for y=M-t+1:M+t-1\n                SUM = 0;\n                for m=-1:1\n                    for n=-1:1\n                        if x+m>0 && x+m<=S && y+n>0 && y+n<=S  % s+121;\n                            SUM = SUM + L(x+m, y+n);\n                            % display(SUM)\n                        end\n                    end\n                end\n                SUM = SUM - L(x, y);\n                Temp(x, y) = mod(SUM, 2); % mod(a,b)ab\n            end\n        else\n            y = M-t+1;",
+          "language": "matlab"
+        },
+        {
+          "filename": "main.m",
+          "path": "CellularAutomata元胞向量机/表面张力/main.m",
+          "snippet": "%cells(.5*n-1,.5*n-1)=1; \n%cells(.5*n-2,.5*n-2)=1; \n%cells(.5*n-3,.5*n-3)=1; \ncells = (rand(n,n))<.5 ; \n%how long for each case to stability or simple oscillators \n%build an image and display it \nimh = image(cat(3,cells,z,z)); \nset(imh, 'erasemode', 'none') \naxis equal \naxis tight \n%index definition for cell update \nx = 2:n-1; \ny = 2:n-1; \n%Main event loop \nstop= 0; %wait for a quit button push \nrun = 0; %wait for a draw \nfreeze = 0; %wait for a freeze \nwhile (stop==0) \n \n if (run==1) \n %nearest neighbor sum \n sum(x,y) = cells(x,y-1) + cells(x,y+1) + ... \n cells(x-1, y) + cells(x+1,y) + ... \n cells(x-1,y-1) + cells(x-1,y+1) + ... \n cells(3:n,y-1) + cells(x+1,y+1); \n % The CA rule \n cells = (sum==3) | (sum==2 & cells); \n %draw the new image \n set(imh, 'cdata', cat(3,cells,z,z) ) \n %update the step number diaplay \n stepnumber = 1 + str2num(get(number,'string')); \n set(number,'string',num2str(stepnumber)) \n end \n \n if (freeze==1) \n run = 0; \n freeze = 0; \n end \n drawnow %need this in the loop for controls to work \nend ",
+          "language": "matlab"
+        },
+        {
+          "filename": "main.m",
+          "path": "CellularAutomata元胞向量机/森林火灾/main.m",
+          "snippet": "%CA driver \n% \n%forest fire \nclf \nclear all \nn=100; \nPlightning = .000005; \nPgrowth = .01; %.01 \nz=zeros(n,n); \no=ones(n,n); \nveg=z; \nsum=z; \nimh = image(cat(3,z,veg*.02,z)); \nset(imh, 'erasemode', 'none') \naxis equal \naxis tight \n \n% burning -> empty \n% green -> burning if one neigbor burning or with prob=f (lightning) \n% empty -> green with prob=p (growth) \n% veg = {empty=0 burning=1 green=2} \nfor i=1:3000 \n    %nearby fires? \n    sum = (veg(1:n,[n 1:n-1])==1) + (veg(1:n,[2:n 1])==1) + ... \n    (veg([n 1:n-1], 1:n)==1) + (veg([2:n 1],1:n)==1) ; \n    \n    veg = ... \n    2*(veg==2) - ((veg==2) & (sum>0 | (rand(n,n)<Plightning))) + ... \n    2*((veg==0) & rand(n,n)<Pgrowth) ; \n    \n    set(imh, 'cdata', cat(3,(veg==1),(veg==2),z) ) \n    drawnow \nend ",
+          "language": "matlab"
+        },
+        {
+          "filename": "foreset_fire.m",
+          "path": "CellularAutomata元胞向量机/森林火灾/foreset_fire.m",
+          "snippet": "%% ɭֻ\n% (1)ȼյɿոλ\n% (2)λھһȼգ\n%   ȼյ\n% (3)ڿոλԸp\n% (4)ھûȼյ\n%   ÿһʱԸf()Ϊȼյ\nclear\nclc\nclear all\n%ͼС\nn=100;\n%еĸ\nPlightning =0.000005;\n%յĸ\nPgrowth = 0.01;\nz=zeros(n,n);\no=ones(n,n);\nveg=z;\nsum=z;\nimh = image(cat(3,z,veg*0.02,z));\nset(imh, 'erasemode', 'none')\naxis equal\naxis tight\nfor i=1:300\n    sum = (veg(1:n,[n 1:n-1])==1) + (veg(1:n,[2:n 1])==1) + ...\n        (veg([n 1:n-1], 1:n)==1) + (veg([2:n 1],1:n)==1) ;\n    veg = ...\n        2*(veg==2) - ((veg==2) & (sum>0 | (rand(n,n)<Plightning))) + ...\n        2*((veg==0) & rand(n,n)<Pgrowth) ;    \n    set(imh, 'cdata', cat(3,(veg==1),(veg==2),z) )\n    pause(0.02)\nend\n",
+          "language": "matlab"
+        },
+        {
+          "filename": "main.m",
+          "path": "CellularAutomata元胞向量机/扩散限制聚集/main.m",
+          "snippet": "%diffusion + dla \nclc, clear\nclf \nnx=200; %must be divisible by 4 \nny=200; \nz=zeros(nx,ny); \no=ones(nx,ny); \nsand = z ; \nsandNew = z; \nsum = z; \ngnd = z; \ngnd(nx/2,ny/2) = 1 ; \nsand = rand(nx,ny)<.1; \nimh = image(cat(3,z,sand,gnd)); \nset(imh, 'erasemode', 'none') \naxis equal \naxis tight \n \nfor i=1:10000 \n    p=mod(i,2); %margolis neighborhood \n    %upper left cell update \n    xind = [1+p:2:nx-2+p]; \n    yind = [1+p:2:ny-2+p]; \n    %random velocity choice \n    vary = rand(nx,ny)<.5 ; \n    vary1 = 1-vary; \n    \n    %diffusion rule -- margolus neighborhood \n    %rotate the 4 cells to randomize velocity \n    sandNew(xind,yind) = ... \n    vary(xind,yind).*sand(xind+1,yind) + ... %cw \n    vary1(xind,yind).*sand(xind,yind+1) ; %ccw \n    \n    sandNew(xind+1,yind) = ... \n    vary(xind,yind).*sand(xind+1,yind+1) + ... \n    vary1(xind,yind).*sand(xind,yind) ; \n    \n    sandNew(xind,yind+1) = ... \n    vary(xind,yind).*sand(xind,yind) + ... \n    vary1(xind,yind).*sand(xind+1,yind+1) ; ",
+          "language": "matlab"
+        }
+      ]
+    },
+    {
+      "id": "FuzzyMathematicalModel模糊数学模型",
+      "name_cn": "FuzzyMathematicalModel模糊数学模型",
+      "name_en": "Fuzzy Mathematical Model",
+      "description": "模糊数学模型，处理边界不清晰、概念模糊的问题，通过隶属度函数将定性描述定量化。",
+      "tags": [
+        "模糊",
+        "评价",
+        "隶属度",
+        "不确定性",
+        "定性定量转换"
+      ],
+      "applicable_scenarios": [
+        "模糊综合评价",
+        "模糊聚类分析",
+        "多目标模糊决策",
+        "语言变量量化"
+      ],
+      "mathematical_model": "隶属度函数 μ(x)∈[0,1]，模糊矩阵运算，λ-截集",
+      "advantages": [
+        "处理模糊不确定性",
+        "符合人类思维习惯",
+        "无需精确数据"
+      ],
+      "limitations": [
+        "隶属度函数构造主观",
+        "计算复杂度较高"
+      ],
+      "subtypes": {
+        "多层次模糊综合评价": "多层次指标体系下的模糊综合评判",
+        "多目标模糊综合评价": "考虑多个冲突目标的模糊决策",
+        "模糊聚类": "基于模糊等价关系的动态聚类方法"
+      },
+      "source_files": [
+        "FuzzyMathematicalModel模糊数学模型/模糊聚类/main.m",
+        "FuzzyMathematicalModel模糊数学模型/模糊聚类/minimun.m",
+        "FuzzyMathematicalModel模糊数学模型/模糊聚类/caculate_SSE.m",
+        "FuzzyMathematicalModel模糊数学模型/模糊聚类/fuzzy_pattern_recognition.m",
+        "FuzzyMathematicalModel模糊数学模型/模糊聚类/fuzzy_matrix_compund.m",
+        "FuzzyMathematicalModel模糊数学模型/模糊聚类/fuzzy_cluster_analysis.m",
+        "FuzzyMathematicalModel模糊数学模型/模糊聚类/maximun.m",
+        "FuzzyMathematicalModel模糊数学模型/模糊聚类/Riemann_closeness.m",
+        "FuzzyMathematicalModel模糊数学模型/模糊聚类/data.txt",
+        "FuzzyMathematicalModel模糊数学模型/多层次模糊综合评价/main.m",
+        "FuzzyMathematicalModel模糊数学模型/多层次模糊综合评价/data.txt",
+        "FuzzyMathematicalModel模糊数学模型/多目标模糊综合评价/main.m",
+        "FuzzyMathematicalModel模糊数学模型/多目标模糊综合评价/muti_objective_fuzzy_analysis.m"
+      ],
+      "code_snippets": [
+        {
+          "filename": "main.m",
+          "path": "FuzzyMathematicalModel模糊数学模型/模糊聚类/main.m",
+          "snippet": "%% ģ֮󣬸\nload data1\n\n% fuzzy_cluster_analysis.m֮ķ\nind1 = [1,5];\nind2 = [2:3,6,8:11];\nind3 = [4,7];\n\nso = [];\n% иѡһȥѭÿһȥķƽͣҵСǸ\nfor i = 1:length(ind1)\n    for j = 1:length(ind3)\n        for k = 1:length(ind2)\n            t = [ind1(i), ind3(j), ind2(k)];\n            err = caculate_SSE(A, t);\n            so = [so;[t,err]];\n        end\n    end\nend\n\nso\ntm = find(so(:,4) == min(so(:,4)));\n\nresult = so(tm,1:3)\n",
+          "language": "matlab"
+        },
+        {
+          "filename": "minimun.m",
+          "path": "FuzzyMathematicalModel模糊数学模型/模糊聚类/minimun.m",
+          "snippet": "function f1 = minimun(x)\n% ģABϵļС\n    f1 = (x>=20 & x<50).*(x-20)/40 + (x>=50 & x<80).*(80-x)/40;  \nend",
+          "language": "matlab"
+        },
+        {
+          "filename": "caculate_SSE.m",
+          "path": "FuzzyMathematicalModel模糊数学模型/模糊聚类/caculate_SSE.m",
+          "snippet": "function err = caculate_SSE(a, t)\n    % ƽ\n    b = a;\n    b(:,t) = [];\n    mu1 = mean(a, 2);\n    mu2 = mean(b, 2);\n    err = sum((mu1-mu2).^2);\nend",
+          "language": "matlab"
+        },
+        {
+          "filename": "fuzzy_pattern_recognition.m",
+          "path": "FuzzyMathematicalModel模糊数学模型/模糊聚类/fuzzy_pattern_recognition.m",
+          "snippet": "%% ԭĳһ\nclc, clear\n\n% ȼָ\n% ע˴AģAתò\nA = [0.5 0.4 0.3 0.6 0.5 0.4\n     0.3 0.2 0.2 0.1 0.2 0.2\n     0.2 0.2 0.2 0.1 0.1 0.2\n     0.0 0.1 0.2 0.1 0.1 0.1\n     0.0 0.1 0.1 0.1 0.1 0.1];\n[m, n] = size(A);  % mΪȼ\n% ֵָ\nb = [0.4 0.2 0.1 0.4 0.5 0.6];\n\nfor i = 1:m\n    x = [A(i,:); b];\n    t(i) = min([max(min(x)) 1-min(max(x))]);\nend\n\nt\n",
+          "language": "matlab"
+        },
+        {
+          "filename": "fuzzy_matrix_compund.m",
+          "path": "FuzzyMathematicalModel模糊数学模型/模糊聚类/fuzzy_matrix_compund.m",
+          "snippet": "function ab = fuzzy_matrix_compund(a, b)\n% ģabϳɣֵab\n% ģһдһȼĸֵָָĸ\n% ˵ȼĸ\n    m = size(a, 1);\n    n = size(b, 2);\n    for i = 1:m\n        for j = 1:n\n            ab(i,j) = max(min([a(i,:); b(:,j)']));\n        end\n    end\nend",
+          "language": "matlab"
+        }
+      ]
+    },
+    {
+      "id": "GoalProgramming目标规划",
+      "name_cn": "GoalProgramming目标规划",
+      "name_en": "Goal Programming",
+      "description": "目标规划，用于求解具有多个目标的优化问题，通过引入偏差变量将多目标转化为单目标。",
+      "tags": [
+        "多目标",
+        "规划",
+        "优化",
+        "偏差",
+        "优先级"
+      ],
+      "applicable_scenarios": [
+        "生产计划优化",
+        "资源配置",
+        "投资决策",
+        "多目标调度"
+      ],
+      "mathematical_model": "min Σ(w_i^+·d_i^+ + w_i^-·d_i^-)，s.t. f_i(x) + d_i^- - d_i^+ = g_i",
+      "advantages": [
+        "处理多目标冲突",
+        "引入优先级",
+        "灵活性强"
+      ],
+      "limitations": [
+        "目标权重确定困难",
+        "大规模问题求解复杂"
+      ],
+      "subtypes": {},
+      "source_files": [],
+      "code_snippets": []
+    },
+    {
+      "id": "GraphTheory图论",
+      "name_cn": "GraphTheory图论",
+      "name_en": "Graph Theory",
+      "description": "图论算法，用于求解网络结构中的路径、连接、流等问题。",
+      "tags": [
+        "最短路径",
+        "网络",
+        "图",
+        "节点",
+        "边",
+        "连通性"
+      ],
+      "applicable_scenarios": [
+        "最短路径规划",
+        "网络优化",
+        "物流运输路径",
+        "通信网络设计",
+        "社交网络分析"
+      ],
+      "mathematical_model": "G=(V,E,w)，Dijkstra: 贪心松弛; Floyd: d_ij^(k)=min(d_ij^(k-1), d_ik^(k-1)+d_kj^(k-1))",
+      "advantages": [
+        "算法成熟",
+        "适用性广",
+        "有标准工具包"
+      ],
+      "limitations": [
+        "大规模图存储开销大",
+        "动态图需重新计算"
+      ],
+      "subtypes": {
+        "dijkstra求解最短路径": "单源最短路径，非负权图，时间复杂度 O(V^2) 或 O(E+VlogV)",
+        "floyd求解最短路径": "全源最短路径，动态规划，时间复杂度 O(V^3)"
+      },
+      "source_files": [],
+      "code_snippets": []
+    },
+    {
+      "id": "GreySystem灰色系统",
+      "name_cn": "GreySystem灰色系统",
+      "name_en": "Grey System Theory",
+      "description": "灰色系统理论，处理小样本、贫信息的不确定性系统，通过数据生成和灰色微分方程实现预测。",
+      "tags": [
+        "预测",
+        "小样本",
+        "灰色",
+        "序列",
+        "贫信息",
+        "微分方程"
+      ],
+      "applicable_scenarios": [
+        "小样本预测",
+        "中长期趋势预测",
+        "关联度分析",
+        "系统行为预测"
+      ],
+      "mathematical_model": "GM(1,1): dx^(1)/dt + a·x^(1) = b，通过一次累加生成(1-AGO)建立一阶线性微分方程",
+      "advantages": [
+        "小样本即可建模",
+        "计算简单",
+        "无需典型分布假设"
+      ],
+      "limitations": [
+        "预测精度有限",
+        "长期预测偏差大",
+        "对数据波动敏感"
+      ],
+      "subtypes": {},
+      "source_files": [
+        "GreySystem灰色系统/strength_analysis.m",
+        "GreySystem灰色系统/example_2.txt",
+        "GreySystem灰色系统/example_1.txt",
+        "GreySystem灰色系统/GM_2_1.m",
+        "GreySystem灰色系统/GM_Verhulst.m",
+        "GreySystem灰色系统/association_analysis.m",
+        "GreySystem灰色系统/GM_full.m",
+        "GreySystem灰色系统/GM_1_1.m",
+        "GreySystem灰色系统/GM_1_1_full_procession.m"
+      ],
+      "code_snippets": [
+        {
+          "filename": "strength_analysis.m",
+          "path": "GreySystem灰色系统/strength_analysis.m",
+          "snippet": "% Ʒ\nclc,clear\n% mοУnȽУȽϵйڲοеĹϵ\n% õ\nload example_2.txt\ndata = example_2\nn = size(data, 1);\n\n% ׼ݣԾͬ\nfor i = 1:n\n    data(i, :) = data(i, :) / data(i, 1);\nend\n\nck = data(6:n, :); m1 = size(ck, 1);\nbj = data(1:5, :); m2 = size(bj, 1);\nfor i = 1:m1\n    for j = 1:m2\n        t(j, :) = bj(j, :) - ck(i, :)\n    end\n    jc1 = min(min(abs(t'))); jc2 = max(max(abs(t')));\n    rho = 0.5;\n        ksi = (jc1 + rho*jc2) ./ (abs(t) + rho*jc2);\n    rt = sum(ksi') / size(ksi, 2);\n    r(i, :) = rt;\nend\n\n% նԹķ\nr",
+          "language": "matlab"
+        },
+        {
+          "filename": "GM_2_1.m",
+          "path": "GreySystem灰色系统/GM_2_1.m",
+          "snippet": "%% GM(2,1)ģ\n% Verhulstģ͵÷Χͬ\nclc, clear\n% ԭʼ죬Ҫ\nx0 = [41, 49, 61, 78, 96, 104];\nn = length(x0);\nx1 = cumsum(x0);\na_x0 = [0, diff(x0)];\nfor i = 2:n\n    z(i) = 0.5 * (x1(i) + x1(i-1))\nend\n\nB = [-x0(2:end)', -z(2:end)', ones(n-1, 1)];\nY = a_x0(2:end)';\nu = B \\ Y\nx = dsolve('D2x+a1*Dx+a2*x=b', 'x(0) = c1, x(5) = c2');\nx = subs(x, {'a1', 'a2', 'b', 'c1', 'c2'}, {u(1), u(2), u(3), x1(1), x1(6)});\npredict_1 = double(subs(x, 't', 0:n-1));\npredict = [predict_1(1), diff(predict_1)]\n\nepsilon = x0 - predict\ndelta = abs(epsilon ./ x0)",
+          "language": "matlab"
+        },
+        {
+          "filename": "GM_Verhulst.m",
+          "path": "GreySystem灰色系统/GM_Verhulst.m",
+          "snippet": "% Grey Model Verhulst\n% ڷǵİڶչУб״̬S\nclc, clear\nx1 = [4.93  5.33  5.87  6.35  6.63  7.15  7.37  7.39  7.81  8.35  9.39  10.59  10.94  10.44];\nyear = 1990:2003;\nplot(year, x1, 'o-');\n\nn = length(x1);\nx0 = [x1(1), diff(x1)];\nfor i = 2:n\n    z1(i) =  0.5 * (x1(i) + x1(i-1));\nend\nB = [-z1(2:end)', z1(2:end)'.^2]\nY = x0(2:end)';\nabhat = B \\ Y     % Сabֵ\nx = dsolve('Dx+a*x=b*x^2', 'x(0)=x0');\nx = vpa(subs(x, {'a', 'b', 'x0'}, {abhat(1), abhat(2), x1(1)}))\npredict = double(subs(x, 't', 0:15))     % ԱĬt\nx1_all = [x1, 9.92, 10.71];\n\n%---ݻɫģ;ȼȼм---\n% в\nepsilon = x1_all - predict\n% \ndelta = abs(epsilon ./ x1_all)\n% ƽ\ndelta_mean = mean(delta)\n\n%% Թ\n% ԭʼʼ㻯\nx1_all_0 = x1_all - x1_all(1);\n% Ԥʼ㻯\npredict_0 = predict - predict(1);\ns0 = abs(sum(x1_all_0(1:end-1)) + 0.5*x1_all_0(end));\ns1 = abs(sum(predict_0(1:end-1)) + 0.5*predict_0(end));\ntt = predict_0 - x1_all_0;\ns1_s0 = abs(sum(tt(1:end-1)) + 0.5*tt(end));\n% Թ\nabs_association_degree = (1 + s0 + s1) / (1 + s0 + s1 + s1_s0)\n",
+          "language": "matlab"
+        },
+        {
+          "filename": "association_analysis.m",
+          "path": "GreySystem灰色系统/association_analysis.m",
+          "snippet": "% ȷ\nclc,clear\n% һοУmȽУȽϵйڲοеĹϵ\nload example_1.txt\n% ׼ݣע⼫ԵĲͬ\nfor i = 1:15\n    example_1(i, :) = example_1(i, :) / example_1(i, 1);\nend\nfor i = 16:17\n    example_1(i, :) = example_1(i, 1) ./ example_1(i, :);\nend\n\ndata = example_1\n% 1άȣУУ\nn = size(data, 1)\n% ϵ: ck = ο bj = Ƚ\nck = data(1, :); m1 = size(ck, 1);\nbj = data(2:n, :); m2 = size(bj, 1);\nfor i = 1:m1\n    for j = 1:m2\n        t(j, :) = bj(j, :) - ck(i, :);\n    end\n    jc1 = min(min(abs(t'))); jc2 = max(max(abs(t')));\n    rho = 0.5;\n    ksi = (jc1 + rho*jc2) ./ (abs(t) + rho*jc2);\n    rt = sum(ksi') / size(ksi, 2);\n    r(i, :) = rt;\nend\nr % ϵ\n\n% Ȱս\n[rs, rind] = sort(r, 'descend')",
+          "language": "matlab"
+        },
+        {
+          "filename": "GM_full.m",
+          "path": "GreySystem灰色系统/GM_full.m",
+          "snippet": "%% ɫԤģ\nclear; clc;\nsyms a b;\n%cдҲ\nc=[a b]';\n%A֪һЩ\nA=[];\nA=input('ҪԤһ:([174 179...285])\\n');\n% ԣ[174 179 183 189 207 234 220.5 256 270 285]\nnnext=input('ҪԤ漸ݣ');\n%Bԭһۼ\nB=cumsum(A);\nn=length(A);\n\n%ȼ飬ǷʹûɫԤ\nlamda=A(1: n-1) ./ A(2: n);\nrange=minmax(lamda);   % ߾еֵСֵжǷҪΧ֮\nex='exp(-2/(n+1))';\nlow=subs(ex,'n',n);\nex='exp(2/(n+1))';\nup=subs(ex,'n',n);\nif (range(1)>=low)&&(range(2)<=up)\n    disp('ʹûɫԤģ');\nend\n\n%CۼӾ(ֵ)\nfor i=1:(n-1);\n    C(i)=(B(i)+B(i+1))/2;\nend\n\n%% ֵ\nD=A;\nD(1)=[];\nD=D';\nE=[-C;ones(1,n-1)];\nc=(E*E')\\E*D;\nc=c';\na=c(1)\nb=c(2)\n",
+          "language": "matlab"
+        }
+      ]
+    },
+    {
+      "id": "HeuristicAlgorithm启发式算法",
+      "name_cn": "HeuristicAlgorithm启发式算法",
+      "name_en": "Heuristic Algorithms",
+      "description": "启发式智能优化算法，包括遗传算法、模拟退火、神经网络等，用于求解复杂非凸优化问题。",
+      "tags": [
+        "优化",
+        "全局搜索",
+        "智能算法",
+        "非凸",
+        "NP-hard"
+      ],
+      "applicable_scenarios": [
+        "组合优化",
+        "函数极值求解",
+        "参数优化",
+        "路径规划",
+        "调度问题"
+      ],
+      "mathematical_model": "遗传算法: 编码→适应度评估→选择→交叉→变异→迭代; 模拟退火: Metropolis准则 P(accept)=exp(-ΔE/T)",
+      "advantages": [
+        "不依赖梯度信息",
+        "可处理离散问题",
+        "全局搜索能力强"
+      ],
+      "limitations": [
+        "参数调优困难",
+        "收敛速度不确定",
+        "结果可重复性差"
+      ],
+      "subtypes": {
+        "模拟退火算法": "模拟物理退火过程，以一定概率接受劣解，逃离局部最优",
+        "遗传算法": "模拟自然选择和遗传机制，通过选择、交叉、变异进化寻优",
+        "神经网络算法": "模拟生物神经网络，通过前向传播和反向学习拟合复杂映射"
+      },
+      "source_files": [],
+      "code_snippets": []
+    },
+    {
+      "id": "IntegerProgramming整数规划",
+      "name_cn": "IntegerProgramming整数规划",
+      "name_en": "Integer Programming",
+      "description": "整数规划，决策变量取整数值的数学规划，包括纯整数规划和混合整数规划。",
+      "tags": [
+        "整数",
+        "规划",
+        "组合",
+        "离散",
+        "0-1变量"
+      ],
+      "applicable_scenarios": [
+        "指派问题",
+        "选址问题",
+        "排班调度",
+        "投资决策",
+        "背包问题"
+      ],
+      "mathematical_model": "min c^T·x, s.t. A·x ≤ b, x_i ∈ Z (或 {0,1})",
+      "advantages": [
+        "精确描述离散决策",
+        "有成熟求解器"
+      ],
+      "limitations": [
+        "NP-hard 问题",
+        "大规模问题求解困难"
+      ],
+      "subtypes": {},
+      "source_files": [],
+      "code_snippets": []
+    },
+    {
+      "id": "Interpolation插值",
+      "name_cn": "Interpolation插值",
+      "name_en": "Interpolation",
+      "description": "插值方法，通过已知离散数据点构造连续函数，用于数据补全、曲线拟合和图像处理。",
+      "tags": [
+        "插值",
+        "拟合",
+        "数据",
+        "补全",
+        "连续化"
+      ],
+      "applicable_scenarios": [
+        "缺失数据填补",
+        "曲线光滑",
+        "图像放大",
+        "函数逼近",
+        "数值微分积分"
+      ],
+      "mathematical_model": "拉格朗日插值、牛顿插值、样条插值(Spline)、双线性/双三次插值",
+      "advantages": [
+        "精确通过已知点",
+        "形式简洁",
+        "有多样化方法"
+      ],
+      "limitations": [
+        "高次插值Runge现象",
+        "外推不可靠",
+        "对噪声敏感"
+      ],
+      "subtypes": {},
+      "source_files": [],
+      "code_snippets": []
+    },
+    {
+      "id": "LinearProgramming线性规划",
+      "name_cn": "LinearProgramming线性规划",
+      "name_en": "Linear Programming",
+      "description": "线性规划，目标函数和约束条件均为线性的优化问题，最常用的运筹学方法之一。",
+      "tags": [
+        "线性",
+        "规划",
+        "约束",
+        "最优解",
+        "单纯形法"
+      ],
+      "applicable_scenarios": [
+        "生产计划",
+        "运输问题",
+        "资源分配",
+        "投资组合",
+        " diet problem"
+      ],
+      "mathematical_model": "min c^T·x, s.t. A·x ≤ b, x ≥ 0",
+      "advantages": [
+        "有精确最优解",
+        "算法成熟高效",
+        "广泛应用"
+      ],
+      "limitations": [
+        "要求线性关系",
+        "对参数敏感",
+        "整数需求需转整数规划"
+      ],
+      "subtypes": {},
+      "source_files": [],
+      "code_snippets": []
+    },
+    {
+      "id": "MultivariateAnalysis多元分析",
+      "name_cn": "MultivariateAnalysis多元分析",
+      "name_en": "Multivariate Analysis",
+      "description": "多元统计分析，处理多变量数据的统计方法，包括聚类分析、主成分分析等。",
+      "tags": [
+        "聚类",
+        "主成分",
+        "降维",
+        "多变量",
+        "统计"
+      ],
+      "applicable_scenarios": [
+        "数据降维",
+        "样本分类",
+        "特征提取",
+        "综合评价",
+        "数据可视化"
+      ],
+      "mathematical_model": "PCA: 对协方差矩阵特征分解，取前k大特征值对应特征向量; K-means: min Σ||x_i-μ_j||^2",
+      "advantages": [
+        "降低数据维度",
+        "发现潜在结构",
+        "消除变量相关性"
+      ],
+      "limitations": [
+        "结果解释性有限",
+        "聚类数目需预设",
+        "对异常值敏感"
+      ],
+      "subtypes": {
+        "聚类分析": "将样本按相似度划分为不同类别，K-means、层次聚类等",
+        "主成分分析": "通过正交变换将相关变量转化为线性无关主成分，实现降维"
+      },
+      "source_files": [],
+      "code_snippets": []
+    },
+    {
+      "id": "NeuralNetwork神经网络",
+      "name_cn": "NeuralNetwork神经网络",
+      "name_en": "Neural Network",
+      "description": "人工神经网络，模拟生物神经元连接结构，通过训练学习数据中的非线性映射关系。",
+      "tags": [
+        "预测",
+        "分类",
+        "神经网络",
+        "非线性",
+        "深度学习"
+      ],
+      "applicable_scenarios": [
+        "非线性回归预测",
+        "模式识别分类",
+        "时间序列预测",
+        "函数逼近",
+        "图像识别"
+      ],
+      "mathematical_model": "BP网络: 前向传播 y=f(W·x+b)，反向传播误差 ΔW=-η·∂E/∂W",
+      "advantages": [
+        "强大的非线性拟合能力",
+        "自适应学习",
+        "容错性"
+      ],
+      "limitations": [
+        "需要大量训练数据",
+        "易过拟合",
+        "黑盒模型",
+        "训练时间长"
+      ],
+      "subtypes": {},
+      "source_files": [
+        "NeuralNetwork神经网络工具箱的调用案例/af_classify_BP.m",
+        "NeuralNetwork神经网络工具箱的调用案例/af_classify_LVQ.m"
+      ],
+      "code_snippets": [
+        {
+          "filename": "af_classify_BP.m",
+          "path": "NeuralNetwork神经网络工具箱的调用案例/af_classify_BP.m",
+          "snippet": "%% ʹģ(󴫲㷨BP)ȳ\nclc, clear\n\n% һȳĴǺͳ\np1 = [1.24, 1.27; 1.36, 1.74; 1.38, 1.64;\n 1.38, 1.82; 1.38, 1.90; 1.40, 1.70;\n 1.48, 1.82; 1.54, 1.82; 1.56, 2.08];\n% ڶȳĴǺͳ\np2 = [1.14, 1.82; 1.18, 1.96; 1.20, 1.86;\n  1.26, 2.00; 1.28, 2.00; 1.30, 1.96];\n\np = [p1; p2]';\n% ֱȡǺͳСֵֵ\npr = minmax(p);\n\ngoal = [ones(1, 9), zeros(1, 6); zeros(1, 9), ones(1, 6)];\nplot(p1(:, 1), p1(:, 2), 'h', p2(:, 1), p2(:, 2), 'o');\n\nnet = newff(pr, [3, 2], {'logsig', 'logsig'});  %newffһѵǰ\n%---------%\n% net=newff(PR,[S1 S2 ...SN],{TF1 TF2...TFN},BTF,BLF,PF\n% PRRx2ľԶRСֵֵ\n% SiiԪ\n% TFiiĴݺĬϺΪtansig\n% BTFѵĬϺΪtrainlm\n% BLFȨֵ/ֵѧϰĬϺΪlearngdm\n% PFܺĬϺΪmse\nnet.trainParam.show = 10;            % ʵƵʣΪûѵ20ʾһ\nnet.trainParam.lr = 0.05;                % ѧϰʣΪ0.05\nnet.trainParam.goal = 1e-10;        % ѵĿС\nnet.trainParam.epochs = 50000;  % ѵΪ300\nnet = train(net, p, goal);\n\n% \nx = [1.24, 1.80; 1.28, 1.84; 1.40, 2.04]';\n% :SimulinkʲôϢ\ny0 = sim(net, p);\ny = sim(net, x);",
+          "language": "matlab"
+        },
+        {
+          "filename": "af_classify_LVQ.m",
+          "path": "NeuralNetwork神经网络工具箱的调用案例/af_classify_LVQ.m",
+          "snippet": "%% ʹģ(ӻLVQ)ȳ\nclc, clear\n\n% һȳĴǺͳ\np1 = [1.24, 1.27; 1.36, 1.74; 1.38, 1.64;\n 1.38, 1.82; 1.38, 1.90; 1.40, 1.70;\n 1.48, 1.82; 1.54, 1.82; 1.56, 2.08];\n% ڶȳĴǺͳ\np2 = [1.14, 1.82; 1.18, 1.96; 1.20, 1.86;\n  1.26, 2.00; 1.28, 2.00; 1.30, 1.96];\n\np = [p1; p2]';\n% ֱȡǺͳСֵֵ\npr = minmax(p);\n\ngoal = [ones(1, 9), zeros(1, 6); zeros(1, 9), ones(1, 6)];\nplot(p1(:, 1), p1(:, 2), 'h', p2(:, 1), p2(:, 2), 'o');\n\nnet = newlvq(pr, 4, [0.6, 0.4]);\nnet = train(net, p, goal);\n\nY = sim(net, p);\n% \nx = [1.24, 1.80; 1.28, 1.84; 1.40, 2.04]';\nsim(net, x)",
+          "language": "matlab"
+        }
+      ]
+    },
+    {
+      "id": "NonLinearProgramming非线性规划",
+      "name_cn": "NonLinearProgramming非线性规划",
+      "name_en": "Nonlinear Programming",
+      "description": "非线性规划，目标函数或约束条件包含非线性项的优化问题，比线性规划更一般但求解更困难。",
+      "tags": [
+        "非线性",
+        "规划",
+        "约束",
+        "优化",
+        "梯度"
+      ],
+      "applicable_scenarios": [
+        "工程设计优化",
+        "参数估计",
+        "资源分配",
+        "机器学习训练"
+      ],
+      "mathematical_model": "min f(x), s.t. g_i(x)≤0, h_j(x)=0，f或g/h含非线性项",
+      "advantages": [
+        "描述能力强",
+        "适用范围广"
+      ],
+      "limitations": [
+        "可能存在多个局部最优",
+        "对初值敏感",
+        "收敛性不确定"
+      ],
+      "subtypes": {},
+      "source_files": [
+        "NonLinearProgramming非线性规划/non_linear_prog.m",
+        "NonLinearProgramming非线性规划/fun2.m",
+        "NonLinearProgramming非线性规划/fun1.m"
+      ],
+      "code_snippets": [
+        {
+          "filename": "non_linear_prog.m",
+          "path": "NonLinearProgramming非线性规划/non_linear_prog.m",
+          "snippet": "%% Թ滮\nrng('shuffle');\noptions = optimset('largescale', 'off');\n[x, y] = fmincon('fun1', rand(3, 1), [], [], [], [], zeros(3, 1), [], ...\n'fun2', options)\n\n%ʹoptimtoolҲֱ",
+          "language": "matlab"
+        },
+        {
+          "filename": "fun2.m",
+          "path": "NonLinearProgramming非线性规划/fun2.m",
+          "snippet": "function [g, h] = fun2(x)\n    %ԲʽԼ\n    g = [-x(1)^2+x(2)-x(3)^2    %עⲻҪӶĿոˣܻᱻµһ\n         x(1)+x(2)^2+x(3)^3-20];\n    \n    %ԵʽԼ\n    h = [-x(1)-x(2)^2+2\n         x(2)+2*x(3)^2-3];\nend",
+          "language": "matlab"
+        },
+        {
+          "filename": "fun1.m",
+          "path": "NonLinearProgramming非线性规划/fun1.m",
+          "snippet": "function f = fun1(x)\n% Ŀ꺯\n    f = sum(x.^2) + 8;\nend",
+          "language": "matlab"
+        }
+      ]
+    },
+    {
+      "id": "RegressionAnalysis回归分析",
+      "name_cn": "RegressionAnalysis回归分析",
+      "name_en": "Regression Analysis",
+      "description": "回归分析，研究变量间相关关系的统计方法，用于预测和因果分析。",
+      "tags": [
+        "回归",
+        "拟合",
+        "预测",
+        "相关关系",
+        "统计"
+      ],
+      "applicable_scenarios": [
+        "趋势预测",
+        "因素分析",
+        "因果关系推断",
+        "数据拟合"
+      ],
+      "mathematical_model": "线性回归: y=Xβ+ε, β=(X^T·X)^(-1)·X^T·y; 多项式回归: y=β_0+β_1·x+...+β_n·x^n",
+      "advantages": [
+        "解释性强",
+        "计算简单",
+        "理论基础扎实"
+      ],
+      "limitations": [
+        "假设线性关系",
+        "对异常值敏感",
+        "多重共线性问题"
+      ],
+      "subtypes": {},
+      "source_files": [
+        "RegressionAnalysis回归分析/func.m",
+        "RegressionAnalysis回归分析/unlinear_regression.m",
+        "RegressionAnalysis回归分析/linear_regression.m",
+        "RegressionAnalysis回归分析/muti_indeterminate_2_degree_poly.m",
+        "RegressionAnalysis回归分析/stepwise_regression.m",
+        "RegressionAnalysis回归分析/one_indeterminate_poly.m"
+      ],
+      "code_snippets": [
+        {
+          "filename": "func.m",
+          "path": "RegressionAnalysis回归分析/func.m",
+          "snippet": "function [ yhat ] = func( beta, x )\n%FUNC ڷԻعģͺ\n%   ˴ʾϸ˵\nyhat = (beta(4) * x(:, 2) - x(:, 3) / beta(5)) ./ (1 + beta(1) * x(:, 1)+ ...\n    beta(2) * x(:, 2) + beta(3) * x(:, 3));\n\nend\n\n",
+          "language": "matlab"
+        },
+        {
+          "filename": "unlinear_regression.m",
+          "path": "RegressionAnalysis回归分析/unlinear_regression.m",
+          "snippet": "%% Իع\nclc, clear\n\nx0 = [1  8.55  470  300  10\n    2  3.79  285  80  10\n    3  4.82  470  300  120\n    4  0.02  470  300  120\n    5  2.75  470    80   10\n    6 14.39  100  190  10\n    7  2.54   100   80   65\n    8  4.35   470  190  65\n    9    13  100  300  54\n    10  8.5  100  300  120\n    11  0.05  100  80  120\n    12  11.32  285  300  10\n    13  3.13  285  190  120];\n\nx = x0(:, 3:5);\ny = x0(:, 2);\n\n% ĳʼԤֵ\nbeta = [0.1, 0.05, 0.02, 1, 2]';\n\n[betahat, r, j] = nlinfit(x, y, @func, beta);\nbetaci = nlparci(betahat, r, 'jacobian', j);\n% عϵԼ\nbetaa = [betahat, betaci];\n% yԤֵԼ뾶\n[yhat, delta] = nlpredci(@func, x, betahat, r, 'jacobian', j);\n\n% ƽʽ\nnlintool(x, y, 'func', beta)",
+          "language": "matlab"
+        },
+        {
+          "filename": "linear_regression.m",
+          "path": "RegressionAnalysis回归分析/linear_regression.m",
+          "snippet": "%% һԪԪԻع\n\n%x = input('ҪԤһ:([0.10 0.11 0.12 ...)\\n');\n% \nx1 = [0.1:0.01:0.18]';\n%y = input('ҪԤһ:([0.10 0.11 0.12 ...)\\n');\n% \ny = [42, 41.5, 45.0, 45.5, 45.0, 47.5, 49.0, 55.0, 50.0]';\nplot(x1, y, '+')  % ۲ǷΪģ\n\nx = [ones(9, 1), x1];\n[b, bint, r, rint, stats] = regress(y, x);\nb                         %عϵֵ\nbint                    %عϵ\nstats                   %عϵͳͳжϵ\nrcoplot(r, rint)  %вв\n%--rcoplotĻƽ޳쳣֮ɻعϵͳ--%",
+          "language": "matlab"
+        },
+        {
+          "filename": "muti_indeterminate_2_degree_poly.m",
+          "path": "RegressionAnalysis回归分析/muti_indeterminate_2_degree_poly.m",
+          "snippet": "%% Ԫʽع\n% rstool(x, y, model, alpha) \n% model֣ԣΣ棬ȫ\nclc, clear\n\nx1 = [120 140 190 130 155 175 125 145 180 150]';\nx2 = [100 110    90 150 210 150 250 270 300 250]';\ny   = [102  100 120  77 46  93  26  69  65  85]';\n\nx = [x1 x2];\nrstool(x, y, 'purequadratic')",
+          "language": "matlab"
+        },
+        {
+          "filename": "stepwise_regression.m",
+          "path": "RegressionAnalysis回归分析/stepwise_regression.m",
+          "snippet": "%% 𲽻عģ\nclc, clear\n\nx0 = [1  8.55  470  300  10\n    2  3.79  285  80  10\n    3  4.82  470  300  120\n    4  0.02  470  300  120\n    5  2.75  470    80   10\n    6 14.39  100  190  10\n    7  2.54   100   80   65\n    8  4.35   470  190  65\n    9    13  100  300  54\n    10  8.5  100  300  120\n    11  0.05  100  80  120\n    12  11.32  285  300  10\n    13  3.13  285  190  120];\n\nx = x0(:, 3:5);\ny = x0(:, 2);\n\nstepwise(x, y)",
+          "language": "matlab"
+        }
+      ]
+    },
+    {
+      "id": "TimeSeries时间序列",
+      "name_cn": "TimeSeries时间序列",
+      "name_en": "Time Series Analysis",
+      "description": "时间序列分析，研究按时间顺序排列的数据序列，揭示发展趋势和周期性规律。",
+      "tags": [
+        "时间序列",
+        "预测",
+        "趋势",
+        "周期",
+        "平稳性"
+      ],
+      "applicable_scenarios": [
+        "经济指标预测",
+        "股票价格预测",
+        "销售量预测",
+        "气象预测",
+        "人口增长预测"
+      ],
+      "mathematical_model": "移动平均: F_{t+1}=(Y_t+Y_{t-1}+...+Y_{t-N+1})/N; 指数平滑: S_t=α·Y_t+(1-α)·S_{t-1}",
+      "advantages": [
+        "方法简单直观",
+        "数据需求少",
+        "适合短期预测"
+      ],
+      "limitations": [
+        "难以捕捉突变",
+        "长期预测精度下降",
+        "忽略因果关系"
+      ],
+      "subtypes": {
+        "移动平均法": "用最近N期平均值作为预测值，平滑随机波动",
+        "指数平滑法": "赋予近期数据更大权重，一阶/二阶/三阶(Holt-Winters)",
+        "趋势外推预测法": "拟合趋势曲线并外推，线性/指数/多项式趋势",
+        "自适应滤波法": "动态调整权重，使预测误差最小化"
+      },
+      "source_files": [
+        "TimeSeries时间序列函数/移动平均法/trend_moving_average.m",
+        "TimeSeries时间序列函数/移动平均法/simple_moving_average.m",
+        "TimeSeries时间序列函数/移动平均法/weighting_moving_average.m",
+        "TimeSeries时间序列函数/指数平滑法/single_exponential _smoothing.m",
+        "TimeSeries时间序列函数/指数平滑法/second_exponential_smoothing.m",
+        "TimeSeries时间序列函数/指数平滑法/third_exponential_smoothing.m",
+        "TimeSeries时间序列函数/自适应滤波法/main.m",
+        "TimeSeries时间序列函数/趋势外推预测法/logistic_curve.m",
+        "TimeSeries时间序列函数/趋势外推预测法/predict1.m",
+        "TimeSeries时间序列函数/趋势外推预测法/compertz_curve.m",
+        "TimeSeries时间序列函数/趋势外推预测法/predict3.m",
+        "TimeSeries时间序列函数/趋势外推预测法/modified_exponential_curve.m",
+        "TimeSeries时间序列函数/趋势外推预测法/predict2.m"
+      ],
+      "code_snippets": [
+        {
+          "filename": "trend_moving_average.m",
+          "path": "TimeSeries时间序列函数/移动平均法/trend_moving_average.m",
+          "snippet": "%% ƶƽ\n% һƶƽĻһƶƽ\nclc, clear\n\ny = [676 825 774 716 940 1159 1384 1524 1668 1688 1958 2031 2234 2566 2820 3006 3093 3277 3514 3770 4107];\n\n% һƶƽ\nm1 = length(y);\nn = 6;    % ƶƽ\nfor i = 1:m1-n+1\n    yhat1(i) = sum(y(i:i+n-1))/n;\nend\n\n% ڶƶƽ\nm2 = length(yhat1);\nfor i = 1:m2-n+1\n    yhat2(i) = sum(yhat1(i:i+n-1))/n;\nend\n\nplot(1:m1, y, '*');\n% ƽϵ\nat = 2*yhat1(end) - yhat2(end);\nbt = 2*(yhat1(end)-yhat2(end)) / (n-1);\n\n% Ԥֵ\ny_predict1 = at + bt;\ny_predict2 = at + 2*bt;",
+          "language": "matlab"
+        },
+        {
+          "filename": "simple_moving_average.m",
+          "path": "TimeSeries时间序列函数/移动平均法/simple_moving_average.m",
+          "snippet": "%% ƶƽ\nclc, clear\n\ny = [533.8 574.6 606.9 649.8 705.1 772.0 816.4 892.7 963.9 1015.1 1102.7];\nm = length(y);\nn = [4,5];    % nλƶƽѡȡ45ֱһ\nfor i = 1:length(n)\n    for j = 1:m-n(i)+1\n        yhat{i}(j) = sum(y(j:j+n(i)-1))/n(i);\n    end\n    y_predict(i) = yhat{i}(end);  % Ԥֵ\n    s(i) = sqrt(mean( (y(n(i)+1:m) - yhat{i}(1:end-1)).^2 )); % Ԥı׼\nend\n",
+          "language": "matlab"
+        },
+        {
+          "filename": "weighting_moving_average.m",
+          "path": "TimeSeries时间序列函数/移动平均法/weighting_moving_average.m",
+          "snippet": "%% Ȩƶƽ\nclc ,clear\n\ny = [6.35 6.20 6.22 6.66 7.15 7.89 8.72 8.94 9.28 9.80];\nw = [1/6; 2/6; 3/6];   % ȨȨ\nm = length(y);\nn = 3;                 % ƶƽ\nfor i = 1:m-n+1\n    yhat(i) = y(i:i+n-1)*w;\nend\nerr = abs(y(n+1:m)-yhat(1:end-1))./y(n+1:m);  % (ʼû)\nT_err = 1 - sum(yhat(1:end-1))/sum(y(n+1:m)); % ܵ\ny_predict = yhat(end) / (1-T_err);            % ܵԤֵ",
+          "language": "matlab"
+        },
+        {
+          "filename": "single_exponential _smoothing.m",
+          "path": "TimeSeries时间序列函数/指数平滑法/single_exponential _smoothing.m",
+          "snippet": "%% һָƽ\nclc, clear\n\nyt = [50 52 47 51 49 48 51 40 48 52 51 59];\nn = length(yt);\nalpha = [0.2 0.5 0.8];   % ѡȡȨϵȽ\nm = length(alpha);\nyhat(1,1:m) = (yt(1)+yt(2)) / 2;  % ʼֵ\nfor i = 2:n\n    yhat(i,:) = alpha*yt(i-1) + (1-alpha).*yhat(i-1,:);\nend\n\nerr = sqrt(mean((repmat(yt',1,m)-yhat).^2));\ny_predict = alpha*yt(n) + (1-alpha).*yhat(n,:);",
+          "language": "matlab"
+        },
+        {
+          "filename": "second_exponential_smoothing.m",
+          "path": "TimeSeries时间序列函数/指数平滑法/second_exponential_smoothing.m",
+          "snippet": "%% ָƽ\nclc, clear\n\nyt = [676 825 774 716 940 1159 1384 1524 1668 1688 1958 2031 2234 2566 2820 3006 3093 3277 3514 3770 4107]';\nn = length(yt);\nalpha = 0.3;\nst1(1) = yt(1); st2(1) = yt(1);  % ʼֵѡʵʳʼֵ\nfor i = 2:n\n    st1(i) = alpha*yt(i) + (1-alpha)*st1(i-1);\n    st2(i) = alpha*st1(i) + (1-alpha)*st2(i-1);\nend\n\nat = 2*st1 - st2;\nbt = alpha/(1-alpha)*(st1-st2);\nyhat = at + bt;\ny_predict = alpha*yt(n) + (1-alpha)*yhat(n);\n\nx = 1965:1985;\nplot(x, yt, '*', x, yhat);",
+          "language": "matlab"
+        }
+      ]
+    }
+  ]
+}

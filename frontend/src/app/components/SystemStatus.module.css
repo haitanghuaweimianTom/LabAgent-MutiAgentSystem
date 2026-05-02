@@ -1,0 +1,85 @@
+.container {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 14px;
+  padding: 1.2rem;
+  margin-bottom: 1rem;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.title { font-size: 1rem; color: #fff; font-weight: 600; }
+.version { font-size: 0.8rem; color: #888; background: rgba(255,255,255,0.06); padding: 0.2rem 0.5rem; border-radius: 6px; }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.5rem;
+  background: rgba(0,0,0,0.2);
+  border-radius: 8px;
+}
+
+.label { font-size: 0.72rem; color: #666; font-weight: 600; }
+.value { font-size: 0.85rem; color: #ccc; }
+.valueSmall { font-size: 0.75rem; color: #888; word-break: break-all; }
+
+.providersTitle { font-size: 0.85rem; color: #aaa; font-weight: 600; margin-bottom: 0.5rem; }
+
+.providers { display: flex; flex-direction: column; gap: 0.4rem; }
+
+.provider {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  background: rgba(0,0,0,0.15);
+  border-radius: 6px;
+  font-size: 0.82rem;
+}
+
+.dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.dotOn { background: #2ecc71; box-shadow: 0 0 6px rgba(46,204,113,0.4); }
+.dotOff { background: #e74c3c; box-shadow: 0 0 6px rgba(231,76,60,0.4); }
+
+.providerName { color: #ccc; font-weight: 500; min-width: 120px; }
+.providerDetail { color: #777; font-size: 0.75rem; }
+
+.loading { text-align: center; padding: 1rem; color: #888; font-size: 0.9rem; }
+.error { text-align: center; padding: 1rem; color: #e74c3c; font-size: 0.9rem; }
+.errorHint { text-align: center; padding: 0.5rem; color: #888; font-size: 0.82rem; }
+.errorHint code { background: rgba(255,255,255,0.06); padding: 0.15rem 0.4rem; border-radius: 4px; color: #2ecc71; font-family: monospace; font-size: 0.78rem; }
+
+.hint {
+  margin-top: 0.8rem;
+  padding: 0.6rem 0.8rem;
+  background: rgba(52,152,219,0.08);
+  border: 1px solid rgba(52,152,219,0.2);
+  border-radius: 8px;
+  font-size: 0.78rem;
+  color: #aaa;
+  line-height: 1.5;
+}
+
+.hint code {
+  display: block;
+  margin-top: 0.4rem;
+  background: rgba(0,0,0,0.3);
+  padding: 0.3rem 0.5rem;
+  border-radius: 4px;
+  color: #2ecc71;
+  font-family: monospace;
+  font-size: 0.75rem;
+}

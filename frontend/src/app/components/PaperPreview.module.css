@@ -1,0 +1,136 @@
+.container {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 14px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: 700px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.8rem 1rem;
+  background: rgba(0,0,0,0.2);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.title { font-size: 0.95rem; color: #fff; font-weight: 600; }
+
+.tabs { display: flex; gap: 0.3rem; }
+
+.tab {
+  padding: 0.3rem 0.8rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04);
+  color: #888;
+  transition: all 0.2s;
+}
+
+.tab:hover { background: rgba(255,255,255,0.08); color: #ddd; }
+
+.tabActive {
+  background: rgba(52,152,219,0.15);
+  border-color: rgba(52,152,219,0.4);
+  color: #3498db;
+}
+
+.content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+  background: rgba(0,0,0,0.15);
+}
+
+.empty { text-align: center; padding: 3rem; color: #555; font-size: 0.9rem; }
+
+.abstractBox {
+  background: rgba(52,152,219,0.06);
+  border: 1px solid rgba(52,152,219,0.15);
+  border-radius: 10px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.abstractTitle { font-size: 0.9rem; color: #3498db; font-weight: 700; margin-bottom: 0.5rem; }
+.abstractText { font-size: 0.85rem; color: #ccc; line-height: 1.7; }
+.keywords { margin-top: 0.5rem; font-size: 0.8rem; color: #888; }
+.keywordsLabel { color: #aaa; font-weight: 600; }
+
+.markdownBody {
+  font-size: 0.88rem;
+  line-height: 1.8;
+  color: #ddd;
+}
+
+.markdownBody :global(h2) { font-size: 1.1rem; color: #fff; margin: 1.2rem 0 0.6rem; padding-bottom: 0.3rem; border-bottom: 1px solid rgba(255,255,255,0.08); }
+.markdownBody :global(h3) { font-size: 1rem; color: #eee; margin: 1rem 0 0.5rem; }
+.markdownBody :global(h4) { font-size: 0.92rem; color: #ddd; margin: 0.8rem 0 0.4rem; }
+.markdownBody :global(p) { margin-bottom: 0.6rem; }
+.markdownBody :global(strong) { color: #fff; }
+.markdownBody :global(em) { color: #bbb; }
+.markdownBody :global(pre) { background: rgba(0,0,0,0.4); padding: 0.8rem; border-radius: 8px; overflow-x: auto; margin: 0.6rem 0; }
+.markdownBody :global(code) { font-family: 'Courier New', monospace; font-size: 0.82rem; }
+.markdownBody :global(img) { max-width: 100%; border-radius: 6px; margin: 0.6rem 0; }
+.markdownBody :global(a) { color: #3498db; text-decoration: none; }
+.markdownBody :global(a:hover) { text-decoration: underline; }
+.markdownBody :global(li) { margin-left: 1rem; margin-bottom: 0.3rem; color: #bbb; }
+.markdownBody :global(table) { width: 100%; border-collapse: collapse; margin: 0.6rem 0; font-size: 0.82rem; }
+.markdownBody :global(td), .markdownBody :global(th) { border: 1px solid rgba(255,255,255,0.1); padding: 0.4rem 0.6rem; }
+.markdownBody :global(th) { background: rgba(255,255,255,0.05); color: #fff; }
+.markdownBody :global(td) { color: #ccc; }
+
+.mathBlock {
+  background: rgba(0,0,0,0.2);
+  padding: 0.8rem;
+  border-radius: 8px;
+  margin: 0.6rem 0;
+  text-align: center;
+  color: #ddd;
+  font-family: 'Times New Roman', serif;
+  font-size: 0.95rem;
+  overflow-x: auto;
+}
+
+.mathInline { color: #ddd; font-family: 'Times New Roman', serif; }
+
+.latexCode {
+  background: rgba(0,0,0,0.4);
+  padding: 1rem;
+  border-radius: 8px;
+  color: #a0e0a0;
+  font-family: 'Courier New', monospace;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.codeBlock {
+  background: rgba(0,0,0,0.4);
+  padding: 0.8rem;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 0.6rem 0;
+}
+
+.inlineCode {
+  background: rgba(255,255,255,0.06);
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  color: #e0c080;
+  font-family: 'Courier New', monospace;
+  font-size: 0.82rem;
+}
+
+.img { max-width: 100%; border-radius: 6px; margin: 0.6rem 0; }
+.link { color: #3498db; text-decoration: none; }
+.link:hover { text-decoration: underline; }
+.li { margin-left: 1rem; margin-bottom: 0.3rem; color: #bbb; }
+.tableWrapper { overflow-x: auto; margin: 0.6rem 0; }
+.table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }

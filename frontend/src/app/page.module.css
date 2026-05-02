@@ -7,211 +7,87 @@
   border-bottom: 1px solid rgba(255,255,255,0.08);
 }
 
-.headerTitle { font-size: 2rem; color: #fff; margin-bottom: 0.3rem; }
+.headerTitle { font-size: 1.8rem; color: #fff; margin-bottom: 0.3rem; font-weight: 700; }
+.subtitle { color: #888; font-size: 0.9rem; }
 
-.subtitle { color: #888; font-size: 0.95rem; }
-
-.tabs {
+/* Navigation */
+.nav {
   display: flex;
   justify-content: center;
-  gap: 0.4rem;
+  gap: 0.5rem;
   padding: 1rem;
   background: rgba(0,0,0,0.2);
   border-bottom: 1px solid rgba(255,255,255,0.06);
   position: sticky;
   top: 0;
   z-index: 10;
+  flex-wrap: wrap;
 }
 
-.tab {
-  padding: 0.5rem 1.5rem;
-  border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 8px;
+.navItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.5rem 1.2rem;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
   background: rgba(255,255,255,0.04);
   color: #aaa;
   cursor: pointer;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   transition: all 0.2s;
+  position: relative;
+  min-width: 80px;
 }
 
-.tab:hover { background: rgba(255,255,255,0.1); color: #fff; }
+.navItem:hover { background: rgba(255,255,255,0.08); color: #fff; }
 
-.active {
-  background: rgba(255,255,255,0.12);
-  color: #fff;
-  border-color: rgba(255,255,255,0.25);
+.navItemActive {
+  background: rgba(52,152,219,0.12) !important;
+  border-color: rgba(52,152,219,0.4) !important;
+  color: #3498db !important;
 }
 
-.container { max-width: 960px; margin: 0 auto; padding: 1.5rem 1rem; }
+.navLabel { font-weight: 600; font-size: 0.9rem; }
+.navDesc { font-size: 0.72rem; color: #666; }
+.navItemActive .navDesc { color: rgba(52,152,219,0.7); }
 
-.card {
+.navDot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 8px;
+  height: 8px;
+  background: #e74c3c;
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(231,76,60,0.4); }
+  70% { box-shadow: 0 0 0 6px rgba(231,76,60,0); }
+  100% { box-shadow: 0 0 0 0 rgba(231,76,60,0); }
+}
+
+/* Container */
+.container { max-width: 1100px; margin: 0 auto; padding: 1.5rem 1rem; }
+
+.dashboard { display: flex; flex-direction: column; gap: 1rem; }
+
+.generateLayout { display: flex; flex-direction: column; gap: 1rem; }
+
+/* Card reused styles */
+.settingsCard {
   background: rgba(255,255,255,0.05);
   border: 1px solid rgba(255,255,255,0.1);
   border-radius: 14px;
   padding: 1.5rem;
-  margin-bottom: 1.5rem;
 }
 
-.cardTitle { font-size: 1.2rem; color: #fff; margin-bottom: 1rem; }
+.cardTitle { font-size: 1.2rem; color: #fff; margin-bottom: 1rem; display: block; font-weight: 600; }
 
-/* OCR */
-.ocrRow { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
-
-.ocrBtn {
-  display: inline-flex; align-items: center; gap: 0.5rem;
-  padding: 0.6rem 1.2rem;
-  background: linear-gradient(135deg, #e74c3c, #c0392b);
-  color: #fff; border-radius: 8px; cursor: pointer;
-  font-size: 0.9rem; font-weight: 600; transition: transform 0.2s;
-}
-
-.ocrBtn:hover { transform: translateY(-1px); }
-.ocrBtn:disabled { opacity: 0.6; cursor: not-allowed; }
-
-.ocrHint { color: #888; font-size: 0.85rem; }
-
-/* 文本框 */
-.textarea {
-  width: 100%; padding: 1rem; margin-bottom: 1rem;
-  background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 8px; color: #e0e0e0; font-size: 0.95rem;
-  font-family: inherit; resize: vertical; line-height: 1.6;
-}
-
-.textarea:focus { outline: none; border-color: #3498db; }
-.textarea::placeholder { color: #555; }
-
-/* 进度条 */
-.progressBar {
-  height: 5px; background: rgba(255,255,255,0.1);
-  border-radius: 3px; margin-bottom: 1rem; overflow: hidden;
-}
-
-.progressFill {
-  height: 100%; background: linear-gradient(90deg, #3498db, #2ecc71);
-  transition: width 0.3s ease; border-radius: 3px;
-}
-
-/* 按钮 */
-.btnRow { display: flex; gap: 0.8rem; align-items: center; }
-
-.submitBtn {
-  padding: 0.8rem 2rem;
-  background: linear-gradient(135deg, #3498db, #2ecc71);
-  color: #fff; border: none; border-radius: 8px;
-  font-size: 1rem; font-weight: 600; cursor: pointer;
-  transition: transform 0.2s, opacity 0.2s;
-}
-
-.submitBtn:hover:not(:disabled) { transform: translateY(-2px); }
-.submitBtn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-.secondaryBtn {
-  padding: 0.8rem 1.5rem; background: rgba(255,255,255,0.08);
-  color: #ccc; border: 1px solid rgba(255,255,255,0.15);
-  border-radius: 8px; cursor: pointer; font-size: 1rem;
-}
-
-.secondaryBtn:hover { background: rgba(255,255,255,0.12); }
-
-.taskInfo {
-  display: flex; gap: 1.5rem; margin-top: 1rem;
-  font-size: 0.82rem; color: #888; padding: 0.8rem;
-  background: rgba(0,0,0,0.2); border-radius: 6px;
-}
-
-/* 聊天室 */
-.chatHeader { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem; }
-.chatHeaderTitle { font-size: 1.2rem; color: #fff; margin-bottom: 0; }
-
-.teamBadges { display: flex; gap: 0.4rem; flex-wrap: wrap; }
-
-.badge {
-  padding: 0.2rem 0.6rem; border-radius: 12px; font-size: 0.72rem;
-  color: #fff; font-weight: 600; white-space: nowrap;
-}
-
-.messages {
-  height: 520px; overflow-y: auto; padding: 0.8rem;
-  background: rgba(0,0,0,0.2); border-radius: 8px; margin-bottom: 0.8rem;
-  scroll-behavior: smooth;
-}
-
-.emptyState { text-align: center; padding: 3rem; color: #555; font-size: 0.9rem; }
-
-.msg {
-  padding: 0.7rem 0.9rem; margin-bottom: 0.5rem; border-radius: 8px;
-  border-left: 3px solid #666; background: rgba(255,255,255,0.02);
-}
-
-.msgResult {
-  padding: 0.8rem; margin-bottom: 0.6rem; border-radius: 10px;
-  border-left: 4px solid #3498db; background: rgba(52,152,219,0.05);
-  border: 1px solid rgba(52,152,219,0.15);
-}
-
-.msgHeader { display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-size: 0.82rem; align-items: center; }
-.msgTime { color: #555; font-size: 0.75rem; }
-.msgContent { font-size: 0.88rem; line-height: 1.6; white-space: pre-wrap; color: #ccc; }
-
-.msgContentResult { font-size: 0.85rem; line-height: 1.7; white-space: pre-wrap; color: #ddd; font-family: 'Courier New', monospace; }
-
-.resultBadge {
-  font-size: 0.7rem; padding: 0.1rem 0.5rem;
-  background: rgba(52,152,219,0.2); color: #3498db;
-  border-radius: 10px; font-weight: 600;
-}
-
-.listItem { padding-left: 0.5rem; color: #aaa; }
-.boldLine { font-weight: 700; color: #fff; margin-top: 0.3rem; }
-
-/* 文件 */
-.uploadRow { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
-
-.uploadBtn {
-  display: inline-block; padding: 0.7rem 1.5rem;
-  background: linear-gradient(135deg, #9b59b6, #8e44ad);
-  color: #fff; border-radius: 8px; cursor: pointer;
-  font-size: 0.95rem; transition: transform 0.2s;
-}
-
-.uploadBtn:hover { transform: translateY(-1px); }
-.uploadBtn:disabled { opacity: 0.6; cursor: not-allowed; }
-
-.hint { color: #777; font-size: 0.85rem; }
-
-.fileListTitle { font-size: 0.95rem; color: #aaa; margin-bottom: 0.8rem; }
-
-.fileItem {
-  display: flex; align-items: center; gap: 0.8rem; padding: 0.8rem;
-  background: rgba(0,0,0,0.2); border-radius: 8px; margin-bottom: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.fileIcon {
-  font-size: 0.75rem; padding: 0.2rem 0.5rem; background: rgba(155,89,182,0.2);
-  border-radius: 4px; color: #9b59b6; font-weight: 600; min-width: 50px; text-align: center;
-}
-
-.fileInfo { flex: 1; }
-.fileName { display: block; font-size: 0.9rem; color: #ddd; }
-.fileSize { display: block; font-size: 0.78rem; color: #777; margin-top: 0.2rem; }
-
-.insights { display: flex; gap: 0.3rem; flex-wrap: wrap; }
-.insightTag { font-size: 0.72rem; padding: 0.15rem 0.5rem; background: rgba(46,204,113,0.1); border-radius: 10px; color: #2ecc71; }
-
-.deleteBtn {
-  padding: 0.3rem 0.6rem; background: rgba(231,76,60,0.15);
-  color: #e74c3c; border: 1px solid rgba(231,76,60,0.3);
-  border-radius: 6px; cursor: pointer; font-size: 0.8rem;
-  transition: all 0.2s; margin-left: 0.5rem; flex-shrink: 0;
-}
-
-.deleteBtn:hover { background: rgba(231,76,60,0.3); }
-
-/* 设置 */
 .settingsSection { margin-bottom: 1.2rem; }
-
 .settingsLabel { font-size: 0.95rem; color: #ddd; margin-bottom: 0.7rem; font-weight: 600; }
 
 .apiKeyRow { display: flex; gap: 0.8rem; align-items: center; margin-bottom: 0.5rem; }
@@ -227,24 +103,22 @@
 
 .apiKeyHint { font-size: 0.8rem; color: #777; margin-bottom: 0.8rem; }
 
+.btnRow { display: flex; gap: 0.8rem; align-items: center; }
+
+.submitBtn {
+  padding: 0.8rem 2rem;
+  background: linear-gradient(135deg, #3498db, #2ecc71);
+  color: #fff; border: none; border-radius: 8px;
+  font-size: 1rem; font-weight: 600; cursor: pointer;
+  transition: transform 0.2s, opacity 0.2s;
+}
+
+.submitBtn:hover:not(:disabled) { transform: translateY(-2px); }
+.submitBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.settingsMsg { font-size: 0.85rem; margin-top: 0.5rem; }
+
 .divider { height: 1px; background: rgba(255,255,255,0.06); margin: 1.5rem 0; }
-
-.agentList { display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 1.5rem; }
-
-.agentItem {
-  display: flex; align-items: center; gap: 0.8rem; padding: 0.7rem;
-  background: rgba(0,0,0,0.2); border-radius: 8px;
-}
-
-.agentName { flex: 1; font-size: 0.82rem; color: #888; }
-
-.modelInput {
-  padding: 0.4rem 0.8rem; background: rgba(0,0,0,0.3);
-  border: 1px solid rgba(255,255,255,0.12); border-radius: 6px;
-  color: #e0e0e0; font-size: 0.88rem; width: 200px;
-}
-
-.modelInput:focus { outline: none; border-color: #3498db; }
 
 .noteBox {
   padding: 1rem; background: rgba(0,0,0,0.2); border-radius: 8px;
@@ -253,436 +127,3 @@
 
 .noteBox strong { color: #fff; }
 .noteBox code { background: rgba(255,255,255,0.06); padding: 0.1rem 0.4rem; border-radius: 4px; color: #2ecc71; font-family: monospace; font-size: 0.82rem; }
-
-/* ========== 历史任务 ========== */
-.historyLayout {
-  display: grid;
-  grid-template-columns: 300px 1fr;
-  gap: 1rem;
-  min-height: 600px;
-}
-
-@media (max-width: 700px) {
-  .historyLayout { grid-template-columns: 1fr; }
-}
-
-.historyListPanel {
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 14px;
-  padding: 1rem;
-  overflow-y: auto;
-  max-height: 700px;
-}
-
-.historyListHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
-}
-
-.historyItem {
-  padding: 0.8rem;
-  border-radius: 10px;
-  border: 1px solid rgba(255,255,255,0.08);
-  margin-bottom: 0.6rem;
-  cursor: pointer;
-  transition: all 0.2s;
-  background: rgba(0,0,0,0.2);
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-}
-
-.historyItem:hover {
-  background: rgba(255,255,255,0.06);
-  border-color: rgba(255,255,255,0.15);
-}
-
-.historyItemActive {
-  background: rgba(52,152,219,0.08) !important;
-  border-color: rgba(52,152,219,0.4) !important;
-}
-
-.historyItemTop {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.4rem;
-  flex: 1;
-}
-
-.historyItemTime {
-  font-size: 0.72rem;
-  color: #555;
-}
-
-.historyItemPreview {
-  font-size: 0.8rem;
-  color: #888;
-  line-height: 1.5;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  margin-bottom: 0.4rem;
-}
-
-.historyItemMeta {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-  font-size: 0.72rem;
-  color: #666;
-}
-
-.historyDeleteBtn {
-  margin-left: auto;
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 0.8rem;
-  opacity: 0.3;
-  transition: opacity 0.2s;
-  padding: 0.2rem;
-}
-
-.historyDeleteBtn:hover { opacity: 1; }
-
-.historyItemCheck {
-  display: inline-flex;
-  align-items: center;
-  margin-right: 0.5rem;
-  vertical-align: middle;
-}
-
-.historyItemCheck input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  cursor: pointer;
-  accent-color: #3498db;
-}
-
-.historyHeaderBtns {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-}
-
-.batchDeleteBtn {
-  padding: 0.35rem 0.9rem;
-  background: rgba(231,76,60,0.15);
-  border: 1px solid rgba(231,76,60,0.35);
-  border-radius: 8px;
-  color: #e74c3c;
-  font-size: 0.82rem;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.batchDeleteBtn:hover { background: rgba(231,76,60,0.25); }
-
-.exportBtn {
-  padding: 0.35rem 0.9rem;
-  background: rgba(46,204,113,0.12);
-  border: 1px solid rgba(46,204,113,0.3);
-  border-radius: 6px;
-  color: #2ecc71;
-  font-size: 0.78rem;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.exportBtn:hover { background: rgba(46,204,113,0.3); }
-
-.pauseBtn {
-  padding: 0.3rem 0.8rem;
-  background: rgba(243,156,18,0.3);
-  border: 1px solid rgba(243,156,18,0.5);
-  border-radius: 6px;
-  color: #f39c12;
-  font-size: 0.78rem;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.pauseBtn:hover { background: rgba(243,156,18,0.5); }
-
-.resumeBtn {
-  padding: 0.3rem 0.8rem;
-  background: rgba(46,204,113,0.3);
-  border: 1px solid rgba(46,204,113,0.5);
-  border-radius: 6px;
-  color: #2ecc71;
-  font-size: 0.78rem;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.resumeBtn:hover { background: rgba(46,204,113,0.5); }
-
-.pauseEditor {
-  background: rgba(243,156,18,0.08);
-  border: 1px solid rgba(243,156,18,0.3);
-  border-radius: 10px;
-  padding: 1rem;
-  margin-bottom: 0.8rem;
-}
-.pauseEditorTitle { color: #f39c12; font-weight: bold; margin-bottom: 0.5rem; }
-.pauseEditorHint { color: #888; font-size: 0.78rem; margin-bottom: 0.8rem; }
-.pauseEditSection { margin-bottom: 0.8rem; }
-.pauseEditLabel { color: #f39c12; font-size: 0.82rem; margin-bottom: 0.3rem; font-weight: bold; }
-.pauseEditTextarea {
-  width: 100%;
-  background: rgba(0,0,0,0.3);
-  border: 1px solid rgba(243,156,18,0.3);
-  border-radius: 6px;
-  color: #ccc;
-  font-family: monospace;
-  font-size: 0.75rem;
-  padding: 0.5rem;
-  resize: vertical;
-}
-
-.refreshBtn {
-  padding: 0.3rem 0.8rem;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 6px;
-  color: #aaa;
-  font-size: 0.78rem;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.refreshBtn:hover { background: rgba(255,255,255,0.1); }
-.refreshBtn:disabled { opacity: 0.4; cursor: not-allowed; }
-
-/* ========== 任务详情面板 ========== */
-.historyDetailPanel {
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 14px;
-  padding: 1rem;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.detailHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.detailTabs {
-  display: flex;
-  gap: 0.3rem;
-}
-
-.detailTab, .detailTabActive {
-  padding: 0.4rem 0.8rem;
-  border-radius: 6px;
-  font-size: 0.82rem;
-  cursor: pointer;
-  transition: all 0.2s;
-  border: 1px solid rgba(255,255,255,0.1);
-  background: rgba(255,255,255,0.04);
-  color: #888;
-}
-
-.detailTab:hover { background: rgba(255,255,255,0.08); color: #ddd; }
-
-.detailTabActive {
-  background: rgba(52,152,219,0.15);
-  border-color: rgba(52,152,219,0.4);
-  color: #3498db;
-}
-
-.detailMessages {
-  flex: 1;
-  overflow-y: auto;
-  max-height: 580px;
-  padding: 0.5rem;
-  background: rgba(0,0,0,0.2);
-  border-radius: 8px;
-}
-
-/* ========== 状态徽章 ========== */
-.statusBadge {
-  font-size: 0.72rem;
-  padding: 0.15rem 0.5rem;
-  border-radius: 10px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.statusCompleted { background: rgba(46,204,113,0.15); color: #2ecc71; }
-.statusRunning { background: rgba(52,152,219,0.15); color: #3498db; }
-.statusFailed { background: rgba(231,76,60,0.15); color: #e74c3c; }
-.statusCancelled { background: rgba(243,156,18,0.15); color: #f39c12; }
-.statusUnknown { background: rgba(150,150,150,0.1); color: #888; }
-
-/* ========== 结果面板 ========== */
-.resultPanel {
-  overflow-y: auto;
-  max-height: 580px;
-  padding: 0.5rem;
-  background: rgba(0,0,0,0.2);
-  border-radius: 8px;
-}
-
-.resultSection { margin-bottom: 1.5rem; }
-
-.resultSectionTitle {
-  font-size: 0.88rem;
-  color: #3498db;
-  font-weight: 700;
-  margin-bottom: 0.5rem;
-  margin-top: 1rem;
-}
-
-.resultSection p { color: #ccc; font-size: 0.88rem; line-height: 1.6; }
-
-.codeTextarea {
-  width: 100%;
-  min-height: 200px;
-  background: rgba(0,0,0,0.4);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 8px;
-  color: #a0e0a0;
-  font-family: 'Courier New', monospace;
-  font-size: 0.78rem;
-  padding: 0.8rem;
-  resize: vertical;
-  line-height: 1.5;
-}
-
-.codeTextarea:focus { outline: none; border-color: #3498db; }
-
-.analysisCard {
-  background: rgba(0,0,0,0.3);
-  border-radius: 8px;
-  padding: 0.8rem;
-  margin-bottom: 0.5rem;
-  font-size: 0.85rem;
-  color: #bbb;
-  border: 1px solid rgba(255,255,255,0.06);
-}
-
-.analysisCard strong { color: #fff; }
-
-.completedAt {
-  text-align: center;
-  padding: 1rem;
-  color: #555;
-  font-size: 0.8rem;
-  border-top: 1px solid rgba(255,255,255,0.05);
-  margin-top: 1rem;
-}
-
-/* ========== 详情面板 ========== */
-.infoPanel {
-  overflow-y: auto;
-  max-height: 580px;
-  padding: 0.5rem;
-  background: rgba(0,0,0,0.2);
-  border-radius: 8px;
-}
-
-.infoRow {
-  display: flex;
-  gap: 1rem;
-  padding: 0.7rem 0;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
-  align-items: flex-start;
-  flex-wrap: wrap;
-}
-
-.infoLabel {
-  font-size: 0.78rem;
-  color: #555;
-  min-width: 80px;
-  font-weight: 600;
-}
-
-.infoValue {
-  font-size: 0.85rem;
-  color: #ccc;
-  flex: 1;
-  word-break: break-all;
-}
-
-.infoError {
-  font-size: 0.82rem;
-  color: #e74c3c;
-  flex: 1;
-  word-break: break-all;
-}
-
-/* 进度条文字 */
-.progressText {
-  position: absolute;
-  right: 0.5rem;
-  top: -1.5rem;
-  font-size: 0.75rem;
-  color: #3498db;
-  font-weight: 600;
-}
-
-/* 建模/求解模式选择器 */
-.modeSelector {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 0.8rem;
-  padding: 0.7rem 1rem;
-  background: rgba(0,0,0,0.2);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 10px;
-}
-.modeLabel {
-  font-size: 0.85rem;
-  color: #888;
-  font-weight: 500;
-  white-space: nowrap;
-  margin-right: 0.3rem;
-}
-.modeOption {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.85rem;
-  cursor: pointer;
-  padding: 0.4rem 0.9rem;
-  border-radius: 8px;
-  border: 1px solid rgba(255,255,255,0.1);
-  background: rgba(255,255,255,0.04);
-  color: #999;
-  transition: all 0.2s;
-}
-.modeOption:hover {
-  background: rgba(255,255,255,0.08);
-  color: #ccc;
-}
-.modeOption input[type="radio"] {
-  accent-color: #3498db;
-  cursor: pointer;
-  width: 14px;
-  height: 14px;
-}
-.modeSelected {
-  background: rgba(52,152,219,0.1);
-  border-color: rgba(52,152,219,0.4);
-  color: #3498db;
-}
-.modeHint {
-  font-size: 0.75rem;
-  color: #666;
-  margin-left: 0.2rem;
-}
-.modeSelected .modeHint { color: rgba(52,152,219,0.7); }
-
-.progressBar { position: relative; margin-bottom: 1rem; }

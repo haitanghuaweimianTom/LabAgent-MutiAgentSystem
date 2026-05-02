@@ -1,0 +1,89 @@
+.container {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 14px;
+  padding: 1.2rem;
+  margin-bottom: 1rem;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.8rem;
+}
+
+.title { font-size: 0.95rem; color: #fff; font-weight: 600; }
+.subtitle { font-size: 0.75rem; color: #888; }
+
+.list { display: flex; flex-direction: column; gap: 0.6rem; }
+
+.card {
+  background: rgba(0,0,0,0.2);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.8rem;
+  background: rgba(52,152,219,0.08);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.rank {
+  font-size: 0.75rem;
+  color: #3498db;
+  font-weight: 700;
+  background: rgba(52,152,219,0.15);
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+}
+
+.name { font-size: 0.9rem; color: #fff; font-weight: 600; }
+.nameEn { font-size: 0.75rem; color: #888; font-style: italic; }
+.score { margin-left: auto; font-size: 0.72rem; color: #2ecc71; font-weight: 600; }
+
+.cardBody { padding: 0.7rem 0.8rem; }
+
+.row { display: flex; gap: 0.5rem; margin-bottom: 0.4rem; align-items: flex-start; }
+.row:last-child { margin-bottom: 0; }
+
+.label {
+  font-size: 0.75rem;
+  color: #888;
+  font-weight: 600;
+  min-width: 60px;
+  flex-shrink: 0;
+}
+
+.text { font-size: 0.82rem; color: #bbb; line-height: 1.5; }
+.textMono { font-size: 0.8rem; color: #ccc; font-family: 'Courier New', monospace; line-height: 1.5; }
+
+.tags { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+
+.tag {
+  font-size: 0.72rem;
+  padding: 0.15rem 0.5rem;
+  background: rgba(155,89,182,0.15);
+  border-radius: 10px;
+  color: #bb8fce;
+}
+
+.rowInline {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.pros, .cons {
+  font-size: 0.78rem;
+  color: #aaa;
+}
+
+.prosLabel { color: #2ecc71; font-weight: 600; margin-right: 0.3rem; }
+.consLabel { color: #e74c3c; font-weight: 600; margin-right: 0.3rem; }

@@ -1,0 +1,81 @@
+.container {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 14px;
+  padding: 1.2rem;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.title { font-size: 1rem; color: #fff; font-weight: 600; }
+
+.uploadBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: linear-gradient(135deg, #9b59b6, #8e44ad);
+  color: #fff;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: transform 0.2s;
+}
+
+.uploadBtn:hover { transform: translateY(-1px); }
+.uploadBtn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.hint { color: #777; font-size: 0.8rem; margin-bottom: 1rem; }
+
+.empty { text-align: center; padding: 2rem; color: #555; font-size: 0.9rem; }
+
+.fileList { display: flex; flex-direction: column; gap: 0.5rem; }
+
+.fileItem {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.7rem;
+  background: rgba(0,0,0,0.2);
+  border-radius: 8px;
+  flex-wrap: wrap;
+}
+
+.fileIcon {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+  background: rgba(155,89,182,0.2);
+  border-radius: 4px;
+  color: #9b59b6;
+  font-weight: 600;
+  min-width: 50px;
+  text-align: center;
+}
+
+.fileInfo { flex: 1; }
+.fileName { display: block; font-size: 0.9rem; color: #ddd; }
+.fileSize { display: block; font-size: 0.78rem; color: #777; margin-top: 0.2rem; }
+
+.insights { display: flex; gap: 0.3rem; flex-wrap: wrap; }
+.insightTag { font-size: 0.72rem; padding: 0.15rem 0.5rem; background: rgba(46,204,113,0.1); border-radius: 10px; color: #2ecc71; }
+
+.deleteBtn {
+  padding: 0.3rem 0.6rem;
+  background: rgba(231,76,60,0.15);
+  color: #e74c3c;
+  border: 1px solid rgba(231,76,60,0.3);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: all 0.2s;
+  margin-left: 0.5rem;
+  flex-shrink: 0;
+}
+
+.deleteBtn:hover { background: rgba(231,76,60,0.3); }

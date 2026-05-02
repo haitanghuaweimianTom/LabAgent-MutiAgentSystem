@@ -1,0 +1,158 @@
+.container {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 14px;
+  padding: 1.2rem;
+  margin-bottom: 1rem;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.title { font-size: 1rem; color: #fff; font-weight: 600; }
+.summary { font-size: 0.8rem; color: #888; }
+
+.stages {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+  position: relative;
+}
+
+@media (max-width: 768px) {
+  .stages { grid-template-columns: 1fr; }
+}
+
+.stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.stageContent {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.connector {
+  position: absolute;
+  top: 18px;
+  left: -50%;
+  width: 100%;
+  height: 2px;
+  background: rgba(255,255,255,0.08);
+  z-index: 0;
+}
+
+.connectorActive {
+  background: linear-gradient(90deg, #2ecc71, #3498db);
+}
+
+.badge {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.8rem;
+  border-radius: 20px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04);
+  color: #888;
+  z-index: 1;
+  white-space: nowrap;
+}
+
+.badge.running {
+  background: rgba(52,152,219,0.15);
+  border-color: rgba(52,152,219,0.5);
+  color: #3498db;
+}
+
+.badge.completed {
+  background: rgba(46,204,113,0.15);
+  border-color: rgba(46,204,113,0.5);
+  color: #2ecc71;
+}
+
+.badge.failed {
+  background: rgba(231,76,60,0.15);
+  border-color: rgba(231,76,60,0.5);
+  color: #e74c3c;
+}
+
+.icon { font-size: 0.9rem; }
+.badgeLabel { font-size: 0.8rem; }
+
+.spinner {
+  width: 12px; height: 12px;
+  border: 2px solid rgba(52,152,219,0.3);
+  border-top-color: #3498db;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.check { color: #2ecc71; font-weight: bold; }
+.cross { color: #e74c3c; font-weight: bold; }
+
+.detailBox {
+  width: 100%;
+  padding: 0.6rem;
+  background: rgba(0,0,0,0.2);
+  border-radius: 8px;
+  text-align: center;
+}
+
+.detailText { font-size: 0.75rem; color: #aaa; line-height: 1.4; }
+.subDetail { font-size: 0.72rem; color: #666; margin-top: 0.3rem; }
+
+.miniBar {
+  height: 3px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 2px;
+  margin-top: 0.4rem;
+  overflow: hidden;
+}
+
+.miniFill {
+  height: 100%;
+  background: linear-gradient(90deg, #3498db, #2ecc71);
+  transition: width 0.5s ease;
+  border-radius: 2px;
+}
+
+.memorySection {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+
+.memoryTitle { font-size: 0.85rem; color: #f39c12; font-weight: 600; margin-bottom: 0.5rem; }
+
+.memoryList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.memoryItem {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.6rem;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px;
+}
+
+.memoryLabel { font-size: 0.72rem; color: #aaa; font-weight: 600; white-space: nowrap; }
+.memoryContent { font-size: 0.72rem; color: #666; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

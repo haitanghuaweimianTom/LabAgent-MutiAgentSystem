@@ -236,6 +236,12 @@ try:
 except ImportError:
     _KNOWLEDGE_AVAILABLE = False
 
+try:
+    from src.knowledge.algorithm_library import get_algorithm_library
+    _ALGO_LIBRARY_AVAILABLE = True
+except ImportError:
+    _ALGO_LIBRARY_AVAILABLE = False
+
 
 class UnifiedWorkflow:
     """
@@ -275,6 +281,17 @@ class UnifiedWorkflow:
         )
         self.document_loader = DocumentLoader()
         self.knowledge_base = KnowledgeBase() if self.use_knowledge_base else None
+
+        # ======================================================================
+        # 算法知识库：集成 Algorithms_MathModels 仓库的算法
+        # ======================================================================
+        self.algorithm_library = None
+        if _ALGO_LIBRARY_AVAILABLE:
+            try:
+                self.algorithm_library = get_algorithm_library()
+                print(f"[AlgorithmLibrary] 算法知识库已加载 ({len(self.algorithm_library.categories)} 个类别)")
+            except Exception as e:
+                print(f"[AlgorithmLibrary] 加载失败: {e}")
 
         # 全局上下文
         self.context: Dict[str, Any] = {}
@@ -555,6 +572,20 @@ class UnifiedWorkflow:
                 if kb_results:
                     kb_context = f"【相关知识】\n{kb_results}\n\n"
 
+            # ======================================================================
+            # 算法知识库检索：自动推荐适用的数学建模算法
+            # ======================================================================
+            algo_context = ""
+            if self.algorithm_library:
+                print(f"    [AlgorithmLibrary] 检索相关算法...")
+                algo_recommendation = self.algorithm_library.generate_recommendation_text(
+                    query=task_node.description + " " + self.problem_text[:500],
+                    top_k=3
+                )
+                if algo_recommendation:
+                    algo_context = f"【算法库推荐】\n{algo_recommendation}\n\n"
+                    print(f"    [AlgorithmLibrary] 已推荐 {len(self.algorithm_library.search(task_node.description + ' ' + self.problem_text[:500], top_k=3))} 个相关算法")
+
             # 1. 任务分析（缩短prompt以加快响应）
             analysis_prompt = f"""对以下子任务进行数学分析：
 
@@ -565,6 +596,8 @@ class UnifiedWorkflow:
 {dep_context}
 
 {kb_context}
+
+{algo_context}
 
 分析核心数学结构、建模方法、关键变量。输出至少600字。"""
 
@@ -579,11 +612,14 @@ class UnifiedWorkflow:
 任务分析:
 {task_analysis[:1200]}
 
+{algo_context}
+
 要求：
 1. 定义变量和参数（表格形式）
 2. 建立核心数学公式（LaTeX格式，公式编号）
 3. 说明公式物理意义
 4. 列出模型假设
+5. 若算法库推荐了适用的算法，请在模型中明确采用并说明理由
 
 输出至少1200字的完整建模过程。"""
 
