@@ -346,9 +346,7 @@ MathModel-MutiAgentSystem/
 │   └── 附件/                        # 数据文件
 │
 ├── 2024A-Problem.md                 # 视觉理解后撰写的赛题描述
-├── result1.xlsx                     # 数据文件
-├── result2.xlsx
-└── result4.xlsx
+└── 2025A-Problem.md                 # 视觉理解后撰写的赛题描述
 ```
 
 ---
