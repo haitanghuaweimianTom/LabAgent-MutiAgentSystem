@@ -913,112 +913,343 @@ class UnifiedWorkflow:
         return _call_llm(prompt, "你是数据分析专家，擅长提炼数值结果。")
 
     def _generate_charts(self) -> str:
-        """生成论文图表"""
+        """生成论文图表（Nature-figure 规范 + 问题特化可视化）"""
         charts_dir = self.output_dir / "stage_7_charts"
         charts_dir.mkdir(parents=True, exist_ok=True)
 
-        execution_result = self.context.get("execution_result", {})
+        # ── Nature 配色板 ──────────────────────────────────────────────
+        PALETTE = {
+            "blue_main": "#0F4D92", "blue_secondary": "#3775BA",
+            "green_1": "#DDF3DE", "green_2": "#AADCA9", "green_3": "#8BCF8B",
+            "red_1": "#F6CFCB", "red_2": "#E9A6A1", "red_strong": "#B64342",
+            "neutral_light": "#CFCECE", "neutral_mid": "#767676",
+            "neutral_dark": "#4D4D4D", "neutral_black": "#272727",
+            "gold": "#FFD700", "teal": "#42949E", "violet": "#9A4D8E",
+        }
+        C_ORDER = [
+            PALETTE["blue_main"], PALETTE["green_3"], PALETTE["red_strong"],
+            PALETTE["teal"], PALETTE["violet"], PALETTE["neutral_light"],
+        ]
 
-        # 使用 matplotlib 生成基础图表
+        def _style(font_size=14, lw=2):
+            plt.rcParams['font.family'] = 'sans-serif'
+            plt.rcParams['font.sans-serif'] = ['Noto Sans CJK JP', 'Arial', 'DejaVu Sans', 'Liberation Sans']
+            plt.rcParams['svg.fonttype'] = 'none'
+            plt.rcParams['font.size'] = font_size
+            plt.rcParams['axes.spines.right'] = False
+            plt.rcParams['axes.spines.top'] = False
+            plt.rcParams['axes.linewidth'] = lw
+            plt.rcParams['legend.frameon'] = False
+            plt.rcParams['axes.unicode_minus'] = False
+
+        def _save(fig, name, dpi=300, pad=2):
+            import warnings
+            base = charts_dir / name
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                fig.tight_layout(pad=pad)
+            fig.savefig(str(base) + '.svg', bbox_inches='tight')
+            fig.savefig(str(base) + '.png', dpi=dpi, bbox_inches='tight')
+            plt.close(fig)
+
+        def _add_panel(ax, label, fs=12):
+            ax.text(-0.08, 1.02, label, transform=ax.transAxes, fontsize=fs,
+                    fontweight='bold', va='bottom', ha='left')
+
+        chart_count = 0
         try:
             import matplotlib
             matplotlib.use('Agg')
             import matplotlib.pyplot as plt
+            from matplotlib.gridspec import GridSpec
             import numpy as np
-            plt.rcParams['font.sans-serif'] = [
-                'Noto Sans CJK SC', 'SimHei', 'DejaVu Sans'
+
+            # ── 读取求解结果 ──────────────────────────────────────────────
+            results_path = self.output_dir / "execution" / "results.json"
+            R = {}
+            if results_path.exists():
+                with open(results_path, "r", encoding="utf-8") as f:
+                    R = json.load(f)
+
+            # =====================================================================
+            # 图 1：烟幕覆盖时间轴 + 效能对比（2 面板复合图）
+            # =====================================================================
+            # 统一颜色映射：按 (UAV, Missile) 对分配固定颜色
+            COLOR_MAP = {
+                ("FY1", "M1"): PALETTE["blue_main"],
+                ("FY2", "M2"): PALETTE["green_3"],
+                ("FY3", "M3"): PALETTE["red_strong"],
+                ("FY4", "M1"): PALETTE["teal"],
+                ("FY5", "M2"): PALETTE["violet"],
+            }
+            def _get_color(label: str):
+                for (u, m), c in COLOR_MAP.items():
+                    if u in label and m in label:
+                        return c
+                return PALETTE["neutral_light"]
+
+            intervals = []   # [(label, t_start, t_end, tau, color)]
+            bar_data = []    # [(label, tau, color)]
+
+            r2 = R.get("result2", {})
+            for key in ["fy1_m1", "fy2_m2", "fy3_m3"]:
+                sub = r2.get(key, {})
+                tau = sub.get("tau_eff", 0)
+                label_map = {"fy1_m1": "FY1→M1", "fy2_m2": "FY2→M2", "fy3_m3": "FY3→M3"}
+                lbl = label_map.get(key, key)
+                c = _get_color(lbl)
+                if tau > 0:
+                    intervals.append((lbl, sub.get("t_start", 0), sub.get("t_end", 0), tau, c))
+                bar_data.append((lbl, tau, c))
+
+            r3 = R.get("result3", {})
+            for item in r3.get("assignments", []):
+                lbl = f"{item['uav']}→{item['missile']}"
+                tau = item.get("tau_eff", 0)
+                c = _get_color(lbl)
+                if tau > 0:
+                    intervals.append((lbl, 0, tau, tau, c))
+                bar_data.append((lbl, tau, c))
+
+            _style(font_size=13, lw=1.8)
+            fig = plt.figure(figsize=(12, 7))
+            gs = GridSpec(2, 1, height_ratios=[1, 1.2], hspace=0.40)
+
+            # Panel a: 甘特图
+            ax_a = fig.add_subplot(gs[0])
+            _add_panel(ax_a, 'a', fs=13)
+            if intervals:
+                y_pos = np.arange(len(intervals))
+                t_max = max(x[2] for x in intervals)
+                for i, (lbl, t0, t1, tau, c) in enumerate(intervals):
+                    ax_a.barh(i, t1 - t0, left=t0, height=0.55, color=c, edgecolor='black', linewidth=1)
+                    # 白字标注在条内
+                    ax_a.text(t0 + (t1 - t0) / 2, i, f'{tau:.1f} s',
+                              ha='center', va='center', fontsize=10, color='white',
+                              fontweight='bold')
+                ax_a.set_yticks(y_pos)
+                ax_a.set_yticklabels([x[0] for x in intervals], fontsize=11)
+                ax_a.set_xlabel('时间 (s)', fontsize=12)
+                ax_a.set_title('烟幕有效遮蔽时间区间', fontsize=13, pad=8)
+                ax_a.set_xlim(0, t_max * 1.12)
+                ax_a.invert_yaxis()
+            else:
+                ax_a.text(0.5, 0.5, '无有效遮蔽时间数据', ha='center', va='center',
+                          transform=ax_a.transAxes, fontsize=12, color=PALETTE['neutral_mid'])
+                ax_a.set_xticks([])
+                ax_a.set_yticks([])
+
+            # Panel b: 分组柱状图
+            ax_b = fig.add_subplot(gs[1])
+            _add_panel(ax_b, 'b', fs=13)
+            if bar_data:
+                labels = [x[0] for x in bar_data]
+                vals = [x[1] for x in bar_data]
+                cols = [x[2] for x in bar_data]
+                x = np.arange(len(labels))
+                bars = ax_b.bar(x, vals, color=cols, edgecolor='black', linewidth=1.2, width=0.55)
+                ax_b.set_xticks(x)
+                ax_b.set_xticklabels(labels, rotation=30, ha='right', fontsize=10)
+                ax_b.set_ylabel(r'$\tau_{\mathrm{eff}}$ (s)', fontsize=12)
+                ax_b.set_title('各方案有效遮蔽时长对比', fontsize=13, pad=8)
+                v_max = max(vals) if max(vals) > 0 else 5
+                for bar, val in zip(bars, vals):
+                    h = bar.get_height()
+                    if h > 0:
+                        ax_b.text(bar.get_x() + bar.get_width() / 2, h + v_max * 0.03,
+                                  f'{val:.1f}', ha='center', va='bottom', fontsize=10)
+                    else:
+                        ax_b.text(bar.get_x() + bar.get_width() / 2, v_max * 0.03,
+                                  '无遮蔽', ha='center', va='bottom', fontsize=10,
+                                  color=PALETTE['neutral_dark'], fontweight='bold')
+                ax_b.set_ylim(0, v_max * 1.15)
+            _save(fig, 'fig_01_coverage_timeline', dpi=300)
+            chart_count += 1
+
+            # =====================================================================
+            # 图 2：无人机-导弹分配矩阵（2 面板复合图）
+            # =====================================================================
+            _style(font_size=12, lw=1.5)
+            fig2 = plt.figure(figsize=(12, 5.5))
+            gs2 = GridSpec(1, 2, width_ratios=[1, 1.3], wspace=0.45)
+
+            # Panel a: 3机3弹协同分配 — 使用 pcolormesh 保证单元格均匀
+            ax2a = fig2.add_subplot(gs2[0])
+            _add_panel(ax2a, 'a', fs=13)
+            uavs3 = ['FY1', 'FY2', 'FY3']
+            missiles = ['M1', 'M2', 'M3']
+            mat3 = np.zeros((len(uavs3), len(missiles)))
+            for item in r3.get("assignments", []):
+                u, m = item['uav'], item['missile']
+                if u in uavs3 and m in missiles:
+                    mat3[uavs3.index(u)][missiles.index(m)] = item.get("tau_eff", 0)
+
+            # pcolormesh 保证单元格是规则矩形
+            im = ax2a.pcolormesh(np.arange(len(missiles) + 1), np.arange(len(uavs3) + 1),
+                                 mat3, cmap='Blues', vmin=0, edgecolors='white', linewidth=1.5)
+            ax2a.set_xticks(np.arange(len(missiles)) + 0.5)
+            ax2a.set_xticklabels(missiles, fontsize=11)
+            ax2a.set_yticks(np.arange(len(uavs3)) + 0.5)
+            ax2a.set_yticklabels(uavs3, fontsize=11)
+            ax2a.set_xlabel('来袭导弹', fontsize=12)
+            ax2a.set_ylabel('无人机', fontsize=12)
+            ax2a.set_title('三机三弹协同分配', fontsize=12, pad=8)
+            ax2a.set_xlim(0, len(missiles))
+            ax2a.set_ylim(0, len(uavs3))
+            ax2a.invert_yaxis()
+            # 单元格标注
+            for i in range(len(uavs3)):
+                for j in range(len(missiles)):
+                    v = mat3[i, j]
+                    txt = f'{v:.1f}' if v > 0 else '—'
+                    tc = 'white' if v > mat3.max() * 0.5 else '#272727'
+                    ax2a.text(j + 0.5, i + 0.5, txt, ha='center', va='center', fontsize=12, color=tc, fontweight='bold')
+            cbar = fig2.colorbar(im, ax=ax2a, shrink=0.5, pad=0.02)
+            cbar.set_label(r'$\tau_{\mathrm{eff}}$ (s)', fontsize=11)
+            ax2a.set_aspect('equal')
+            for spine in ax2a.spines.values():
+                spine.set_visible(False)
+
+            # Panel b: 5机3弹鲁棒分配 — 角色矩阵
+            ax2b = fig2.add_subplot(gs2[1])
+            _add_panel(ax2b, 'b', fs=13)
+            uavs5 = ['FY1', 'FY2', 'FY3', 'FY4', 'FY5']
+            mat_role = np.zeros((len(uavs5), len(missiles)))
+            for item in R.get("result4", {}).get("optimal_assignment", []):
+                u, m = item['uav'], item['missile']
+                role = 1.0 if item.get('role') == 'primary' else 0.5
+                if u in uavs5 and m in missiles:
+                    mat_role[uavs5.index(u)][missiles.index(m)] = role
+
+            cmap_role = plt.matplotlib.colors.ListedColormap(['#FFFFFF', '#B4C0E4', '#484878'])
+            im2 = ax2b.pcolormesh(np.arange(len(missiles) + 1), np.arange(len(uavs5) + 1),
+                                  mat_role, cmap=cmap_role, vmin=0, vmax=1,
+                                  edgecolors='white', linewidth=1.5)
+            ax2b.set_xticks(np.arange(len(missiles)) + 0.5)
+            ax2b.set_xticklabels(missiles, fontsize=11)
+            ax2b.set_yticks(np.arange(len(uavs5)) + 0.5)
+            ax2b.set_yticklabels(uavs5, fontsize=11)
+            ax2b.set_xlabel('来袭导弹', fontsize=12)
+            ax2b.set_ylabel('无人机', fontsize=12)
+            ax2b.set_title('五机三弹鲁棒分配', fontsize=12, pad=8)
+            ax2b.set_xlim(0, len(missiles))
+            ax2b.set_ylim(0, len(uavs5))
+            ax2b.invert_yaxis()
+            for i in range(len(uavs5)):
+                for j in range(len(missiles)):
+                    v = mat_role[i, j]
+                    if v == 1.0:
+                        ax2b.text(j + 0.5, i + 0.5, '主', ha='center', va='center', fontsize=12, color='white', fontweight='bold')
+                    elif v == 0.5:
+                        ax2b.text(j + 0.5, i + 0.5, '备', ha='center', va='center', fontsize=12, color='#484878', fontweight='bold')
+            ax2b.set_aspect('equal')
+            for spine in ax2b.spines.values():
+                spine.set_visible(False)
+            _save(fig2, 'fig_02_assignment_matrix', dpi=300)
+            chart_count += 1
+
+            # =====================================================================
+            # 图 3：三维战场态势 + 烟幕几何示意
+            # =====================================================================
+            _style(font_size=11, lw=1.2)
+            fig3 = plt.figure(figsize=(12, 9))
+            ax3 = fig3.add_subplot(111, projection='3d')
+            ax3.view_init(elev=22, azim=-65)
+
+            scale = 0.001  # m -> km
+
+            # 假目标 & 真目标
+            ax3.scatter([0], [0], [0], color=PALETTE["red_strong"], s=220,
+                        label='假目标', marker='o', edgecolors='black', linewidth=1.5, zorder=10)
+            ax3.scatter([0], [200 * scale], [5 * scale], color=PALETTE["blue_main"], s=220,
+                        label='真目标', marker='s', edgecolors='black', linewidth=1.5, zorder=10)
+
+            # 导弹初始位置 & 轨迹线
+            M_init = {"M1": (20000, 0, 2000), "M2": (19000, 600, 2100), "M3": (18000, -600, 1900)}
+            m_scatter = []
+            for name, (mx, my, mz) in M_init.items():
+                s = ax3.scatter([mx * scale], [my * scale], [mz * scale],
+                                color=PALETTE["neutral_dark"], s=120, marker='^', zorder=5)
+                if not m_scatter:
+                    m_scatter = s
+                # 轨迹线
+                ax3.plot([mx * scale, 0], [my * scale, 0], [mz * scale, 0],
+                         color=PALETTE["neutral_mid"], linewidth=2, linestyle='--', alpha=0.7)
+                # 偏移标签避免重叠
+                offset = 0.6 if name == "M1" else (0.8 if name == "M2" else 0.5)
+                ax3.text(mx * scale + offset, my * scale, mz * scale + 0.4, name,
+                         fontsize=10, color=PALETTE["neutral_black"], fontweight='bold')
+
+            # 无人机初始位置 & 航迹线
+            U_init = {"FY1": (17800, 0, 1800), "FY2": (12000, 1400, 1400),
+                      "FY3": (6000, -3000, 700), "FY4": (11000, 2000, 1800), "FY5": (13000, -2000, 1300)}
+            r1 = R.get("result1", {})
+            dir_vec = r1.get("direction", [0.0, 0.0])
+            u_scatter = []
+            for name, (ux, uy, uz) in U_init.items():
+                s = ax3.scatter([ux * scale], [uy * scale], [uz * scale],
+                                color=PALETTE["green_3"], s=120, marker='D', zorder=5)
+                if not u_scatter:
+                    u_scatter = s
+                # 标签偏移
+                z_off = 0.5 if name in ("FY2", "FY4") else 0.3
+                ax3.text(ux * scale, uy * scale, uz * scale + z_off, name,
+                         fontsize=10, color=PALETTE["neutral_black"], fontweight='bold')
+                # FY1 航迹线
+                if name == "FY1" and (dir_vec[0] != 0 or dir_vec[1] != 0):
+                    dx, dy = dir_vec[0], dir_vec[1]
+                    ax3.plot([ux * scale, (ux + dx * 2000) * scale],
+                             [uy * scale, (uy + dy * 2000) * scale],
+                             [uz * scale, uz * scale],
+                             color=PALETTE["green_3"], linewidth=2.5, alpha=0.85, zorder=6)
+
+            # 烟幕球体示意
+            if r1.get("tau_eff", 0) > 0:
+                u_s = np.linspace(0, 2 * np.pi, 30)
+                v_s = np.linspace(0, np.pi, 20)
+                r_smoke = 0.3
+                x_s = r_smoke * np.outer(np.cos(u_s), np.sin(v_s))
+                y_s = r_smoke * np.outer(np.sin(u_s), np.sin(v_s))
+                z_s = r_smoke * np.outer(np.ones(np.size(u_s)), np.cos(v_s))
+                ax3.plot_surface(x_s, y_s + 200 * scale, z_s,
+                                 alpha=0.12, color=PALETTE["teal"], rstride=2, cstride=2)
+
+            ax3.set_xlabel('X (km)', fontsize=11, labelpad=8)
+            ax3.set_ylabel('Y (km)', fontsize=11, labelpad=8)
+            ax3.set_zlabel('Z (km)', fontsize=11, labelpad=8)
+            ax3.set_title('三维战场态势与烟幕遮蔽几何示意', fontsize=13, pad=12)
+
+            ax3.grid(False)
+            ax3.xaxis.pane.set_visible(False)
+            ax3.yaxis.pane.set_visible(False)
+            ax3.zaxis.pane.set_visible(False)
+
+            # 完整图例
+            from matplotlib.lines import Line2D
+            legend_elements = [
+                Line2D([0], [0], marker='o', color='w', markerfacecolor=PALETTE["red_strong"],
+                       markeredgecolor='black', markersize=10, label='假目标'),
+                Line2D([0], [0], marker='s', color='w', markerfacecolor=PALETTE["blue_main"],
+                       markeredgecolor='black', markersize=10, label='真目标'),
+                Line2D([0], [0], marker='^', color='w', markerfacecolor=PALETTE["neutral_dark"],
+                       markersize=9, label='导弹 (M1-M3)'),
+                Line2D([0], [0], marker='D', color='w', markerfacecolor=PALETTE["green_3"],
+                       markersize=9, label='无人机 (FY1-FY5)'),
             ]
-            plt.rcParams['axes.unicode_minus'] = False
+            ax3.legend(handles=legend_elements, loc='upper left', fontsize=10, bbox_to_anchor=(0.02, 0.98))
 
-            chart_count = 0
+            ax3.set_xlim(-2, 22)
+            ax3.set_ylim(-5, 5)
+            ax3.set_zlim(-1, 3)
 
-            # 深度提取数值数据
-            def extract_numeric_data(data, prefix=""):
-                """递归提取字典中的数值数据"""
-                keys, vals = [], []
-                if isinstance(data, dict):
-                    for k, v in data.items():
-                        key_path = f"{prefix}_{k}" if prefix else k
-                        if isinstance(v, (int, float)) and not isinstance(v, bool):
-                            keys.append(key_path)
-                            vals.append(float(v))
-                        elif isinstance(v, dict):
-                            sub_k, sub_v = extract_numeric_data(v, key_path)
-                            keys.extend(sub_k)
-                            vals.extend(sub_v)
-                return keys, vals
+            _save(fig3, 'fig_03_battlefield_3d', dpi=300)
+            chart_count += 1
 
-            numeric_keys, numeric_vals = extract_numeric_data(execution_result)
-
-            # 策略1：如果有多个数值结果，生成对比柱状图
-            if len(numeric_keys) > 1 and len(numeric_vals) > 1:
-                # 限制数量避免图表过密
-                if len(numeric_keys) > 20:
-                    numeric_keys = numeric_keys[:20]
-                    numeric_vals = numeric_vals[:20]
-
-                fig, ax = plt.subplots(figsize=(max(10, len(numeric_keys)*0.5), 6))
-                colors = plt.cm.viridis(np.linspace(0, 0.8, len(numeric_keys)))
-                ax.bar(range(len(numeric_keys)), numeric_vals, color=colors)
-                ax.set_xticks(range(len(numeric_keys)))
-                ax.set_xticklabels(numeric_keys, rotation=45, ha='right', fontsize=8)
-                ax.set_xlabel('指标', fontsize=12)
-                ax.set_ylabel('数值', fontsize=12)
-                ax.set_title('计算结果数值对比', fontsize=14)
-                plt.tight_layout()
-                fig.savefig(str(charts_dir / 'fig_01_comparison.png'), dpi=300)
-                plt.close(fig)
-                chart_count += 1
-
-            # 策略2：如果结果是导弹/无人机相关数据，生成轨迹或参数图
-            # 尝试从 results.json 或 execution_result 中提取特殊结构
-            results_json_path = self.output_dir / "execution" / "results.json"
-            if results_json_path.exists():
-                try:
-                    with open(results_json_path, "r", encoding="utf-8") as f:
-                        results_data = json.load(f)
-
-                    # 如果结果是按问题组织的（如 task_1, task_2），生成饼图
-                    if isinstance(results_data, dict):
-                        task_results = {}
-                        for k, v in results_data.items():
-                            if isinstance(v, dict) and "tau_eff" in v:
-                                task_results[k] = v["tau_eff"]
-                            elif isinstance(v, dict) and "result" in v:
-                                try:
-                                    task_results[k] = float(v["result"])
-                                except:
-                                    pass
-
-                        if len(task_results) > 1:
-                            fig, ax = plt.subplots(figsize=(8, 8))
-                            labels = list(task_results.keys())
-                            sizes = list(task_results.values())
-                            ax.pie(sizes, labels=labels, autopct='%1.1f%%', startangle=90)
-                            ax.set_title('各任务有效遮蔽时间占比', fontsize=14)
-                            plt.tight_layout()
-                            fig.savefig(str(charts_dir / 'fig_02_pie.png'), dpi=300)
-                            plt.close(fig)
-                            chart_count += 1
-                except Exception as e:
-                    print(f"    读取 results.json 生成图表失败: {e}")
-
-            # 策略3：生成流程图/示意图（如果没有任何数值图表）
-            if chart_count == 0:
-                fig, ax = plt.subplots(figsize=(10, 6))
-                ax.text(0.5, 0.5, "图表生成依赖于数值计算结果\n\n"
-                       "请确保代码执行产生了有效的数值结果",
-                       ha='center', va='center', fontsize=14, color='gray')
-                ax.set_xlim(0, 1)
-                ax.set_ylim(0, 1)
-                ax.axis('off')
-                fig.savefig(str(charts_dir / 'fig_placeholder.png'), dpi=150)
-                plt.close(fig)
-                chart_count += 1
-
-            print(f"  生成 {chart_count} 个图表")
+            print(f"  生成 {chart_count} 个图表（Nature 风格，SVG + PNG 双格式）")
         except ImportError:
             print("  matplotlib 未安装，跳过图表生成")
+        except Exception as e:
+            print(f"  图表生成出错: {e}")
 
         return f"图表保存于: {charts_dir}"
 

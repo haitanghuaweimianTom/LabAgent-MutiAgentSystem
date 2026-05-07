@@ -67,4 +67,7 @@ Thumbs.db
 *.out
 *.toc
 *.synctex.gz
+
+# Third-party cloned repositories
+src/knowledge/figures4papers/
 /home/tomgame/projects/MathModel-MutiAgentSystem/rules/github-config-rule.md

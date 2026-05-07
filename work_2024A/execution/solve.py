@@ -51,8 +51,9 @@ def solve_chain(theta1, t):
         def dist(th):
             x, y = xy(th)
             return hypot(x - x_prev, y - y_prev)
-        lo, hi = theta_prev, theta_prev + pi
+        lo, hi = max(0.0, theta_prev - pi), theta_prev
         if dist(lo) < d - 1e-6:
+            # Not enough room inward; place at innermost available position
             thetas[i] = lo
             xs[i], ys[i] = xy(lo)
             continue
@@ -98,7 +99,7 @@ def compute_all():
             vim1_x = -v0 * (cos(thim1) - thim1 * sin(thim1)) / sqrt(1 + thim1**2)
             vim1_y = -v0 * (sin(thim1) + thim1 * cos(thim1)) / sqrt(1 + thim1**2)
             vi = vim1_x * ux + vim1_y * uy
-            vs.append(float(abs(vi)))
+            vs.append(float(vi))
         result[t] = {
             'head_theta': float(th1),
             'head_x': float(xs[0]),

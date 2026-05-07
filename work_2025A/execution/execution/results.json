@@ -1,0 +1,516 @@
+{
+  "result1": {
+    "scenario": "Q1_FY1_fixed_vs_M1",
+    "theta": 3.141592653589793,
+    "v": 120.0,
+    "t_release": 1.5,
+    "t_fuse": 3.6,
+    "tau_eff": 0.0,
+    "intervals": []
+  },
+  "result2": {
+    "scenario": "FY1_FY2_FY3_vs_M1",
+    "fy1": {
+      "theta": 0.36397775163801194,
+      "v": 72.49416967853904,
+      "t_release": 0.5146266305819152,
+      "t_fuse": 0.5201183104887603,
+      "tau_eff": 6.693346673336669,
+      "intervals": [
+        [
+          2.2653602487245026,
+          8.958706922061172
+        ]
+      ]
+    },
+    "fy2": {
+      "theta": 5.163943287954321,
+      "v": 139.07798748493894,
+      "t_release": 9.83048527669927,
+      "t_fuse": 4.895475663422567,
+      "tau_eff": 6.69334667333667,
+      "intervals": [
+        [
+          16.87703647789072,
+          23.57038315122739
+        ]
+      ]
+    },
+    "fy3": {
+      "theta": 0.0,
+      "v": 70.0,
+      "t_release": 0.0,
+      "t_fuse": 0.5,
+      "tau_eff": 0.0,
+      "intervals": []
+    }
+  },
+  "result3": {
+    "scenario": "coordinated_3UAV_3Missile",
+    "total_coverage": 6.69334667333667,
+    "assignments": [
+      {
+        "uav": "FY2",
+        "missile": "M1",
+        "tau_eff": 6.69334667333667
+      },
+      {
+        "uav": "FY1",
+        "missile": "M2",
+        "tau_eff": 0.0
+      },
+      {
+        "uav": "FY3",
+        "missile": "M3",
+        "tau_eff": 0.0
+      }
+    ]
+  },
+  "result4": {
+    "scenario": "5UAV_3Missile_robust",
+    "min_coverage_time": 0.0,
+    "redundancy": 1,
+    "optimal_assignment": [
+      {
+        "uav": "FY2",
+        "missile": "M1",
+        "role": "primary"
+      },
+      {
+        "uav": "FY1",
+        "missile": "M1",
+        "role": "backup"
+      },
+      {
+        "uav": "FY2",
+        "missile": "M2",
+        "role": "primary"
+      },
+      {
+        "uav": "FY1",
+        "missile": "M2",
+        "role": "backup"
+      },
+      {
+        "uav": "FY1",
+        "missile": "M3",
+        "role": "primary"
+      },
+      {
+        "uav": "FY2",
+        "missile": "M3",
+        "role": "backup"
+      }
+    ],
+    "details": {
+      "M1": {
+        "primary": {
+          "uav": "FY2",
+          "tau_eff": 6.69334667333667
+        },
+        "backup": {
+          "uav": "FY1",
+          "tau_eff": 6.693346673336669
+        }
+      },
+      "M2": {
+        "primary": {
+          "uav": "FY2",
+          "tau_eff": 6.703351675837922
+        },
+        "backup": {
+          "uav": "FY1",
+          "tau_eff": 0.0
+        }
+      },
+      "M3": {
+        "primary": {
+          "uav": "FY1",
+          "tau_eff": 0.0
+        },
+        "backup": {
+          "uav": "FY2",
+          "tau_eff": 0.0
+        }
+      }
+    }
+  },
+  "detailed": {
+    "q1": {
+      "scenario": "Q1_FY1_fixed_vs_M1",
+      "theta": 3.141592653589793,
+      "v": 120.0,
+      "t_release": 1.5,
+      "t_fuse": 3.6,
+      "tau_eff": 0.0,
+      "intervals": []
+    },
+    "q2": {
+      "theta": 0.36397775163801194,
+      "v": 72.49416967853904,
+      "t_release": 0.5146266305819152,
+      "t_fuse": 0.5201183104887603,
+      "tau_eff": 6.693346673336669,
+      "intervals": [
+        [
+          2.2653602487245026,
+          8.958706922061172
+        ]
+      ]
+    },
+    "q3": {
+      "n_decoys": 3,
+      "decoys": [
+        {
+          "id": 1,
+          "theta": 6.106385255771264,
+          "v": 122.45345687866211,
+          "t_release": -1.487564849853516,
+          "t_fuse": 1.815379006522042
+        },
+        {
+          "id": 2,
+          "theta": 3.049238830739375,
+          "v": 73.31514420545957,
+          "t_release": 3.469417731563788,
+          "t_fuse": 0.515800633801996
+        },
+        {
+          "id": 3,
+          "theta": 3.0626792865212407,
+          "v": 70.89057531849886,
+          "t_release": 5.3474831407819625,
+          "t_fuse": 0.5127863823773072
+        }
+      ],
+      "tau_eff": 17.65175253451236,
+      "intervals": [
+        [
+          0.506630752531893,
+          0.9792174701707912
+        ],
+        [
+          1.937163519438828,
+          9.140917809934464
+        ],
+        [
+          15.846540154810722,
+          22.50107204372602
+        ],
+        [
+          22.53938988569674,
+          25.860269523159268
+        ]
+      ]
+    },
+    "q4": {
+      "FY1": {
+        "theta": 0.36397775163801194,
+        "v": 72.49416967853904,
+        "t_release": 0.5146266305819152,
+        "t_fuse": 0.5201183104887603,
+        "tau_eff": 6.693346673336669,
+        "intervals": [
+          [
+            2.2653602487245026,
+            8.958706922061172
+          ]
+        ]
+      },
+      "FY2": {
+        "theta": 5.163943287954321,
+        "v": 139.07798748493894,
+        "t_release": 9.83048527669927,
+        "t_fuse": 4.895475663422567,
+        "tau_eff": 6.69334667333667,
+        "intervals": [
+          [
+            16.87703647789072,
+            23.57038315122739
+          ]
+        ]
+      },
+      "FY3": {
+        "theta": 0.0,
+        "v": 70.0,
+        "t_release": 0.0,
+        "t_fuse": 0.5,
+        "tau_eff": 0.0,
+        "intervals": []
+      }
+    },
+    "q5": {
+      "single_pair": {
+        "FY1_M1": {
+          "theta": 0.36397775163801194,
+          "v": 72.49416967853904,
+          "t_release": 0.5146266305819152,
+          "t_fuse": 0.5201183104887603,
+          "tau_eff": 6.693346673336669,
+          "intervals": [
+            [
+              2.2653602487245026,
+              8.958706922061172
+            ]
+          ]
+        },
+        "FY1_M2": {
+          "theta": 0.0,
+          "v": 70.0,
+          "t_release": 0.0,
+          "t_fuse": 0.5,
+          "tau_eff": 0.0,
+          "intervals": []
+        },
+        "FY1_M3": {
+          "theta": 0.0,
+          "v": 70.0,
+          "t_release": 0.0,
+          "t_fuse": 0.5,
+          "tau_eff": 0.0,
+          "intervals": []
+        },
+        "FY2_M1": {
+          "theta": 5.163943287954321,
+          "v": 139.07798748493894,
+          "t_release": 9.83048527669927,
+          "t_fuse": 4.895475663422567,
+          "tau_eff": 6.69334667333667,
+          "intervals": [
+            [
+              16.87703647789072,
+              23.57038315122739
+            ]
+          ]
+        },
+        "FY2_M2": {
+          "theta": 4.683011615705004,
+          "v": 126.01031683534384,
+          "t_release": 6.997405971586704,
+          "t_fuse": 3.012027282267809,
+          "tau_eff": 6.703351675837922,
+          "intervals": [
+            [
+              17.453155114784977,
+              24.1565067906229
+            ]
+          ]
+        },
+        "FY2_M3": {
+          "theta": 0.0,
+          "v": 70.0,
+          "t_release": 0.0,
+          "t_fuse": 0.5,
+          "tau_eff": 0.0,
+          "intervals": []
+        },
+        "FY3_M1": {
+          "theta": 0.0,
+          "v": 70.0,
+          "t_release": 0.0,
+          "t_fuse": 0.5,
+          "tau_eff": 0.0,
+          "intervals": []
+        },
+        "FY3_M2": {
+          "theta": 0.0,
+          "v": 70.0,
+          "t_release": 0.0,
+          "t_fuse": 0.5,
+          "tau_eff": 0.0,
+          "intervals": []
+        },
+        "FY3_M3": {
+          "theta": 0.0,
+          "v": 70.0,
+          "t_release": 0.0,
+          "t_fuse": 0.5,
+          "tau_eff": 0.0,
+          "intervals": []
+        },
+        "FY4_M1": {
+          "theta": 0.0,
+          "v": 70.0,
+          "t_release": 0.0,
+          "t_fuse": 0.5,
+          "tau_eff": 0.0,
+          "intervals": []
+        },
+        "FY4_M2": {
+          "theta": 0.0,
+          "v": 70.0,
+          "t_release": 0.0,
+          "t_fuse": 0.5,
+          "tau_eff": 0.0,
+          "intervals": []
+        },
+        "FY4_M3": {
+          "theta": 0.0,
+          "v": 70.0,
+          "t_release": 0.0,
+          "t_fuse": 0.5,
+          "tau_eff": 0.0,
+          "intervals": []
+        },
+        "FY5_M1": {
+          "theta": 0.0,
+          "v": 70.0,
+          "t_release": 0.0,
+          "t_fuse": 0.5,
+          "tau_eff": 0.0,
+          "intervals": []
+        },
+        "FY5_M2": {
+          "theta": 0.0,
+          "v": 70.0,
+          "t_release": 0.0,
+          "t_fuse": 0.5,
+          "tau_eff": 0.0,
+          "intervals": []
+        },
+        "FY5_M3": {
+          "theta": 0.0,
+          "v": 70.0,
+          "t_release": 0.0,
+          "t_fuse": 0.5,
+          "tau_eff": 0.0,
+          "intervals": []
+        }
+      },
+      "assignments": [
+        {
+          "uav": "FY2",
+          "missile": "M1",
+          "tau_eff": 6.69334667333667,
+          "params": {
+            "theta": 5.163943287954321,
+            "v": 139.07798748493894,
+            "t_release": 9.83048527669927,
+            "t_fuse": 4.895475663422567,
+            "tau_eff": 6.69334667333667,
+            "intervals": [
+              [
+                16.87703647789072,
+                23.57038315122739
+              ]
+            ]
+          }
+        },
+        {
+          "uav": "FY1",
+          "missile": "M2",
+          "tau_eff": 0.0,
+          "params": {
+            "theta": 0.0,
+            "v": 70.0,
+            "t_release": 0.0,
+            "t_fuse": 0.5,
+            "tau_eff": 0.0,
+            "intervals": []
+          }
+        },
+        {
+          "uav": "FY3",
+          "missile": "M3",
+          "tau_eff": 0.0,
+          "params": {
+            "theta": 0.0,
+            "v": 70.0,
+            "t_release": 0.0,
+            "t_fuse": 0.5,
+            "tau_eff": 0.0,
+            "intervals": []
+          }
+        }
+      ],
+      "total_coverage_single": 6.69334667333667,
+      "multi_pair": {
+        "FY2_M1": {
+          "n_decoys": 3,
+          "decoys": [
+            {
+              "id": 1,
+              "theta": 0.0,
+              "v": 70.0,
+              "t_release": -9.0,
+              "t_fuse": 0.5
+            },
+            {
+              "id": 2,
+              "theta": 0.0,
+              "v": 70.0,
+              "t_release": -8.0,
+              "t_fuse": 0.5
+            },
+            {
+              "id": 3,
+              "theta": 0.0,
+              "v": 70.0,
+              "t_release": -7.0,
+              "t_fuse": 0.5
+            }
+          ],
+          "tau_eff": 0.0,
+          "intervals": []
+        },
+        "FY1_M2": {
+          "n_decoys": 3,
+          "decoys": [
+            {
+              "id": 1,
+              "theta": 0.0,
+              "v": 70.0,
+              "t_release": -9.0,
+              "t_fuse": 0.5
+            },
+            {
+              "id": 2,
+              "theta": 0.0,
+              "v": 70.0,
+              "t_release": -8.0,
+              "t_fuse": 0.5
+            },
+            {
+              "id": 3,
+              "theta": 0.0,
+              "v": 70.0,
+              "t_release": -7.0,
+              "t_fuse": 0.5
+            }
+          ],
+          "tau_eff": 0.0,
+          "intervals": []
+        },
+        "FY3_M3": {
+          "n_decoys": 3,
+          "decoys": [
+            {
+              "id": 1,
+              "theta": 0.0,
+              "v": 70.0,
+              "t_release": -9.0,
+              "t_fuse": 0.5
+            },
+            {
+              "id": 2,
+              "theta": 0.0,
+              "v": 70.0,
+              "t_release": -8.0,
+              "t_fuse": 0.5
+            },
+            {
+              "id": 3,
+              "theta": 0.0,
+              "v": 70.0,
+              "t_release": -7.0,
+              "t_fuse": 0.5
+            }
+          ],
+          "tau_eff": 0.0,
+          "intervals": []
+        }
+      },
+      "total_coverage_multi": 0.0
+    }
+  }
+}

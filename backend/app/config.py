@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     api_base_url: str = "https://api.minimax.chat/v1"
     minimax_api_key: str = ""
 
+    # ===== Kimi 后端配置 =====
+    kimi_api_key: str = ""
+    kimi_base_url: str = "https://api.kimi.com/coding"
+
     # ===== Claude Code 后端配置 =====
     # 各Agent的默认LLM后端: "minimax" | "claude"
     # analyzer / modeler / solver 默认使用 claude

@@ -46,6 +46,21 @@ export default function Home() {
 
   // Settings
   const [settingsMsg, setSettingsMsg] = useState('');
+  const [kimiKeySet, setKimiKeySet] = useState(false);
+  const [minimaxKeySet, setMinimaxKeySet] = useState(false);
+
+  // Load existing settings on mount
+  useEffect(() => {
+    fetch(apiBase() + '/settings')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (d) {
+          setMinimaxKeySet(d.minimax_api_key_set);
+          setKimiKeySet(d.kimi_api_key_set);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // ========== 提交任务 ==========
   const handleSubmit = async (params: {
@@ -159,19 +174,34 @@ export default function Home() {
 
   // ========== 保存设置 ==========
   const handleSaveSettings = async () => {
-    const input = document.getElementById('apiKeyInput') as HTMLInputElement;
-    if (!input?.value.trim()) {
-      setSettingsMsg('请输入 API 密钥');
+    const minimaxInput = document.getElementById('apiKeyInput') as HTMLInputElement;
+    const kimiInput = document.getElementById('kimiKeyInput') as HTMLInputElement;
+    const kimiUrlInput = document.getElementById('kimiUrlInput') as HTMLInputElement;
+
+    const payload: Record<string, string> = {};
+    if (minimaxInput?.value.trim()) payload.minimax_api_key = minimaxInput.value.trim();
+    if (kimiInput?.value.trim()) payload.kimi_api_key = kimiInput.value.trim();
+    if (kimiUrlInput?.value.trim()) payload.kimi_base_url = kimiUrlInput.value.trim();
+
+    if (Object.keys(payload).length === 0) {
+      setSettingsMsg('请至少输入一项密钥');
       return;
     }
+
     try {
       const res = await fetch(apiBase() + '/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ minimax_api_key: input.value.trim() }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
-      setSettingsMsg(data.success ? '✓ API密钥保存成功！' : '保存失败');
+      if (data.success) {
+        setSettingsMsg('✓ 设置保存成功！');
+        if (payload.minimax_api_key) setMinimaxKeySet(true);
+        if (payload.kimi_api_key) setKimiKeySet(true);
+      } else {
+        setSettingsMsg('保存失败: ' + (data.message || ''));
+      }
     } catch {
       setSettingsMsg('保存失败，请检查后端连接');
     }
@@ -250,28 +280,66 @@ export default function Home() {
         {tab === 'settings' && (
           <div className={styles.settingsCard}>
             <span className={styles.cardTitle}>⚙️ 系统设置</span>
+
+            {/* MiniMax */}
             <div className={styles.settingsSection}>
-              <div className={styles.settingsLabel}>MiniMax API 密钥</div>
+              <div className={styles.settingsLabel}>
+                MiniMax API 密钥
+                {minimaxKeySet && <span style={{ color: '#2ecc71', marginLeft: 8, fontSize: 12 }}>✓ 已配置</span>}
+              </div>
               <div className={styles.apiKeyRow}>
                 <input
                   type="password"
                   className={styles.apiKeyInput}
-                  placeholder="输入 MiniMax API 密钥（必填）"
+                  placeholder="输入 MiniMax API 密钥"
                   id="apiKeyInput"
                 />
               </div>
               <div className={styles.apiKeyHint}>
                 请在 <a href="https://platform.minimax.chat" target="_blank" rel="noopener" style={{ color: '#3498db' }}>MiniMax 开放平台</a> 获取密钥
               </div>
-              <div className={styles.btnRow}>
-                <button className={styles.submitBtn} onClick={handleSaveSettings}>💾 保存设置</button>
-              </div>
-              {settingsMsg && (
-                <div className={styles.settingsMsg} style={{ color: settingsMsg.includes('✓') ? '#2ecc71' : '#e74c3c' }}>
-                  {settingsMsg}
-                </div>
-              )}
             </div>
+
+            <div className={styles.divider} />
+
+            {/* Kimi */}
+            <div className={styles.settingsSection}>
+              <div className={styles.settingsLabel}>
+                Kimi API 密钥
+                {kimiKeySet && <span style={{ color: '#2ecc71', marginLeft: 8, fontSize: 12 }}>✓ 已配置</span>}
+              </div>
+              <div className={styles.apiKeyRow}>
+                <input
+                  type="password"
+                  className={styles.apiKeyInput}
+                  placeholder="输入 Kimi API 密钥"
+                  id="kimiKeyInput"
+                />
+              </div>
+              <div className={styles.settingsLabel} style={{ marginTop: 12 }}>Kimi API 地址</div>
+              <div className={styles.apiKeyRow}>
+                <input
+                  type="text"
+                  className={styles.apiKeyInput}
+                  placeholder="https://api.kimi.com/coding"
+                  defaultValue="https://api.kimi.com/coding"
+                  id="kimiUrlInput"
+                />
+              </div>
+              <div className={styles.apiKeyHint}>
+                Kimi API 地址，默认 <code>https://api.kimi.com/coding</code>
+              </div>
+            </div>
+
+            <div className={styles.btnRow}>
+              <button className={styles.submitBtn} onClick={handleSaveSettings}>💾 保存设置</button>
+            </div>
+            {settingsMsg && (
+              <div className={styles.settingsMsg} style={{ color: settingsMsg.includes('✓') ? '#2ecc71' : '#e74c3c' }}>
+                {settingsMsg}
+              </div>
+            )}
+
             <div className={styles.divider} />
             <div className={styles.noteBox}>
               <strong>📍 访问地址：</strong>

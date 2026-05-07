@@ -9,7 +9,11 @@ from pydantic import BaseModel
 from .config import get_settings
 from .routers import tasks_router, agents_router, data_router, workflows_router
 from .routers.mcp import router as mcp_router
-from .core.runtime_config import get_runtime_api_key, update_runtime_api_key, is_api_key_set
+from .core.runtime_config import (
+    get_runtime_api_key, update_runtime_api_key, is_api_key_set,
+    get_runtime_kimi_key, get_runtime_kimi_url,
+    update_runtime_kimi_key, update_runtime_kimi_url, is_kimi_key_set,
+)
 from .routers.tasks import reset_orchestrator
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -18,6 +22,8 @@ logger = logging.getLogger(__name__)
 
 class SettingsUpdate(BaseModel):
     minimax_api_key: str | None = None
+    kimi_api_key: str | None = None
+    kimi_base_url: str | None = None
     default_model: str | None = None
 
 
@@ -93,6 +99,8 @@ async def info():
 async def get_runtime_settings():
     return {
         "minimax_api_key_set": is_api_key_set(),
+        "kimi_api_key_set": is_kimi_key_set(),
+        "kimi_base_url": get_runtime_kimi_url(),
         "default_model": get_settings().default_model,
         "api_base_url": get_settings().api_base_url,
     }
@@ -100,13 +108,24 @@ async def get_runtime_settings():
 
 @app.post("/api/v1/settings")
 async def update_runtime_settings(body: SettingsUpdate):
+    changed = False
     if body.minimax_api_key is not None:
         update_runtime_api_key(body.minimax_api_key.strip())
-        logger.info("API密钥已更新，重置Orchestrator")
+        logger.info("MiniMax API密钥已更新")
+        changed = True
+    if body.kimi_api_key is not None:
+        update_runtime_kimi_key(body.kimi_api_key.strip())
+        logger.info("Kimi API密钥已更新")
+        changed = True
+    if body.kimi_base_url is not None:
+        update_runtime_kimi_url(body.kimi_base_url.strip())
+        logger.info(f"Kimi Base URL已更新: {body.kimi_base_url}")
+        changed = True
+    if changed:
         reset_orchestrator()
     if body.default_model is not None:
         logger.info(f"默认模型已更新为: {body.default_model}")
-    return {"success": True, "message": "设置已保存，Agent已用新密钥重新初始化"}
+    return {"success": True, "message": "设置已保存" + ("，Agent已重新初始化" if changed else "")}
 
 
 @app.get("/api/v1/debug/key")

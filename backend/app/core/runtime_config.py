@@ -47,3 +47,43 @@ def is_api_key_set() -> bool:
     env = _read_env()
     return bool(env.get("MINIMAX_API_KEY", "").strip())
 
+
+# ===== Kimi API 密钥管理 =====
+
+def get_runtime_kimi_key() -> str:
+    """获取 Kimi API 密钥"""
+    env = _read_env()
+    key = env.get("KIMI_API_KEY", "")
+    if key:
+        return key
+    return os.environ.get("KIMI_API_KEY", "")
+
+
+def get_runtime_kimi_url() -> str:
+    """获取 Kimi API 基础 URL"""
+    env = _read_env()
+    url = env.get("KIMI_BASE_URL", "")
+    if url:
+        return url
+    return os.environ.get("KIMI_BASE_URL", "https://api.kimi.com/coding")
+
+
+def update_runtime_kimi_key(key: str) -> None:
+    """更新 Kimi API 密钥"""
+    env = _read_env()
+    env["KIMI_API_KEY"] = key
+    _write_env(env)
+
+
+def update_runtime_kimi_url(url: str) -> None:
+    """更新 Kimi API 基础 URL"""
+    env = _read_env()
+    env["KIMI_BASE_URL"] = url
+    _write_env(env)
+
+
+def is_kimi_key_set() -> bool:
+    """检查 .env 中是否有 Kimi API 密钥"""
+    env = _read_env()
+    return bool(env.get("KIMI_API_KEY", "").strip())
+
