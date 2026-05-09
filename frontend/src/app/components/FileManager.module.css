@@ -79,3 +79,40 @@
 }
 
 .deleteBtn:hover { background: rgba(231,76,60,0.3); }
+
+.batchBar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.6rem;
+  padding: 0.4rem 0.6rem;
+  background: rgba(0,0,0,0.15);
+  border-radius: 8px;
+}
+
+.checkAll {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #aaa;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.checkAll input { accent-color: #3498db; width: 16px; height: 16px; }
+
+.batchDeleteBtn {
+  padding: 0.4rem 0.8rem;
+  background: rgba(231,76,60,0.2);
+  color: #e74c3c;
+  border: 1px solid rgba(231,76,60,0.4);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.batchDeleteBtn:hover { background: rgba(231,76,60,0.35); }
+
+.fileCheck { accent-color: #3498db; width: 16px; height: 16px; cursor: pointer; }

@@ -216,6 +216,19 @@
 
 .progressText { font-size: 0.8rem; color: #3498db; font-weight: 600; text-align: center; }
 
+.projectInput {
+  width: 100%;
+  padding: 0.7rem 1rem;
+  margin-bottom: 0.6rem;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  color: #e0e0e0;
+  font-size: 0.95rem;
+}
+.projectInput:focus { outline: none; border-color: #3498db; }
+.projectInput::placeholder { color: #555; }
+
 .btnRow { display: flex; gap: 0.8rem; }
 
 .submitBtn {

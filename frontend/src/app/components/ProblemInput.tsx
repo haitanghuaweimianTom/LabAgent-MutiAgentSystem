@@ -24,6 +24,7 @@ const SOLVE_MODES = [
 interface ProblemInputProps {
   onSubmit: (params: {
     problemText: string;
+    projectName: string;
     workflow: string;
     template: string;
     mode: string;
@@ -35,6 +36,7 @@ interface ProblemInputProps {
 }
 
 export default function ProblemInput({ onSubmit, submitting, taskStatus, progress }: ProblemInputProps) {
+  const [projectName, setProjectName] = useState('');
   const [problemText, setProblemText] = useState('');
   const [workflow, setWorkflow] = useState('standard');
   const [template, setTemplate] = useState('math_modeling');
@@ -63,7 +65,7 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
 
   const handleSubmit = () => {
     if (!problemText.trim()) { alert('请输入问题描述'); return; }
-    onSubmit({ problemText, workflow, template, mode, useCritique });
+    onSubmit({ problemText, projectName: projectName.trim() || '未命名项目', workflow, template, mode, useCritique });
   };
 
   const isRunning = taskStatus === 'running' || taskStatus === 'phase1' || taskStatus === 'phase2';
@@ -72,6 +74,13 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
     <div className={styles.container}>
       <div className={styles.section}>
         <div className={styles.sectionTitle}>📝 赛题输入</div>
+        <input
+          className={styles.projectInput}
+          placeholder="输入项目名称（如：2025A 板凳龙）"
+          value={projectName}
+          onChange={e => setProjectName(e.target.value)}
+          maxLength={60}
+        />
         <div className={styles.ocrRow}>
           <label className={styles.ocrBtn}>
             {ocrLoading ? '识别中...' : '📷 上传题目图片 / PDF'}

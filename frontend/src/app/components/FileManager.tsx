@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import styles from './FileManager.module.css';
+import { useAppStore } from '../store/useAppStore';
 
 interface FileInfo {
   name: string;
@@ -21,6 +22,10 @@ export default function FileManager({ taskId }: FileManagerProps) {
   const [files, setFiles] = useState<FileInfo[]>([]);
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(false);
+  const selectedFiles = useAppStore((s) => s.selectedFiles);
+  const toggleFile = useAppStore((s) => s.toggleFileSelection);
+  const selectAll = useAppStore((s) => s.selectAllFiles);
+  const clearSelection = useAppStore((s) => s.clearFileSelection);
 
   const loadFiles = async () => {
     setLoading(true);
@@ -52,27 +57,62 @@ export default function FileManager({ taskId }: FileManagerProps) {
     if (!confirm(`确定删除文件 "${fileName}" 吗？`)) return;
     try {
       await fetch(apiBase() + '/data/files/' + encodeURIComponent(fileName), { method: 'DELETE' });
+      clearSelection();
       loadFiles();
     } catch {}
   };
+
+  const handleBatchDelete = async () => {
+    if (!selectedFiles.size) return;
+    if (!confirm(`确定批量删除 ${selectedFiles.size} 个文件吗？`)) return;
+    for (const name of Array.from(selectedFiles)) {
+      try {
+        await fetch(apiBase() + '/data/files/' + encodeURIComponent(name), { method: 'DELETE' });
+      } catch {}
+    }
+    clearSelection();
+    loadFiles();
+  };
+
+  const allSelected = files.length > 0 && files.every((f) => selectedFiles.has(f.name));
 
   return (
     <div className={styles.container}>
       <div className={styles.header}>
         <span className={styles.title}>📁 数据文件管理</span>
         <label className={styles.uploadBtn}>
-          {uploading ? '上传中...' : '📤 上传文件'}
+          {uploading ? '上传中...' : '📤 批量上传'}
           <input type="file" accept=".csv,.xlsx,.xls,.json,.txt,.tsv,.parquet,.png,.jpg,.jpeg,.pdf" multiple onChange={handleUpload} style={{ display: 'none' }} disabled={uploading} />
         </label>
       </div>
-      <div className={styles.hint}>支持 CSV · Excel · JSON · 图片 · PDF</div>
+      <div className={styles.hint}>支持 CSV · Excel · JSON · 图片 · PDF · 可多选批量删除</div>
+
+      {files.length > 0 && (
+        <div className={styles.batchBar}>
+          <label className={styles.checkAll}>
+            <input type="checkbox" checked={allSelected} onChange={() => allSelected ? clearSelection() : selectAll(files.map((f) => f.name))} />
+            <span>全选</span>
+          </label>
+          {selectedFiles.size > 0 && (
+            <button className={styles.batchDeleteBtn} onClick={handleBatchDelete}>
+              🗑️ 删除选中 ({selectedFiles.size})
+            </button>
+          )}
+        </div>
+      )}
 
       {loading && files.length === 0 && <div className={styles.empty}>加载中...</div>}
       {files.length === 0 && !loading && <div className={styles.empty}>暂无文件，请上传数据文件</div>}
 
       <div className={styles.fileList}>
-        {files.map(f => (
+        {files.map((f) => (
           <div key={f.name} className={styles.fileItem}>
+            <input
+              type="checkbox"
+              className={styles.fileCheck}
+              checked={selectedFiles.has(f.name)}
+              onChange={() => toggleFile(f.name)}
+            />
             <span className={styles.fileIcon}>{f.type}</span>
             <div className={styles.fileInfo}>
               <span className={styles.fileName}>{f.name}</span>

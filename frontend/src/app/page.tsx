@@ -49,7 +49,6 @@ export default function Home() {
   const [kimiKeySet, setKimiKeySet] = useState(false);
   const [minimaxKeySet, setMinimaxKeySet] = useState(false);
 
-  // Load existing settings on mount
   useEffect(() => {
     fetch(apiBase() + '/settings')
       .then(r => r.ok ? r.json() : null)
@@ -62,9 +61,9 @@ export default function Home() {
       .catch(() => {});
   }, []);
 
-  // ========== 提交任务 ==========
   const handleSubmit = async (params: {
     problemText: string;
+    projectName: string;
     workflow: string;
     template: string;
     mode: string;
@@ -77,6 +76,7 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           problem_text: params.problemText,
+          project_name: params.projectName,
           mode: params.mode,
           options: {
             workflow: params.workflow,

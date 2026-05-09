@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 
 from src.paper.tex_exporter import MarkdownToTexConverter
+from src.agents.crew import Agent, Task, Crew, Process
 
 # =============================================================================
 # 多 LLM 提供商支持
@@ -300,7 +301,7 @@ class UnifiedWorkflow:
         """运行完整工作流，输出 Markdown + Word + LaTeX 三格式论文。"""
         print("\n" + "=" * 70)
         print("数学建模论文自动生成系统 v2.1")
-        print("架构: 分段生成 + 显式记忆池")
+        print("架构: CrewAI Agent 协作 + 显式记忆池")
         print(f"模板: {self.template_name}")
         print("=" * 70)
 
@@ -309,45 +310,71 @@ class UnifiedWorkflow:
         self.context["problem_text"] = problem_text
         self.context["data_files"] = data_files
 
-        # Stage 1: 问题分析
-        print(f"\n{'='*60}")
-        print("Stage 1: 问题分析")
-        print(f"{'='*60}")
-        analysis = self._stage_problem_analysis()
-        self.context["analysis"] = analysis
-        # 生成阶段1摘要
-        self.memory_pool["analysis_summary"] = self._summarize_analysis(analysis)
-        self._save_text("stage_1_analysis/analysis_summary.md", self.memory_pool["analysis_summary"])
+        # Create role-based agents (crewAI style)
+        llm_cb = lambda p, s: _call_llm(p, s)
+        analyst = Agent(role="问题分析师", goal="深入分析赛题，提取子任务与约束", llm_callback=llm_cb)
+        modeler = Agent(role="数学建模师", goal="建立严谨的数学模型与公式体系", llm_callback=llm_cb)
+        solver = Agent(role="求解工程师", goal="设计算法并生成可执行代码", llm_callback=llm_cb)
+        writer = Agent(role="论文写作专家", goal="撰写完整的数学建模竞赛论文", llm_callback=llm_cb)
+        manager = Agent(role="协调者", goal="统筹各阶段工作，确保质量与衔接", allow_delegation=True, llm_callback=llm_cb)
 
-        # Stage 2: 数学建模
-        print(f"\n{'='*60}")
-        print("Stage 2: 数学建模")
-        print(f"{'='*60}")
-        modeling = self._stage_mathematical_modeling(analysis)
-        self.context["modeling"] = modeling
-        # 生成阶段2摘要
-        self.memory_pool["modeling_summary"] = self._summarize_modeling(modeling)
-        self._save_text("stage_2_modeling/modeling_summary.md", self.memory_pool["modeling_summary"])
+        shared: Dict[str, Any] = {}
 
-        # Stage 3: 计算求解
-        print(f"\n{'='*60}")
-        print("Stage 3: 计算求解")
-        print(f"{'='*60}")
-        solving = self._stage_computational_solving(modeling)
-        self.context["execution_result"] = solving.get("execution_result", {})
-        self.context["code"] = solving.get("code", "")
-        self.context["result_analysis"] = solving.get("interpretation", "")
-        # 生成阶段3摘要
-        self.memory_pool["algorithm_summary"] = self._summarize_algorithm(solving)
-        self.memory_pool["results_summary"] = self._summarize_results(solving)
-        self._save_text("stage_3_algorithm/algorithm_summary.md", self.memory_pool["algorithm_summary"])
-        self._save_text("stage_6_result_analysis/results_summary.md", self.memory_pool["results_summary"])
+        def do_analysis(ctx: str) -> str:
+            analysis = self._stage_problem_analysis()
+            self.context["analysis"] = analysis
+            self.memory_pool["analysis_summary"] = self._summarize_analysis(analysis)
+            self._save_text("stage_1_analysis/analysis_summary.md", self.memory_pool["analysis_summary"])
+            shared["analysis"] = analysis
+            shared["analysis_summary"] = self.memory_pool["analysis_summary"]
+            return self.memory_pool["analysis_summary"]
 
-        # Stage 4: 论文生成（分段 + 记忆传递）
-        print(f"\n{'='*60}")
-        print("Stage 4: 论文生成（分段逐章 + 记忆衔接）")
-        print(f"{'='*60}")
-        paper = self._stage_paper_generation_v2()
+        def do_modeling(ctx: str) -> str:
+            analysis = shared.get("analysis", self.context.get("analysis", {}))
+            modeling = self._stage_mathematical_modeling(analysis)
+            self.context["modeling"] = modeling
+            self.memory_pool["modeling_summary"] = self._summarize_modeling(modeling)
+            self._save_text("stage_2_modeling/modeling_summary.md", self.memory_pool["modeling_summary"])
+            shared["modeling"] = modeling
+            shared["modeling_summary"] = self.memory_pool["modeling_summary"]
+            return self.memory_pool["modeling_summary"]
+
+        def do_solving(ctx: str) -> str:
+            modeling = shared.get("modeling", self.context.get("modeling", {}))
+            solving = self._stage_computational_solving(modeling)
+            self.context["execution_result"] = solving.get("execution_result", {})
+            self.context["code"] = solving.get("code", "")
+            self.context["result_analysis"] = solving.get("interpretation", "")
+            self.memory_pool["algorithm_summary"] = self._summarize_algorithm(solving)
+            self.memory_pool["results_summary"] = self._summarize_results(solving)
+            self._save_text("stage_3_algorithm/algorithm_summary.md", self.memory_pool["algorithm_summary"])
+            shared["solving"] = solving
+            shared["algorithm_summary"] = self.memory_pool["algorithm_summary"]
+            shared["results_summary"] = self.memory_pool["results_summary"]
+            return self.memory_pool["results_summary"]
+
+        def do_paper(ctx: str) -> str:
+            paper = self._stage_paper_generation_v2()
+            shared["paper"] = paper
+            return paper
+
+        analyst.execute = do_analysis
+        modeler.execute = do_modeling
+        solver.execute = do_solving
+        writer.execute = do_paper
+
+        tasks = [
+            Task(description="分析问题", agent=analyst, output_key="analysis_summary"),
+            Task(description="建立数学模型", agent=modeler, output_key="modeling_summary"),
+            Task(description="计算求解", agent=solver, output_key="results_summary"),
+            Task(description="撰写论文", agent=writer, output_key="paper"),
+        ]
+
+        crew = Crew(agents=[analyst, modeler, solver, writer, manager], tasks=tasks, process=Process.SEQUENTIAL, shared_memory=shared)
+        crew.kickoff()
+
+        paper = shared.get("paper", "")
+        self._save_text("stage_6_result_analysis/results_summary.md", self.memory_pool.get("results_summary", ""))
 
         # 保存结果
         paper_path = self.output_dir / "final" / "MathModeling_Paper.md"
@@ -913,6 +940,24 @@ class UnifiedWorkflow:
                     fontweight='bold', va='bottom', ha='left')
 
         chart_count = 0
+        results_path = self.output_dir / "execution" / "results.json"
+        R = {}
+        if results_path.exists():
+            with open(results_path, "r", encoding="utf-8") as f:
+                R = json.load(f)
+
+        # Try LLM-driven generic chart designer first
+        try:
+            from src.charts import ChartDesigner
+            designer = ChartDesigner(self.output_dir, R)
+            chart_count = designer.design_and_draw()
+            if chart_count > 0:
+                print(f"  [ChartDesigner] 生成 {chart_count} 张图表")
+                return chart_count
+        except Exception:
+            pass
+
+        # Fallback to problem-specific hardcoded charts
         try:
             import matplotlib
             matplotlib.use('Agg')
@@ -920,17 +965,6 @@ class UnifiedWorkflow:
             from matplotlib.gridspec import GridSpec
             import numpy as np
 
-            # ── 读取求解结果 ──────────────────────────────────────────────
-            results_path = self.output_dir / "execution" / "results.json"
-            R = {}
-            if results_path.exists():
-                with open(results_path, "r", encoding="utf-8") as f:
-                    R = json.load(f)
-
-            # =====================================================================
-            # 图 1：烟幕覆盖时间轴 + 效能对比（2 面板复合图）
-            # =====================================================================
-            # 统一颜色映射：按 (UAV, Missile) 对分配固定颜色
             COLOR_MAP = {
                 ("FY1", "M1"): PALETTE["blue_main"],
                 ("FY2", "M2"): PALETTE["green_3"],
@@ -944,8 +978,8 @@ class UnifiedWorkflow:
                         return c
                 return PALETTE["neutral_light"]
 
-            intervals = []   # [(label, t_start, t_end, tau, color)]
-            bar_data = []    # [(label, tau, color)]
+            intervals = []
+            bar_data = []
 
             r2 = R.get("result2", {})
             for key in ["fy1_m1", "fy2_m2", "fy3_m3"]:
