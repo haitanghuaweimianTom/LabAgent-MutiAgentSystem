@@ -128,9 +128,9 @@ MathModel-MutiAgentSystem/
 │   ├── result1.xlsx          # 数据文件
 │   └── result2.csv           # 数据文件
 │
-├── 2025B-USETHIS/
+├── 2025B/
 │   ├── 2025B-Problem.md
-│   └── data.xlsx
+│   └── 附件1.xlsx ~ 附件4.xlsx
 ```
 
 **方式 B：金融分析模式（`*func2*` 文件夹）**
@@ -568,8 +568,6 @@ MathModel-MutiAgentSystem/
 │   ├── 2025B-Problem.md
 │   └── 附件1.xlsx ~ 附件4.xlsx
 │
-└── work_2025A/                      # 2025A 示例输出
-    └── ...
 ```
 
 ---
