@@ -219,12 +219,17 @@ class CodeExecutor:
             # 将输出目录通过环境变量传递，便于代码使用绝对路径
             env["OUTPUT_DIR"] = str(self.output_dir.resolve())
 
-            # 将数据文件复制到执行目录，确保代码能找到它们
+            # 将数据文件复制到工作目录（代码运行的 cwd），确保代码能找到它们
             if data_files:
                 for name, src_path in data_files.items():
                     src = Path(src_path)
+                    # 如果路径不存在，尝试相对于输出目录解析
+                    if not src.exists():
+                        src = self.output_dir / src_path
+                        if not src.exists():
+                            src = code_file.parent / src_path
                     if src.exists():
-                        dst = self.exec_dir / src.name
+                        dst = self.output_dir / src.name
                         if not dst.exists() or dst.resolve() != src.resolve():
                             shutil.copy2(str(src), str(dst))
 
