@@ -138,7 +138,7 @@ python run_auto.py --provider anthropic
 # 禁用 Critique 加速
 python run_auto.py --no-critique
 
-# 切换 Agent 协作模式（默认 hierarchical）
+# 切换 Agent 协作模式（默认 sequential）
 CREW_PROCESS_MODE=sequential python run_auto.py
 CREW_PROCESS_MODE=consensus python run_auto.py
 ```
@@ -479,7 +479,7 @@ MathModel-MutiAgentSystem/
 | `OLLAMA_HOST` | Ollama 服务地址 | `http://localhost:11434` |
 | `ANTHROPIC_BASE_URL` | Anthropic API 代理地址 | - |
 | `DEFAULT_LLM_PROVIDER` | 强制指定默认 Provider：`claude_cli`, `anthropic`, `openai`, `gemini`, `ollama` | 自动检测 |
-| `CREW_PROCESS_MODE` | Agent 协作模式：`sequential`, `hierarchical`, `consensus` | `hierarchical` |
+| `CREW_PROCESS_MODE` | Agent 协作模式：`sequential`, `hierarchical`, `consensus` | `sequential` |
 
 ---
 

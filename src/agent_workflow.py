@@ -379,7 +379,7 @@ class UnifiedWorkflow:
             Task(description="撰写论文", agent=writer, output_key="paper"),
         ]
 
-        process_mode = os.getenv("CREW_PROCESS_MODE", "hierarchical").lower()
+        process_mode = os.getenv("CREW_PROCESS_MODE", "sequential").lower()
         process_map = {
             "sequential": Process.SEQUENTIAL,
             "hierarchical": Process.HIERARCHICAL,
