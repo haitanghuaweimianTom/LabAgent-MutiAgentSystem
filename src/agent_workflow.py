@@ -1,23 +1,3 @@
-"""
-统一工作流引擎 v2.0
-===================
-
-融合 LLM-MM-Agent + cherry-studio + Claude CLI 的统一架构：
-- Coordinator: DAG调度与黑板内存（LLM-MM-Agent）
-- CritiqueEngine: Actor-Critic-Improvement 质量保障（LLM-MM-Agent）
-- KnowledgeBase: RAG 知识增强（cherry-studio）
-- DocumentLoader: 多格式文档处理（cherry-studio）
-- CodeExecutor: Claude CLI 代码生成与执行
-- PaperGenerator: 大纲驱动的论文章节生成（LLM-MM-Agent）
-- PaperTemplate: 通用论文模板系统
-
-核心改进：
-1. 每章节完整生成、内容充实、可直接交付
-2. 代码任务明确使用 Claude CLI
-3. 数据分析利用 KnowledgeBase + DocumentLoader
-4. 支持多种论文模板（数学建模/课程作业/金融分析）
-"""
-
 import os
 import sys
 import json
@@ -32,6 +12,8 @@ from enum import Enum
 
 import numpy as np
 import pandas as pd
+
+from src.paper.tex_exporter import MarkdownToTexConverter
 
 # =============================================================================
 # 多 LLM 提供商支持
@@ -315,14 +297,7 @@ class UnifiedWorkflow:
         data_files: Dict[str, str],
         problem_name: str = "数学建模问题",
     ) -> str:
-        """
-        运行完整工作流（分段生成 + 显式记忆传递）
-
-        核心改进：
-        1. 每个阶段完成后，调用LLM生成结构化摘要，存入 memory_pool
-        2. 下一阶段只接收摘要，而非原始长文本，避免上下文过载
-        3. 论文生成阶段，先预生成大纲，再逐章生成，每章基于前几章摘要 + 阶段摘要
-        """
+        """运行完整工作流，输出 Markdown + Word + LaTeX 三格式论文。"""
         print("\n" + "=" * 70)
         print("数学建模论文自动生成系统 v2.1")
         print("架构: 分段生成 + 显式记忆池")
@@ -395,7 +370,9 @@ class UnifiedWorkflow:
         # 导出 docx
         self._convert_to_docx(paper_path)
 
-        # 导出记忆池
+        # 导出 LaTeX
+        self._convert_to_tex(paper_path)
+
         self._save_json("final/memory_pool.json", self.memory_pool)
 
         return paper
@@ -796,45 +773,24 @@ class UnifiedWorkflow:
     # ========================================================================
 
     def _stage_paper_generation_v2(self) -> str:
-        """
-        论文生成阶段 v2.1（分段生成 + 显式记忆传递）
-
-        核心改进：
-        1. 预生成论文章节大纲（每章列出必须覆盖的要点）
-        2. 逐章生成时，prompt 中明确包含：本章大纲 + 相关阶段摘要 + 前几章摘要
-        3. 每章生成后，生成该章结构化摘要，存入记忆池，供后续章节衔接
-        """
         print("  [Stage 4] 开始论文生成（分段逐章 + 记忆衔接）...")
-
-        # 生成图表
-        print("  [Stage 4.1] 生成图表...")
         charts = self._generate_charts()
         self.context["charts"] = charts
-
-        # 组装记忆池给 PaperGenerator
         memory_for_paper = {
             "analysis_summary": self.memory_pool.get("analysis_summary", ""),
             "modeling_summary": self.memory_pool.get("modeling_summary", ""),
             "algorithm_summary": self.memory_pool.get("algorithm_summary", ""),
             "results_summary": self.memory_pool.get("results_summary", ""),
         }
-
-        # 使用 PaperGenerator v2 生成论文
-        print("  [Stage 4.2] 预生成大纲，再逐章生成...")
         paper = self.paper_generator.generate_paper_v2(
             context=self.context,
             memory_pool=memory_for_paper,
             use_critique=self.use_critique,
         )
-
-        # 保存章节摘要
         self.memory_pool["chapter_summaries"] = self.paper_generator.chapter_summaries
         self._save_json("final/chapter_summaries.json", self.paper_generator.chapter_summaries)
-
-        # 保存
         paper_path = self.paper_generator.save_paper(paper, "MathModeling_Paper.md")
         print(f"  [Stage 4.3] 论文已保存: {paper_path}")
-
         return paper
 
     def _summarize_analysis(self, analysis: Dict) -> str:
@@ -1362,8 +1318,17 @@ class UnifiedWorkflow:
         except Exception as e:
             print(f"  Word导出失败: {e}")
 
+    def _convert_to_tex(self, md_path: Path):
+        template_dir = Path(__file__).parent.parent / "config" / "latex_templates" / "mcm"
+        tex_path = md_path.parent / "MathModeling_Paper.tex"
+        try:
+            converter = MarkdownToTexConverter(template_dir, md_path.parent)
+            converter.export(md_path, tex_path)
+            print(f"  论文已导出为LaTeX: {tex_path}")
+        except Exception as e:
+            print(f"  LaTeX导出失败: {e}")
+
     def _save_json(self, rel_path: str, data: Any):
-        """保存JSON文件"""
         path = self.output_dir / rel_path
         path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:

@@ -161,7 +161,8 @@ Web UI 功能：
 ```
 work/final/
 ├── MathModeling_Paper.md          # 完整论文（Markdown）
-├── MathModeling_Paper.tex         # LaTeX 源文件（JXUSTmodeling 模板）
+├── MathModeling_Paper.tex         # LaTeX 源文件（mcmthesis MCM/ICM 模板）
+├── mcmthesis.cls                  # MCM/ICM 模板类文件（自动复制）
 ├── MathModeling_Paper.pdf         # 排版后的 PDF（竞赛标准格式）
 ├── 数学建模论文.docx               # Word 格式论文（备用）
 ├── solution.json                  # 完整解决方案（含子任务结果）
@@ -386,7 +387,7 @@ MathModel-MutiAgentSystem/
 | **公式** | LaTeX 格式，完整编号与推导 |
 | **图表** | 自动生成的对比图/饼图（300 DPI PNG）+ Markdown 表格 |
 | **代码** | Python 实现，附录或独立文件 |
-| **格式** | Markdown + LaTeX PDF（JXUSTmodeling 模板）+ Word（.docx） |
+| **格式** | Markdown + LaTeX PDF（mcmthesis MCM/ICM 模板）+ Word（.docx） |
 
 ---
 
