@@ -318,6 +318,7 @@ class PaperGenerator:
         context: Dict[str, Any],
         memory_pool: Dict[str, str],
         use_critique: bool = True,
+        chart_files: Optional[List[str]] = None,
     ) -> str:
         """
         生成完整论文 v2.1（显式记忆传递 + 逐章衔接）
@@ -348,6 +349,7 @@ class PaperGenerator:
                 memory_pool=memory_pool,
                 previous_chapters=previous_chapters,
                 use_critique=use_critique,
+                chart_files=chart_files if chapter.id in ["result_analysis", "model_solution", "sensitivity_analysis"] else None,
             )
 
             # 格式化章节
@@ -360,6 +362,10 @@ class PaperGenerator:
 
         # 组装论文
         paper = "\n".join(paper_parts)
+
+        # Step 3: 后处理——确保所有图表都被引用
+        if chart_files:
+            paper = self._ensure_charts_referenced(paper, chart_files)
 
         # 最终字数统计
         total_chars = self.count_chinese_chars(paper)
@@ -459,6 +465,7 @@ class PaperGenerator:
         memory_pool: Dict[str, str],
         previous_chapters: Dict[str, str],
         use_critique: bool = True,
+        chart_files: Optional[List[str]] = None,
     ) -> str:
         """
         生成单个章节 v2.1（显式记忆传递）
@@ -479,6 +486,7 @@ class PaperGenerator:
             chapter_outline=chapter_outline,
             relevant_summaries=relevant_summaries,
             previous_summaries=prev_summaries,
+            chart_files=chart_files,
         )
 
         # 4. 生成内容
@@ -521,6 +529,7 @@ class PaperGenerator:
         chapter_outline: str,
         relevant_summaries: str,
         previous_summaries: str,
+        chart_files: Optional[List[str]] = None,
     ) -> str:
         """构建 v2.1 章节生成 Prompt"""
         prompt = f"""请撰写论文的"{chapter.title}"章节。
@@ -540,6 +549,10 @@ class PaperGenerator:
 
         if relevant_summaries:
             prompt += f"\n【相关资料 - 可引用以支撑本章】\n{relevant_summaries}\n"
+
+        if chart_files:
+            chart_list = "\n".join([f"- {Path(f).name}" for f in chart_files])
+            prompt += f"""\n【可用图表 - 必须在正文中引用】\n本章必须引用以下已生成的图表，在合适的位置插入 Markdown 图片语法：\n{chart_list}\n\n插入格式示例：\n![图1：图表说明](stage_7_charts/fig_01_xxx.png)\n\n要求：\n1. 每张图至少引用一次\n2. 引用时要有文字说明，解释图表展示的内容和结论\n3. 图表编号按顺序排列\n"""
 
         prompt += """
 【输出格式要求】
@@ -679,6 +692,65 @@ class PaperGenerator:
         except Exception as e:
             print(f"      扩展失败: {e}")
             return content
+
+    def _ensure_charts_referenced(self, paper: str, chart_files: List[str]) -> str:
+        """后处理：确保所有图表都在论文中被引用"""
+        # 收集已在论文中引用的图表
+        referenced = set(re.findall(r'!\[.*?\]\((.*?)\)', paper))
+
+        missing = []
+        for f in chart_files:
+            fname = Path(f).name
+            # 检查是否已被引用（支持绝对路径和相对路径匹配）
+            if not any(fname in ref for ref in referenced):
+                missing.append(f)
+
+        if not missing:
+            return paper
+
+        print(f"[PaperGenerator] 发现 {len(missing)} 张图表未被引用，执行自动插入...")
+
+        # 在"结果分析"章节末尾插入缺失的图表
+        insert_markers = [
+            "## 七、结果分析",
+            "## 结果分析",
+            "## 八、灵敏度分析",
+            "## 灵敏度分析",
+            "## 六、模型的求解",
+            "## 模型的求解",
+        ]
+        insert_pos = -1
+        for marker in insert_markers:
+            pos = paper.find(marker)
+            if pos != -1:
+                # 找到该章节的末尾（下一个 ## 标题或文末）
+                next_heading = paper.find("\n## ", pos + len(marker))
+                if next_heading != -1:
+                    insert_pos = next_heading
+                else:
+                    insert_pos = len(paper)
+                break
+
+        if insert_pos == -1:
+            # 如果没找到合适章节，在参考文献前插入
+            ref_pos = paper.find("## 参考文献")
+            if ref_pos != -1:
+                insert_pos = ref_pos
+            else:
+                insert_pos = len(paper)
+
+        # 生成图表引用块
+        chart_block = []
+        for i, fpath in enumerate(missing, 1):
+            fname = Path(fpath).stem
+            caption = fname.replace("fig_", "").replace("_", " ")
+            # 使用相对路径
+            rel_path = f"stage_7_charts/{Path(fpath).name}"
+            chart_block.append(f"![图{i}：{caption}]({rel_path})")
+
+        insert_text = "\n\n" + "\n\n".join(chart_block) + "\n\n"
+        paper = paper[:insert_pos] + insert_text + paper[insert_pos:]
+        return paper
 
     def save_paper(self, paper: str, filename: str = "paper.md"):
         """保存论文到文件"""

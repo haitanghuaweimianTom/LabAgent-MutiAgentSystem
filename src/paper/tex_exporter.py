@@ -30,12 +30,21 @@ class MarkdownToTexConverter:
 
     def convert(self, md_text: str, title: str = "数学建模论文") -> str:
         """Convert full Markdown paper to LaTeX source."""
+        # Pre-process: protect multi-line LaTeX environments
+        md_text = self._protect_math_blocks(md_text)
+
         lines = md_text.splitlines()
         body_lines: List[str] = []
         i = 0
         while i < len(lines):
             line = lines[i]
             stripped = line.strip()
+
+            # Skip protected math block placeholders (they are already LaTeX)
+            if stripped.startswith("<<MATHBLOCK"):
+                body_lines.append(self._restore_math_block(stripped))
+                i += 1
+                continue
 
             if stripped.startswith("```"):
                 i = self._process_code_block(lines, i, body_lines)
@@ -67,6 +76,33 @@ class MarkdownToTexConverter:
 
         body = "\n".join(body_lines)
         return self._build_document(body, title)
+
+    def _protect_math_blocks(self, text: str) -> str:
+        """Protect multi-line LaTeX environments and display math."""
+        self._math_block_cache: List[str] = []
+
+        # Protect $$...$$
+        def repl_display(m):
+            self._math_block_cache.append(m.group(0))
+            return f"<<MATHBLOCK{len(self._math_block_cache)-1}>>"
+        text = re.sub(r"\$\$.*?\$\$", repl_display, text, flags=re.DOTALL)
+
+        # Protect \begin{...}...\end{...}
+        def repl_env(m):
+            self._math_block_cache.append(m.group(0))
+            return f"<<MATHBLOCK{len(self._math_block_cache)-1}>>"
+        text = re.sub(r"\\begin\{.*?\}.*?\\end\{.*?\}", repl_env, text, flags=re.DOTALL)
+
+        return text
+
+    def _restore_math_block(self, stripped: str) -> str:
+        """Restore a protected math block from placeholder."""
+        m = re.match(r"<<MATHBLOCK(\d+)>>", stripped)
+        if m:
+            idx = int(m.group(1))
+            if idx < len(self._math_block_cache):
+                return self._math_block_cache[idx]
+        return stripped
 
     def _process_heading(self, text: str, level: int) -> str:
         text = self._protect_math(text)
@@ -102,7 +138,11 @@ class MarkdownToTexConverter:
         def repl(m):
             self._math_cache.append(m.group(0))
             return f"<<MATH{len(self._math_cache)-1}>>"
+        # Protect display math blocks $$...$$
         text = re.sub(r"\$\$.*?\$\$", repl, text, flags=re.DOTALL)
+        # Protect LaTeX environments \begin{...}...\end{...}
+        text = re.sub(r"\\begin\{.*?\}.*?\\end\{.*?\}", repl, text, flags=re.DOTALL)
+        # Protect inline math $...$
         text = re.sub(r"\$.*?\$", repl, text)
         return text
 

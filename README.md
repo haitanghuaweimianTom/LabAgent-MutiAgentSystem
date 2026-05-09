@@ -1,4 +1,4 @@
-# 数学建模论文全自动生成系统 v2.2
+# 数学建模论文全自动生成系统 v2.3
 
 > **融合 LLM-MM-Agent + Cherry Studio + crewAI 架构，集成 15 类经典数学建模算法库**
 >
@@ -103,7 +103,63 @@ npm install -g @anthropic-ai/claude-code
 
 ## 使用方式
 
-### 方式一：命令行（CLI）
+### 方式一：全自动扫描（推荐）
+
+将赛题和数据文件放入 `*USETHIS*` 命名文件夹，系统会自动扫描并批量处理。
+
+**期望目录结构：**
+
+```
+2024A-USETHIS/
+├── 2024A-Problem.md      # 赛题描述（.md 格式）
+├── result1.xlsx          # 数据文件
+└── result2.csv           # 数据文件
+
+2025B-USETHIS/
+├── 2025B-Problem.md
+└── data.xlsx
+```
+
+**运行命令：**
+
+```bash
+# 全自动扫描并生成
+python run_auto.py
+
+# 指定根目录
+python run_auto.py --root ./problems
+
+# 强制使用 Claude Code CLI（默认）
+python run_auto.py --provider claude_cli
+
+# 使用 API Provider（如已配置环境变量）
+python run_auto.py --provider anthropic
+
+# 禁用 Critique 加速
+python run_auto.py --no-critique
+
+# 切换 Agent 协作模式（默认 hierarchical）
+CREW_PROCESS_MODE=sequential python run_auto.py
+CREW_PROCESS_MODE=consensus python run_auto.py
+```
+
+### 方式二：金融分析模式
+
+将素材放入 `*func2*` 命名文件夹，使用 `financial_analysis` 模板。
+
+```bash
+python run_finance.py
+```
+
+### 方式三：课程作业模式
+
+将素材放入 `*func3*` 命名文件夹，使用 `coursework` 模板。
+
+```bash
+python run_coursework.py
+```
+
+### 方式四：命令行（CLI）单题模式
 
 适合自动化脚本、服务器部署或无图形界面环境。
 
@@ -178,7 +234,7 @@ work/final/
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                    数学建模论文全自动生成系统 v2.1                     │
+│                    数学建模论文全自动生成系统 v2.3                     │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
 │  Stage 1: 问题分析 (Problem Analysis)                                │
@@ -302,7 +358,7 @@ MathModel-MutiAgentSystem/
 │   └── package.json
 │
 ├── src/                             # 核心源码（CLI 与后端共用）
-│   ├── agent_workflow.py            # 统一工作流引擎 v2.1（核心）
+│   ├── agent_workflow.py            # 统一工作流引擎 数学建模论文全自动生成系统 v2.3（核心）
 │   ├── framework.py                 # 模板驱动工作流（兼容层）
 │   ├── workflow/                    # 工作流模块
 │   │   ├── paper_generator.py       # 大纲驱动分段论文生成器
@@ -422,6 +478,8 @@ MathModel-MutiAgentSystem/
 | `OLLAMA_MODEL` | Ollama 本地模型名 | - |
 | `OLLAMA_HOST` | Ollama 服务地址 | `http://localhost:11434` |
 | `ANTHROPIC_BASE_URL` | Anthropic API 代理地址 | - |
+| `DEFAULT_LLM_PROVIDER` | 强制指定默认 Provider：`claude_cli`, `anthropic`, `openai`, `gemini`, `ollama` | 自动检测 |
+| `CREW_PROCESS_MODE` | Agent 协作模式：`sequential`, `hierarchical`, `consensus` | `hierarchical` |
 
 ---
 
@@ -480,8 +538,8 @@ MathModel-MutiAgentSystem/
 
 | 版本 | 日期 | 主要更新 |
 |------|------|----------|
-| **v2.2** | 2026-05-08 | 删除了多余的文件，归档已有的重要文件|
-| **v2.2** | 2026-05-09 | crewAI Agent 协作 + 通用图表引擎 + 三格式交付 + 前端项目化管理 + 批量文件操作 |
+| **v2.3** | 2026-05-09 | **通用化重构**：LLM 驱动的通用图表引擎（ChartDesigner）自动分析结果数据并生成图表，自动插入论文对应章节；修复 LaTeX 多行公式（`\begin{equation}` 等跨行环境）渲染问题；删除所有题目特定的硬编码图表逻辑，系统完全通用；CrewAI Agent 协作默认启用 HIERARCHICAL 模式，支持 `CREW_PROCESS_MODE` 环境变量切换；新增 `run_auto.py` / `run_finance.py` / `run_coursework.py` 三种自动扫描脚本 |
+| **v2.2** | 2026-05-08 | crewAI Agent 协作架构 + 通用图表引擎雏形 + LaTeX/MCM 模板集成 + 前端 Next.js 重构 |
 | **v2.0** | 2026-04-29 | 统一工作流引擎 + Critique-Improvement + 代码自动执行 + Word 导出 |
 | **v1.0** | 2026-04-25 | 初始多 Agent 协作框架 |
 

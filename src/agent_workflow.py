@@ -40,27 +40,36 @@ def _get_llm_provider():
         return None
 
     try:
-        if os.getenv("OPENAI_API_KEY"):
+        default_provider = os.getenv("DEFAULT_LLM_PROVIDER", "").lower()
+
+        if default_provider == "claude_cli":
+            manager = get_provider_manager()
+            manager.register(ProviderType.CLAUDE_CLI)
+            _llm_provider_instance = manager
+            print(f"[LLM] 使用 Claude CLI Provider (model={manager.get().config.model})")
+        elif default_provider == "openai" or os.getenv("OPENAI_API_KEY"):
             manager = get_provider_manager()
             manager.register(ProviderType.OPENAI)
             _llm_provider_instance = manager
             print(f"[LLM] 使用 OpenAI Provider (model={manager.get().config.model})")
-        elif os.getenv("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN"):
+        elif default_provider == "anthropic" or os.getenv("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN"):
             manager = get_provider_manager()
             config = ProviderConfig.from_env(ProviderType.ANTHROPIC)
             if not config.api_key and os.getenv("ANTHROPIC_AUTH_TOKEN"):
                 config.api_key = os.getenv("ANTHROPIC_AUTH_TOKEN")
             if os.getenv("ANTHROPIC_BASE_URL"):
                 config.api_host = os.getenv("ANTHROPIC_BASE_URL")
+            if os.getenv("ANTHROPIC_MODEL"):
+                config.model = os.getenv("ANTHROPIC_MODEL")
             manager.register(ProviderType.ANTHROPIC, config)
             _llm_provider_instance = manager
             print(f"[LLM] 使用 Anthropic Provider (model={manager.get().config.model})")
-        elif os.getenv("GEMINI_API_KEY"):
+        elif default_provider == "gemini" or os.getenv("GEMINI_API_KEY"):
             manager = get_provider_manager()
             manager.register(ProviderType.GEMINI)
             _llm_provider_instance = manager
             print(f"[LLM] 使用 Gemini Provider (model={manager.get().config.model})")
-        elif os.getenv("OLLAMA_MODEL") or os.getenv("OLLAMA_HOST"):
+        elif default_provider == "ollama" or os.getenv("OLLAMA_MODEL") or os.getenv("OLLAMA_HOST"):
             manager = get_provider_manager()
             manager.register(ProviderType.OLLAMA)
             _llm_provider_instance = manager
@@ -300,7 +309,7 @@ class UnifiedWorkflow:
     ) -> str:
         """运行完整工作流，输出 Markdown + Word + LaTeX 三格式论文。"""
         print("\n" + "=" * 70)
-        print("数学建模论文自动生成系统 v2.1")
+        print("数学建模论文自动生成系统 v2.3")
         print("架构: CrewAI Agent 协作 + 显式记忆池")
         print(f"模板: {self.template_name}")
         print("=" * 70)
@@ -320,7 +329,7 @@ class UnifiedWorkflow:
 
         shared: Dict[str, Any] = {}
 
-        def do_analysis(ctx: str) -> str:
+        def do_analysis(_task: str, _ctx: str) -> str:
             analysis = self._stage_problem_analysis()
             self.context["analysis"] = analysis
             self.memory_pool["analysis_summary"] = self._summarize_analysis(analysis)
@@ -329,7 +338,7 @@ class UnifiedWorkflow:
             shared["analysis_summary"] = self.memory_pool["analysis_summary"]
             return self.memory_pool["analysis_summary"]
 
-        def do_modeling(ctx: str) -> str:
+        def do_modeling(_task: str, _ctx: str) -> str:
             analysis = shared.get("analysis", self.context.get("analysis", {}))
             modeling = self._stage_mathematical_modeling(analysis)
             self.context["modeling"] = modeling
@@ -339,7 +348,7 @@ class UnifiedWorkflow:
             shared["modeling_summary"] = self.memory_pool["modeling_summary"]
             return self.memory_pool["modeling_summary"]
 
-        def do_solving(ctx: str) -> str:
+        def do_solving(_task: str, _ctx: str) -> str:
             modeling = shared.get("modeling", self.context.get("modeling", {}))
             solving = self._stage_computational_solving(modeling)
             self.context["execution_result"] = solving.get("execution_result", {})
@@ -353,7 +362,7 @@ class UnifiedWorkflow:
             shared["results_summary"] = self.memory_pool["results_summary"]
             return self.memory_pool["results_summary"]
 
-        def do_paper(ctx: str) -> str:
+        def do_paper(_task: str, _ctx: str) -> str:
             paper = self._stage_paper_generation_v2()
             shared["paper"] = paper
             return paper
@@ -370,7 +379,22 @@ class UnifiedWorkflow:
             Task(description="撰写论文", agent=writer, output_key="paper"),
         ]
 
-        crew = Crew(agents=[analyst, modeler, solver, writer, manager], tasks=tasks, process=Process.SEQUENTIAL, shared_memory=shared)
+        process_mode = os.getenv("CREW_PROCESS_MODE", "hierarchical").lower()
+        process_map = {
+            "sequential": Process.SEQUENTIAL,
+            "hierarchical": Process.HIERARCHICAL,
+            "consensus": Process.CONSENSUS,
+        }
+        selected_process = process_map.get(process_mode, Process.HIERARCHICAL)
+        print(f"[Crew] 流程模式: {selected_process.value}")
+
+        crew = Crew(
+            agents=[analyst, modeler, solver, writer, manager],
+            tasks=tasks,
+            process=selected_process,
+            manager_agent=manager if selected_process == Process.HIERARCHICAL else None,
+            shared_memory=shared,
+        )
         crew.kickoff()
 
         paper = shared.get("paper", "")
@@ -803,6 +827,13 @@ class UnifiedWorkflow:
         print("  [Stage 4] 开始论文生成（分段逐章 + 记忆衔接）...")
         charts = self._generate_charts()
         self.context["charts"] = charts
+
+        # Collect generated chart files for auto-insertion
+        charts_dir = self.output_dir / "stage_7_charts"
+        chart_files = [str(f) for f in sorted(charts_dir.glob("fig_*.png"))] if charts_dir.exists() else []
+        if chart_files:
+            print(f"  [Stage 4] 发现 {len(chart_files)} 张图表，将在论文中自动引用")
+
         memory_for_paper = {
             "analysis_summary": self.memory_pool.get("analysis_summary", ""),
             "modeling_summary": self.memory_pool.get("modeling_summary", ""),
@@ -813,6 +844,7 @@ class UnifiedWorkflow:
             context=self.context,
             memory_pool=memory_for_paper,
             use_critique=self.use_critique,
+            chart_files=chart_files,
         )
         self.memory_pool["chapter_summaries"] = self.paper_generator.chapter_summaries
         self._save_json("final/chapter_summaries.json", self.paper_generator.chapter_summaries)
@@ -957,289 +989,8 @@ class UnifiedWorkflow:
         except Exception:
             pass
 
-        # Fallback to problem-specific hardcoded charts
-        try:
-            import matplotlib
-            matplotlib.use('Agg')
-            import matplotlib.pyplot as plt
-            from matplotlib.gridspec import GridSpec
-            import numpy as np
-
-            COLOR_MAP = {
-                ("FY1", "M1"): PALETTE["blue_main"],
-                ("FY2", "M2"): PALETTE["green_3"],
-                ("FY3", "M3"): PALETTE["red_strong"],
-                ("FY4", "M1"): PALETTE["teal"],
-                ("FY5", "M2"): PALETTE["violet"],
-            }
-            def _get_color(label: str):
-                for (u, m), c in COLOR_MAP.items():
-                    if u in label and m in label:
-                        return c
-                return PALETTE["neutral_light"]
-
-            intervals = []
-            bar_data = []
-
-            r2 = R.get("result2", {})
-            for key in ["fy1_m1", "fy2_m2", "fy3_m3"]:
-                sub = r2.get(key, {})
-                tau = sub.get("tau_eff", 0)
-                label_map = {"fy1_m1": "FY1→M1", "fy2_m2": "FY2→M2", "fy3_m3": "FY3→M3"}
-                lbl = label_map.get(key, key)
-                c = _get_color(lbl)
-                if tau > 0:
-                    intervals.append((lbl, sub.get("t_start", 0), sub.get("t_end", 0), tau, c))
-                bar_data.append((lbl, tau, c))
-
-            r3 = R.get("result3", {})
-            for item in r3.get("assignments", []):
-                lbl = f"{item['uav']}→{item['missile']}"
-                tau = item.get("tau_eff", 0)
-                c = _get_color(lbl)
-                if tau > 0:
-                    intervals.append((lbl, 0, tau, tau, c))
-                bar_data.append((lbl, tau, c))
-
-            _style(font_size=13, lw=1.8)
-            fig = plt.figure(figsize=(12, 7))
-            gs = GridSpec(2, 1, height_ratios=[1, 1.2], hspace=0.40)
-
-            # Panel a: 甘特图
-            ax_a = fig.add_subplot(gs[0])
-            _add_panel(ax_a, 'a', fs=13)
-            if intervals:
-                y_pos = np.arange(len(intervals))
-                t_max = max(x[2] for x in intervals)
-                for i, (lbl, t0, t1, tau, c) in enumerate(intervals):
-                    ax_a.barh(i, t1 - t0, left=t0, height=0.55, color=c, edgecolor='black', linewidth=1)
-                    # 白字标注在条内
-                    ax_a.text(t0 + (t1 - t0) / 2, i, f'{tau:.1f} s',
-                              ha='center', va='center', fontsize=10, color='white',
-                              fontweight='bold')
-                ax_a.set_yticks(y_pos)
-                ax_a.set_yticklabels([x[0] for x in intervals], fontsize=11)
-                ax_a.set_xlabel('时间 (s)', fontsize=12)
-                ax_a.set_title('烟幕有效遮蔽时间区间', fontsize=13, pad=8)
-                ax_a.set_xlim(0, t_max * 1.12)
-                ax_a.invert_yaxis()
-            else:
-                ax_a.text(0.5, 0.5, '无有效遮蔽时间数据', ha='center', va='center',
-                          transform=ax_a.transAxes, fontsize=12, color=PALETTE['neutral_mid'])
-                ax_a.set_xticks([])
-                ax_a.set_yticks([])
-
-            # Panel b: 分组柱状图
-            ax_b = fig.add_subplot(gs[1])
-            _add_panel(ax_b, 'b', fs=13)
-            if bar_data:
-                labels = [x[0] for x in bar_data]
-                vals = [x[1] for x in bar_data]
-                cols = [x[2] for x in bar_data]
-                x = np.arange(len(labels))
-                bars = ax_b.bar(x, vals, color=cols, edgecolor='black', linewidth=1.2, width=0.55)
-                ax_b.set_xticks(x)
-                ax_b.set_xticklabels(labels, rotation=30, ha='right', fontsize=10)
-                ax_b.set_ylabel(r'$\tau_{\mathrm{eff}}$ (s)', fontsize=12)
-                ax_b.set_title('各方案有效遮蔽时长对比', fontsize=13, pad=8)
-                v_max = max(vals) if max(vals) > 0 else 5
-                for bar, val in zip(bars, vals):
-                    h = bar.get_height()
-                    if h > 0:
-                        ax_b.text(bar.get_x() + bar.get_width() / 2, h + v_max * 0.03,
-                                  f'{val:.1f}', ha='center', va='bottom', fontsize=10)
-                    else:
-                        ax_b.text(bar.get_x() + bar.get_width() / 2, v_max * 0.03,
-                                  '无遮蔽', ha='center', va='bottom', fontsize=10,
-                                  color=PALETTE['neutral_dark'], fontweight='bold')
-                ax_b.set_ylim(0, v_max * 1.15)
-            _save(fig, 'fig_01_coverage_timeline', dpi=300)
-            chart_count += 1
-
-            # =====================================================================
-            # 图 2：无人机-导弹分配矩阵（2 面板复合图）
-            # =====================================================================
-            _style(font_size=12, lw=1.5)
-            fig2 = plt.figure(figsize=(12, 5.5))
-            gs2 = GridSpec(1, 2, width_ratios=[1, 1.3], wspace=0.45)
-
-            # Panel a: 3机3弹协同分配 — 使用 pcolormesh 保证单元格均匀
-            ax2a = fig2.add_subplot(gs2[0])
-            _add_panel(ax2a, 'a', fs=13)
-            uavs3 = ['FY1', 'FY2', 'FY3']
-            missiles = ['M1', 'M2', 'M3']
-            mat3 = np.zeros((len(uavs3), len(missiles)))
-            for item in r3.get("assignments", []):
-                u, m = item['uav'], item['missile']
-                if u in uavs3 and m in missiles:
-                    mat3[uavs3.index(u)][missiles.index(m)] = item.get("tau_eff", 0)
-
-            # pcolormesh 保证单元格是规则矩形
-            im = ax2a.pcolormesh(np.arange(len(missiles) + 1), np.arange(len(uavs3) + 1),
-                                 mat3, cmap='Blues', vmin=0, edgecolors='white', linewidth=1.5)
-            ax2a.set_xticks(np.arange(len(missiles)) + 0.5)
-            ax2a.set_xticklabels(missiles, fontsize=11)
-            ax2a.set_yticks(np.arange(len(uavs3)) + 0.5)
-            ax2a.set_yticklabels(uavs3, fontsize=11)
-            ax2a.set_xlabel('来袭导弹', fontsize=12)
-            ax2a.set_ylabel('无人机', fontsize=12)
-            ax2a.set_title('三机三弹协同分配', fontsize=12, pad=8)
-            ax2a.set_xlim(0, len(missiles))
-            ax2a.set_ylim(0, len(uavs3))
-            ax2a.invert_yaxis()
-            # 单元格标注
-            for i in range(len(uavs3)):
-                for j in range(len(missiles)):
-                    v = mat3[i, j]
-                    txt = f'{v:.1f}' if v > 0 else '—'
-                    tc = 'white' if v > mat3.max() * 0.5 else '#272727'
-                    ax2a.text(j + 0.5, i + 0.5, txt, ha='center', va='center', fontsize=12, color=tc, fontweight='bold')
-            cbar = fig2.colorbar(im, ax=ax2a, shrink=0.5, pad=0.02)
-            cbar.set_label(r'$\tau_{\mathrm{eff}}$ (s)', fontsize=11)
-            ax2a.set_aspect('equal')
-            for spine in ax2a.spines.values():
-                spine.set_visible(False)
-
-            # Panel b: 5机3弹鲁棒分配 — 角色矩阵
-            ax2b = fig2.add_subplot(gs2[1])
-            _add_panel(ax2b, 'b', fs=13)
-            uavs5 = ['FY1', 'FY2', 'FY3', 'FY4', 'FY5']
-            mat_role = np.zeros((len(uavs5), len(missiles)))
-            for item in R.get("result4", {}).get("optimal_assignment", []):
-                u, m = item['uav'], item['missile']
-                role = 1.0 if item.get('role') == 'primary' else 0.5
-                if u in uavs5 and m in missiles:
-                    mat_role[uavs5.index(u)][missiles.index(m)] = role
-
-            cmap_role = plt.matplotlib.colors.ListedColormap(['#FFFFFF', '#B4C0E4', '#484878'])
-            im2 = ax2b.pcolormesh(np.arange(len(missiles) + 1), np.arange(len(uavs5) + 1),
-                                  mat_role, cmap=cmap_role, vmin=0, vmax=1,
-                                  edgecolors='white', linewidth=1.5)
-            ax2b.set_xticks(np.arange(len(missiles)) + 0.5)
-            ax2b.set_xticklabels(missiles, fontsize=11)
-            ax2b.set_yticks(np.arange(len(uavs5)) + 0.5)
-            ax2b.set_yticklabels(uavs5, fontsize=11)
-            ax2b.set_xlabel('来袭导弹', fontsize=12)
-            ax2b.set_ylabel('无人机', fontsize=12)
-            ax2b.set_title('五机三弹鲁棒分配', fontsize=12, pad=8)
-            ax2b.set_xlim(0, len(missiles))
-            ax2b.set_ylim(0, len(uavs5))
-            ax2b.invert_yaxis()
-            for i in range(len(uavs5)):
-                for j in range(len(missiles)):
-                    v = mat_role[i, j]
-                    if v == 1.0:
-                        ax2b.text(j + 0.5, i + 0.5, '主', ha='center', va='center', fontsize=12, color='white', fontweight='bold')
-                    elif v == 0.5:
-                        ax2b.text(j + 0.5, i + 0.5, '备', ha='center', va='center', fontsize=12, color='#484878', fontweight='bold')
-            ax2b.set_aspect('equal')
-            for spine in ax2b.spines.values():
-                spine.set_visible(False)
-            _save(fig2, 'fig_02_assignment_matrix', dpi=300)
-            chart_count += 1
-
-            # =====================================================================
-            # 图 3：三维战场态势 + 烟幕几何示意
-            # =====================================================================
-            _style(font_size=11, lw=1.2)
-            fig3 = plt.figure(figsize=(12, 9))
-            ax3 = fig3.add_subplot(111, projection='3d')
-            ax3.view_init(elev=22, azim=-65)
-
-            scale = 0.001  # m -> km
-
-            # 假目标 & 真目标
-            ax3.scatter([0], [0], [0], color=PALETTE["red_strong"], s=220,
-                        label='假目标', marker='o', edgecolors='black', linewidth=1.5, zorder=10)
-            ax3.scatter([0], [200 * scale], [5 * scale], color=PALETTE["blue_main"], s=220,
-                        label='真目标', marker='s', edgecolors='black', linewidth=1.5, zorder=10)
-
-            # 导弹初始位置 & 轨迹线
-            M_init = {"M1": (20000, 0, 2000), "M2": (19000, 600, 2100), "M3": (18000, -600, 1900)}
-            m_scatter = []
-            for name, (mx, my, mz) in M_init.items():
-                s = ax3.scatter([mx * scale], [my * scale], [mz * scale],
-                                color=PALETTE["neutral_dark"], s=120, marker='^', zorder=5)
-                if not m_scatter:
-                    m_scatter = s
-                # 轨迹线
-                ax3.plot([mx * scale, 0], [my * scale, 0], [mz * scale, 0],
-                         color=PALETTE["neutral_mid"], linewidth=2, linestyle='--', alpha=0.7)
-                # 偏移标签避免重叠
-                offset = 0.6 if name == "M1" else (0.8 if name == "M2" else 0.5)
-                ax3.text(mx * scale + offset, my * scale, mz * scale + 0.4, name,
-                         fontsize=10, color=PALETTE["neutral_black"], fontweight='bold')
-
-            # 无人机初始位置 & 航迹线
-            U_init = {"FY1": (17800, 0, 1800), "FY2": (12000, 1400, 1400),
-                      "FY3": (6000, -3000, 700), "FY4": (11000, 2000, 1800), "FY5": (13000, -2000, 1300)}
-            r1 = R.get("result1", {})
-            dir_vec = r1.get("direction", [0.0, 0.0])
-            u_scatter = []
-            for name, (ux, uy, uz) in U_init.items():
-                s = ax3.scatter([ux * scale], [uy * scale], [uz * scale],
-                                color=PALETTE["green_3"], s=120, marker='D', zorder=5)
-                if not u_scatter:
-                    u_scatter = s
-                # 标签偏移
-                z_off = 0.5 if name in ("FY2", "FY4") else 0.3
-                ax3.text(ux * scale, uy * scale, uz * scale + z_off, name,
-                         fontsize=10, color=PALETTE["neutral_black"], fontweight='bold')
-                # FY1 航迹线
-                if name == "FY1" and (dir_vec[0] != 0 or dir_vec[1] != 0):
-                    dx, dy = dir_vec[0], dir_vec[1]
-                    ax3.plot([ux * scale, (ux + dx * 2000) * scale],
-                             [uy * scale, (uy + dy * 2000) * scale],
-                             [uz * scale, uz * scale],
-                             color=PALETTE["green_3"], linewidth=2.5, alpha=0.85, zorder=6)
-
-            # 烟幕球体示意
-            if r1.get("tau_eff", 0) > 0:
-                u_s = np.linspace(0, 2 * np.pi, 30)
-                v_s = np.linspace(0, np.pi, 20)
-                r_smoke = 0.3
-                x_s = r_smoke * np.outer(np.cos(u_s), np.sin(v_s))
-                y_s = r_smoke * np.outer(np.sin(u_s), np.sin(v_s))
-                z_s = r_smoke * np.outer(np.ones(np.size(u_s)), np.cos(v_s))
-                ax3.plot_surface(x_s, y_s + 200 * scale, z_s,
-                                 alpha=0.12, color=PALETTE["teal"], rstride=2, cstride=2)
-
-            ax3.set_xlabel('X (km)', fontsize=11, labelpad=8)
-            ax3.set_ylabel('Y (km)', fontsize=11, labelpad=8)
-            ax3.set_zlabel('Z (km)', fontsize=11, labelpad=8)
-            ax3.set_title('三维战场态势与烟幕遮蔽几何示意', fontsize=13, pad=12)
-
-            ax3.grid(False)
-            ax3.xaxis.pane.set_visible(False)
-            ax3.yaxis.pane.set_visible(False)
-            ax3.zaxis.pane.set_visible(False)
-
-            # 完整图例
-            from matplotlib.lines import Line2D
-            legend_elements = [
-                Line2D([0], [0], marker='o', color='w', markerfacecolor=PALETTE["red_strong"],
-                       markeredgecolor='black', markersize=10, label='假目标'),
-                Line2D([0], [0], marker='s', color='w', markerfacecolor=PALETTE["blue_main"],
-                       markeredgecolor='black', markersize=10, label='真目标'),
-                Line2D([0], [0], marker='^', color='w', markerfacecolor=PALETTE["neutral_dark"],
-                       markersize=9, label='导弹 (M1-M3)'),
-                Line2D([0], [0], marker='D', color='w', markerfacecolor=PALETTE["green_3"],
-                       markersize=9, label='无人机 (FY1-FY5)'),
-            ]
-            ax3.legend(handles=legend_elements, loc='upper left', fontsize=10, bbox_to_anchor=(0.02, 0.98))
-
-            ax3.set_xlim(-2, 22)
-            ax3.set_ylim(-5, 5)
-            ax3.set_zlim(-1, 3)
-
-            _save(fig3, 'fig_03_battlefield_3d', dpi=300)
-            chart_count += 1
-
-            print(f"  生成 {chart_count} 个图表（Nature 风格，SVG + PNG 双格式）")
-        except ImportError:
-            print("  matplotlib 未安装，跳过图表生成")
-        except Exception as e:
-            print(f"  图表生成出错: {e}")
+        if chart_count == 0:
+            print("  [ChartDesigner] 未生成图表，results.json 可能缺少可可视化数据")
 
         return f"图表保存于: {charts_dir}"
 

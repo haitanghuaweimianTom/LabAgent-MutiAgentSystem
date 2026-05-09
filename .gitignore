@@ -36,6 +36,7 @@ env/
 # Environment
 .env
 .env.local
+setup_kimi.py
 
 # Output
 output/

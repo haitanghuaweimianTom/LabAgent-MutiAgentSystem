@@ -15,15 +15,12 @@ from .style_engine import apply_nature_style, save_figure, NATURE_PALETTE
 def _call_llm(prompt: str, system: str = "") -> str:
     """Call LLM via available provider."""
     try:
-        from src.llm import get_provider_manager, ProviderType
-        pm = get_provider_manager()
-        provider = pm.get_provider(ProviderType.ANTHROPIC)
-        if not provider or not provider.is_available():
-            provider = pm.get_provider(ProviderType.OPENAI)
-        if not provider or not provider.is_available():
-            provider = pm.get_first_available()
-        if provider:
-            return provider.complete(prompt, system=system)
+        import os
+        # Use the same provider initialization as agent_workflow
+        from src.agent_workflow import _get_llm_provider
+        pm = _get_llm_provider()
+        if pm:
+            return pm.generate(prompt, system_prompt=system)
     except Exception:
         pass
     return ""
@@ -105,9 +102,11 @@ Write ONLY the Python code body (no markdown fences, no explanations).
 
     def _execute_code(self, code: str) -> int:
         """Execute generated plotting code in isolated process."""
+        project_root = str(Path(__file__).parent.parent.parent)
         wrapper = f"""
 import json, sys
 from pathlib import Path
+sys.path.insert(0, {repr(project_root)})
 charts_dir = Path("{self.charts_dir}")
 RESULTS = {json.dumps(self.results, ensure_ascii=False)}
 
@@ -128,10 +127,13 @@ print("CHARTS_DONE")
                 f.flush()
                 result = subprocess.run(
                     [sys.executable, f.name],
-                    capture_output=True, text=True, timeout=120, cwd=str(Path(__file__).parent.parent.parent)
+                    capture_output=True, text=True, timeout=120, cwd=project_root
                 )
                 if "CHARTS_DONE" in result.stdout:
                     return result.stdout.count("CHARTS_DONE") + result.stdout.count("save_figure")
+                if result.returncode != 0:
+                    print(f"  [ChartDesigner] stderr: {result.stderr[:300]}")
             return 0
-        except Exception:
+        except Exception as e:
+            print(f"  [ChartDesigner] execution error: {e}")
             return 0

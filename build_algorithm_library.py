@@ -16,7 +16,7 @@ import argparse
 from pathlib import Path
 from typing import Dict, List, Any
 
-# 核心算法类别定义（排除随书源码等辅助目录）
+# 核心算法类别定义
 ALGORITHM_CATEGORIES = {
     "AHP层次分析法": {
         "name_en": "Analytic Hierarchy Process (AHP)",
