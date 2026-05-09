@@ -208,7 +208,9 @@ python run_auto.py --root ./problems --provider anthropic --no-critique
 
 ### 方式二：CLI 单题模式
 
-适用于处理单个赛题，赛题和数据文件位于项目根目录。
+适用于处理单个赛题，支持两种文件组织方式：
+
+**A. 赛题文件放在项目根目录**
 
 ```bash
 # 基础用法：自动生成论文（默认数学建模模板）
@@ -216,9 +218,25 @@ python main.py --auto
 
 # 指定输出目录
 python main.py --auto --output-dir work_custom
+```
 
+**B. 赛题文件放在独立文件夹（推荐）**
+
+```bash
+# 一行命令处理任意文件夹，无需 cd
+python main.py --auto --input-dir 2025B
+
+# 指定输入目录 + 输出目录 + 模板
+python main.py --auto --input-dir ./problems/2025B --output-dir work_2025B --template math_modeling
+
+# 快速测试（禁用 Critique）
+python main.py --auto --input-dir 2025B --no-critique
+```
+
+**常用参数组合**
+
+```bash
 # 指定论文模板
-python main.py --auto --template math_modeling
 python main.py --auto --template coursework
 python main.py --auto --template financial_analysis
 
@@ -226,7 +244,7 @@ python main.py --auto --template financial_analysis
 python main.py --auto --no-critique
 
 # 组合使用示例
-python main.py --auto --template coursework --output-dir work_homework --no-critique
+python main.py --auto --input-dir 2025B --output-dir work_2025B --template math_modeling --no-critique
 ```
 
 ### 方式三：金融分析模式
@@ -365,6 +383,7 @@ pandoc MathModeling_Paper.md -o 数学建模论文.docx
 | `python run_finance.py` | 金融分析模式（扫描 `*func2*`） |
 | `python run_coursework.py` | 课程作业模式（扫描 `*func3*`） |
 | `python main.py --auto` | CLI 单题模式（根目录） |
+| `python main.py --auto --input-dir 2025B` | 指定赛题目录，一行命令运行 |
 | `python main.py --auto --output-dir work` | 指定输出目录 |
 | `python main.py --auto --template coursework` | 指定论文模板 |
 | `python main.py --auto --no-critique` | 禁用 Critique |

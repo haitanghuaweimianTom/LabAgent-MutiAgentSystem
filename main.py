@@ -44,6 +44,8 @@ def main():
                        help='输出目录')
     parser.add_argument('--no-critique', action='store_true',
                        help='禁用 Critique-Improvement（加速模式）')
+    parser.add_argument('--input-dir', type=str, default=None,
+                       help='赛题与数据文件所在目录（默认使用当前目录）')
 
     args = parser.parse_args()
 
@@ -52,7 +54,12 @@ def main():
     print("="*70)
 
     if args.auto:
-        run_auto_generation(args.output_dir, args.template, not args.no_critique)
+        run_auto_generation(
+            output_dir=args.output_dir,
+            template_name=args.template,
+            use_critique=not args.no_critique,
+            input_dir=args.input_dir,
+        )
     else:
         print("\n使用方法:")
         print("  python main.py --auto                              # 全自动生成数学建模论文")
@@ -61,19 +68,27 @@ def main():
         print("\n推荐使用 --auto 模式，系统将自动完成所有工作")
 
 
-def run_auto_generation(output_dir: str = 'work', template_name: str = 'math_modeling', use_critique: bool = True):
+def run_auto_generation(output_dir: str = 'work', template_name: str = 'math_modeling', use_critique: bool = True, input_dir: str = None):
     """全自动论文生成"""
     from src.agent_workflow import UnifiedWorkflow
     from src.workflow import list_templates
+
+    # 确定工作目录
+    work_dir = Path(input_dir) if input_dir else Path('.')
+    if input_dir and not work_dir.exists():
+        print(f"错误: 输入目录不存在: {input_dir}")
+        sys.exit(1)
 
     print("\n" + "="*70)
     print(f"模板: {template_name}")
     print(f"可用模板: {list_templates()}")
     print(f"Critique-Improvement: {'启用' if use_critique else '禁用'}")
+    if input_dir:
+        print(f"输入目录: {input_dir}")
     print("="*70)
 
     # 检测数据文件
-    data_files = detect_data_files()
+    data_files = detect_data_files(work_dir)
     if data_files:
         print(f"\n检测到 {len(data_files)} 个数据文件:")
         for name, path in data_files.items():
@@ -82,7 +97,7 @@ def run_auto_generation(output_dir: str = 'work', template_name: str = 'math_mod
         print("\n未检测到数据文件")
 
     # 检测赛题文件
-    problem_file = detect_problem_file()
+    problem_file = detect_problem_file(work_dir)
     if problem_file:
         print(f"赛题文件: {problem_file}")
         with open(problem_file, 'r', encoding='utf-8') as f:
@@ -90,11 +105,11 @@ def run_auto_generation(output_dir: str = 'work', template_name: str = 'math_mod
         print(f"赛题预览: {preview}...")
     else:
         print("未检测到赛题文件，将使用默认描述")
-        problem_file = "problem.md"
+        problem_file = work_dir / "problem.md"
 
     # 读取问题文本
     problem_text = ""
-    if Path(problem_file).exists():
+    if problem_file.exists():
         with open(problem_file, 'r', encoding='utf-8') as f:
             problem_text = f.read()
 
@@ -127,24 +142,25 @@ def run_auto_generation(output_dir: str = 'work', template_name: str = 'math_mod
     return paper
 
 
-def detect_data_files() -> dict:
+def detect_data_files(directory: Path = Path('.')) -> dict:
     """检测数据文件 - 自动识别所有xlsx文件"""
     data_files = {}
-    for filepath in Path('.').glob('*.xlsx'):
-        filename = filepath.name
-        if filename.lower() not in ['config.xlsx', 'settings.xlsx']:
-            display_name = filename.replace('.xlsx', '')
-            data_files[display_name] = filename
+    for ext in ('*.xlsx', '*.xls', '*.csv'):
+        for filepath in directory.glob(ext):
+            filename = filepath.name
+            if filename.lower() not in ['config.xlsx', 'settings.xlsx']:
+                display_name = filepath.stem
+                data_files[display_name] = str(filepath)
     return data_files
 
 
-def detect_problem_file() -> str:
+def detect_problem_file(directory: Path = Path('.')) -> Path:
     """检测赛题文件"""
-    for filepath in Path('.').glob('*.md'):
+    for filepath in directory.glob('*.md'):
         filename = filepath.name.lower()
         if 'problem' in filename or '题目' in filename or '赛题' in filename:
-            return filepath.name
-    return ""
+            return filepath
+    return directory / "problem.md"
 
 
 if __name__ == '__main__':
