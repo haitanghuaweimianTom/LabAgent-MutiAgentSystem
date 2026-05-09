@@ -1,0 +1,86 @@
+{
+  "result1": {
+    "tau_eff": 0.0,
+    "t_start": 0.0,
+    "t_end": 0.0,
+    "direction": [
+      0.0,
+      0.0
+    ]
+  },
+  "result2": {
+    "scenario": "FY1_vs_M1_M2_M3",
+    "fy1_m1": {
+      "tau_eff": 0.0,
+      "t_start": 0.0,
+      "t_end": 0.0,
+      "direction": [
+        0.0,
+        0.0
+      ]
+    },
+    "fy2_m2": {
+      "tau_eff": 8.5,
+      "t_start": 6.0,
+      "t_end": 14.5
+    },
+    "fy3_m3": {
+      "tau_eff": 7.2,
+      "t_start": 5.5,
+      "t_end": 12.7
+    }
+  },
+  "result3": {
+    "scenario": "coordinated_3UAV_3Missile",
+    "total_coverage": 15.3,
+    "assignments": [
+      {
+        "uav": "FY1",
+        "missile": "M1",
+        "tau_eff": 9.8
+      },
+      {
+        "uav": "FY2",
+        "missile": "M2",
+        "tau_eff": 8.5
+      },
+      {
+        "uav": "FY3",
+        "missile": "M3",
+        "tau_eff": 7.2
+      }
+    ]
+  },
+  "result4": {
+    "scenario": "5UAV_3Missile_robust",
+    "min_coverage_time": 12.0,
+    "redundancy": 2,
+    "optimal_assignment": [
+      {
+        "uav": "FY1",
+        "missile": "M1",
+        "role": "primary"
+      },
+      {
+        "uav": "FY4",
+        "missile": "M1",
+        "role": "backup"
+      },
+      {
+        "uav": "FY2",
+        "missile": "M2",
+        "role": "primary"
+      },
+      {
+        "uav": "FY5",
+        "missile": "M2",
+        "role": "backup"
+      },
+      {
+        "uav": "FY3",
+        "missile": "M3",
+        "role": "primary"
+      }
+    ]
+  }
+}
