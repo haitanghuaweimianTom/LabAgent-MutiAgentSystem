@@ -25,6 +25,7 @@ from .templates import (
 from .critique_engine import CritiqueEngine
 from .code_executor import CodeExecutor
 from .paper_generator import PaperGenerator
+from .ideation import ProblemIdeation
 
 __all__ = [
     "Coordinator",
@@ -38,4 +39,5 @@ __all__ = [
     "CritiqueEngine",
     "CodeExecutor",
     "PaperGenerator",
+    "ProblemIdeation",
 ]

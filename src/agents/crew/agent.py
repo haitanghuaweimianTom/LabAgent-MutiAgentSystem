@@ -14,6 +14,7 @@ class Agent:
         allow_delegation: bool = True,
         verbose: bool = True,
         llm_callback: Optional[Callable[[str, str], str]] = None,
+        memory_system: Optional[Any] = None,
     ):
         self.role = role
         self.goal = goal
@@ -24,6 +25,7 @@ class Agent:
         self.llm_callback = llm_callback
         self.memory: List[Dict[str, Any]] = []
         self.crew: Optional[Any] = None
+        self.memory_system = memory_system  # MemorySystem instance (optional)
 
     def execute(self, task_description: str, context: str = "") -> str:
         if self.verbose:
@@ -34,18 +36,36 @@ class Agent:
         if self.llm_callback:
             result = self.llm_callback(prompt, system)
         self.memory.append({"task": task_description, "result": result})
+        # Persist to memory system if available
+        if self.memory_system and result:
+            self.memory_system.store(
+                self.role,
+                task_description[:50],
+                result[:2000],
+                metadata={"task": task_description, "role": self.role},
+            )
         if self.verbose:
             print(f"  [{self.role}] 完成")
         return result
 
     def _build_prompt(self, task: str, context: str) -> str:
         parts = [f"任务：{task}"]
+
+        # Inject persistent memory context
+        if self.memory_system:
+            mem_context = self.memory_system.load_agent_memories(self.role)
+            shared_context = self.memory_system.load_shared_context(task[:100])
+            if mem_context:
+                parts.append(f"持久记忆：\n{mem_context}")
+            if shared_context:
+                parts.append(f"共享记忆：\n{shared_context}")
+
         if context:
             parts.append(f"上下文：{context}")
         if self.memory:
             recent = self.memory[-2:]
             mem_text = "\n".join(f"- 历史任务：{m['task'][:80]}" for m in recent)
-            parts.append(f"记忆：\n{mem_text}")
+            parts.append(f"会话记忆：\n{mem_text}")
         return "\n\n".join(parts)
 
     def delegate(self, task_description: str, to_agent: "Agent", context: str = "") -> str:

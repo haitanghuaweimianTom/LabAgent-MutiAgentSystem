@@ -1,8 +1,8 @@
-# 数学建模论文全自动生成系统 v2.3
+# 数学建模论文全自动生成系统 v2.4
 
 > **融合 LLM-MM-Agent + Cherry Studio + crewAI 架构，集成 15 类经典数学建模算法库**
 >
-> 全自动分段生成 | CrewAI Agent 协作 | 代码执行闭环 | 算法智能推荐 | Markdown/LaTeX/Word 三格式交付 | Web UI 交互
+> 全自动分段生成 | CrewAI Agent 协作 | Claude CLI 默认代码生成 | 分层持久记忆 | AI-Scientist 创意分析 | 5 步图表流水线 | Markdown/LaTeX/Word 三格式交付 | Web UI 交互
 
 ---
 
@@ -41,8 +41,12 @@
 
 - **视觉理解赛题**：支持 PDF 题目解析，通过视觉分析提取几何参数与图示信息
 - **算法智能推荐**：集成 [Algorithms_MathModels](https://github.com/HuangCongQing/Algorithms_MathModels) 15 类经典算法库，建模阶段自动检索并推荐适用方法
+- **Claude CLI 默认代码/算法生成**：算法设计与代码求解默认调用 Claude Code CLI，针对代码任务优化，失败自动回退 API
+- **分层持久记忆**：GMemory 风格的三级记忆架构，每个 Agent 拥有独立持久记忆库，跨运行不丢失，支持关键词检索与 Prompt 注入
+- **创意研究视角分析**：AI-Scientist v2 风格的 ideation 预步骤，在问题分析前生成多种研究角度与跨学科方法借鉴
 - **代码执行闭环**：生成 Python 代码 → 隔离执行 → 结果验证 → 自动修复，确保论文数据真实可溯源
-- **分段记忆衔接**：12 章逐章独立生成，显式记忆池传递结构化摘要，避免上下文溢出
+- **分段记忆衔接**：12 章逐章独立生成，显式记忆池 + 持久记忆双层传递结构化摘要，避免上下文溢出
+- **5 步图表流水线**：LLM 规划 → 数据验证 → 逐图生成 → 失败重试 → 模板兜底，100% 保证图表产出
 - **三格式交付**：同时输出 Markdown（便于审阅）+ LaTeX PDF（竞赛标准格式）+ Word（备用格式）
 - **Web UI 可视化**：基于 Next.js 的交互界面，实时展示四阶段流水线、Agent 协作讨论、算法推荐与论文预览
 
@@ -409,40 +413,50 @@ pandoc MathModeling_Paper.md -o 数学建模论文.docx
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                    数学建模论文全自动生成系统 v2.3                     │
+│                    数学建模论文全自动生成系统 v2.4                     │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
+│  Stage 0: 创意视角生成 (Ideation) — AI-Scientist v2 风格             │
+│  ├── 生成 5 个不同研究视角与跨学科方法借鉴                              │
+│  ├── 每个视角含：标题、核心思路、方法建议、新颖性评估、具体步骤            │
+│  └── 注入 Stage 1 分析 Prompt，引导多角度思考                          │
+│                               ↓                                     │
 │  Stage 1: 问题分析 (Problem Analysis)                                │
-│  ├── LLM 深度分析赛题，提取子任务、约束、数据需求                      │
+│  ├── 综合创意视角，LLM 深度分析赛题，提取子任务、约束、数据需求           │
 │  ├── 构建 DAG 任务依赖图（5 种依赖类型）                               │
-│  └── 生成 analysis_summary → memory_pool                             │
+│  └── 生成 analysis_summary → memory_pool + 持久记忆                   │
 │                               ↓                                     │
 │  Stage 2: 数学建模 (Mathematical Modeling)                           │
 │  ├── 按 DAG 拓扑序逐任务建模                                          │
 │  ├── 🔍 算法库检索：自动推荐 15 类经典算法中的适用方法                    │
 │  ├── 生成变量定义表、核心公式（LaTeX）、模型假设                        │
-│  └── 生成 modeling_summary → memory_pool                             │
+│  └── 生成 modeling_summary → memory_pool + 持久记忆                   │
 │                               ↓                                     │
 │  Stage 3: 计算求解 (Computational Solving)                           │
-│  ├── 设计求解算法                                                     │
-│  ├── 生成 Python 代码（纯净提取，去除 markdown 标记）                   │
+│  ├── 🔧 设计求解算法（默认 Claude Code CLI，API 回退）                  │
+│  ├── 🔧 生成 Python 代码（默认 Claude Code CLI，API 回退）              │
 │  ├── 隔离执行（subprocess 沙箱，60s 超时）                             │
 │  ├── 自动修复循环（失败 → 分析 stderr → LLM 修复 → 重试，最多 4 轮）     │
-│  └── 生成 algorithm_summary + results_summary → memory_pool          │
+│  └── 生成 algorithm_summary + results_summary → memory_pool + 持久记忆  │
 │                               ↓                                     │
 │  Stage 4: 论文生成 (Paper Generation)                                │
 │  ├── 预生成 12 章详细大纲（分批，每批 4 章）                            │
 │  ├── 逐章生成：本章大纲 + 相关阶段摘要 + 前 2 章摘要                     │
 │  ├── 每章：字数检查 → Critique-Improvement → 扩展 → 章节摘要            │
 │  ├── 内容净化：过滤题目原文、重复标题                                   │
-│  ├── 图表自动生成（基于计算结果绘制对比图、饼图，300 DPI PNG）            │
+│  ├── 📊 图表自动生成（5步流水线 + 模板保底，100% 产出）                   │
 │  └── 组装完整论文 + LaTeX 排版 + Word 导出                             │
 │                                                                     │
+│  💾 分层持久记忆系统（GMemory 风格）                                   │
+│  ├── {work}/memory/{agent_name}/  每个 Agent 独立记忆目录              │
+│  ├── {work}/memory/shared/         共享记忆空间                        │
+│  └── 支持关键词检索 + Prompt 注入 + 阶段摘要持久化                     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### 显式记忆池
+### 显式记忆池 + 持久记忆系统
 
+**内存记忆池（memory_pool）**：
 ```
 memory_pool
 ├── analysis_summary      # Stage 1 问题分析摘要（400-500 字）
@@ -456,7 +470,31 @@ memory_pool
 └── chapter_summaries     # Stage 4 各章结构化摘要（200-300 字/章）
 ```
 
-每份摘要严格限制长度，按固定结构组织，确保 LLM prompt 不会溢出。
+**持久记忆系统（文件系统）**：
+```
+{work_dir}/memory/
+├── analyst/               # 问题分析师的记忆
+│   ├── mem_*.json         # 持久化记忆条目（含时间戳、内容、元数据）
+│   └── summary.md         # 阶段摘要（人类可读）
+├── modeler/               # 数学建模师的记忆
+│   ├── mem_*.json
+│   └── summary.md
+├── solver/                # 求解工程师的记忆
+│   ├── mem_*.json
+│   └── summary.md
+├── writer/                # 论文写作专家的记忆
+│   ├── mem_*.json
+│   └── summary.md
+└── shared/                # 所有 Agent 共享记忆
+    ├── mem_*.json
+    ├── analysis_summary.md
+    ├── modeling_summary.md
+    ├── results_summary.md
+    ├── ideation_results.json
+    └── memory_pool.json
+```
+
+每份摘要严格限制长度，按固定结构组织，确保 LLM prompt 不会溢出。持久记忆在 Agent 构建 Prompt 时自动注入，提供历史上下文参考。
 
 ---
 
@@ -631,15 +669,42 @@ MathModel-MutiAgentSystem/
 ### 交付物目录结构
 
 ```
-work_<name>/final/
-├── MathModeling_Paper.md          # 完整论文（Markdown）
-├── MathModeling_Paper.tex         # LaTeX 源文件（mcmthesis MCM/ICM 模板）
-├── mcmthesis.cls                  # MCM/ICM 模板类文件（自动复制）
-├── MathModeling_Paper.pdf         # 排版后的 PDF（竞赛标准格式）
-├── 数学建模论文.docx               # Word 格式论文（备用）
-├── solution.json                  # 完整解决方案（含子任务结果）
-├── memory_pool.json               # 显式记忆池（阶段摘要）
-└── chapter_summaries.json         # 各章结构化摘要
+work_<name>/
+├── final/
+│   ├── MathModeling_Paper.md          # 完整论文（Markdown）
+│   ├── MathModeling_Paper.tex         # LaTeX 源文件（mcmthesis MCM/ICM 模板）
+│   ├── mcmthesis.cls                  # MCM/ICM 模板类文件（自动复制）
+│   ├── MathModeling_Paper.pdf         # 排版后的 PDF（竞赛标准格式）
+│   ├── 数学建模论文.docx               # Word 格式论文（备用）
+│   ├── solution.json                  # 完整解决方案（含子任务结果）
+│   ├── memory_pool.json               # 显式记忆池（阶段摘要）
+│   └── chapter_summaries.json         # 各章结构化摘要
+├── memory/                            # 分层持久记忆系统
+│   ├── analyst/                       # 问题分析师独立记忆
+│   │   ├── mem_*.json
+│   │   └── summary.md
+│   ├── modeler/                       # 数学建模师独立记忆
+│   │   ├── mem_*.json
+│   │   └── summary.md
+│   ├── solver/                        # 求解工程师独立记忆
+│   │   ├── mem_*.json
+│   │   └── summary.md
+│   ├── writer/                        # 论文写作专家独立记忆
+│   │   ├── mem_*.json
+│   │   └── summary.md
+│   └── shared/                        # 共享记忆
+│       ├── analysis_summary.md
+│       ├── modeling_summary.md
+│       ├── results_summary.md
+│       ├── ideation_results.json      # AI-Scientist 风格创意研究视角
+│       └── memory_pool.json
+├── stage_1_analysis/                  # 问题分析结果
+├── stage_2_modeling/                  # 数学建模结果
+├── stage_3_algorithm/                 # 算法设计结果
+├── stage_4_coding/                    # 代码文件
+├── stage_5_execution/                 # 代码执行结果
+├── stage_6_result_analysis/           # 结果分析
+└── stage_7_charts/                    # 论文图表（PNG/SVG）
 ```
 
 ---
@@ -759,6 +824,7 @@ curl http://localhost:8000/health
 
 | 版本 | 日期 | 主要更新 |
 |------|------|----------|
+| **v2.4** | 2026-05-11 | **智能增强版**：Algorithm/Coding 智能体默认使用 Claude Code CLI 生成；GMemory 风格的分层持久记忆系统（每个 Agent 独立记忆库 + 共享记忆）；AI-Scientist v2 风格创意研究视角生成（问题分析前生成 5 个不同研究角度）；5 步图表流水线修复（规划→验证→生成→重试→模板保底），100% 保证图表产出 |
 | **v2.3** | 2026-05-09 | **通用化重构**：LLM 驱动的通用图表引擎（ChartDesigner）自动分析结果数据并生成图表，自动插入论文对应章节；修复 LaTeX 多行公式（`\begin{equation}` 等跨行环境）渲染问题；删除所有题目特定的硬编码图表逻辑，系统完全通用；CrewAI Agent 协作默认启用 SEQUENTIAL 模式，支持 `CREW_PROCESS_MODE` 环境变量切换；新增 `run_auto.py` / `run_finance.py` / `run_coursework.py` 三种自动扫描脚本 |
 | **v2.2** | 2026-05-08 | crewAI Agent 协作架构 + 通用图表引擎雏形 + LaTeX/MCM 模板集成 + 前端 Next.js 重构 |
 | **v2.0** | 2026-04-29 | 统一工作流引擎 + Critique-Improvement + 代码自动执行 + Word 导出 |

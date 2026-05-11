@@ -327,6 +327,9 @@ class UnifiedWorkflow:
         self.problem_text = ""
         self.data_files: Dict[str, str] = {}
 
+        # Claude CLI path for code/algorithm generation
+        self._claude_path = _find_claude_code()
+
         # ======================================================================
         # 显式记忆池：每个阶段完成后生成结构化摘要，供下一阶段调用
         # ======================================================================
@@ -337,6 +340,15 @@ class UnifiedWorkflow:
             "results_summary": "",       # 阶段3结果摘要
             "chapter_summaries": {},     # 论文各章摘要，key=chapter_id
         }
+
+        # Per-agent persistent memory system
+        try:
+            from src.memory import MemorySystem
+            self.memory_system = MemorySystem(str(self.output_dir))
+            print(f"[MemorySystem] 已初始化，目录: {self.output_dir}/memory/")
+        except ImportError:
+            self.memory_system = None
+            print("[MemorySystem] 模块不可用，将使用内存记忆池")
 
     def run_full_workflow(
         self,
@@ -356,13 +368,14 @@ class UnifiedWorkflow:
         self.context["problem_text"] = problem_text
         self.context["data_files"] = data_files
 
-        # Create role-based agents (crewAI style)
+        # Create role-based agents (crewAI style) with persistent memory
         llm_cb = lambda p, s: _call_llm(p, s)
-        analyst = Agent(role="问题分析师", goal="深入分析赛题，提取子任务与约束", llm_callback=llm_cb)
-        modeler = Agent(role="数学建模师", goal="建立严谨的数学模型与公式体系", llm_callback=llm_cb)
-        solver = Agent(role="求解工程师", goal="设计算法并生成可执行代码", llm_callback=llm_cb)
-        writer = Agent(role="论文写作专家", goal="撰写完整的数学建模竞赛论文", llm_callback=llm_cb)
-        manager = Agent(role="协调者", goal="统筹各阶段工作，确保质量与衔接", allow_delegation=True, llm_callback=llm_cb)
+        ms = self.memory_system
+        analyst = Agent(role="问题分析师", goal="深入分析赛题，提取子任务与约束", llm_callback=llm_cb, memory_system=ms)
+        modeler = Agent(role="数学建模师", goal="建立严谨的数学模型与公式体系", llm_callback=llm_cb, memory_system=ms)
+        solver = Agent(role="求解工程师", goal="设计算法并生成可执行代码", llm_callback=llm_cb, memory_system=ms)
+        writer = Agent(role="论文写作专家", goal="撰写完整的数学建模竞赛论文", llm_callback=llm_cb, memory_system=ms)
+        manager = Agent(role="协调者", goal="统筹各阶段工作，确保质量与衔接", allow_delegation=True, llm_callback=llm_cb, memory_system=ms)
 
         shared: Dict[str, Any] = {}
 
@@ -371,6 +384,10 @@ class UnifiedWorkflow:
             self.context["analysis"] = analysis
             self.memory_pool["analysis_summary"] = self._summarize_analysis(analysis)
             self._save_text("stage_1_analysis/analysis_summary.md", self.memory_pool["analysis_summary"])
+            if ms:
+                ms.save_agent_summary("问题分析师", self.memory_pool["analysis_summary"])
+                ms.save_shared_summary("analysis_summary.md", self.memory_pool["analysis_summary"])
+                ms.store_shared("analysis_summary", self.memory_pool["analysis_summary"], metadata={"stage": "1"})
             shared["analysis"] = analysis
             shared["analysis_summary"] = self.memory_pool["analysis_summary"]
             return self.memory_pool["analysis_summary"]
@@ -381,6 +398,10 @@ class UnifiedWorkflow:
             self.context["modeling"] = modeling
             self.memory_pool["modeling_summary"] = self._summarize_modeling(modeling)
             self._save_text("stage_2_modeling/modeling_summary.md", self.memory_pool["modeling_summary"])
+            if ms:
+                ms.save_agent_summary("数学建模师", self.memory_pool["modeling_summary"])
+                ms.save_shared_summary("modeling_summary.md", self.memory_pool["modeling_summary"])
+                ms.store_shared("modeling_summary", self.memory_pool["modeling_summary"], metadata={"stage": "2"})
             shared["modeling"] = modeling
             shared["modeling_summary"] = self.memory_pool["modeling_summary"]
             return self.memory_pool["modeling_summary"]
@@ -394,6 +415,11 @@ class UnifiedWorkflow:
             self.memory_pool["algorithm_summary"] = self._summarize_algorithm(solving)
             self.memory_pool["results_summary"] = self._summarize_results(solving)
             self._save_text("stage_3_algorithm/algorithm_summary.md", self.memory_pool["algorithm_summary"])
+            self._save_text("stage_6_result_analysis/results_summary.md", self.memory_pool["results_summary"])
+            if ms:
+                ms.save_agent_summary("求解工程师", self.memory_pool["algorithm_summary"])
+                ms.save_shared_summary("results_summary.md", self.memory_pool["results_summary"])
+                ms.store_shared("results_summary", self.memory_pool["results_summary"], metadata={"stage": "3"})
             shared["solving"] = solving
             shared["algorithm_summary"] = self.memory_pool["algorithm_summary"]
             shared["results_summary"] = self.memory_pool["results_summary"]
@@ -401,6 +427,9 @@ class UnifiedWorkflow:
 
         def do_paper(_task: str, _ctx: str) -> str:
             paper = self._stage_paper_generation_v2()
+            if ms:
+                ms.save_agent_summary("论文写作专家", paper[:2000])
+                ms.save_shared_summary("paper_summary.md", paper[:2000])
             shared["paper"] = paper
             return paper
 
@@ -462,6 +491,8 @@ class UnifiedWorkflow:
         self._convert_to_tex(paper_path)
 
         self._save_json("final/memory_pool.json", self.memory_pool)
+        if self.memory_system:
+            self.memory_system.save_shared_json("memory_pool.json", self.memory_pool)
 
         return paper
 
@@ -474,6 +505,7 @@ class UnifiedWorkflow:
         问题分析阶段
 
         借鉴 LLM-MM-Agent 的反思链设计 + Critique-Improvement
+        + AI-Scientist v2 风格的创意性研究视角生成
         """
         print("  分析问题并构建DAG...")
 
@@ -490,7 +522,38 @@ class UnifiedWorkflow:
                     metadata={"type": "data"},
                 )
 
+        # ======================================================================
+        # 创意性研究视角生成（AI-Scientist v2 风格 ideation pre-step）
+        # ======================================================================
+        print("  [Ideation] 生成创意研究视角...")
+        try:
+            from src.workflow.ideation import ProblemIdeation
+            ideation = ProblemIdeation(_call_llm)
+            data_desc_text = "\n".join(data_descriptions.values())[:1000]
+            ideas = ideation.generate_ideas(
+                self.problem_text,
+                data_descriptions=data_desc_text,
+                num_ideas=5,
+            )
+            ideation_context = ideation.format_for_analysis(ideas)
+            self.context["ideation_ideas"] = ideas
+            self.context["ideation_context"] = ideation_context
+            if self.memory_system:
+                self.memory_system.save_shared_json("ideation_results.json", ideas)
+                self.memory_system.store_shared(
+                    "ideation_ideas",
+                    ideation_context,
+                    metadata={"stage": "ideation", "count": len(ideas)},
+                )
+            print(f"  [Ideation] 已生成 {len(ideas)} 个研究视角")
+        except Exception as e:
+            print(f"  [Ideation] 生成失败: {e}，将跳过创意视角注入")
+            ideation_context = ""
+            self.context["ideation_ideas"] = []
+
         # Prompt: 反思链设计（借鉴 LLM-MM-Agent PROBLEM_ANALYSIS_PROMPT）
+        ideation_section = f"\n【研究视角建议 - 供参考的创意方向】\n{ideation_context}\n" if ideation_context else ""
+
         prompt = f"""请对以下数学建模问题进行深度分析。
 
 【赛题】
@@ -498,7 +561,7 @@ class UnifiedWorkflow:
 
 【数据文件描述】
 {chr(10).join(data_descriptions.values())[:2000]}
-
+{ideation_section}
 要求：
 1. 识别问题的核心组件和它们之间的依赖关系
 2. 分析问题的动态特性（时间演化、空间分布等）
@@ -738,9 +801,9 @@ class UnifiedWorkflow:
 
         formulas = modeling.get("formulas", "")
 
-        # 设计算法
+        # 设计算法（默认使用 Claude CLI）
         print("  [Stage 3.1] 设计求解算法...")
-        algorithm_desc = self._design_algorithm(modeling)
+        algorithm_desc = self._design_algorithm_with_claude_cli(modeling)
         self.context["algorithm"] = algorithm_desc
         print(f"  [Stage 3.1] 算法设计完成 ({len(algorithm_desc)} 字符)")
 
@@ -788,7 +851,7 @@ class UnifiedWorkflow:
             system_prompt="你是Python编程专家，只输出代码，不输出任何解释。",
             data_files=self.data_files,
             filename="solve.py",
-            use_claude_cli=False,
+            use_claude_cli=True,
         )
         print(f"  [Stage 3.2] 代码生成完成，success={result.get('success', False)}")
 
@@ -831,6 +894,76 @@ class UnifiedWorkflow:
 
         print("    调用LLM设计算法...")
         return _call_llm(prompt, "你是算法设计专家。")
+
+    def _design_algorithm_with_claude_cli(self, modeling: Dict) -> str:
+        """使用 Claude Code CLI 设计求解算法（默认方式）"""
+        formulas = modeling.get("formulas", "")
+
+        prompt = f"""基于以下数学模型，设计详细的求解算法。
+
+【数学模型核心】
+{formulas[:2000]}
+
+【赛题摘要】
+{self.problem_text[:1000]}
+
+要求：
+1. 选择合适的数值方法或优化算法
+2. 给出详细的算法步骤（伪代码或分步说明）
+3. 分析算法的时间复杂度和空间复杂度
+4. 讨论算法的收敛性和稳定性
+5. 设置关键参数及其选择依据
+
+输出至少800字的算法设计文档。输出纯文本，不要包含 markdown 代码块标记。"""
+
+        if not self._claude_path:
+            print("    [Algorithm] Claude CLI 不可用，回退到 API...")
+            return _call_llm(prompt, "你是算法设计专家。")
+
+        full_prompt = f"你是算法设计专家，擅长为数学建模问题设计高效求解算法。\n\n{prompt}"
+
+        cmd = [
+            self._claude_path,
+            "-p",
+            "--model", "sonnet",
+            "--output-format", "json",
+            full_prompt,
+        ]
+
+        print("    [Algorithm] 调用 Claude CLI 设计算法...")
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            stdout, stderr = proc.communicate(timeout=300)
+
+            if proc.returncode != 0:
+                error_msg = stderr.decode("utf-8", errors="replace")
+                print(f"    [Algorithm] Claude CLI 失败: {error_msg[:200]}，回退到 API")
+                return _call_llm(prompt, "你是算法设计专家。")
+
+            stdout_text = stdout.decode("utf-8", errors="replace").strip()
+            try:
+                data = json.loads(stdout_text)
+                result = data.get("result", "")
+                if isinstance(result, str):
+                    text = result.strip()
+                    # Strip markdown fences if present
+                    if text.startswith("```"):
+                        lines = text.splitlines()
+                        if lines[0].startswith("```"):
+                            lines = lines[1:]
+                        if lines and lines[-1].strip() == "```":
+                            lines = lines[:-1]
+                        text = "\n".join(lines).strip()
+                    return text
+            except json.JSONDecodeError:
+                return stdout_text.strip()
+        except subprocess.TimeoutExpired:
+            print("    [Algorithm] Claude CLI 超时，回退到 API")
+            return _call_llm(prompt, "你是算法设计专家。")
 
     def _interpret_results(self, execution_result: Dict, modeling: Dict) -> str:
         """解读计算结果"""
@@ -965,71 +1098,60 @@ class UnifiedWorkflow:
         return _call_llm(prompt, "你是数据分析专家，擅长提炼数值结果。")
 
     def _generate_charts(self) -> str:
-        """生成论文图表（Nature-figure 规范 + 问题特化可视化）"""
+        """
+        生成论文图表
+
+        Pipeline:
+        1. Try ChartPipeline (LLM-driven with validation and retry)
+        2. Fall back to TemplateChartGenerator (always produces output)
+        """
         charts_dir = self.output_dir / "stage_7_charts"
         charts_dir.mkdir(parents=True, exist_ok=True)
 
-        # ── Nature 配色板 ──────────────────────────────────────────────
-        PALETTE = {
-            "blue_main": "#0F4D92", "blue_secondary": "#3775BA",
-            "green_1": "#DDF3DE", "green_2": "#AADCA9", "green_3": "#8BCF8B",
-            "red_1": "#F6CFCB", "red_2": "#E9A6A1", "red_strong": "#B64342",
-            "neutral_light": "#CFCECE", "neutral_mid": "#767676",
-            "neutral_dark": "#4D4D4D", "neutral_black": "#272727",
-            "gold": "#FFD700", "teal": "#42949E", "violet": "#9A4D8E",
-        }
-        C_ORDER = [
-            PALETTE["blue_main"], PALETTE["green_3"], PALETTE["red_strong"],
-            PALETTE["teal"], PALETTE["violet"], PALETTE["neutral_light"],
-        ]
-
-        def _style(font_size=14, lw=2):
-            plt.rcParams['font.family'] = 'sans-serif'
-            plt.rcParams['font.sans-serif'] = ['Noto Sans CJK JP', 'Arial', 'DejaVu Sans', 'Liberation Sans']
-            plt.rcParams['svg.fonttype'] = 'none'
-            plt.rcParams['font.size'] = font_size
-            plt.rcParams['axes.spines.right'] = False
-            plt.rcParams['axes.spines.top'] = False
-            plt.rcParams['axes.linewidth'] = lw
-            plt.rcParams['legend.frameon'] = False
-            plt.rcParams['axes.unicode_minus'] = False
-
-        def _save(fig, name, dpi=300, pad=2):
-            import warnings
-            base = charts_dir / name
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                fig.tight_layout(pad=pad)
-            fig.savefig(str(base) + '.svg', bbox_inches='tight')
-            fig.savefig(str(base) + '.png', dpi=dpi, bbox_inches='tight')
-            plt.close(fig)
-
-        def _add_panel(ax, label, fs=12):
-            ax.text(-0.08, 1.02, label, transform=ax.transAxes, fontsize=fs,
-                    fontweight='bold', va='bottom', ha='left')
-
-        chart_count = 0
+        # Load results
         results_path = self.output_dir / "execution" / "results.json"
         R = {}
         if results_path.exists():
             with open(results_path, "r", encoding="utf-8") as f:
                 R = json.load(f)
 
-        # Try LLM-driven generic chart designer first
+        if not R:
+            print("  [Charts] results.json 为空，跳过图表生成")
+            return f"图表保存于: {charts_dir}"
+
+        # Step 1: Try LLM-driven ChartPipeline
+        chart_count = 0
         try:
-            from src.charts import ChartDesigner
-            designer = ChartDesigner(self.output_dir, R)
-            chart_count = designer.design_and_draw()
+            from src.charts import ChartPipeline
+            pipeline = ChartPipeline(self.output_dir, R, call_llm=_call_llm)
+            chart_count = pipeline.run()
             if chart_count > 0:
-                print(f"  [ChartDesigner] 生成 {chart_count} 张图表")
-                return chart_count
-        except Exception:
-            pass
+                print(f"  [ChartPipeline] 成功生成 {chart_count} 张图表")
+        except Exception as e:
+            print(f"  [ChartPipeline] 失败: {e}")
+
+        # Step 2: Fallback to template-based charts if pipeline produced nothing
+        if chart_count == 0:
+            print("  [Charts] ChartPipeline 未产出，使用模板图表生成...")
+            try:
+                from src.charts import TemplateChartGenerator
+                gen = TemplateChartGenerator(self.output_dir, R)
+                chart_count = gen.generate_all()
+                if chart_count > 0:
+                    print(f"  [TemplateCharts] 生成 {chart_count} 张模板图表")
+            except Exception as e:
+                print(f"  [TemplateCharts] 失败: {e}")
 
         if chart_count == 0:
-            print("  [ChartDesigner] 未生成图表，results.json 可能缺少可可视化数据")
+            print("  [Charts] 未能生成任何图表，results.json 可能缺少可可视化数据")
+        else:
+            # List generated files
+            png_files = list(charts_dir.glob("*.png"))
+            print(f"  [Charts] 已生成 {len(png_files)} 张图表:")
+            for f in sorted(png_files)[:6]:
+                print(f"    - {f.name}")
 
-        return f"图表保存于: {charts_dir}"
+        return f"图表保存于: {charts_dir} (共 {chart_count} 张)"
 
 
     # ========================================================================
