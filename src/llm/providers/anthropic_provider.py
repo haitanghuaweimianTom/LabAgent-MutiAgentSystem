@@ -91,7 +91,10 @@ class AnthropicProvider(BaseLLMProvider):
 
         content = ""
         if "content" in data and len(data["content"]) > 0:
-            content = data["content"][0].get("text", "")
+            # Collect all text blocks (Qwen and other models may return
+            # thinking/reasoning blocks before text blocks)
+            text_parts = [b.get("text", "") for b in data["content"] if b.get("type") == "text"]
+            content = "\n".join(text_parts)
 
         usage = data.get("usage", {})
 
@@ -124,7 +127,8 @@ class AnthropicProvider(BaseLLMProvider):
 
         content = ""
         if "content" in data and len(data["content"]) > 0:
-            content = data["content"][0].get("text", "")
+            text_parts = [b.get("text", "") for b in data["content"] if b.get("type") == "text"]
+            content = "\n".join(text_parts)
 
         usage = data.get("usage", {})
 
