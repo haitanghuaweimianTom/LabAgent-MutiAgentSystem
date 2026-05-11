@@ -537,7 +537,7 @@ class UnifiedWorkflow:
                 content_type="analysis",
                 context=self.problem_text[:2000],
                 max_iterations=1,
-                score_threshold=7.5,
+                score_threshold=8.0,
             )
             analysis = self._parse_json_safely(improved, analysis)
 
@@ -701,7 +701,7 @@ class UnifiedWorkflow:
                     content_type="modeling",
                     context=f"任务: {task_node.description}\n{self.problem_text[:1000]}",
                     max_iterations=1,
-                    score_threshold=7.5,
+                    score_threshold=8.0,
                     min_chars=1500,
                 )
 

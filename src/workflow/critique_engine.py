@@ -113,39 +113,66 @@ class CritiqueEngine:
 {context if context else ''}
 
 【待评估内容】
-{content[:5000]}
+{content[:4000]}
 
 【评估维度】
 {dim_text}
 
 要求：
 1. 对每个维度给出 1-10 分的评分（10分为完美）
-2. 给出具体的评论，指出具体的不足之处（引用原文）
+2. 给出具体的评论，指出具体的不足之处
 3. 给出 2-3 条可操作的改进建议
 
-输出严格的 JSON 格式：
-{{"overall_score": 7.5, "critiques": [{{"dimension": "思考深度", "score": 7, "comment": "...", "suggestions": ["..."]}}]}}"""
+输出严格的JSON格式，不要任何markdown代码块或其他文字：
+{{"overall_score": 7.5, "critiques": [{{"dimension": "思考深度", "score": 7, "comment": "...", "suggestions": ["...", "..."]}}]}}"""
 
         try:
-            response = self.call_llm(prompt, "你是一位严格的学术评审专家。")
-            # 提取 JSON：去除 markdown 代码块
+            response = self.call_llm(prompt, "你是一位严格的学术评审专家。你必须输出严格的JSON格式，不要任何解释文字。")
+            # 提取 JSON：去除 markdown 代码块、前后文本
             text = response.strip()
-            if text.startswith("```"):
-                text = re.sub(r'^```\w*\n?', '', text)
-                text = re.sub(r'\n?```$', '', text)
+
+            # Step 1: Remove markdown code blocks
+            if "```" in text:
+                # Remove all ``` blocks
+                text = re.sub(r'```(?:json)?\s*\n?', '', text)
                 text = text.strip()
 
-            # 提取 JSON 对象
-            json_match = re.search(r'\{[\s\S]*\}', text)
-            if json_match:
-                raw = json_match.group()
-            else:
-                raw = text
+            # Step 2: Extract JSON object — find outermost { } with balanced braces
+            json_match = re.search(r'\{.*\}', text, re.DOTALL)
+            if not json_match:
+                raise ValueError("No JSON found in response")
+            raw = json_match.group()
 
-            # 修复单引号 JSON（LLM 常犯错误）
+            # Step 3: Normalize — fix single quotes, escaped quotes, trailing commas
             raw = raw.replace("'", '"')
+            # Remove trailing commas before } or ]
+            raw = re.sub(r',\s*([}\]])', r'\1', raw)
 
-            data = json.loads(raw)
+            # Step 4: Try parsing; if fails, try balanced-brace extraction
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError:
+                data = None
+                depth = 0
+                for i, ch in enumerate(raw):
+                    if ch == '{':
+                        if depth == 0:
+                            start_idx = i
+                        depth += 1
+                    elif ch == '}':
+                        depth -= 1
+                        if depth == 0:
+                            candidate = raw[start_idx:i+1]
+                            candidate = candidate.replace("'", '"')
+                            candidate = re.sub(r',\s*([}\]])', r'\1', candidate)
+                            try:
+                                data = json.loads(candidate)
+                                break
+                            except json.JSONDecodeError:
+                                continue
+
+                if data is None:
+                    raise ValueError("无法解析有效的 JSON 对象")
 
             critiques = []
             for c in data.get("critiques", []):

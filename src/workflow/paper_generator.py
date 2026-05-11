@@ -68,9 +68,9 @@ class PaperGenerator:
         """
         print(f"    生成章节: {chapter.title} (目标 {chapter.target_chars} 字)")
 
-        # 1. 提取相关性上下文（避免全量堆入）
+        # 1. 提取相关性上下文（严格控制上下文，避免 LLM 生成过多内容）
         relevant_context = self.template.get_relevance_context(
-            chapter, context, max_chars=5000
+            chapter, context, max_chars=3000
         )
 
         # 2. 提取前置章节的关键衔接内容
@@ -103,14 +103,17 @@ class PaperGenerator:
             content = self.critique_engine.critique_and_improve(
                 content=content,
                 content_type="paper_chapter",
-                context=f"题目：{context.get('problem_text', '')[:1000]}",
+                context=f"题目：{context.get('problem_text', '')[:800]}",
                 max_iterations=1,
-                score_threshold=7.5,
+                score_threshold=8.0,
                 min_chars=chapter.min_chars,
             )
             content = self._sanitize_chapter_content(content, chapter.title)
             # 再次确保字数
             content = self._ensure_length(content, chapter)
+
+        # 7. 硬截断：防止超过 max_chars
+        content = self._cap_length(content, chapter)
 
         self.chapters[chapter.id] = content
         return content
@@ -126,9 +129,11 @@ class PaperGenerator:
 
 【章节要求】
 - 标题: {chapter.title}
-- 目标字数: {chapter.target_chars} 中文字符（至少 {chapter.min_chars} 字）
+- 目标字数: {chapter.target_chars} 中文字符
+- 最少 {chapter.min_chars} 字，最多不超过 {chapter.max_chars} 字
 - 要求内容充实、论证充分、有具体数据支撑
 - 禁止空洞的套话和废话
+- 严格控制篇幅，不要过度展开
 """
 
         if chapter.requires_coding:
@@ -187,11 +192,16 @@ class PaperGenerator:
             "2025 年高教社杯全国大学生数学建模竞赛题目",
             "（请先阅读",
             "A 题",
+            "B 题",
             "烟幕干扰弹主要通过化学燃烧",
             "现考虑运用无人机完成烟幕干扰弹的投放策略问题",
             "来袭武器为空地导弹",
             "在导弹来袭过程中，通过投放烟幕干扰弹",
             "为实现更为有效的烟幕干扰效果",
+            "2026 年以来，中东冲突持续升级",
+            "中东地区是全球石油供应的核心枢纽",
+            "我国现行的成品油价格形成机制",
+            "成品油价格调控机制的动态优化设计",
         ]
 
         lines = content.split("\n")
@@ -508,15 +518,18 @@ class PaperGenerator:
             content = self.critique_engine.critique_and_improve(
                 content=content,
                 content_type="paper_chapter",
-                context=f"题目：{context.get('problem_text', '')[:1000]}",
+                context=f"题目：{context.get('problem_text', '')[:800]}",
                 max_iterations=1,
-                score_threshold=7.5,
+                score_threshold=8.0,
                 min_chars=chapter.min_chars,
             )
             content = self._sanitize_chapter_content(content, chapter.title)
             content = self._ensure_length(content, chapter)
 
-        # 7. 生成章节摘要（用于后续章节衔接）
+        # 7. 硬截断：防止超过 max_chars
+        content = self._cap_length(content, chapter)
+
+        # 8. 生成章节摘要（用于后续章节衔接）
         chapter_summary = self._summarize_chapter(chapter.id, chapter.title, content)
         self.chapter_summaries[chapter.id] = chapter_summary
         self.chapters[chapter.id] = content
@@ -539,9 +552,10 @@ class PaperGenerator:
 
 【字数要求】
 - 目标字数: {chapter.target_chars} 中文字符
-- 最低字数: {chapter.min_chars} 中文字符
+- 最低字数: {chapter.min_chars} 字，最多不超过 {chapter.max_chars} 字
 - 内容必须充实、论证充分、有具体数据/公式支撑
 - 禁止空洞的套话和废话
+- 严格控制篇幅，不要过度展开
 """
 
         if previous_summaries:
@@ -692,6 +706,21 @@ class PaperGenerator:
         except Exception as e:
             print(f"      扩展失败: {e}")
             return content
+
+    def _cap_length(self, content: str, chapter: ChapterSpec) -> str:
+        """硬截断：防止章节超过 max_chars"""
+        chars = self.count_chinese_chars(content)
+        if chars > chapter.max_chars:
+            print(f"      超过最大字数: {chars}/{chapter.max_chars}，执行截断")
+            # 找到接近 max_chars 位置的最后一个完整段落
+            max_bytes = int(chapter.max_chars * 3)  # 粗略估算：中文字节比约 3:1
+            truncated = content[:max_bytes]
+            # 回退到最后一个段落分隔符
+            last_break = truncated.rfind('\n\n')
+            if last_break > max_bytes // 2:
+                truncated = truncated[:last_break]
+            return truncated.strip()
+        return content
 
     def _ensure_charts_referenced(self, paper: str, chart_files: List[str]) -> str:
         """后处理：确保所有图表都在论文中被引用"""

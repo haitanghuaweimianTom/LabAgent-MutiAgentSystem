@@ -127,3 +127,63 @@
 
 .noteBox strong { color: #fff; }
 .noteBox code { background: rgba(255,255,255,0.06); padding: 0.1rem 0.4rem; border-radius: 4px; color: #2ecc71; font-family: monospace; font-size: 0.82rem; }
+
+/* Provider selector */
+.providerSelector {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+}
+
+.providerChip {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 1rem;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 20px;
+  background: rgba(0,0,0,0.2);
+  color: #aaa;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+}
+
+.providerChip:hover {
+  background: rgba(255,255,255,0.06);
+  color: #fff;
+}
+
+.providerChipActive {
+  background: rgba(52,152,219,0.15) !important;
+  border-color: rgba(52,152,219,0.5) !important;
+  color: #3498db !important;
+}
+
+.providerName { font-weight: 600; }
+
+.providerStatusOk {
+  color: #2ecc71;
+  font-size: 0.8rem;
+  font-weight: bold;
+}
+
+.providerStatusOff {
+  color: #666;
+  font-size: 0.7rem;
+}
+
+.testBtn {
+  padding: 0.4rem 0.8rem;
+  background: rgba(52,152,219,0.15);
+  border: 1px solid rgba(52,152,219,0.3);
+  border-radius: 6px;
+  color: #3498db;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.testBtn:hover:not(:disabled) { background: rgba(52,152,219,0.25); }
+.testBtn:disabled { opacity: 0.5; cursor: not-allowed; }

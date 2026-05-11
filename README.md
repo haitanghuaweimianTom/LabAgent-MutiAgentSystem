@@ -119,7 +119,7 @@ npm install -g @anthropic-ai/claude-code
 
 #### 目录结构要求
 
-**方式 A：全自动扫描模式（`*USETHIS*` 文件夹）**
+**方式 A：全自动扫描模式（`USETHIS` 文件夹）**
 
 ```
 MathModel-MutiAgentSystem/
@@ -133,7 +133,7 @@ MathModel-MutiAgentSystem/
 │   └── 附件1.xlsx ~ 附件4.xlsx
 ```
 
-**方式 B：金融分析模式（`*func2*` 文件夹）**
+**方式 B：金融分析模式（`func2` 文件夹）**
 
 ```
 MathModel-MutiAgentSystem/
@@ -142,7 +142,7 @@ MathModel-MutiAgentSystem/
 │   └── financial_data.xlsx
 ```
 
-**方式 C：课程作业模式（`*func3*` 文件夹）**
+**方式 C：课程作业模式（`func3` 文件夹）**
 
 ```
 MathModel-MutiAgentSystem/

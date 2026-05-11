@@ -43,6 +43,19 @@
 .refreshBtn:hover { background: rgba(255,255,255,0.1); }
 .refreshBtn:disabled { opacity: 0.4; cursor: not-allowed; }
 
+.selectAllBtn {
+  padding: 0.35rem 0.9rem;
+  background: rgba(52,152,219,0.1);
+  border: 1px solid rgba(52,152,219,0.25);
+  border-radius: 8px;
+  color: #3498db;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.selectAllBtn:hover { background: rgba(52,152,219,0.2); }
+
 .batchDeleteBtn {
   padding: 0.35rem 0.9rem;
   background: rgba(231,76,60,0.15);

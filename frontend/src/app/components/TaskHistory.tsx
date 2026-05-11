@@ -113,14 +113,26 @@ export default function TaskHistory() {
         <div className={styles.listHeader}>
           <span className={styles.title}>📋 历史任务</span>
           <div className={styles.headerActions}>
+            <button className={styles.refreshBtn} onClick={loadTaskList} disabled={loading}>
+              {loading ? '加载中...' : '🔄 刷新'}
+            </button>
+            <button
+              className={styles.selectAllBtn}
+              onClick={() => {
+                if (selectedIds.size === taskList.length) {
+                  setSelectedIds(new Set());
+                } else {
+                  setSelectedIds(new Set(taskList.map(t => t.task_id)));
+                }
+              }}
+            >
+              {selectedIds.size === taskList.length && taskList.length > 0 ? '☑️ 取消全选' : '⬜ 全选'}
+            </button>
             {selectedIds.size > 0 && (
               <button className={styles.batchDeleteBtn} onClick={handleBatchDelete} disabled={batchDeleting}>
                 🗑️ 批量删除({selectedIds.size})
               </button>
             )}
-            <button className={styles.refreshBtn} onClick={loadTaskList} disabled={loading}>
-              {loading ? '加载中...' : '🔄 刷新'}
-            </button>
           </div>
         </div>
 

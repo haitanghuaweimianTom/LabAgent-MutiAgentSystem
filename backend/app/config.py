@@ -24,6 +24,24 @@ class Settings(BaseSettings):
     kimi_api_key: str = ""
     kimi_base_url: str = "https://api.kimi.com/coding"
 
+    # ===== 多 LLM Provider 配置 =====
+    # Anthropic
+    anthropic_api_key: str = ""
+    anthropic_base_url: str = ""
+    anthropic_model: str = "claude-sonnet-4-6-20250514"
+    # OpenAI
+    openai_api_key: str = ""
+    openai_base_url: str = "https://api.openai.com/v1"
+    openai_model: str = "gpt-4o"
+    # Gemini
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.5-pro"
+    # Ollama
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_model: str = "qwen2.5:latest"
+    # 默认使用的 Provider: "anthropic" | "openai" | "gemini" | "ollama" | "claude_cli" | "minimax"
+    default_llm_provider: str = "claude_cli"
+
     # ===== Claude Code 后端配置 =====
     # 各Agent的默认LLM后端: "minimax" | "claude"
     # analyzer / modeler / solver 默认使用 claude

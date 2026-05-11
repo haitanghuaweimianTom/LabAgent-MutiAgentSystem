@@ -25,6 +25,18 @@ class SettingsUpdate(BaseModel):
     kimi_api_key: str | None = None
     kimi_base_url: str | None = None
     default_model: str | None = None
+    # Multi-provider settings
+    anthropic_api_key: str | None = None
+    anthropic_base_url: str | None = None
+    anthropic_model: str | None = None
+    openai_api_key: str | None = None
+    openai_base_url: str | None = None
+    openai_model: str | None = None
+    gemini_api_key: str | None = None
+    gemini_model: str | None = None
+    ollama_base_url: str | None = None
+    ollama_model: str | None = None
+    default_llm_provider: str | None = None
 
 
 @asynccontextmanager
@@ -97,14 +109,42 @@ async def info():
 
 @app.get("/api/v1/settings")
 async def get_runtime_settings():
+    s = get_settings()
     return {
         "minimax_api_key_set": is_api_key_set(),
         "kimi_api_key_set": is_kimi_key_set(),
         "kimi_base_url": get_runtime_kimi_url(),
-        "default_model": get_settings().default_model,
-        "api_base_url": get_settings().api_base_url,
+        "default_model": s.default_model,
+        "api_base_url": s.api_base_url,
+        # Multi-provider
+        "providers": {
+            "anthropic": {
+                "api_key_set": bool(s.anthropic_api_key),
+                "base_url": s.anthropic_base_url or "https://api.anthropic.com",
+                "model": s.anthropic_model,
+            },
+            "openai": {
+                "api_key_set": bool(s.openai_api_key),
+                "base_url": s.openai_base_url,
+                "model": s.openai_model,
+            },
+            "gemini": {
+                "api_key_set": bool(s.gemini_api_key),
+                "model": s.gemini_model,
+            },
+            "ollama": {
+                "base_url": s.ollama_base_url,
+                "model": s.ollama_model,
+            },
+            "claude_cli": {
+                "available": _find_claude_code() is not None,
+                "model": s.claude_model,
+            },
+        },
+        "default_llm_provider": s.default_llm_provider,
     }
 
+from .agents.base import _find_claude_code
 
 @app.post("/api/v1/settings")
 async def update_runtime_settings(body: SettingsUpdate):
@@ -120,6 +160,41 @@ async def update_runtime_settings(body: SettingsUpdate):
     if body.kimi_base_url is not None:
         update_runtime_kimi_url(body.kimi_base_url.strip())
         logger.info(f"Kimi Base URL已更新: {body.kimi_base_url}")
+        changed = True
+    # Multi-provider updates
+    s = get_settings()
+    if body.anthropic_api_key is not None:
+        s.anthropic_api_key = body.anthropic_api_key.strip()
+        changed = True
+    if body.anthropic_base_url is not None:
+        s.anthropic_base_url = body.anthropic_base_url.strip()
+        changed = True
+    if body.anthropic_model is not None:
+        s.anthropic_model = body.anthropic_model.strip()
+        changed = True
+    if body.openai_api_key is not None:
+        s.openai_api_key = body.openai_api_key.strip()
+        changed = True
+    if body.openai_base_url is not None:
+        s.openai_base_url = body.openai_base_url.strip()
+        changed = True
+    if body.openai_model is not None:
+        s.openai_model = body.openai_model.strip()
+        changed = True
+    if body.gemini_api_key is not None:
+        s.gemini_api_key = body.gemini_api_key.strip()
+        changed = True
+    if body.gemini_model is not None:
+        s.gemini_model = body.gemini_model.strip()
+        changed = True
+    if body.ollama_base_url is not None:
+        s.ollama_base_url = body.ollama_base_url.strip()
+        changed = True
+    if body.ollama_model is not None:
+        s.ollama_model = body.ollama_model.strip()
+        changed = True
+    if body.default_llm_provider is not None:
+        s.default_llm_provider = body.default_llm_provider.strip()
         changed = True
     if changed:
         reset_orchestrator()
