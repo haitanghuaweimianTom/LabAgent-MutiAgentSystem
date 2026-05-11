@@ -1,0 +1,13 @@
+{
+  "calibrated_psi": 0.8,
+  "calibrated_lambda_mid": 0.6,
+  "calibration_mse": 80868596.88677418,
+  "regime_distribution_low": 31,
+  "regime_distribution_mid": 0,
+  "regime_distribution_high": 0,
+  "total_adjustment_windows": 31,
+  "mean_theoretical_change": 2428.0741935483866,
+  "mean_actual_change": 2428.0741935483866,
+  "final_residual": 0.0,
+  "policy_sensitivity_score": 0.48
+}

@@ -60,8 +60,8 @@ def _get_llm_provider():
                 config.api_key = os.getenv("ANTHROPIC_AUTH_TOKEN")
             if os.getenv("ANTHROPIC_BASE_URL"):
                 config.api_host = os.getenv("ANTHROPIC_BASE_URL")
-                # 代理模式下缩短超时，快速失败回退
-                config.timeout = min(config.timeout, 120)
+                # 代理模式下设置5分钟超时
+                config.timeout = min(config.timeout, 300)
             if os.getenv("ANTHROPIC_MODEL"):
                 config.model = os.getenv("ANTHROPIC_MODEL")
             manager.register(ProviderType.ANTHROPIC, config)
@@ -101,7 +101,7 @@ def _call_llm(
     model: str = "sonnet",
     timeout: int = 600,
     max_retries: int = 3,
-    retry_wait: int = 5
+    retry_wait: int = 60
 ) -> str:
     """
     调用 LLM 生成内容

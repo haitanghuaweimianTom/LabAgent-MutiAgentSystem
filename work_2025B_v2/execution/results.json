@@ -1,0 +1,38 @@
+{
+  "\u9644\u4ef61": {
+    "thickness_um": 2650.852774875886,
+    "fitting_error": 0.04187092374935566,
+    "wavelength_range": [
+      399.6747,
+      4000.122
+    ],
+    "num_points": 7469
+  },
+  "\u9644\u4ef62": {
+    "thickness_um": 2272.1819630686878,
+    "fitting_error": 0.041350425109110044,
+    "wavelength_range": [
+      399.6747,
+      4000.122
+    ],
+    "num_points": 7469
+  },
+  "\u9644\u4ef63": {
+    "thickness_um": 2273.124516426846,
+    "fitting_error": 0.09457850451519728,
+    "wavelength_range": [
+      399.6747,
+      4000.122
+    ],
+    "num_points": 7469
+  },
+  "\u9644\u4ef64": {
+    "thickness_um": 2271.5535941636654,
+    "fitting_error": 0.08534999465472633,
+    "wavelength_range": [
+      399.6747,
+      4000.122
+    ],
+    "num_points": 7469
+  }
+}

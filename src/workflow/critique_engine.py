@@ -126,53 +126,136 @@ class CritiqueEngine:
 输出严格的JSON格式，不要任何markdown代码块或其他文字：
 {{"overall_score": 7.5, "critiques": [{{"dimension": "思考深度", "score": 7, "comment": "...", "suggestions": ["...", "..."]}}]}}"""
 
+    def _extract_json(self, text: str) -> dict:
+        """从LLM响应中提取JSON对象。
+
+        处理：markdown代码块、前后多余文本、字符串内的花括号、字符串内的裸引号。
+        """
+        # 1. 去除 markdown 代码块
+        text = re.sub(r'```(?:json)?\s*\n', '', text)
+        text = text.strip()
+
+        # 2. 找到第一个 { 和最后一个 }
+        start = text.find('{')
+        end = text.rfind('}')
+        if start == -1 or end == -1 or end <= start:
+            raise ValueError("No JSON found in response")
+
+        raw = text[start:end+1]
+
+        # 3. 先尝试直接解析
+        normalized = raw.replace("'", '"')
+        normalized = re.sub(r',\s*([}\]])', r'\1', normalized)
         try:
-            response = self.call_llm(prompt, "你是一位严格的学术评审专家。你必须输出严格的JSON格式，不要任何解释文字。")
-            # 提取 JSON：去除 markdown 代码块、前后文本
-            text = response.strip()
+            return json.loads(normalized)
+        except json.JSONDecodeError:
+            pass
 
-            # Step 1: Remove markdown code blocks
-            if "```" in text:
-                # Remove all ``` blocks
-                text = re.sub(r'```(?:json)?\s*\n?', '', text)
-                text = text.strip()
+        # 4. 修复字符串内的裸双引号后再试
+        fixed = self._fix_unescaped_quotes(normalized)
+        fixed = re.sub(r',\s*([}\]])', r'\1', fixed)
+        try:
+            return json.loads(fixed)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"无法解析有效的 JSON 对象: {e}")
 
-            # Step 2: Extract JSON object — find outermost { } with balanced braces
-            json_match = re.search(r'\{.*\}', text, re.DOTALL)
-            if not json_match:
-                raise ValueError("No JSON found in response")
-            raw = json_match.group()
+    def _fix_unescaped_quotes(self, raw: str) -> str:
+        """修复JSON字符串值内的裸双引号。
 
-            # Step 3: Normalize — fix single quotes, escaped quotes, trailing commas
-            raw = raw.replace("'", '"')
-            # Remove trailing commas before } or ]
-            raw = re.sub(r',\s*([}\]])', r'\1', raw)
+        策略：
+        - key 的引号后面跟 `:` → 正常闭合
+        - value 的引号后面跟 `,` `}` `]` → 正常闭合
+        - value 内的裸 `"` 后面跟的不是这些字符 → 转义
+        """
+        chars = list(raw)
+        n = len(chars)
+        i = 0
+        result = []
 
-            # Step 4: Try parsing; if fails, try balanced-brace extraction
-            try:
-                data = json.loads(raw)
-            except json.JSONDecodeError:
-                data = None
-                depth = 0
-                for i, ch in enumerate(raw):
-                    if ch == '{':
-                        if depth == 0:
-                            start_idx = i
-                        depth += 1
-                    elif ch == '}':
-                        depth -= 1
-                        if depth == 0:
-                            candidate = raw[start_idx:i+1]
-                            candidate = candidate.replace("'", '"')
-                            candidate = re.sub(r',\s*([}\]])', r'\1', candidate)
-                            try:
-                                data = json.loads(candidate)
-                                break
-                            except json.JSONDecodeError:
-                                continue
+        while i < n:
+            c = chars[i]
+            if c != '"':
+                result.append(c)
+                i += 1
+                continue
 
-                if data is None:
-                    raise ValueError("无法解析有效的 JSON 对象")
+            # 遇到 "：收集字符串内容
+            result.append('"')
+            i += 1
+            content = []
+
+            while i < n:
+                c = chars[i]
+                if c == '\\' and i + 1 < n:
+                    content.append(c)
+                    content.append(chars[i+1])
+                    i += 2
+                    continue
+                if c == '"':
+                    # 看后面的非空白字符，判断是否为字符串结束
+                    j = i + 1
+                    while j < n and chars[j] in (' ', '\t', '\n', '\r'):
+                        j += 1
+                    next_ch = chars[j] if j < n else ''
+
+                    # key 引号后跟 : 或 value 引号后跟 ,}] → 正常闭合
+                    if next_ch in (':', ',', '}', ']', ''):
+                        result.append(''.join(content))
+                        result.append('"')
+                        i += 1
+                        break
+                    else:
+                        # 字符串内的裸引号 → 转义
+                        content.append('\\"')
+                        i += 1
+                else:
+                    content.append(c)
+                    i += 1
+
+        return ''.join(result)
+
+    def critique(
+        self,
+        content: str,
+        content_type: str,
+        context: Optional[str] = None,
+    ) -> CritiqueResult:
+        """
+        对内容进行多维度批判评估
+
+        Args:
+            content: 待评估的内容
+            content_type: 内容类型 (analysis/modeling/algorithm/paper_chapter)
+            context: 额外上下文（如题目描述）
+
+        Returns:
+            CritiqueResult: 批判结果
+        """
+        dimensions = self.DIMENSIONS.get(content_type, self.DIMENSIONS["paper_chapter"])
+
+        dim_text = "\n".join([f"{i+1}. {name}：{desc}" for i, (name, desc) in enumerate(dimensions)])
+
+        prompt = f"""请对以下内容进行严格的批判性评估。
+
+{context if context else ''}
+
+【待评估内容】
+{content[:4000]}
+
+【评估维度】
+{dim_text}
+
+要求：
+1. 对每个维度给出 1-10 分的评分（10分为完美）
+2. 给出具体的评论，指出具体的不足之处
+3. 给出 2-3 条可操作的改进建议
+
+输出严格的JSON格式，不要任何markdown代码块或其他文字：
+{{"overall_score": 7.5, "critiques": [{{"dimension": "思考深度", "score": 7, "comment": "...", "suggestions": ["...", "..."]}}]}}"""
+
+        try:
+            response = self.call_llm(prompt, "你是一位严格的学术评审专家。你必须只输出JSON，不要任何其他文字。")
+            data = self._extract_json(response)
 
             critiques = []
             for c in data.get("critiques", []):
