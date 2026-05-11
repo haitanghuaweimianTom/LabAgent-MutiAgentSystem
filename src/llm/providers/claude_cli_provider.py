@@ -32,8 +32,9 @@ class ClaudeCLIProvider(BaseLLMProvider):
             )
         if not config.model:
             config.model = self.DEFAULT_MODEL
-        super().__init__(config)
+        # Must set _claude_path BEFORE super().__init__ since _validate_config checks it
         self._claude_path = self._find_claude_code()
+        super().__init__(config)
 
     def _find_claude_code(self) -> Optional[str]:
         """自动搜索 Claude Code CLI 路径"""

@@ -4,6 +4,7 @@ import json
 import time
 import re
 import shutil
+import signal
 import subprocess
 from pathlib import Path
 from typing import Dict, List, Any, Optional
@@ -59,6 +60,8 @@ def _get_llm_provider():
                 config.api_key = os.getenv("ANTHROPIC_AUTH_TOKEN")
             if os.getenv("ANTHROPIC_BASE_URL"):
                 config.api_host = os.getenv("ANTHROPIC_BASE_URL")
+                # 代理模式下缩短超时，快速失败回退
+                config.timeout = min(config.timeout, 120)
             if os.getenv("ANTHROPIC_MODEL"):
                 config.model = os.getenv("ANTHROPIC_MODEL")
             manager.register(ProviderType.ANTHROPIC, config)
@@ -105,22 +108,56 @@ def _call_llm(
     优先使用配置的 API Provider，回退到 Claude Code CLI
     """
     provider_manager = _get_llm_provider()
+    api_timed_out = False  # 标记 API 是否已超时，用于快速回退
 
     if provider_manager is not None:
         for attempt in range(max_retries):
+            # API 首次超时后立即回退，避免用户长时间等待
+            if api_timed_out:
+                print("    [LLM] API Provider 不可用，直接回退到 Claude CLI...")
+                break
+
             try:
                 if attempt > 0:
                     print(f"    [LLM调用 {attempt + 1}/{max_retries}] 等待{retry_wait}秒后重试...")
                     time.sleep(retry_wait)
 
                 print(f"    [LLM调用 {attempt + 1}/{max_retries}] 开始请求...")
-                response = provider_manager.generate(
-                    prompt=prompt,
-                    system_prompt=system_prompt,
-                    timeout=timeout
-                )
+
+                # 使用 alarm 机制防止 API 调用卡死（仅 Linux）
+                result = []
+                exception = []
+                def _handler(signum, frame):
+                    raise TimeoutError("LLM API 调用超时")
+
+                old_handler = None
+                use_alarm = hasattr(signal, 'SIGALRM')
+                if use_alarm:
+                    old_handler = signal.signal(signal.SIGALRM, _handler)
+                    signal.alarm(timeout)
+
+                try:
+                    response = provider_manager.generate(
+                        prompt=prompt,
+                        system_prompt=system_prompt,
+                        timeout=timeout
+                    )
+                    result.append(response)
+                except TimeoutError:
+                    api_timed_out = True
+                    raise
+                finally:
+                    if use_alarm:
+                        signal.alarm(0)
+                        if old_handler is not None:
+                            signal.signal(signal.SIGALRM, old_handler)
+
                 print(f"    [LLM调用 {attempt + 1}/{max_retries}] 成功!")
-                return response
+                return result[0]
+            except (TimeoutError, TimeoutError):
+                api_timed_out = True
+                print(f"    [LLM调用 {attempt + 1}/{max_retries}] 超时，回退到 Claude CLI")
+                break
             except Exception as e:
                 print(f"    [LLM调用 {attempt + 1}/{max_retries}] 失败: {str(e)[:200]}")
                 if attempt < max_retries - 1:

@@ -128,12 +128,24 @@ class CritiqueEngine:
 
         try:
             response = self.call_llm(prompt, "你是一位严格的学术评审专家。")
-            # 提取 JSON
-            json_match = re.search(r'\{.*\}', response, re.DOTALL)
+            # 提取 JSON：去除 markdown 代码块
+            text = response.strip()
+            if text.startswith("```"):
+                text = re.sub(r'^```\w*\n?', '', text)
+                text = re.sub(r'\n?```$', '', text)
+                text = text.strip()
+
+            # 提取 JSON 对象
+            json_match = re.search(r'\{[\s\S]*\}', text)
             if json_match:
-                data = json.loads(json_match.group())
+                raw = json_match.group()
             else:
-                data = json.loads(response)
+                raw = text
+
+            # 修复单引号 JSON（LLM 常犯错误）
+            raw = raw.replace("'", '"')
+
+            data = json.loads(raw)
 
             critiques = []
             for c in data.get("critiques", []):
