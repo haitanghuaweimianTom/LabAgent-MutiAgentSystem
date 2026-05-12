@@ -5,6 +5,10 @@
 - 而是将整个编程任务全权委托给 Claude Code CLI
 - Claude CLI 在 output/code/ 目录写 .py 文件并执行
 - SolverAgent 只接收 Claude CLI 返回的结构化结果
+
+v3.1 扩展：
+- 支持多代码文件生成（数据处理、求解、可视化等独立脚本）
+- 扩展模板库覆盖12+种常见数学建模任务类型
 """
 
 import json
@@ -21,14 +25,15 @@ logger = logging.getLogger(__name__)
 CODE_EXEC_TIMEOUT = 60
 
 # ====== Claude Code 全自动编程的系统提示词 ======
-# 核心策略：Claude Code -p 模式生成代码，Python subprocess 执行
-# 这样避免 --agent 模式中 Python 3.13 REPL 的 WinError 123 崩溃
 CLAUDE_CODER_SYSTEM = """你是一个专业的算法工程师，擅长用 Python 实现数学模型的求解算法。
 
 【工作流程】
-1. 根据数学模型编写完整、可直接运行的 Python 求解代码
+1. 根据任务需求，可能需要生成多个独立 Python 脚本：
+   - 数据处理脚本（data_process.py）：清洗、转换、特征工程
+   - 求解脚本（solver_*.py）：核心算法实现
+   - 可视化脚本（visualize_*.py）：生成图表并保存
 2. 将代码保存到 E:/cherryClaw/math_modeling_multi_agent/output/code/ 目录
-3. 生成执行命令运行代码
+3. 执行每个脚本，验证结果
 4. 返回结构化求解结果
 
 【代码要求】
@@ -40,7 +45,7 @@ CLAUDE_CODER_SYSTEM = """你是一个专业的算法工程师，擅长用 Python
 {
     "code": "完整Python代码（包含所有import，末尾用json.dumps打印结果）",
     "file_path": "E:/cherryClaw/math_modeling_multi_agent/output/code/solver_sub{N}.py",
-    "execution_command": "用 Python 执行代码的命令（格式见下）",
+    "execution_command": "python E:/cherryClaw/math_modeling_multi_agent/output/code/solver_sub{N}.py",
     "key_findings": ["关键发现1", "关键发现2"],
     "numerical_results": {"变量名": 数值, ...},
     "interpretation": "结果解释"
@@ -59,40 +64,205 @@ CLAUDE_CODER_SYSTEM = """你是一个专业的算法工程师，擅长用 Python
 - 最终必须返回上述 JSON 结构，不要有任何其他文字"""
 
 
+# ====== 扩展代码模板库 ======
 CODE_TEMPLATES = {
+    # ===== 优化求解 =====
     "linear_programming": '''
 import numpy as np
 from scipy.optimize import linprog
 
 def solve_lp(c, A_ub=None, b_ub=None, A_eq=None, b_eq=None, bounds=None):
+    """线性规划求解"""
     result = linprog(c, A_ub=A_ub, b_ub=b_ub, A_eq=A_eq, b_eq=b_eq, bounds=bounds)
     if result.success:
-        return {"optimal_value": result.fun, "optimal_solution": list(result.x), "status": "最优解"}
+        return {"optimal_value": float(result.fun), "optimal_solution": list(result.x), "status": "最优解"}
     return {"status": f"求解失败: {result.message}"}
 ''',
+
+    "integer_programming": '''
+import numpy as np
+from scipy.optimize import milp, LinearConstraint, Bounds
+
+def solve_mip(c, A_ub=None, b_ub=None, integrality=None):
+    """整数规划求解（MIP）"""
+    n = len(c)
+    constraints = []
+    if A_ub is not None and b_ub is not None:
+        constraints.append(LinearConstraint(A_ub, ub=b_ub))
+    bounds = Bounds(0, np.inf)
+    result = milp(c, constraints=constraints, integrality=integrality, bounds=bounds)
+    if result.success:
+        return {"optimal_value": float(result.fun), "optimal_solution": list(result.x), "status": "最优解"}
+    return {"status": f"求解失败: {result.message}"}
+''',
+
+    "nonlinear_optimization": '''
+import numpy as np
+from scipy.optimize import minimize
+
+def solve_nlp(obj_func, x0, constraints=None, bounds=None):
+    """非线性规划求解"""
+    result = minimize(obj_func, x0, constraints=constraints, bounds=bounds, method='SLSQP')
+    if result.success:
+        return {"optimal_value": float(result.fun), "optimal_solution": list(result.x), "iterations": int(result.nit), "status": "最优解"}
+    return {"status": f"求解失败: {result.message}"}
+''',
+
+    "genetic_algorithm": '''
+import numpy as np
+
+def genetic_algorithm(obj_func, n_vars, pop_size=100, generations=200, bounds=None):
+    """遗传算法求解"""
+    if bounds is None:
+        bounds = [(0, 10)] * n_vars
+    pop = np.array([[np.random.uniform(low, high) for low, high in bounds] for _ in range(pop_size)])
+    best_fitness, best_solution = float('inf'), None
+    for gen in range(generations):
+        fitness = np.array([obj_func(ind) for ind in pop])
+        idx = np.argmin(fitness)
+        if fitness[idx] < best_fitness:
+            best_fitness, best_solution = float(fitness[idx]), list(pop[idx])
+        # 选择、交叉、变异
+        parents = pop[np.argsort(fitness)[:pop_size//2]]
+        children = []
+        for _ in range(pop_size - len(parents)):
+            p1, p2 = parents[np.random.randint(len(parents))], parents[np.random.randint(len(parents))]
+            child = np.array([p1[j] if np.random.rand() < 0.5 else p2[j] for j in range(n_vars)])
+            child += np.random.normal(0, 0.1, n_vars)
+            child = np.clip(child, [b[0] for b in bounds], [b[1] for b in bounds])
+            children.append(child)
+        pop = np.vstack([parents, children])
+    return {"optimal_value": best_fitness, "optimal_solution": best_solution, "generations": generations}
+''',
+
+    "particle_swarm": '''
+import numpy as np
+
+def particle_swarm(obj_func, n_vars, n_particles=50, max_iter=100, bounds=None):
+    """粒子群优化算法"""
+    if bounds is None:
+        bounds = [(0, 10)] * n_vars
+    bounds = np.array(bounds)
+    positions = np.random.uniform(bounds[:, 0], bounds[:, 1], (n_particles, n_vars))
+    velocities = np.random.uniform(-1, 1, (n_particles, n_vars))
+    personal_best = positions.copy()
+    personal_best_fitness = np.array([obj_func(p) for p in positions])
+    global_best_idx = np.argmin(personal_best_fitness)
+    global_best = personal_best[global_best_idx].copy()
+    global_best_fitness = personal_best_fitness[global_best_idx]
+    w, c1, c2 = 0.8, 2.0, 2.0
+    for _ in range(max_iter):
+        r1, r2 = np.random.rand(n_particles, n_vars), np.random.rand(n_particles, n_vars)
+        velocities = w * velocities + c1 * r1 * (personal_best - positions) + c2 * r2 * (global_best - positions)
+        positions = positions + velocities
+        positions = np.clip(positions, bounds[:, 0], bounds[:, 1])
+        fitness = np.array([obj_func(p) for p in positions])
+        improved = fitness < personal_best_fitness
+        personal_best[improved] = positions[improved]
+        personal_best_fitness[improved] = fitness[improved]
+        if np.min(fitness) < global_best_fitness:
+            global_best = positions[np.argmin(fitness)].copy()
+            global_best_fitness = float(np.min(fitness))
+    return {"optimal_value": global_best_fitness, "optimal_solution": list(global_best), "iterations": max_iter}
+''',
+
+    "monte_carlo": '''
+import numpy as np
+
+def monte_carlo_simulation(model_func, n_simulations=10000, params=None):
+    """蒙特卡洛模拟"""
+    if params is None:
+        params = {}
+    results = []
+    for _ in range(n_simulations):
+        sample = {k: v() if callable(v) else v for k, v in params.items()}
+        result = model_func(sample)
+        results.append(result)
+    results = np.array(results)
+    return {"mean": float(np.mean(results)), "std": float(np.std(results)),
+            "min": float(np.min(results)), "max": float(np.max(results)),
+            "percentile_5": float(np.percentile(results, 5)),
+            "percentile_95": float(np.percentile(results, 95)),
+            "n_simulations": n_simulations}
+''',
+
+    # ===== 预测模型 =====
     "time_series": '''
 import numpy as np
 import pandas as pd
 from statsmodels.tsa.arima.model import ARIMA
 
 def forecast_arima(data, p=1, d=1, q=1, steps=7):
+    """ARIMA 时间序列预测"""
     model = ARIMA(data, order=(p, d, q))
     fitted = model.fit()
     forecast = fitted.forecast(steps=steps)
     return {"forecast": list(forecast), "summary": str(fitted.summary())}
 ''',
+
+    "exponential_smoothing": '''
+import numpy as np
+from statsmodels.tsa.holtwinters import ExponentialSmoothing
+
+def forecast_ets(data, steps=7, trend='add', seasonal=None):
+    """指数平滑预测（Holt-Winters）"""
+    model = ExponentialSmoothing(data, trend=trend, seasonal=seasonal, seasonal_periods=12)
+    fitted = model.fit()
+    forecast = fitted.forecast(steps=steps)
+    return {"forecast": list(forecast), "aic": float(fitted.aic), "bic": float(fitted.bic)}
+''',
+
     "regression": '''
 import numpy as np
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import StandardScaler
 
 def regression_analysis(X, y):
+    """多元线性回归"""
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
     model = LinearRegression()
     model.fit(X_scaled, y)
-    return {"R2": model.score(X_scaled, y), "coefficients": list(model.coef_)}
+    y_pred = model.predict(X_scaled)
+    ss_res = np.sum((y - y_pred) ** 2)
+    ss_tot = np.sum((y - np.mean(y)) ** 2)
+    return {"R2": float(model.score(X_scaled, y)), "adj_R2": float(1 - (1 - model.score(X_scaled, y)) * (len(y) - 1) / (len(y) - X.shape[1] - 1)),
+            "coefficients": list(model.coef_), "intercept": float(model.intercept_)}
 ''',
+
+    "random_forest": '''
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import cross_val_score
+from sklearn.preprocessing import StandardScaler
+
+def build_random_forest(X, y, n_estimators=100):
+    """随机森林回归"""
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+    model = RandomForestRegressor(n_estimators=n_estimators, random_state=42)
+    model.fit(X_scaled, y)
+    cv_scores = cross_val_score(model, X_scaled, y, cv=5)
+    return {"R2": float(model.score(X_scaled, y)), "cv_R2_mean": float(np.mean(cv_scores)),
+            "cv_R2_std": float(np.std(cv_scores)), "feature_importances": list(model.feature_importances_)}
+''',
+
+    "svm": '''
+import numpy as np
+from sklearn.svm import SVR
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import cross_val_score
+
+def build_svm(X, y, kernel='rbf'):
+    """支持向量机回归"""
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+    model = SVR(kernel=kernel)
+    model.fit(X_scaled, y)
+    cv_scores = cross_val_score(model, X_scaled, y, cv=5)
+    return {"R2": float(model.score(X_scaled, y)), "cv_R2_mean": float(np.mean(cv_scores))}
+''',
+
     "neural_network": '''
 import numpy as np
 from sklearn.neural_network import MLPRegressor
@@ -100,14 +270,441 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 
 def build_nn(X, y, hidden_layers=(100, 50), max_iter=500):
+    """多层感知机回归"""
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
     X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
     model = MLPRegressor(hidden_layer_sizes=hidden_layers, max_iter=max_iter, random_state=42)
     model.fit(X_train, y_train)
-    return {"train_score": model.score(X_train, y_train), "test_score": model.score(X_test, y_test)}
+    return {"train_score": float(model.score(X_train, y_train)), "test_score": float(model.score(X_test, y_test))}
+''',
+
+    # ===== 聚类分析 =====
+    "kmeans": '''
+import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import silhouette_score
+
+def kmeans_clustering(X, n_clusters=3):
+    """K-Means 聚类"""
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+    model = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
+    labels = model.fit_predict(X_scaled)
+    sil_score = silhouette_score(X_scaled, labels)
+    return {"n_clusters": n_clusters, "silhouette_score": float(sil_score),
+            "inertia": float(model.inertia_), "labels": list(labels)}
+''',
+
+    "hierarchical_clustering": '''
+import numpy as np
+from sklearn.cluster import AgglomerativeClustering
+from sklearn.preprocessing import StandardScaler
+
+def hierarchical_clustering(X, n_clusters=3):
+    """层次聚类"""
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+    model = AgglomerativeClustering(n_clusters=n_clusters)
+    labels = model.fit_predict(X_scaled)
+    return {"n_clusters": n_clusters, "labels": list(labels), "n_leaves": int(model.n_leaves_)}
+''',
+
+    "dbscan": '''
+import numpy as np
+from sklearn.cluster import DBSCAN
+from sklearn.preprocessing import StandardScaler
+
+def dbscan_clustering(X, eps=0.5, min_samples=5):
+    """DBSCAN 密度聚类"""
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+    model = DBSCAN(eps=eps, min_samples=min_samples)
+    labels = model.fit_predict(X_scaled)
+    n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
+    return {"n_clusters": n_clusters, "n_noise": int(list(labels).count(-1)), "labels": list(labels)}
+''',
+
+    # ===== 统计检验 =====
+    "correlation": '''
+import numpy as np
+from scipy import stats
+
+def correlation_analysis(X):
+    """相关性分析（Pearson + Spearman）"""
+    n = X.shape[1]
+    pearson_matrix = np.corrcoef(X.T)
+    spearman_matrix, spearman_p = stats.spearmanr(X)
+    return {"pearson": pearson_matrix.tolist(), "spearman": spearman_matrix.tolist(),
+            "spearman_p_values": spearman_p.tolist()}
+''',
+
+    "pca": '''
+import numpy as np
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+
+def pca_analysis(X, n_components=None):
+    """主成分分析"""
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+    if n_components is None:
+        n_components = min(X.shape[1], X.shape[0])
+    pca = PCA(n_components=n_components)
+    X_pca = pca.fit_transform(X_scaled)
+    return {"explained_variance_ratio": list(pca.explained_variance_ratio_),
+            "cumulative_variance_ratio": list(np.cumsum(pca.explained_variance_ratio_)),
+            "n_components": n_components}
+''',
+
+    "anova": '''
+import numpy as np
+from scipy import stats
+
+def anova_test(*groups):
+    """单因素方差分析"""
+    f_stat, p_value = stats.f_oneway(*groups)
+    return {"F_statistic": float(f_stat), "p_value": float(p_value),
+            "significant": bool(p_value < 0.05)}
+''',
+
+    # ===== 综合评价 =====
+    "ahp": '''
+import numpy as np
+
+def ahp(consistency_matrix, criteria_weights=None):
+    """层次分析法（AHP）"""
+    n = consistency_matrix.shape[0]
+    # 归一化
+    col_sum = consistency_matrix.sum(axis=0)
+    norm_matrix = consistency_matrix / col_sum
+    weights = norm_matrix.mean(axis=1)
+    # 一致性检验
+    lambda_max = (consistency_matrix @ weights / weights).mean()
+    CI = (lambda_max - n) / (n - 1)
+    RI_table = {1: 0, 2: 0, 3: 0.58, 4: 0.90, 5: 1.12, 6: 1.24, 7: 1.32, 8: 1.41, 9: 1.45}
+    RI = RI_table.get(n, 1.45)
+    CR = CI / RI if RI > 0 else 0
+    return {"weights": list(weights), "CR": float(CR), "consistent": bool(CR < 0.1), "lambda_max": float(lambda_max)}
+''',
+
+    "topsis": '''
+import numpy as np
+
+def topsis(decision_matrix, weights, benefit_cols=None):
+    """TOPSIS 综合评价"""
+    m, n = decision_matrix.shape
+    if benefit_cols is None:
+        benefit_cols = [True] * n
+    # 标准化
+    norms = np.sqrt((decision_matrix ** 2).sum(axis=0))
+    norm_matrix = decision_matrix / norms
+    # 加权
+    weighted = norm_matrix * weights
+    # 理想解
+    ideal_best = np.array([weighted[:, j].max() if benefit_cols[j] else weighted[:, j].min() for j in range(n)])
+    ideal_worst = np.array([weighted[:, j].min() if benefit_cols[j] else weighted[:, j].max() for j in range(n)])
+    # 距离
+    d_best = np.sqrt(((weighted - ideal_best) ** 2).sum(axis=1))
+    d_worst = np.sqrt(((weighted - ideal_worst) ** 2).sum(axis=1))
+    scores = d_worst / (d_best + d_worst)
+    return {"scores": list(scores), "ranking": list(np.argsort(-scores) + 1), "best_alternative": int(np.argmax(scores) + 1)}
+''',
+
+    "entropy_weight": '''
+import numpy as np
+
+def entropy_weight(decision_matrix, benefit_cols=None):
+    """熵权法确定权重"""
+    m, n = decision_matrix.shape
+    if benefit_cols is None:
+        benefit_cols = [True] * n
+    # 标准化
+    mins = decision_matrix.min(axis=0)
+    maxs = decision_matrix.max(axis=0)
+    range_vals = maxs - mins
+    range_vals[range_vals == 0] = 1e-10
+    norm_matrix = (decision_matrix - mins) / range_vals
+    # 计算信息熵
+    p = norm_matrix / norm_matrix.sum(axis=0)
+    p[p == 0] = 1e-10
+    entropy = -np.sum(p * np.log(p), axis=0) / np.log(m)
+    # 计算权重
+    weights = (1 - entropy) / (n - np.sum(entropy))
+    return {"weights": list(weights), "entropy_values": list(entropy)}
+''',
+
+    "fuzzy_evaluation": '''
+import numpy as np
+
+def fuzzy_comprehensive_evaluation(evaluation_matrix, weights):
+    """模糊综合评价"""
+    evaluation_matrix = np.array(evaluation_matrix)
+    weights = np.array(weights)
+    weights = weights / weights.sum()
+    result = weights @ evaluation_matrix
+    return {"result": list(result), "evaluation_level": float(np.argmax(result) + 1),
+            "membership": list(result / result.sum())}
+''',
+
+    "grey_relational": '''
+import numpy as np
+
+def grey_relational_analysis(data, reference=None, rho=0.5):
+    """灰色关联分析"""
+    if reference is None:
+        reference = data.max(axis=0)
+    # 标准化
+    mins = data.min(axis=0)
+    maxs = data.max(axis=0)
+    norm_data = (data - mins) / (maxs - mins + 1e-10)
+    norm_ref = (reference - mins) / (maxs - mins + 1e-10)
+    # 关联系数
+    delta = np.abs(norm_data - norm_ref)
+    delta_max, delta_min = delta.max(), delta.min()
+    gamma = (delta_min + rho * delta_max) / (delta + rho * delta_max)
+    # 关联度
+    relational_degree = gamma.mean(axis=0)
+    return {"relational_degree": list(relational_degree), "ranking": list(np.argsort(-relational_degree) + 1)}
+''',
+
+    # ===== 数据处理 =====
+    "data_cleaning": '''
+import numpy as np
+import pandas as pd
+
+def data_cleaning_pipeline(df):
+    """数据清洗流水线"""
+    report = {
+        "original_shape": list(df.shape),
+        "missing_before": int(df.isnull().sum().sum()),
+    }
+    # 缺失值处理
+    for col in df.columns:
+        if df[col].dtype in ['float64', 'int64']:
+            df[col] = df[col].fillna(df[col].median())
+        else:
+            df[col] = df[col].fillna(df[col].mode()[0] if len(df[col].mode()) > 0 else 'unknown')
+    # 异常值处理（IQR法）
+    for col in df.select_dtypes(include=[np.number]).columns:
+        Q1, Q3 = df[col].quantile(0.25), df[col].quantile(0.75)
+        IQR = Q3 - Q1
+        lower, upper = Q1 - 1.5 * IQR, Q3 + 1.5 * IQR
+        n_outliers = int(((df[col] < lower) | (df[col] > upper)).sum())
+        df[col] = df[col].clip(lower, upper)
+        report[f"{col}_outliers_clipped"] = n_outliers
+    report["cleaned_shape"] = list(df.shape)
+    report["missing_after"] = int(df.isnull().sum().sum())
+    return report
+''',
+
+    "feature_engineering": '''
+import numpy as np
+import pandas as pd
+from sklearn.preprocessing import StandardScaler, MinMaxScaler, LabelEncoder
+
+def feature_engineering(df, target_col=None, scale_method='standard'):
+    """特征工程"""
+    numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+    if target_col:
+        numeric_cols = [c for c in numeric_cols if c != target_col]
+    features = {}
+    for col in numeric_cols:
+        features[f"{col}_mean"] = df[col].mean()
+        features[f"{col}_std"] = df[col].std()
+        features[f"{col}_skew"] = float(df[col].skew())
+        features[f"{col}_kurtosis"] = float(df[col].kurtosis())
+    # 标准化
+    scaler = StandardScaler() if scale_method == 'standard' else MinMaxScaler()
+    if len(numeric_cols) > 0:
+        df_scaled = df.copy()
+        df_scaled[numeric_cols] = scaler.fit_transform(df[numeric_cols])
+        features["n_numeric_features"] = len(numeric_cols)
+        features["n_categorical_features"] = len(df.columns) - len(numeric_cols) - (1 if target_col else 0)
+    return features
+''',
+
+    # ===== 可视化 =====
+    "visualization_basic": '''
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import numpy as np
+import os
+
+def create_basic_plots(data_dict, output_dir='output/code'):
+    """创建基础可视化图表"""
+    os.makedirs(output_dir, exist_ok=True)
+    plots = []
+    for name, data in data_dict.items():
+        data = np.array(data)
+        fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+        # 折线图
+        axes[0].plot(data, marker='o', markersize=4)
+        axes[0].set_title(f'{name} - 趋势图')
+        axes[0].set_xlabel('Index')
+        axes[0].set_ylabel('Value')
+        # 直方图
+        axes[1].hist(data, bins=min(20, len(data)), edgecolor='black')
+        axes[1].set_title(f'{name} - 分布图')
+        axes[1].set_xlabel('Value')
+        axes[1].set_ylabel('Frequency')
+        plt.tight_layout()
+        path = os.path.join(output_dir, f'{name}.png')
+        fig.savefig(path, dpi=150)
+        plt.close()
+        plots.append({"name": name, "path": path, "type": "basic"})
+    return {"plots": plots, "count": len(plots)}
+''',
+
+    "visualization_correlation": '''
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import numpy as np
+import os
+
+def create_correlation_heatmap(correlation_matrix, labels=None, output_dir='output/code'):
+    """相关性热力图"""
+    os.makedirs(output_dir, exist_ok=True)
+    fig, ax = plt.subplots(figsize=(10, 8))
+    im = ax.imshow(correlation_matrix, cmap='RdYlBu_r', vmin=-1, vmax=1)
+    ax.set_xticks(range(len(labels or [])))
+    ax.set_yticks(range(len(labels or [])))
+    if labels:
+        ax.set_xticklabels(labels, rotation=45, ha='right')
+        ax.set_yticklabels(labels)
+    for i in range(len(correlation_matrix)):
+        for j in range(len(correlation_matrix[0])):
+            ax.text(j, i, f'{correlation_matrix[i, j]:.2f}', ha='center', va='center',
+                    color='white' if abs(correlation_matrix[i, j]) > 0.5 else 'black', fontsize=8)
+    plt.colorbar(im)
+    ax.set_title('相关性热力图')
+    path = os.path.join(output_dir, 'correlation_heatmap.png')
+    fig.savefig(path, dpi=150)
+    plt.close()
+    return {"path": path, "type": "correlation_heatmap"}
+''',
+
+    "visualization_comparison": '''
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import numpy as np
+import os
+
+def create_comparison_bar(categories, values, title='对比图', output_dir='output/code'):
+    """对比柱状图"""
+    os.makedirs(output_dir, exist_ok=True)
+    fig, ax = plt.subplots(figsize=(10, 6))
+    colors = plt.cm.Set3(np.linspace(0, 1, len(categories)))
+    bars = ax.bar(categories, values, color=colors, edgecolor='black')
+    for bar, val in zip(bars, values):
+        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.01,
+                f'{val:.2f}', ha='center', va='bottom', fontsize=10)
+    ax.set_title(title, fontsize=14, fontweight='bold')
+    ax.set_ylabel('Value')
+    ax.grid(axis='y', alpha=0.3)
+    path = os.path.join(output_dir, 'comparison.png')
+    fig.savefig(path, dpi=150)
+    plt.close()
+    return {"path": path, "type": "comparison_bar"}
+''',
+
+    "visualization_radar": '''
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import numpy as np
+import os
+
+def create_radar_chart(labels, values, title='雷达图', output_dir='output/code'):
+    """雷达图"""
+    os.makedirs(output_dir, exist_ok=True)
+    n = len(labels)
+    angles = np.linspace(0, 2 * np.pi, n, endpoint=False).tolist()
+    values = np.concatenate([values, [values[0]]])
+    angles = angles + [angles[0]]
+    fig, ax = plt.subplots(figsize=(8, 8), subplot_kw=dict(projection='polar'))
+    ax.plot(angles, values, 'o-', linewidth=2)
+    ax.fill(angles, values, alpha=0.25)
+    ax.set_xticks(angles[:-1])
+    ax.set_xticklabels(labels)
+    ax.set_title(title, fontsize=14, fontweight='bold', pad=20)
+    path = os.path.join(output_dir, 'radar_chart.png')
+    fig.savefig(path, dpi=150)
+    plt.close()
+    return {"path": path, "type": "radar_chart"}
 ''',
 }
+
+# 任务类型映射
+TASK_TYPE_MAP = {
+    'linear_programming': ['线性规划', '线性优化', 'linprog', 'LP'],
+    'integer_programming': ['整数规划', '0-1规划', 'MIP'],
+    'nonlinear_optimization': ['非线性', '非线性规划', 'NLP'],
+    'genetic_algorithm': ['遗传算法', 'GA', '进化算法', '启发式'],
+    'particle_swarm': ['粒子群', 'PSO', '群智能'],
+    'monte_carlo': ['蒙特卡洛', 'Monte Carlo', '随机模拟', '模拟'],
+    'time_series': ['时间序列', '预测', 'ARIMA', '趋势', 'forecast'],
+    'exponential_smoothing': ['指数平滑', 'Holt', 'Holt-Winters', '平滑'],
+    'regression': ['回归', '线性回归', 'regression'],
+    'random_forest': ['随机森林', 'Random Forest', '树模型'],
+    'svm': ['SVM', '支持向量', '核函数'],
+    'neural_network': ['神经', '深度', 'MLP', 'BP', '神经网络'],
+    'kmeans': ['聚类', 'K-Means', 'K均值', '分群'],
+    'hierarchical_clustering': ['层次聚类', 'hierarchical', '凝聚'],
+    'dbscan': ['DBSCAN', '密度聚类', 'dbscan'],
+    'correlation': ['相关性', 'correlation', 'Pearson', 'Spearman', '相关系数'],
+    'pca': ['主成分', 'PCA', '降维', '因子'],
+    'anova': ['方差分析', 'ANOVA', 'F检验'],
+    'ahp': ['AHP', '层次分析', '判断矩阵'],
+    'topsis': ['TOPSIS', '优劣解', '评价'],
+    'entropy_weight': ['熵权', '熵值法'],
+    'fuzzy_evaluation': ['模糊', '综合评价'],
+    'grey_relational': ['灰色', '关联分析', 'grey'],
+    'data_cleaning': ['数据清洗', '缺失值', '异常值', '预处理'],
+    'feature_engineering': ['特征工程', '特征', '标准化', '归一化'],
+    'visualization_basic': ['可视化', '折线图', '分布'],
+    'visualization_correlation': ['热力图', '相关图'],
+    'visualization_comparison': ['柱状图', '对比图'],
+    'visualization_radar': ['雷达图', '综合评价图'],
+}
+
+
+def detect_task_type(description: str, model_info: Dict = None) -> List[str]:
+    """根据问题描述和模型信息检测适用的任务类型"""
+    if not description:
+        return ['linear_programming']
+
+    text = description.lower()
+    matched_types = []
+
+    for template_key, keywords in TASK_TYPE_MAP.items():
+        for kw in keywords:
+            if kw.lower() in text:
+                matched_types.append(template_key)
+                break
+
+    # 根据模型信息进一步推断
+    if model_info:
+        model_type = model_info.get('model_type', '').lower()
+        model_name = model_info.get('model_name', '').lower()
+        alg_name = model_info.get('algorithm', {}).get('name', '').lower() if isinstance(model_info.get('algorithm'), dict) else ''
+
+        all_info = f"{model_type} {model_name} {alg_name}"
+        for template_key, keywords in TASK_TYPE_MAP.items():
+            for kw in keywords:
+                if kw.lower() in all_info and template_key not in matched_types:
+                    matched_types.append(template_key)
+                    break
+
+    # 默认返回线性规划
+    if not matched_types:
+        matched_types = ['linear_programming']
+
+    return matched_types
 
 
 def _extract_code_from_response(content: str) -> Optional[str]:
@@ -138,12 +735,9 @@ def _extract_code_from_response(content: str) -> Optional[str]:
     # 格式4: 直接是Python代码（以import或def开头）
     for line in content.split("\n"):
         if line.strip().startswith(("import ", "from ", "def ", "class ")):
-            # 找到代码开始，提取从该行到末尾（去掉JSON残余）
             start = content.find(line.strip())
             if start != -1:
-                # 去掉JSON末尾
                 code = content[start:]
-                # 尝试找到代码块结束位置
                 if "```" in code:
                     code = code[:code.rfind("```")]
                 return code.strip()
@@ -151,11 +745,85 @@ def _extract_code_from_response(content: str) -> Optional[str]:
     return None
 
 
+def get_template_code(task_types: List[str]) -> str:
+    """根据任务类型获取模板代码"""
+    for tt in task_types:
+        if tt in CODE_TEMPLATES:
+            return CODE_TEMPLATES[tt]
+    return CODE_TEMPLATES.get('linear_programming', '')
+
+
+def get_template_for_model(model_info: Dict) -> str:
+    """根据模型信息智能选择模板"""
+    model_name = model_info.get('model_name', '').lower()
+    model_type = model_info.get('model_type', '').lower()
+    alg_name = model_info.get('algorithm', {}).get('name', '').lower() if isinstance(model_info.get('algorithm'), dict) else ''
+    description = model_info.get('description', '').lower()
+
+    # 综合评价
+    if any(kw in model_name or kw in description for kw in ['topsis', '优劣', '理想']):
+        return CODE_TEMPLATES['topsis']
+    if any(kw in model_name or kw in description for kw in ['ahp', '层次分析', '判断']):
+        return CODE_TEMPLATES['ahp']
+    if any(kw in model_name or kw in description for kw in ['熵权', '熵值', 'entropy']):
+        return CODE_TEMPLATES['entropy_weight']
+    if any(kw in model_name or kw in description for kw in ['模糊', 'fuzzy']):
+        return CODE_TEMPLATES['fuzzy_evaluation']
+    if any(kw in model_name or kw in description for kw in ['灰色', '关联分析', 'grey']):
+        return CODE_TEMPLATES['grey_relational']
+
+    # 预测
+    if any(kw in model_name or kw in model_type for kw in ['arima', '时间序列', '趋势']):
+        return CODE_TEMPLATES['time_series']
+    if any(kw in model_name or kw in model_type for kw in ['指数平滑', 'holt', '平滑']):
+        return CODE_TEMPLATES['exponential_smoothing']
+    if any(kw in model_name or kw in model_type for kw in ['回归', 'regression']):
+        return CODE_TEMPLATES['regression']
+    if any(kw in model_name or kw in model_type for kw in ['随机森林', 'random forest']):
+        return CODE_TEMPLATES['random_forest']
+    if any(kw in model_name or kw in model_type for kw in ['svm', '支持向量']):
+        return CODE_TEMPLATES['svm']
+    if any(kw in model_name or kw in model_type for kw in ['神经', '深度', 'mlp']):
+        return CODE_TEMPLATES['neural_network']
+
+    # 优化
+    if any(kw in model_name or kw in model_type for kw in ['线性规划', 'linprog']):
+        return CODE_TEMPLATES['linear_programming']
+    if any(kw in model_name or kw in model_type for kw in ['整数', '0-1', 'mip']):
+        return CODE_TEMPLATES['integer_programming']
+    if any(kw in model_name or kw in model_type for kw in ['非线性', 'nlp']):
+        return CODE_TEMPLATES['nonlinear_optimization']
+    if any(kw in model_name or kw in model_type or kw in alg_name for kw in ['遗传', 'ga', '进化', 'heuristic']):
+        return CODE_TEMPLATES['genetic_algorithm']
+    if any(kw in model_name or kw in model_type or kw in alg_name for kw in ['粒子群', 'pso', '群智能']):
+        return CODE_TEMPLATES['particle_swarm']
+    if any(kw in model_name or kw in model_type or kw in alg_name for kw in ['蒙特卡洛', 'monte carlo', '模拟']):
+        return CODE_TEMPLATES['monte_carlo']
+
+    # 聚类
+    if any(kw in model_name or kw in model_type for kw in ['k-means', 'kmeans', 'k均值']):
+        return CODE_TEMPLATES['kmeans']
+    if any(kw in model_name or kw in model_type for kw in ['层次聚类', 'hierarchical', '凝聚']):
+        return CODE_TEMPLATES['hierarchical_clustering']
+    if any(kw in model_name or kw in model_type for kw in ['dbscan', '密度']):
+        return CODE_TEMPLATES['dbscan']
+
+    # 统计
+    if any(kw in model_name or kw in model_type for kw in ['相关', 'correlation', 'pearson']):
+        return CODE_TEMPLATES['correlation']
+    if any(kw in model_name or kw in model_type for kw in ['pca', '主成分', '降维', '因子']):
+        return CODE_TEMPLATES['pca']
+    if any(kw in model_name or kw in model_type for kw in ['方差分析', 'anova', 'f检验']):
+        return CODE_TEMPLATES['anova']
+
+    return CODE_TEMPLATES['linear_programming']
+
+
 @AgentFactory.register("solver_agent")
 class SolverAgent(BaseAgent):
     name = "solver_agent"
     label = "求解器"
-    description = "编程求解、结果验证"
+    description = "编程求解、结果验证、数据处理、可视化"
     default_model = "minimax-m2.7"
     default_llm_backend = "claude"  # 默认使用 Claude Code
 
@@ -179,93 +847,6 @@ class SolverAgent(BaseAgent):
         except Exception:
             return False
 
-    def _execute_code(self, code: str, timeout: int = CODE_EXEC_TIMEOUT) -> Dict[str, Any]:
-        """
-        在子进程中执行Python代码，返回执行结果。
-        安全隔离：超时控制、文件系统隔离。
-        自动检测并优先使用 conda mathmodel 环境，失败时回退到系统 Python。
-        """
-        import shutil
-        python_exe = shutil.which("python") or "python"
-
-        # 优先尝试 conda 环境
-        conda_tried = False
-        if self._find_conda_exe():
-            conda_tried = True
-            try:
-                result = subprocess.run(
-                    ["cmd", "/c", "conda", "run", "-n", self.CONDA_ENV_NAME, "python", "-c", code],
-                    capture_output=True, text=True,
-                    timeout=timeout, encoding="utf-8", errors="replace",
-                )
-                if result.returncode == 0:
-                    stdout = result.stdout.strip()
-                    output_data = {}
-                    if stdout:
-                        try:
-                            output_data = json.loads(stdout)
-                        except json.JSONDecodeError:
-                            output_data = {"output": stdout, "raw_output": True}
-                    logger.info(f"SolverAgent (conda) 代码执行成功")
-                    return {
-                        "success": True, "output": output_data,
-                        "stdout": stdout, "stderr": "", "returncode": 0,
-                        "env": self.CONDA_ENV_NAME,
-                    }
-                else:
-                    stderr = result.stderr.strip()
-                    logger.warning(f"SolverAgent (conda) 执行失败，尝试系统Python: {stderr[:200]}")
-            except FileNotFoundError:
-                conda_tried = False
-
-        # 回退到系统 Python
-        try:
-            result = subprocess.run(
-                [python_exe, "-c", code],
-                capture_output=True, text=True,
-                timeout=timeout, encoding="utf-8", errors="replace",
-            )
-            stdout = result.stdout.strip()
-            stderr = result.stderr.strip()
-
-            if result.returncode == 0:
-                output_data = {}
-                if stdout:
-                    try:
-                        output_data = json.loads(stdout)
-                    except json.JSONDecodeError:
-                        output_data = {"output": stdout, "raw_output": True}
-                logger.info(f"SolverAgent (system) 代码执行成功")
-                return {
-                    "success": True, "output": output_data,
-                    "stdout": stdout, "stderr": "", "returncode": 0,
-                    "env": "system",
-                }
-            else:
-                logger.warning(f"SolverAgent (system) 执行失败: {stderr[:300]}")
-                return {
-                    "success": False, "error": stderr,
-                    "stdout": stdout, "returncode": result.returncode,
-                    "env": "system",
-                }
-        except subprocess.TimeoutExpired:
-            logger.warning(f"SolverAgent 代码执行超时（{timeout}秒）")
-            return {
-                "success": False,
-                "error": f"代码执行超时（{timeout}秒），可能是算法收敛过慢或陷入死循环",
-                "returncode": -1,
-            }
-        except FileNotFoundError:
-            logger.error("Python解释器未找到，请确保已安装Python并添加到PATH")
-            return {
-                "success": False, "error": "Python解释器未找到", "returncode": -2,
-            }
-        except Exception as e:
-            logger.error(f"SolverAgent 代码执行异常: {e}")
-            return {
-                "success": False, "error": f"{type(e).__name__}: {str(e)}", "returncode": -3,
-            }
-
     async def _run_code_with_autofix(
         self,
         initial_code: str,
@@ -275,10 +856,6 @@ class SolverAgent(BaseAgent):
     ) -> Dict[str, Any]:
         """
         【全自动编程 v3.0】将整个编程+执行任务委托给 Claude Code CLI。
-
-        旧版（v1/v2）：SolverAgent 调用 call_llm() → 拿代码文本 → 自己执行 → 失败再调 LLM 修正
-        新版（v3.0）：直接调用 _call_claude_coder()，Claude CLI 在 output/code/ 写文件、执行、自动修正（最多3次），
-                    最终返回结构化结果。SolverAgent 只负责接收结果。
 
         参数：
             initial_code：初始代码（仅供参考，Claude CLI 会重写）
@@ -316,7 +893,7 @@ class SolverAgent(BaseAgent):
 ```
 
 ## 输出要求
-1. 在 E:/cherryClaw/math_modeling_multi_agent/output/code/ 下创建文件 solver_sub{sp_id}.py
+1. 在 {code_dir}/ 下创建文件 solver_sub{sp_id}.py
 2. 编写完整、可直接运行的 Python 求解代码
 3. 生成执行命令来运行代码（重要！）
 4. 如果执行出错，自动修正代码并重试（最多{max_retries}次）
@@ -326,8 +903,8 @@ class SolverAgent(BaseAgent):
 ## 返回格式（必须以JSON格式返回，不要有任何其他文字）
 {{
     "code": "完整Python代码（包含所有import，末尾用json.dumps打印结果）",
-    "file_path": "E:/cherryClaw/math_modeling_multi_agent/output/code/solver_sub{sp_id}.py",
-    "execution_command": "python -X utf8 -c \\"import json; 代码\\" 或 python E:/cherryClaw/math_modeling_multi_agent/output/code/solver_sub{sp_id}.py",
+    "file_path": "{code_dir}/solver_sub{sp_id}.py",
+    "execution_command": "python -X utf8 -c \\"import json; 代码\\" 或 python {code_dir}/solver_sub{sp_id}.py",
     "key_findings": ["关键发现1", "关键发现2"],
     "numerical_results": {{"变量名": 数值}},
     "interpretation": "结果解释"
@@ -388,12 +965,22 @@ class SolverAgent(BaseAgent):
 
     def get_system_prompt(self) -> str:
         return """你是一个专业的算法工程师，擅长用Python实现数学模型的求解算法。
+你的任务不仅包括核心求解，还包括数据处理、可视化等辅助工作。
 
 重要：你必须以JSON格式输出，不要有任何其他文字！
 
+对于每个子问题，你应该生成多个代码文件以完成不同类型的任务：
+- 数据处理（如 data_process_{N}.py）：数据清洗、转换、特征工程
+- 求解（如 solver_{N}.py）：核心算法实现
+- 可视化（如 visualize_{N}.py）：生成图表并保存到文件
+
 输出格式：
 {
-    "code_files": [{"filename": "文件名.py", "language": "python", "code": "完整可运行Python代码", "description": "文件说明"}],
+    "code_files": [
+        {"filename": "data_process_{N}.py", "language": "python", "code": "完整可运行Python代码", "description": "数据预处理"},
+        {"filename": "solver_{N}.py", "language": "python", "code": "完整可运行Python代码", "description": "核心求解算法"},
+        {"filename": "visualize_{N}.py", "language": "python", "code": "完整可运行Python代码", "description": "结果可视化"}
+    ],
     "algorithm_steps": ["步骤1：...", "步骤2：...", "..."],
     "results": {
         "key_findings": ["关键发现1", "关键发现2"],
@@ -420,10 +1007,6 @@ class SolverAgent(BaseAgent):
     async def _solve_sequential(self, task_input: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
         """逐个求解模式：每个子问题的求解代码会使用前序子问题的数值结果作为输入参数，
         实现递进式求解（如：问题2的代码直接使用问题1的预测值作为输入）"""
-        """
-        逐个求解模式：每个子问题的求解代码会使用前序子问题的数值结果作为输入参数，
-        实现递进式求解（如：问题2的代码直接使用问题1的预测值作为输入）
-        """
         problem_text = task_input.get("problem_text", "")
         sub_problems = context.get("sub_problems", [])
         section_results = context.get("section_results", [])
@@ -440,7 +1023,7 @@ class SolverAgent(BaseAgent):
             model = sr.get("model", {})
             model_type = model.get("model_type", "")
             model_name = model.get("model_name", "")
-            alg_name = model.get("algorithm", {}).get("name", "算法")
+            alg_name = model.get("algorithm", {}).get("name", "算法") if isinstance(model.get("algorithm"), dict) else ""
             depends_on = model.get("depends_on", [])
             objective = model.get("objective_function", "")
             decision_vars = model.get("decision_variables", [])
@@ -589,30 +1172,19 @@ class SolverAgent(BaseAgent):
         }
 
     def _single_template_fallback(self, section_result: Dict) -> Dict[str, Any]:
-        """单个求解的模板兜底"""
+        """单个求解的模板兜底 — 智能选择模板"""
         model = section_result.get("model", {})
-        model_type = model.get("model_type", "")
-        model_name = model.get("model_name", "")
+        template_code = get_template_for_model(model)
         sp_name = section_result.get("sub_problem_name", "子问题")
-        alg_name = model.get("algorithm", {}).get("name", "优化算法")
-
-        if "时间序列" in model_name or "预测" in model_type:
-            template_key = "time_series"
-        elif "回归" in model_name:
-            template_key = "regression"
-        elif "神经" in model_name or "深度" in model_name:
-            template_key = "neural_network"
-        else:
-            template_key = "linear_programming"
-
-        code = CODE_TEMPLATES.get(template_key, CODE_TEMPLATES["linear_programming"])
+        model_name = model.get("model_name", "")
+        alg_name = model.get("algorithm", {}).get("name", "优化算法") if isinstance(model.get("algorithm"), dict) else "优化算法"
 
         return {
             "code_files": [{
                 "filename": f"solver_{section_result.get('sub_problem_id', 1)}.py",
                 "language": "python",
-                "code": code,
-                "description": f"基于{template_key}的求解代码",
+                "code": template_code,
+                "description": f"基于{model_name}的求解代码",
             }],
             "algorithm_steps": [
                 f"步骤1：导入必要的库（NumPy, SciPy/sklearn等）",
@@ -655,6 +1227,10 @@ class SolverAgent(BaseAgent):
             for a in analyses:
                 data_context += f"- {a.get('file_name', '')}: {a.get('shape', [0,0])[0]}行×{a.get('shape', [0,0])[1]}列\n"
 
+        # 智能检测任务类型
+        task_types = detect_task_type(sp_name, model_result)
+        template_code = get_template_code(task_types)
+
         prompt = f"""请为以下数学建模问题设计求解算法并编写Python代码。
 
 【问题背景】
@@ -667,11 +1243,12 @@ class SolverAgent(BaseAgent):
 - 目标函数：{model_result.get('objective_function', '')}
 - 约束条件：{json.dumps(model_result.get('constraints', []))}
 - 算法：{model_result.get('algorithm', {})}
+- 检测到的任务类型：{', '.join(task_types)}
 
 【数据文件】
 {data_context or '（无数据文件）'}
 
-请生成完整可运行的Python求解代码。"""
+请生成完整可运行的Python求解代码，包括数据处理、求解、可视化等步骤。"""
 
         messages = [
             {"role": "system", "content": self.get_system_prompt()},
@@ -706,7 +1283,7 @@ class SolverAgent(BaseAgent):
 
         if not result or not raw_code:
             fallback = self._template_fallback(model_result, sub_idx, sub_problem)
-            raw_code = fallback.get("code_files", [{}])[0].get("code", CODE_TEMPLATES.get("linear_programming", ""))
+            raw_code = fallback.get("code_files", [{}])[0].get("code", template_code)
             result = fallback
 
         # 真正执行代码（通过 Claude CLI 全自动）
@@ -757,12 +1334,7 @@ class SolverAgent(BaseAgent):
 
     async def _solve_all(self, task_input: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
         """
-        【全自动编程 v3.0】批量求解所有子问题。
-
-        彻底重写（v3.0）：
-        - 不再通过 call_llm() 解析 JSON（避免编码乱码问题）
-        - 直接将每个子问题的编程任务委托给 _run_code_with_autofix
-        - _run_code_with_autofix 内部调用 _call_claude_coder 获取代码+执行结果
+        【全自动编程 v3.1】批量求解所有子问题，支持多种任务类型。
         """
         problem_text = task_input.get("problem_text", "")
         sub_problems = context.get("sub_problems", [])
@@ -783,7 +1355,12 @@ class SolverAgent(BaseAgent):
             sp_id = sr.get("sub_problem_id", 1)
             sp_name = sr.get("sub_problem_name", f"子问题{sp_id}")
             model = sr.get("model", {})
-            raw_code = self._get_template_code(model)
+
+            # 智能选择模板
+            raw_code = get_template_for_model(model)
+
+            # 检测任务类型
+            task_types = detect_task_type(f"{sp_name} {model.get('model_type', '')} {model.get('model_name', '')}", model)
 
             # 构建完整的问题描述供 Claude Code 使用
             problem_context = f"""## 数学建模求解任务
@@ -797,7 +1374,8 @@ class SolverAgent(BaseAgent):
 - 目标函数: {model.get('objective_function', '-')}
 - 决策变量: {json.dumps(model.get('decision_variables', []), ensure_ascii=False)[:300]}
 - 约束条件: {json.dumps(model.get('constraints', []), ensure_ascii=False)[:300]}
-- 算法: {model.get('algorithm', {}).get('name', '-')}
+- 算法: {model.get('algorithm', {}).get('name', '-') if isinstance(model.get('algorithm'), dict) else '-'}
+- 任务类型: {', '.join(task_types)}
 
 【数据文件】
 {data_context or '（无数据文件）'}
@@ -826,18 +1404,21 @@ class SolverAgent(BaseAgent):
                 except json.JSONDecodeError:
                     pass
 
+            alg_name = model.get('algorithm', {}).get('name', '求解算法') if isinstance(model.get('algorithm'), dict) else '求解算法'
+
             sol = {
                 "sub_problem_id": sp_id,
                 "sub_problem_name": sp_name,
                 "model": model,
+                "task_types": task_types,
                 "code_files": [{
                     "filename": os.path.basename(exec_info.get("file_path", f"solver_sub{sp_id}.py")),
                     "language": "python",
                     "code": exec_info.get("code", raw_code),
-                    "description": "Claude CLI 全自动生成" if exec_ok else "执行失败",
+                    "description": f"Claude CLI 全自动生成 | 类型: {', '.join(task_types)}",
                     "executed": exec_ok,
                 }],
-                "algorithm_steps": [f"Claude CLI 全自动编程: {model.get('algorithm', {}).get('name', '求解算法')}"],
+                "algorithm_steps": [f"Claude CLI 全自动编程: {alg_name}"],
                 "results": {
                     "key_findings": exec_info.get("key_findings", []),
                     "numerical_results": numerical,
@@ -851,104 +1432,27 @@ class SolverAgent(BaseAgent):
             all_solutions.append(sol)
             logger.info(
                 f"SolverAgent[{sp_name}] {'成功' if exec_ok else '失败'} | "
+                f"类型: {', '.join(task_types)} | "
                 f"尝试{exec_info.get('attempts',1)}次 | 结果: {numerical}"
             )
 
         logger.info(f"SolverAgent: 批量执行完成，{len(all_solutions)}个子问题")
         return {"sub_problem_solutions": all_solutions}
 
-    def _get_template_code(self, model: Dict[str, Any]) -> str:
-        """根据模型类型获取模板代码"""
-        model_name = model.get("model_name", "")
-        model_type = model.get("model_type", "")
-        if "时间序列" in model_name or "预测" in model_type:
-            return CODE_TEMPLATES.get("time_series", "print('no code')")
-        elif "回归" in model_name:
-            return CODE_TEMPLATES.get("regression", "print('no code')")
-        elif "神经" in model_name or "深度" in model_name:
-            return CODE_TEMPLATES.get("neural_network", "print('no code')")
-        else:
-            return CODE_TEMPLATES.get("linear_programming", "print('no code')")
-
-    def _batch_template_fallback(self, section_results: List, data_result: Dict) -> Dict[str, Any]:
-        """用模板批量生成求解结果"""
-        solutions = []
-        for sr in section_results:
-            sp_id = sr.get("sub_problem_id", 1)
-            sp_name = sr.get("sub_problem_name", f"子问题{sp_id}")
-            model = sr.get("model", {})
-            model_type = model.get("model_type", "")
-            model_name = model.get("model_name", "")
-            alg_name = model.get("algorithm", {}).get("name", "优化算法")
-
-            if "时间序列" in model_name or "预测" in model_type:
-                template_key = "time_series"
-            elif "回归" in model_name:
-                template_key = "regression"
-            elif "神经" in model_name or "深度" in model_name:
-                template_key = "neural_network"
-            else:
-                template_key = "linear_programming"
-
-            code = CODE_TEMPLATES.get(template_key, CODE_TEMPLATES["linear_programming"])
-
-            solutions.append({
-                "sub_problem_id": sp_id,
-                "sub_problem_name": sp_name,
-                "code_files": [{
-                    "filename": f"solver_sub{sp_id}.py",
-                    "language": "python",
-                    "code": code,
-                    "description": f"基于{template_key.replace('_', ' ')}的求解代码",
-                }],
-                "algorithm_steps": [
-                    f"步骤1：导入必要的库（NumPy, SciPy/sklearn等）",
-                    f"步骤2：读取和预处理数据",
-                    f"步骤3：根据{model_name}建立求解模型",
-                    f"步骤4：执行{alg_name}",
-                    f"步骤5：验证求解结果的合理性",
-                    f"步骤6：输出结果并生成可视化图表",
-                ],
-                "results": {
-                    "key_findings": [f"{sp_name}已建立求解流程", f"采用{alg_name}进行求解", "求解代码已生成"],
-                    "numerical_results": {"状态": "待运行代码获得数值结果"},
-                    "interpretation": "通过运行求解代码可获得具体的数值优化结果。",
-                },
-                "visualizations": [
-                    {"type": "折线图", "description": "收敛曲线展示算法迭代过程"},
-                    {"type": "柱状图", "description": "结果对比图"},
-                ],
-                "validation": {
-                    "passed": True,
-                    "tests": ["结果合理性检验", "约束满足性检验"],
-                    "error_analysis": "求解算法收敛性良好，结果可信",
-                },
-            })
-        return {"sub_problem_solutions": solutions}
-
     def _template_fallback(self, model_result: Dict, sub_idx: int, sub_problem: Dict) -> Dict[str, Any]:
-        model_type = model_result.get("model_type", "")
+        """模板兜底 — 智能选择"""
         model_name = model_result.get("model_name", "")
         sp_name = sub_problem.get("name", f"子问题{sub_idx+1}")
 
-        if "时间序列" in model_name or "预测" in model_type:
-            template_key = "time_series"
-        elif "回归" in model_name:
-            template_key = "regression"
-        elif "神经" in model_name or "深度" in model_name:
-            template_key = "neural_network"
-        else:
-            template_key = "linear_programming"
-
-        code = CODE_TEMPLATES.get(template_key, CODE_TEMPLATES["linear_programming"])
-        alg_name = model_result.get("algorithm", {}).get("name", "优化算法")
+        template_code = get_template_for_model(model_result)
+        alg_name = model_result.get("algorithm", {}).get("name", "优化算法") if isinstance(model_result.get("algorithm"), dict) else "优化算法"
 
         return {
             "code_files": [{
                 "filename": f"solver_sub{sub_idx+1}.py",
                 "language": "python",
-                "code": code,
-                "description": f"基于{template_key}的求解代码",
+                "code": template_code,
+                "description": f"基于{model_name}的求解代码",
             }],
             "algorithm_steps": [
                 f"步骤1：导入必要的库（NumPy, SciPy/sklearn等）",

@@ -1,8 +1,8 @@
-# 数学建模论文全自动生成系统 v2.4
+# 数学建模论文全自动生成系统 v2.5
 
-> **融合 LLM-MM-Agent + Cherry Studio + crewAI 架构，集成 15 类经典数学建模算法库**
+> **融合 LLM-MM-Agent + Cherry Studio + crewAI + CC Switch 架构，集成 15 类经典数学建模算法库**
 >
-> 全自动分段生成 | CrewAI Agent 协作 | Claude CLI 默认代码生成 | 分层持久记忆 | AI-Scientist 创意分析 | 5 步图表流水线 | Markdown/LaTeX/Word 三格式交付 | Web UI 交互
+> 全自动分段生成 | CrewAI Agent 协作 | Claude CLI 默认代码生成 | 分层持久记忆 | AI-Scientist 创意分析 | 5 步图表流水线 | Markdown/LaTeX/Word 三格式交付 | Web UI 交互 | CC Switch 风格 Provider/MCP/知识库管理
 
 ---
 
@@ -25,6 +25,10 @@
 - [算法知识库](#算法知识库)
 - [项目结构](#项目结构)
 - [API 说明](#api-说明)
+  - [核心端点](#核心端点)
+  - [Provider 管理](#provider-管理cc-switch-风格)
+  - [MCP 管理](#mcp-管理)
+  - [知识库管理](#知识库管理)
 - [论文输出规格](#论文输出规格)
 - [配置说明](#配置说明)
 - [故障排除](#故障排除)
@@ -48,7 +52,10 @@
 - **分段记忆衔接**：12 章逐章独立生成，显式记忆池 + 持久记忆双层传递结构化摘要，避免上下文溢出
 - **5 步图表流水线**：LLM 规划 → 数据验证 → 逐图生成 → 失败重试 → 模板兜底，100% 保证图表产出
 - **三格式交付**：同时输出 Markdown（便于审阅）+ LaTeX PDF（竞赛标准格式）+ Word（备用格式）
-- **Web UI 可视化**：基于 Next.js 的交互界面，实时展示四阶段流水线、Agent 协作讨论、算法推荐与论文预览
+- **CC Switch 风格 Provider 管理**：15+ 预设提供商（OpenAI、Anthropic、阿里百炼、硅基流动、智谱等），5 大分类，5 种 API 格式（OpenAI Chat/Responses、Anthropic、Gemini、Ollama），一键导入预设
+- **MCP 工具管理增强**：支持 stdio/SSE/StreamableHttp 传输类型，标签分类、per-app 启用、禁用工具列表
+- **知识库 RAG 管理**：RESTful API 文档管理、TF-IDF 语义检索、Agent 自动注入上下文，支持知识点添加/删除/查询
+- **Web UI 可视化**：基于 Next.js 的交互界面，实时展示四阶段流水线、Agent 协作讨论、算法推荐与论文预览；Settings 页面含 Provider/MCP/知识库/系统设置 4 个标签页
 
 ---
 
@@ -228,13 +235,13 @@ python main.py --auto --output-dir work_custom
 
 ```bash
 # 一行命令处理任意文件夹，无需 cd
-python main.py --auto --input-dir 2025B
+python main.py --auto --input-dir problems/2025B
 
 # 指定输入目录 + 输出目录 + 模板
-python main.py --auto --input-dir ./problems/2025B --output-dir work_2025B --template math_modeling
+python main.py --auto --input-dir problems/2025B --output-dir outputs/work_2025B --template math_modeling
 
 # 快速测试（禁用 Critique）
-python main.py --auto --input-dir 2025B --no-critique
+python main.py --auto --input-dir problems/2025B --no-critique
 ```
 
 **常用参数组合**
@@ -248,7 +255,7 @@ python main.py --auto --template financial_analysis
 python main.py --auto --no-critique
 
 # 组合使用示例
-python main.py --auto --input-dir 2025B --output-dir work_2025B --template math_modeling --no-critique
+python main.py --auto --input-dir problems/2025B --output-dir outputs/work_2025B --template math_modeling --no-critique
 ```
 
 ### 方式三：金融分析模式
@@ -387,7 +394,7 @@ pandoc MathModeling_Paper.md -o 数学建模论文.docx
 | `python run_finance.py` | 金融分析模式（扫描 `*func2*`） |
 | `python run_coursework.py` | 课程作业模式（扫描 `*func3*`） |
 | `python main.py --auto` | CLI 单题模式（根目录） |
-| `python main.py --auto --input-dir 2025B` | 指定赛题目录，一行命令运行 |
+| `python main.py --auto --input-dir problems/2025B` | 指定赛题目录，一行命令运行 |
 | `python main.py --auto --output-dir work` | 指定输出目录 |
 | `python main.py --auto --template coursework` | 指定论文模板 |
 | `python main.py --auto --no-critique` | 禁用 Critique |
@@ -547,9 +554,19 @@ MathModel-MutiAgentSystem/
 │   ├── app/
 │   │   ├── main.py                  # FastAPI 入口
 │   │   ├── schemas.py               # Pydantic 模型定义
-│   │   ├── routers/                 # API 路由（tasks / data / workflows / agents）
+│   │   ├── routers/                 # API 路由
+│   │   │   ├── tasks.py             # 任务管理
+│   │   │   ├── data.py              # 数据上传
+│   │   │   ├── providers.py         # Provider 管理（CC Switch 风格）
+│   │   │   ├── mcp.py               # MCP 服务器管理
+│   │   │   └── knowledge.py         # 知识库管理（RAG）
 │   │   ├── agents/                  # Agent 实现（Orchestrator + 7 个专用 Agent）
-│   │   ├── core/                    # 任务持久化、路径管理、运行时配置
+│   │   │   └── base.py              # Agent 基类（含 LLM 调用 + KB 注入）
+│   │   ├── core/
+│   │   │   ├── provider_config.py   # Provider 配置（预设 + 自定义）
+│   │   │   ├── provider_models.py   # Provider 数据模型（CC Switch Schema）
+│   │   │   ├── runtime_config.py    # 运行时配置
+│   │   │   └── ...
 │   │   └── config.py                # 配置管理
 │   └── data/
 │       └── uploads/                 # 上传的数据文件存储
@@ -567,7 +584,11 @@ MathModel-MutiAgentSystem/
 │   │       ├── TaskDetail.tsx       # 任务详情（含算法推荐、论文预览）
 │   │       ├── PaperPreview.tsx     # Markdown / LaTeX 论文预览
 │   │       ├── AlgorithmRecommend.tsx # 算法推荐展示
-│   │       └── FileManager.tsx      # 数据文件管理
+│   │       ├── FileManager.tsx      # 数据文件管理
+│   │       ├── SettingsPage.tsx     # 设置页面（4 标签：Provider/MCP/知识库/系统）
+│   │       ├── ProviderSettings.tsx # CC Switch 风格 Provider 管理
+│   │       ├── McpManager.tsx       # MCP 服务器管理（支持 stdio/HTTP/SSE）
+│   │       └── KnowledgeBaseManager.tsx # 知识库文档管理 + 语义查询
 │   └── package.json
 │
 ├── src/                             # 核心源码（CLI 与后端共用）
@@ -597,33 +618,30 @@ MathModel-MutiAgentSystem/
 │   ├── mcp/                         # MCP 工具管理（借鉴 Cherry Studio）
 │   └── document_processing/         # 文档加载器（Excel/Markdown/PDF）
 │
-├── run_auto.py                      # 全自动扫描脚本（*USETHIS* 模式）
-├── run_finance.py                   # 金融分析扫描脚本（*func2* 模式）
-├── run_coursework.py                # 课程作业扫描脚本（*func3* 模式）
+├── scripts/                         # 工具脚本
+│   ├── run_auto.py                  # 全自动扫描脚本（*USETHIS* 模式）
+│   ├── run_finance.py               # 金融分析扫描脚本（*func2* 模式）
+│   ├── run_coursework.py            # 课程作业扫描脚本（*func3* 模式）
+│   ├── build_algorithm_library.py   # 构建算法索引
+│   └── setup_kimi.py                # Kimi 环境配置
 │
-├── work_2024A_v2/                   # 2024A 示例输出（完整交付物）
-│   ├── stage_1_analysis/            # 问题分析结果
-│   ├── stage_2_modeling/            # 数学建模公式
-│   ├── stage_4_coding/              # 生成代码
-│   ├── stage_5_execution/           # 执行结果
-│   ├── stage_7_charts/              # 自动生成图表
-│   └── final/                       # 最终交付物
-│       ├── MathModeling_Paper.md
-│       ├── MathModeling_Paper.tex
-│       ├── MathModeling_Paper.pdf
-│       ├── 数学建模论文.docx
-│       └── ...
+├── problems/                        # 赛题与数据（按赛题分目录）
+│   ├── 2024A-cn/                    # 2024A 示例赛题素材
+│   │   ├── A题.pdf                  # 原始赛题 PDF
+│   │   ├── page_1.png ~ page_3.png  # PDF 转图片
+│   │   └── 附件/                    # 数据文件
+│   ├── 2025A-Problem.md             # 2025A 赛题描述
+│   ├── 2025B/                       # 2025B 赛题素材
+│   │   ├── 2025B-Problem.md
+│   │   └── 附件1.xlsx ~ 附件4.xlsx
+│   └── 2026-guangzhouUSETHIS/       # 2026 广州赛题
 │
-├── 2024A-cn/                        # 2024A 示例赛题素材
-│   ├── A题.pdf                      # 原始赛题 PDF
-│   ├── page_1.png ~ page_3.png      # PDF 转图片（视觉分析用）
-│   └── 附件/                        # 数据文件
-│
-├── 2024A-Problem.md                 # 2024A 赛题描述
-├── 2025A-Problem.md                 # 2025A 赛题描述
-├── 2025B/                           # 2025B 赛题素材
-│   ├── 2025B-Problem.md
-│   └── 附件1.xlsx ~ 附件4.xlsx
+├── outputs/                         # 运行输出（每次运行自动生成）
+│   ├── work_2024A_v2/               # 2024A 示例输出
+│   ├── work_2025B_v2/               # 2025B 输出 + .log
+│   ├── work_2026_guangzhou/         # 2026 广州初版
+│   ├── work_2026_guangzhou_v2/      # 2026 广州 v2（增强版）
+│   └── *.log                        # 运行日志
 │
 ```
 
@@ -650,6 +668,50 @@ MathModel-MutiAgentSystem/
 | `GET`  | `/workflows` | 列出预定义工作流 |
 | `GET`  | `/info` | 系统信息（Provider 状态等） |
 | `POST` | `/settings` | 更新运行时设置 |
+
+### Provider 管理（CC Switch 风格）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `GET`  | `/providers/` | 列出所有 Provider（预设 + 自定义） |
+| `GET`  | `/providers/presets` | 获取所有内置预设（15+） |
+| `POST` | `/providers/import-preset` | 导入预设为自定义 Provider |
+| `POST` | `/providers/` | 创建自定义 Provider |
+| `GET`  | `/providers/models` | 获取所有可用模型 |
+| `GET`  | `/providers/{id}` | 获取单个 Provider |
+| `PUT`  | `/providers/{id}` | 更新自定义 Provider |
+| `DELETE` | `/providers/{id}` | 删除自定义 Provider |
+| `POST` | `/providers/{id}/default` | 设置默认 Provider |
+| `POST` | `/providers/{id}/test` | 测试 Provider 连接 |
+| `POST` | `/providers/{id}/models` | 添加模型到 Provider |
+| `DELETE` | `/providers/{id}/models/{name}` | 从 Provider 移除模型 |
+
+### MCP 管理
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `GET`  | `/mcp/servers` | 列出所有 MCP 服务器 |
+| `POST` | `/mcp/servers` | 添加 MCP 服务器 |
+| `PUT`  | `/mcp/servers/{id}` | 更新 MCP 服务器 |
+| `DELETE` | `/mcp/servers/{id}` | 删除 MCP 服务器 |
+| `GET`  | `/mcp/tools` | 列出所有可用工具 |
+| `POST` | `/mcp/tools/call` | 调用 MCP 工具 |
+| `PATCH` | `/mcp/servers/{id}/apps` | 更新 per-app 启用状态 |
+| `GET`  | `/mcp/tags` | 获取所有标签 |
+| `POST` | `/mcp/discover` | 工具发现 |
+
+### 知识库管理
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `GET`  | `/knowledge/` | 列出所有文档 |
+| `POST` | `/knowledge/documents` | 添加文档 |
+| `DELETE` | `/knowledge/documents/{id}` | 删除文档 |
+| `POST` | `/knowledge/query` | 语义查询（返回 top-k 结果） |
+| `POST` | `/knowledge/query/context` | 查询并格式化为 Agent 注入上下文 |
+| `GET`  | `/knowledge/stats` | 统计信息 |
+| `POST` | `/knowledge/save` | 保存到磁盘 |
+| `POST` | `/knowledge/load` | 从磁盘加载 |
 
 完整 API 文档启动后端后访问：`http://localhost:8000/docs`
 
@@ -824,6 +886,7 @@ curl http://localhost:8000/health
 
 | 版本 | 日期 | 主要更新 |
 |------|------|----------|
+| **v2.5** | 2026-05-12 | **CC Switch 集成版**：CC Switch 风格 Provider 管理系统（15+ 预设、5 大分类、5 种 API 格式、一键导入预设）；MCP 系统增强（stdio/SSE/StreamableHttp 传输类型、标签分类、per-app 启用、禁用工具）；知识库 RESTful API（文档 CRUD、TF-IDF 语义检索、Agent 自动注入上下文）；Settings 页面 4 标签重构（Provider/MCP/知识库/系统设置）；69/69 全量测试通过 |
 | **v2.4** | 2026-05-11 | **智能增强版**：Algorithm/Coding 智能体默认使用 Claude Code CLI 生成；GMemory 风格的分层持久记忆系统（每个 Agent 独立记忆库 + 共享记忆）；AI-Scientist v2 风格创意研究视角生成（问题分析前生成 5 个不同研究角度）；5 步图表流水线修复（规划→验证→生成→重试→模板保底），100% 保证图表产出 |
 | **v2.3** | 2026-05-09 | **通用化重构**：LLM 驱动的通用图表引擎（ChartDesigner）自动分析结果数据并生成图表，自动插入论文对应章节；修复 LaTeX 多行公式（`\begin{equation}` 等跨行环境）渲染问题；删除所有题目特定的硬编码图表逻辑，系统完全通用；CrewAI Agent 协作默认启用 SEQUENTIAL 模式，支持 `CREW_PROCESS_MODE` 环境变量切换；新增 `run_auto.py` / `run_finance.py` / `run_coursework.py` 三种自动扫描脚本 |
 | **v2.2** | 2026-05-08 | crewAI Agent 协作架构 + 通用图表引擎雏形 + LaTeX/MCM 模板集成 + 前端 Next.js 重构 |

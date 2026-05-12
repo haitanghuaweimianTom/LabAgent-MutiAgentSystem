@@ -6,6 +6,7 @@
 - 自定义MCP工具导入
 - MCP工具发现和注册
 - Claude Code MCP 集成（通过 --mcp-config 参数）
+- CC Switch 风格：HTTP/SSE 传输类型、标签、per-app 启用
 """
 
 import json
@@ -16,18 +17,28 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel
 
 from ..config import get_settings
+from .schemas import McpServerType, InstallSource, McpServerApp, detect_server_type
 
 logger = logging.getLogger(__name__)
 
 
 class MCPServerConfig(BaseModel):
-    """MCP服务器配置"""
+    """MCP服务器配置 — 向后兼容"""
     name: str
-    command: str
+    command: str = ""
     args: List[str] = []
     env: Dict[str, str] = {}
     enabled: bool = True
     description: str = ""
+    # CC Switch 扩展字段
+    url: Optional[str] = None
+    headers: Dict[str, str] = {}
+    tags: List[str] = []
+    disabled_tools: List[str] = []
+    apps: Optional[Dict[str, bool]] = None
+    install_source: str = "manual"
+    is_trusted: bool = True
+    server_type: str = "stdio"
 
 
 class MCPToolConfig(BaseModel):
@@ -41,19 +52,25 @@ class MCPToolConfig(BaseModel):
 class MCPManager:
     """MCP工具管理器"""
 
-    # 内置MCP服务器配置
+    # 内置MCP服务器配置（增强版）
     BUILTIN_SERVERS: Dict[str, MCPServerConfig] = {
         "web_search": MCPServerConfig(
             name="web_search",
             command="npx",
             args=["-y", "@modelcontextprotocol/server-exa"],
             description="网页搜索工具",
+            tags=["search", "web"],
+            install_source=InstallSource.BUILTIN,
+            is_trusted=True,
         ),
         "file_system": MCPServerConfig(
             name="file_system",
             command="npx",
             args=["-y", "@modelcontextprotocol/server-filesystem", "./workspace"],
             description="文件系统操作工具",
+            tags=["filesystem"],
+            install_source=InstallSource.BUILTIN,
+            is_trusted=True,
         ),
         "brave_search": MCPServerConfig(
             name="brave_search",
@@ -61,6 +78,9 @@ class MCPManager:
             args=["-y", "@modelcontextprotocol/server-brave"],
             env={"BRAVE_API_KEY": ""},
             description="Brave搜索工具",
+            tags=["search", "web"],
+            install_source=InstallSource.BUILTIN,
+            is_trusted=True,
         ),
         "github": MCPServerConfig(
             name="github",
@@ -68,6 +88,9 @@ class MCPManager:
             args=["-y", "@modelcontextprotocol/server-github"],
             env={"GITHUB_TOKEN": ""},
             description="GitHub API工具",
+            tags=["git", "code"],
+            install_source=InstallSource.BUILTIN,
+            is_trusted=True,
         ),
     }
 
@@ -88,12 +111,7 @@ class MCPManager:
         self.agent_tools_map: Dict[str, List[str]] = {}
 
     def load_config(self, config_path: Optional[str] = None) -> None:
-        """加载MCP配置
-
-        支持两种格式：
-        1. 新格式（含 mcpServers 顶层键）：标准 MCP JSON 配置
-        2. 旧格式（含 servers/tools 顶层键）：原有自定义格式
-        """
+        """加载MCP配置"""
         if config_path is None:
             settings = get_settings()
             if settings.claude_mcp_config_path:
@@ -112,13 +130,10 @@ class MCPManager:
             with open(config_path, "r", encoding="utf-8") as f:
                 config = json.load(f)
 
-            # 检测格式
             if "mcpServers" in config:
-                # 新格式：标准 MCP JSON（用于 Claude Code --mcp-config）
                 self._load_standard_mcp_config(config)
                 logger.info(f"Loaded 标准 MCP config: {len(self.servers)} servers, {len(self.tools)} tools")
             else:
-                # 旧格式：自定义格式
                 self._load_legacy_mcp_config(config)
                 logger.info(f"Loaded 旧版 MCP config: {len(self.servers)} servers, {len(self.tools)} tools")
 
@@ -127,8 +142,7 @@ class MCPManager:
             self._load_default_config()
 
     def _load_standard_mcp_config(self, config: Dict[str, Any]) -> None:
-        """加载标准 MCP JSON 配置（Claude Code 格式）"""
-        # 加载服务器
+        """加载标准 MCP JSON 配置"""
         for server_name, server_config in config.get("mcpServers", {}).items():
             env = server_config.get("env", {})
             self.servers[server_name] = MCPServerConfig(
@@ -138,9 +152,10 @@ class MCPManager:
                 env=env,
                 enabled=True,
                 description=f"MCP服务器: {server_name}",
+                tags=["builtin"],
+                install_source=InstallSource.BUILTIN,
             )
 
-        # 加载工具
         for tool_name, tool_config in config.get("tools", {}).items():
             self.tools[tool_name] = MCPToolConfig(
                 name=tool_name,
@@ -148,28 +163,33 @@ class MCPManager:
                 description=tool_config.get("description", ""),
             )
 
-        # 加载 Agent -> 工具映射
         agent_tools = config.get("agent_tools", {})
         for agent_name, tools_list in agent_tools.items():
             self.agent_tools_map[agent_name] = tools_list
 
     def _load_legacy_mcp_config(self, config: Dict[str, Any]) -> None:
-        """加载旧版自定义 MCP 配置"""
-        # 加载服务器配置
+        """加载旧版自定义 MCP 配置（迁移到新 schema）"""
         for server_name, server_config in config.get("servers", {}).items():
-            self.servers[server_name] = MCPServerConfig(**server_config)
+            sc = dict(server_config)
+            # 迁移旧字段
+            if "server_type" not in sc:
+                sc["server_type"] = detect_server_type(server_config)
+            if "tags" not in sc:
+                sc["tags"] = []
+            if "install_source" not in sc:
+                sc["install_source"] = InstallSource.MANUAL
+            if "is_trusted" not in sc:
+                sc["is_trusted"] = True
+            self.servers[server_name] = MCPServerConfig(**sc)
 
-        # 加载工具配置
         for tool_name, tool_config in config.get("tools", {}).items():
             self.tools[tool_name] = MCPToolConfig(**tool_config)
 
     def _load_default_config(self) -> None:
         """加载默认配置"""
-        # 添加内置服务器
         for name, config in self.BUILTIN_SERVERS.items():
             self.servers[name] = config
 
-        # 添加内置工具映射
         for tool_name, server_name in self.BUILTIN_TOOLS.items():
             self.tools[tool_name] = MCPToolConfig(
                 name=tool_name,
@@ -177,7 +197,6 @@ class MCPManager:
                 description=f"内置工具: {tool_name}",
             )
 
-        # 默认 Agent 工具映射
         self.agent_tools_map = {
             "research_agent": ["web_search", "paper_search", "file_write"],
             "analyzer_agent": ["web_search"],
@@ -188,6 +207,10 @@ class MCPManager:
 
     def add_custom_server(self, config: MCPServerConfig) -> None:
         """添加自定义MCP服务器"""
+        if not config.server_type:
+            config.server_type = detect_server_type(config.model_dump())
+        if not config.install_source:
+            config.install_source = InstallSource.MANUAL
         self.servers[config.name] = config
         logger.info(f"Added custom MCP server: {config.name}")
 
@@ -196,12 +219,27 @@ class MCPManager:
         self.custom_tools.append(tool_config)
         logger.info(f"Added custom MCP tool: {tool_config.get('name')}")
 
+    def toggle_server_app(self, server_name: str, app: str, enabled: bool) -> bool:
+        """切换服务器在特定应用的启用状态"""
+        server = self.servers.get(server_name)
+        if not server:
+            return False
+        if server.apps is None:
+            server.apps = {}
+        server.apps[app] = enabled
+        return True
+
+    def get_server_tags(self) -> List[str]:
+        """获取所有可用标签"""
+        tags = set()
+        for s in self.servers.values():
+            tags.update(s.tags)
+        return sorted(tags)
+
     def get_tools_for_agent(self, agent_name: str) -> List[str]:
         """获取Agent可用的工具列表"""
-        # 优先使用配置中的映射
         if agent_name in self.agent_tools_map:
             return self.agent_tools_map[agent_name]
-        # 兜底：内置映射
         agent_tools_map = {
             "research_agent": ["web_search", "paper_search", "file_write"],
             "analyzer_agent": ["web_search", "bing_search", "sequentialthinking", "paper_search"],
@@ -217,27 +255,50 @@ class MCPManager:
 
     def list_servers(self) -> List[Dict[str, Any]]:
         """列出所有服务器"""
-        return [
-            {
+        result = []
+        for name, config in self.servers.items():
+            entry = {
                 "name": name,
                 "command": config.command,
                 "args": config.args,
                 "enabled": config.enabled,
                 "description": config.description,
             }
-            for name, config in self.servers.items()
-        ]
+            # 添加 CC Switch 扩展字段
+            if config.url:
+                entry["url"] = config.url
+            if config.headers:
+                entry["headers"] = config.headers
+            if config.tags:
+                entry["tags"] = config.tags
+            if config.disabled_tools:
+                entry["disabled_tools"] = config.disabled_tools
+            if config.apps:
+                entry["apps"] = config.apps
+            if config.install_source:
+                entry["install_source"] = config.install_source
+            if config.server_type:
+                entry["server_type"] = config.server_type
+            entry["is_trusted"] = config.is_trusted
+            result.append(entry)
+        return result
 
     def list_tools(self) -> List[Dict[str, Any]]:
-        """列出所有工具"""
+        """列出所有工具（过滤禁用的）"""
         tools = []
         for name, config in self.tools.items():
-            tools.append({
-                "name": name,
-                "server": config.server,
-                "description": config.description,
-            })
-        # 添加自定义工具
+            # 检查是否在某个服务器的 disabled_tools 中
+            disabled = False
+            for server in self.servers.values():
+                if name in server.disabled_tools:
+                    disabled = True
+                    break
+            if not disabled:
+                tools.append({
+                    "name": name,
+                    "server": config.server,
+                    "description": config.description,
+                })
         tools.extend(self.custom_tools)
         return tools
 

@@ -13,8 +13,12 @@ from .core.runtime_config import (
     get_runtime_api_key, update_runtime_api_key, is_api_key_set,
     get_runtime_kimi_key, get_runtime_kimi_url,
     update_runtime_kimi_key, update_runtime_kimi_url, is_kimi_key_set,
+    persist_provider_setting, persist_claude_setting,
 )
 from .routers.tasks import reset_orchestrator
+from .routers.providers import router as providers_router
+from .routers.knowledge import router as knowledge_router
+from .core.provider_config import migrate_legacy_to_new, get_default_provider
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -37,6 +41,12 @@ class SettingsUpdate(BaseModel):
     ollama_base_url: str | None = None
     ollama_model: str | None = None
     default_llm_provider: str | None = None
+    # Claude Code CLI settings
+    claude_model: str | None = None
+    claude_mcp_tools: str | None = None
+    claude_mcp_config_path: str | None = None
+    claude_temperature: float | None = None
+    claude_max_tokens: int | None = None
 
 
 @asynccontextmanager
@@ -45,6 +55,8 @@ async def lifespan(app: FastAPI):
     # 确保所有必要目录存在
     from .core.paths import ensure_dirs
     ensure_dirs()
+    # 迁移旧格式 provider 配置
+    migrate_legacy_to_new()
     try:
         from .core.task_persistence import list_all_tasks
         tasks = list_all_tasks()
@@ -71,6 +83,8 @@ app.include_router(agents_router, prefix="/api/v1")
 app.include_router(data_router, prefix="/api/v1")
 app.include_router(workflows_router, prefix="/api/v1")
 app.include_router(mcp_router, prefix="/api/v1")
+app.include_router(providers_router, prefix="/api/v1")
+app.include_router(knowledge_router, prefix="/api/v1")
 
 
 @app.get("/")
@@ -87,9 +101,9 @@ async def health():
 async def info():
     from .core.chat_room import list_chat_rooms
     s = get_settings()
-    # 检测 Claude Code CLI 是否可用
     from .agents.base import _find_claude_code
     claude_code_path = _find_claude_code()
+    default_p = get_default_provider()
     return {
         "app_name": s.app_name,
         "version": s.app_version,
@@ -97,13 +111,17 @@ async def info():
         "api_base_url": s.api_base_url,
         "team_size": 7,
         "active_chat_rooms": list_chat_rooms(),
-        # Claude Code 集成状态
         "claude_code_available": claude_code_path is not None,
         "claude_code_path": claude_code_path or "",
         "claude_model": s.claude_model,
         "claude_mcp_tools": s.claude_mcp_tools,
         "claude_mcp_config_path": s.claude_mcp_config_path,
         "default_llm_backend": s.default_llm_backend,
+        "default_provider": {
+            "id": default_p["id"] if default_p else None,
+            "name": default_p["name"] if default_p else None,
+            "type": default_p["type"] if default_p else None,
+        } if default_p else None,
     }
 
 
@@ -161,46 +179,82 @@ async def update_runtime_settings(body: SettingsUpdate):
         update_runtime_kimi_url(body.kimi_base_url.strip())
         logger.info(f"Kimi Base URL已更新: {body.kimi_base_url}")
         changed = True
-    # Multi-provider updates
+    # Multi-provider updates (also persist to .env)
     s = get_settings()
     if body.anthropic_api_key is not None:
         s.anthropic_api_key = body.anthropic_api_key.strip()
+        persist_provider_setting("ANTHROPIC_API_KEY", body.anthropic_api_key.strip())
         changed = True
     if body.anthropic_base_url is not None:
         s.anthropic_base_url = body.anthropic_base_url.strip()
+        persist_provider_setting("ANTHROPIC_BASE_URL", body.anthropic_base_url.strip())
         changed = True
     if body.anthropic_model is not None:
         s.anthropic_model = body.anthropic_model.strip()
+        persist_provider_setting("ANTHROPIC_MODEL", body.anthropic_model.strip())
         changed = True
     if body.openai_api_key is not None:
         s.openai_api_key = body.openai_api_key.strip()
+        persist_provider_setting("OPENAI_API_KEY", body.openai_api_key.strip())
         changed = True
     if body.openai_base_url is not None:
         s.openai_base_url = body.openai_base_url.strip()
+        persist_provider_setting("OPENAI_BASE_URL", body.openai_base_url.strip())
         changed = True
     if body.openai_model is not None:
         s.openai_model = body.openai_model.strip()
+        persist_provider_setting("OPENAI_MODEL", body.openai_model.strip())
         changed = True
     if body.gemini_api_key is not None:
         s.gemini_api_key = body.gemini_api_key.strip()
+        persist_provider_setting("GEMINI_API_KEY", body.gemini_api_key.strip())
         changed = True
     if body.gemini_model is not None:
         s.gemini_model = body.gemini_model.strip()
+        persist_provider_setting("GEMINI_MODEL", body.gemini_model.strip())
         changed = True
     if body.ollama_base_url is not None:
         s.ollama_base_url = body.ollama_base_url.strip()
+        persist_provider_setting("OLLAMA_BASE_URL", body.ollama_base_url.strip())
         changed = True
     if body.ollama_model is not None:
         s.ollama_model = body.ollama_model.strip()
+        persist_provider_setting("OLLAMA_MODEL", body.ollama_model.strip())
         changed = True
     if body.default_llm_provider is not None:
         s.default_llm_provider = body.default_llm_provider.strip()
+        persist_provider_setting("DEFAULT_LLM_PROVIDER", body.default_llm_provider.strip())
+        changed = True
+    # Claude Code CLI settings updates (also persist to .env)
+    if body.claude_model is not None:
+        s.claude_model = body.claude_model.strip()
+        persist_claude_setting("CLAUDE_MODEL", body.claude_model.strip())
+        changed = True
+    if body.claude_mcp_tools is not None:
+        s.claude_mcp_tools = body.claude_mcp_tools.strip()
+        persist_claude_setting("CLAUDE_MCP_TOOLS", body.claude_mcp_tools.strip())
+        changed = True
+    if body.claude_mcp_config_path is not None:
+        s.claude_mcp_config_path = body.claude_mcp_config_path.strip()
+        persist_claude_setting("CLAUDE_MCP_CONFIG_PATH", body.claude_mcp_config_path.strip())
+        changed = True
+    if body.claude_temperature is not None:
+        s.claude_temperature = body.claude_temperature
+        persist_claude_setting("CLAUDE_TEMPERATURE", str(body.claude_temperature))
+        changed = True
+    if body.claude_max_tokens is not None:
+        s.claude_max_tokens = body.claude_max_tokens
+        persist_claude_setting("CLAUDE_MAX_TOKENS", str(body.claude_max_tokens))
         changed = True
     if changed:
         reset_orchestrator()
     if body.default_model is not None:
         logger.info(f"默认模型已更新为: {body.default_model}")
     return {"success": True, "message": "设置已保存" + ("，Agent已重新初始化" if changed else "")}
+
+
+# Provider 管理已移至 backend/app/routers/providers.py
+# 以下为调试和测试端点
 
 
 @app.get("/api/v1/debug/key")

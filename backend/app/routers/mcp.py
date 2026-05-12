@@ -174,3 +174,75 @@ async def export_config() -> Dict[str, Any]:
     """
     mcp_manager = get_mcp_manager()
     return mcp_manager.export_config()
+
+
+@router.get("/tags", response_model=List[str])
+async def get_tags() -> List[str]:
+    """获取所有MCP服务器标签"""
+    mcp_manager = get_mcp_manager()
+    return mcp_manager.get_server_tags()
+
+
+@router.patch("/servers/{server_name}/apps", response_model=Dict[str, Any])
+async def toggle_server_app(server_name: str, body: Dict[str, Any]) -> Dict[str, Any]:
+    """切换服务器在特定应用的启用状态"""
+    mcp_manager = get_mcp_manager()
+    server = mcp_manager.get_server_config(server_name)
+    if not server:
+        raise HTTPException(status_code=404, detail=f"Server {server_name} not found")
+
+    app = body.get("app", "")
+    enabled = body.get("enabled", True)
+    if not app:
+        raise HTTPException(status_code=400, detail="app is required")
+
+    ok = mcp_manager.toggle_server_app(server_name, app, enabled)
+    if not ok:
+        raise HTTPException(status_code=500, detail="Failed to toggle server app")
+
+    return {
+        "success": True,
+        "message": f"Server {server_name} app {app} {'enabled' if enabled else 'disabled'}",
+        "apps": server.apps or {},
+    }
+
+
+@router.post("/servers/{server_name}/disabled-tools", response_model=Dict[str, Any])
+async def update_disabled_tools(server_name: str, body: Dict[str, Any]) -> Dict[str, Any]:
+    """更新服务器的禁用工具列表"""
+    mcp_manager = get_mcp_manager()
+    server = mcp_manager.get_server_config(server_name)
+    if not server:
+        raise HTTPException(status_code=404, detail=f"Server {server_name} not found")
+
+    disabled_tools = body.get("disabled_tools", [])
+    server.disabled_tools = disabled_tools
+
+    return {
+        "success": True,
+        "message": f"Updated disabled tools for server {server_name}",
+        "disabled_tools": disabled_tools,
+    }
+
+
+@router.post("/discover", response_model=Dict[str, Any])
+async def discover_tools(body: Dict[str, Any] = {}) -> Dict[str, Any]:
+    """工具发现 — 返回所有可用服务器及其工具"""
+    mcp_manager = get_mcp_manager()
+    servers = mcp_manager.list_servers()
+    tools = mcp_manager.list_tools()
+
+    by_tag = {}
+    for server in servers:
+        for tag in server.get("tags", []):
+            if tag not in by_tag:
+                by_tag[tag] = []
+            by_tag[tag].append(server["name"])
+
+    return {
+        "servers": servers,
+        "tools": tools,
+        "tags": by_tag,
+        "total_servers": len(servers),
+        "total_tools": len(tools),
+    }

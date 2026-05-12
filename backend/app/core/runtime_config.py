@@ -25,6 +25,13 @@ def _write_env(env: Dict[str, str]) -> None:
     ENV_FILE.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def update_env_key(key: str, value: str) -> None:
+    """通用 .env 写入（永久保存任意配置）"""
+    env = _read_env()
+    env[key] = value
+    _write_env(env)
+
+
 def get_runtime_api_key() -> str:
     """获取运行时API密钥（优先读.env文件）"""
     env = _read_env()
@@ -37,9 +44,7 @@ def get_runtime_api_key() -> str:
 
 def update_runtime_api_key(key: str) -> None:
     """更新 .env 文件中的 API 密钥（永久保存）"""
-    env = _read_env()
-    env["MINIMAX_API_KEY"] = key
-    _write_env(env)
+    update_env_key("MINIMAX_API_KEY", key)
 
 
 def is_api_key_set() -> bool:
@@ -70,20 +75,28 @@ def get_runtime_kimi_url() -> str:
 
 def update_runtime_kimi_key(key: str) -> None:
     """更新 Kimi API 密钥"""
-    env = _read_env()
-    env["KIMI_API_KEY"] = key
-    _write_env(env)
+    update_env_key("KIMI_API_KEY", key)
 
 
 def update_runtime_kimi_url(url: str) -> None:
     """更新 Kimi API 基础 URL"""
-    env = _read_env()
-    env["KIMI_BASE_URL"] = url
-    _write_env(env)
+    update_env_key("KIMI_BASE_URL", url)
 
 
 def is_kimi_key_set() -> bool:
     """检查 .env 中是否有 Kimi API 密钥"""
     env = _read_env()
     return bool(env.get("KIMI_API_KEY", "").strip())
+
+
+# ===== Multi-provider .env 持久化 =====
+
+def persist_provider_setting(key: str, value: str) -> None:
+    """持久化 Provider 设置到 .env"""
+    update_env_key(key, value)
+
+
+def persist_claude_setting(key: str, value: str) -> None:
+    """持久化 Claude Code CLI 设置到 .env"""
+    update_env_key(key, value)
 

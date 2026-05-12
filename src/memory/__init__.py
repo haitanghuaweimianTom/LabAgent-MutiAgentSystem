@@ -101,7 +101,7 @@ class MemorySystem:
     """
 
     def __init__(self, work_dir: str):
-        self.work_dir = Path(work_dir)
+        self.work_dir = Path(work_dir).resolve()
         self.memory_root = self.work_dir / "memory"
         self.memory_root.mkdir(parents=True, exist_ok=True)
         (self.memory_root / "shared").mkdir(exist_ok=True)
@@ -121,7 +121,9 @@ class MemorySystem:
         return d
 
     def _shared_dir(self) -> Path:
-        return self.memory_root / "shared"
+        d = self.memory_root / "shared"
+        d.mkdir(parents=True, exist_ok=True)
+        return d
 
     def _load_all(self):
         """Load all existing memory entries from disk into cache."""

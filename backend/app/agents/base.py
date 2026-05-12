@@ -5,8 +5,10 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 import httpx
 
@@ -391,7 +393,7 @@ class BaseAgent(ABC):
         self.api_key = api_key or ""
         self.api_base_url = api_base_url or "https://api.minimax.chat/v1"
 
-        # LLM 后端: "minimax" (默认) | "claude"
+        # LLM 后端: "minimax" (默认) | "claude" | provider_id
         from ..config import get_settings
         settings = get_settings()
         if llm_backend:
@@ -401,10 +403,30 @@ class BaseAgent(ABC):
         else:
             self.llm_backend = self.default_llm_backend
 
+        # 从默认 Provider 获取 API 配置（如果未显式提供 api_key）
+        if not self.api_key:
+            self._resolve_provider_config()
+
         self._claude_model = settings.claude_model
         self._claude_max_tokens = settings.claude_max_tokens
         self._claude_temperature = settings.claude_temperature
         self._claude_mcp_tools = settings.claude_mcp_tools.split(",") if settings.claude_mcp_tools else []
+
+    def _resolve_provider_config(self) -> None:
+        """从当前默认 Provider 解析 API 配置"""
+        try:
+            from ..core.provider_config import get_default_provider
+            provider = get_default_provider()
+            if provider and provider.get("api_key") and provider.get("api_host"):
+                self.api_key = provider["api_key"]
+                self.api_base_url = provider["api_host"]
+                self.model = self.model or next(
+                    (m.get("name") for m in provider.get("models", []) if m.get("enabled")),
+                    self.model
+                )
+                logger.info(f"[{self.name}] 使用默认 Provider: {provider['name']} ({provider['type']})")
+        except Exception as e:
+            logger.debug(f"[{self.name}] 解析 Provider 配置失败: {e}")
 
     # 子类可以重写此属性以获得更大的token限制
     _max_tokens_override: int = 0
@@ -597,24 +619,139 @@ class BaseAgent(ABC):
         """执行任务"""
         pass
 
+    def _inject_knowledge_context(self, query_text: str, top_k: int = 3) -> str:
+        """查询知识库并返回上下文文本（静默失败）"""
+        try:
+            project_root = Path(__file__).parent.parent.parent.parent
+            src_path = str(project_root)
+            if src_path not in sys.path:
+                sys.path.insert(0, src_path)
+            from src.knowledge import KnowledgeBase, TfidfEmbedding
+            kb = KnowledgeBase(name="math_modeling", embedding_model=TfidfEmbedding(max_features=2000))
+            kb_file = project_root / "data" / "knowledge_base.json"
+            if kb_file.exists():
+                kb.load(str(kb_file))
+            ctx = kb.query_with_context(query_text, top_k=top_k, max_chars=1500)
+            if ctx:
+                logger.info(f"[{self.name}] 注入知识库上下文 ({len(ctx)} chars)")
+                return f"\n\n## 知识库参考上下文\n{ctx}\n"
+        except Exception as e:
+            logger.debug(f"[{self.name}] 知识库查询失败: {e}")
+        return ""
+
+    def _get_api_format(self) -> str:
+        """从 provider 元数据或 llm_backend 推断 API 格式"""
+        try:
+            from ..core.provider_config import get_default_provider
+            provider = get_default_provider()
+            if provider:
+                meta = provider.get("meta", {})
+                return meta.get("api_format", "openai_chat")
+        except Exception:
+            pass
+        if self.llm_backend == "anthropic":
+            return "anthropic"
+        return "openai_chat"
+
+    async def _call_anthropic(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: Optional[float],
+    ) -> Dict[str, Any]:
+        """调用 Anthropic Messages API"""
+        headers = {
+            "x-api-key": self.api_key,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        }
+        payload = {
+            "model": self.model,
+            "max_tokens": self.effective_max_tokens,
+            "temperature": temperature if temperature is not None else self.temperature,
+            "messages": messages,
+        }
+        timeout = 300.0 if self.effective_max_tokens > 8192 else 120.0
+        try:
+            body_bytes = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.post(
+                    f"{self.api_base_url}/v1/messages",
+                    headers=headers,
+                    content=body_bytes,
+                )
+                response.raise_for_status()
+                text = response.content.decode("utf-8")
+                data = json.loads(text)
+                content_text = ""
+                for c in data.get("content", []):
+                    if c.get("type") == "text":
+                        content_text += c["text"]
+                return {"choices": [{"message": {"role": "assistant", "content": content_text}}]}
+        except httpx.ReadTimeout:
+            logger.warning(f"[{self.name}] Anthropic ReadTimeout, retrying...")
+            try:
+                async with httpx.AsyncClient(timeout=timeout * 1.5) as client:
+                    response = await client.post(
+                        f"{self.api_base_url}/v1/messages",
+                        headers=headers,
+                        content=body_bytes,
+                    )
+                    response.raise_for_status()
+                    text = response.content.decode("utf-8")
+                    data = json.loads(text)
+                    content_text = ""
+                    for c in data.get("content", []):
+                        if c.get("type") == "text":
+                            content_text += c["text"]
+                    return {"choices": [{"message": {"role": "assistant", "content": content_text}}]}
+            except Exception as e2:
+                logger.error(f"[{self.name}] Anthropic retry failed: {e2}")
+                self._call_context["error"] = str(e2)
+                return self._mock_response(messages)
+        except httpx.HTTPStatusError as e:
+            err_text = e.response.content.decode("utf-8", errors="replace")[:300]
+            logger.error(f"[{self.name}] Anthropic HTTP {e.response.status_code}: {err_text}")
+            self._call_context["error"] = f"HTTP {e.response.status_code}"
+            return self._mock_response(messages)
+        except Exception as e:
+            logger.error(f"[{self.name}] Anthropic call failed: {e}")
+            self._call_context["error"] = str(e)
+            return self._mock_response(messages)
+
     async def call_llm(
         self,
         messages: List[Dict[str, str]],
         stream: bool = False,
         temperature: Optional[float] = None,
     ) -> Dict[str, Any]:
-        """调用LLM API，支持 minimax 和 claude 两种后端。API Key为空且后端为minimax时返回演示响应"""
+        """调用LLM API，支持 OpenAI / Anthropic / Claude CLI 格式"""
         self._call_context = {"messages": messages, "temperature": temperature}
 
         # ===== Claude Code 后端 =====
         if self.llm_backend == "claude":
             return await self._call_claude_backend(messages, temperature)
 
-        # ===== MiniMax 后端 =====
+        # ===== 注入知识库上下文 =====
+        kb_context = self._inject_knowledge_context(messages[-1]["content"])
+        if kb_context:
+            for msg in messages:
+                if msg.get("role") == "user":
+                    msg["content"] = msg["content"] + kb_context
+                    break
+
+        # ===== 检查 API Key =====
         if not self.api_key:
             logger.warning(f"[{self.name}] No API key, returning demo response")
             return self._mock_response(messages)
 
+        # 检测 API 格式（从 provider 元数据或 llm_backend 推断）
+        api_format = self._get_api_format()
+
+        # ===== Anthropic Messages 格式 =====
+        if api_format == "anthropic":
+            return await self._call_anthropic(messages, temperature)
+
+        # ===== OpenAI Chat Completions 格式（默认） =====
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json; charset=utf-8",
