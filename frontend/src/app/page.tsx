@@ -8,7 +8,6 @@ import ProblemInput from './components/ProblemInput';
 import AgentChat from './components/AgentChat';
 import FileManager from './components/FileManager';
 import TaskHistory from './components/TaskHistory';
-import McpManager from './components/McpManager';
 import WorkflowManager from './components/WorkflowManager';
 import AgentManager from './components/AgentManager';
 import SettingsPage from './components/SettingsPage';
@@ -31,7 +30,7 @@ interface Message {
 }
 
 export default function Home() {
-  const [tab, setTab] = useState<'dashboard' | 'generate' | 'files' | 'history' | 'agents' | 'workflows' | 'mcp' | 'settings'>('dashboard');
+  const [tab, setTab] = useState<'dashboard' | 'generate' | 'files' | 'history' | 'agents' | 'workflows' | 'settings'>('dashboard');
 
   // Task state
   const [taskId, setTaskId] = useState<string | null>(null);
@@ -273,8 +272,7 @@ export default function Home() {
     { id: 'history', label: '📋 历史', desc: '任务记录' },
     { id: 'agents', label: '🤖 Agent', desc: '团队管理' },
     { id: 'workflows', label: '🔄 流程', desc: '工作流' },
-    { id: 'mcp', label: '🔗 MCP', desc: '工具管理' },
-    { id: 'settings', label: '⚙️ 设置', desc: '系统配置' },
+    { id: 'settings', label: '⚙️ 设置', desc: 'Provider/MCP/知识库/系统' },
   ] as const;
 
   return (
@@ -449,12 +447,7 @@ export default function Home() {
           <WorkflowManager />
         )}
 
-        {/* ===== MCP ===== */}
-        {tab === 'mcp' && (
-          <McpManager />
-        )}
-
-        {/* ===== 设置 ===== */}
+        {/* ===== 设置（包含 Provider/MCP/知识库/系统 子标签） ===== */}
         {tab === 'settings' && (
           <SettingsPage />
         )}

@@ -25,7 +25,9 @@
       "Bash(pkill -f \"uvicorn\")",
       "Bash(mkdir -p backend/data/uploads backend/data/tasks output/papers output/code output/figures)",
       "Bash(nohup python *)",
-      "Bash(git -C /home/tomgame/projects/MathModel-MutiAgentSystem log --oneline -20)"
+      "Bash(git -C /home/tomgame/projects/MathModel-MutiAgentSystem log --oneline -20)",
+      "Bash(uvicorn backend.app.main:app --host 0.0.0.0 --port 8000)",
+      "Bash(echo \"Server PID: $!\")"
     ]
   }
 }

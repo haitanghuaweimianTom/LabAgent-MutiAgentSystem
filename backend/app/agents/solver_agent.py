@@ -824,8 +824,8 @@ class SolverAgent(BaseAgent):
     name = "solver_agent"
     label = "求解器"
     description = "编程求解、结果验证、数据处理、可视化"
-    default_model = "minimax-m2.7"
-    default_llm_backend = "claude"  # 默认使用 Claude Code
+    default_model = ""
+    
 
     # conda环境名
     CONDA_ENV_NAME = "mathmodel"

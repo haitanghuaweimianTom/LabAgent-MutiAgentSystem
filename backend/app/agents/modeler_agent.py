@@ -230,8 +230,8 @@ class ModelerAgent(BaseAgent):
     name = "modeler_agent"
     label = "建模师"
     description = "建立数学模型、设计算法"
-    default_model = "minimax-m2.7"
-    default_llm_backend = "claude"  # 默认使用 Claude Code
+    default_model = ""
+    
     _max_tokens_override = 16000  # 批量建模需要更大的输出
 
     def get_system_prompt(self) -> str:

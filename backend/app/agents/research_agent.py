@@ -12,7 +12,7 @@ class ResearchAgent(BaseAgent):
     name = "research_agent"
     label = "研究员"
     description = "搜集相关资料、文献、数据"
-    default_model = "minimax-m2.7"
+    default_model = ""
 
     def get_system_prompt(self) -> str:
         return """你是一个专业的研究助手，专门为数学建模问题搜集相关资料。

@@ -5,7 +5,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
@@ -46,6 +46,19 @@ def reset_orchestrator() -> None:
     logger.info("Orchestrator 已重置，将在下次任务时用最新配置初始化")
 
 
+def _get_agent_config(agent_name: str) -> Dict[str, str]:
+    """从 agent_model_map 获取 Agent 配置，延迟导入避免循环依赖"""
+    try:
+        from .agents import agent_model_map
+        mapping = agent_model_map.get(agent_name, {})
+        return {
+            "provider_id": mapping.get("provider_id", ""),
+            "model": mapping.get("model", ""),
+        }
+    except Exception:
+        return {"provider_id": "", "model": ""}
+
+
 def get_orchestrator() -> Orchestrator:
     global _orchestrator
     if _orchestrator is None:
@@ -64,42 +77,31 @@ def get_orchestrator() -> Orchestrator:
                 return []
             return mcp_mgr.get_tools_for_agent(agent_name)
 
+        def make_agent(agent_class, agent_name: str, **extra_kwargs):
+            """根据 agent_model_map 配置创建 Agent"""
+            cfg = _get_agent_config(agent_name)
+            model = cfg["model"] or settings.default_model
+            provider_id = cfg["provider_id"]
+            return agent_class(
+                model=model,
+                api_key=api_key,
+                api_base_url=settings.api_base_url,
+                provider_id=provider_id,
+                **extra_kwargs,
+            )
+
         agents = {
-            "research_agent": ResearchAgent(
-                model=settings.default_model,
-                api_key=api_key,
-                api_base_url=settings.api_base_url,
-                mcp_tools=get_agent_mcp_tools("research_agent"),
-            ),
-            "data_agent": DataAgent(
-                model=settings.default_model,
-                api_key=api_key,
-                api_base_url=settings.api_base_url,
-                data_dir=str(DATA_DIR),
-            ),
-            "analyzer_agent": AnalyzerAgent(
-                model=settings.default_model,
-                api_key=api_key,
-                api_base_url=settings.api_base_url,
-                mcp_tools=get_agent_mcp_tools("analyzer_agent"),
-            ),
-            "modeler_agent": ModelerAgent(
-                model=settings.default_model,
-                api_key=api_key,
-                api_base_url=settings.api_base_url,
-                mcp_tools=get_agent_mcp_tools("modeler_agent"),
-            ),
-            "solver_agent": SolverAgent(
-                model=settings.default_model,
-                api_key=api_key,
-                api_base_url=settings.api_base_url,
-                mcp_tools=get_agent_mcp_tools("solver_agent"),
-            ),
-            "writer_agent": WriterAgent(
-                model=settings.default_model,
-                api_key=api_key,
-                api_base_url=settings.api_base_url,
-            ),
+            "research_agent": make_agent(ResearchAgent, "research_agent",
+                mcp_tools=get_agent_mcp_tools("research_agent")),
+            "data_agent": make_agent(DataAgent, "data_agent",
+                data_dir=str(DATA_DIR)),
+            "analyzer_agent": make_agent(AnalyzerAgent, "analyzer_agent",
+                mcp_tools=get_agent_mcp_tools("analyzer_agent")),
+            "modeler_agent": make_agent(ModelerAgent, "modeler_agent",
+                mcp_tools=get_agent_mcp_tools("modeler_agent")),
+            "solver_agent": make_agent(SolverAgent, "solver_agent",
+                mcp_tools=get_agent_mcp_tools("solver_agent")),
+            "writer_agent": make_agent(WriterAgent, "writer_agent"),
         }
         _orchestrator = Orchestrator(agents=agents)
     return _orchestrator

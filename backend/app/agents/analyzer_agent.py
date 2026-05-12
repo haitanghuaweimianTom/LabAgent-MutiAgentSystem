@@ -245,8 +245,8 @@ class AnalyzerAgent(BaseAgent):
     name = "analyzer_agent"
     label = "分析师"
     description = "理解问题、分解任务、制定策略"
-    default_model = "minimax-m2.7"
-    default_llm_backend = "claude"  # 默认使用 Claude Code
+    default_model = ""
+    
 
     def get_system_prompt(self) -> str:
         return """你是一个专业的数学建模分析师，专门分析全国大学生数学建模竞赛（CUMCM）赛题。

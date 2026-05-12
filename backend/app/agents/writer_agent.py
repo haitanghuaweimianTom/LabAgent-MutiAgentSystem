@@ -96,8 +96,8 @@ class WriterAgent(BaseAgent):
     name = "writer_agent"
     label = "写作专家"
     description = "生成完整CUMCM格式LaTeX论文"
-    default_model = "minimax-m2.7"
-    default_llm_backend = "claude"  # 使用 Claude Code
+    default_model = ""
+    
     _max_tokens_override = 16000
 
     def get_system_prompt(self) -> str:

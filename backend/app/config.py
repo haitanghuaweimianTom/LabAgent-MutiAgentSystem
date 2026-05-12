@@ -15,14 +15,14 @@ class Settings(BaseSettings):
     api_prefix: str = "/api/v1"
     cors_origins: List[str] = ["*"]
 
-    default_model: str = "minimax-m2.7"
-    fallback_model: str = "minimax-m2.1"
-    api_base_url: str = "https://api.minimax.chat/v1"
+    default_model: str = ""
+    fallback_model: str = ""
+    api_base_url: str = ""
     minimax_api_key: str = ""
 
-    # ===== Kimi 后端配置 =====
+    # ===== Kimi 后端配置（已废弃，使用 Provider 系统）=====
     kimi_api_key: str = ""
-    kimi_base_url: str = "https://api.kimi.com/coding"
+    kimi_base_url: str = ""
 
     # ===== 多 LLM Provider 配置 =====
     # Anthropic

@@ -296,5 +296,99 @@ def build_test_config(provider: Dict[str, Any]) -> Dict[str, Any]:
         "api_host": provider.get("api_host", ""),
         "model": next((m.get("name") for m in provider.get("models", []) if m.get("enabled")), ""),
         "api_format": meta.get("api_format", type_to_api_format(provider.get("type", "openai"))),
+        "auth_field": meta.get("auth_field", ""),
         "is_full_url": meta.get("is_full_url", False),
+    }
+
+
+def parse_cc_switch_json(config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """解析 CC Switch 风格 Provider JSON 并创建 Provider
+
+    支持的 CC Switch JSON 格式:
+    {
+      "env": {
+        "ANTHROPIC_BASE_URL": "...",
+        "ANTHROPIC_AUTH_TOKEN": "...",
+        "ANTHROPIC_DEFAULT_SONNET_MODEL": "...",
+        ...
+      },
+      "model": "...",
+      "effortLevel": "max",
+      ...
+    }
+    """
+    env = config.get("env", {})
+    if not env:
+        return None
+
+    # 提取 API 地址
+    api_host = (
+        env.get("ANTHROPIC_BASE_URL")
+        or env.get("OPENAI_BASE_URL")
+        or env.get("OPENAI_API_BASE")
+        or env.get("BASE_URL")
+        or env.get("API_BASE")
+        or ""
+    )
+
+    # 提取 API Key / Token
+    api_key = (
+        env.get("ANTHROPIC_AUTH_TOKEN")
+        or env.get("ANTHROPIC_API_KEY")
+        or env.get("OPENAI_API_KEY")
+        or env.get("API_KEY")
+        or ""
+    )
+
+    # 提取模型名称
+    model_name = (
+        config.get("model")
+        or env.get("ANTHROPIC_MODEL")
+        or env.get("ANTHROPIC_DEFAULT_SONNET_MODEL")
+        or env.get("ANTHROPIC_DEFAULT_OPUS_MODEL")
+        or env.get("ANTHROPIC_DEFAULT_HAIKU_MODEL")
+        or env.get("DEFAULT_MODEL")
+        or ""
+    )
+
+    # 自动推断 API 格式
+    api_format = "openai_chat"  # 默认
+    if "anthropic" in api_host.lower() or "kimi" in api_host.lower() or "coding" in api_host.lower():
+        # 如果 key 字段名包含 ANTHROPIC 前缀，推断为 Anthropic 格式
+        if any(k.startswith("ANTHROPIC_") for k in env.keys()):
+            api_format = "anthropic"
+        else:
+            api_format = "openai_chat"
+    elif "openai" in api_host.lower():
+        api_format = "openai_chat"
+    elif "gemini" in api_host.lower() or "google" in api_host.lower():
+        api_format = "gemini_native"
+    elif "localhost:11434" in api_host or "ollama" in api_host.lower():
+        api_format = "ollama_chat"
+
+    # 推断 provider 类型
+    p_type = "openai"
+    if api_format == "anthropic":
+        p_type = "anthropic"
+    elif api_format == "ollama_chat":
+        p_type = "ollama"
+    elif api_format == "gemini_native":
+        p_type = "gemini"
+
+    # 从 URL 推断 provider 名称
+    name_from_url = api_host.split("://")[1].split("/")[0] if "://" in api_host else api_host
+    name = config.get("name", "") or env.get("PROVIDER_NAME", "") or name_from_url
+
+    models = []
+    if model_name:
+        models.append({"name": model_name, "enabled": True})
+
+    return {
+        "name": name or "CC Switch Provider",
+        "type": p_type,
+        "api_key": api_key,
+        "api_host": api_host,
+        "models": models,
+        "meta": {"api_format": api_format},
+        "notes": "从 CC Switch JSON 导入",
     }

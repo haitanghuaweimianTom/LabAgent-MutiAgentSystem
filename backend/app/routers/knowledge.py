@@ -1,18 +1,21 @@
 """知识库 RESTful API
 
-提供知识库 CRUD、查询和统计端点。
+提供知识库 CRUD、查询、文件上传和统计端点。
 使用 src/knowledge.KnowledgeBase 作为后端。
 """
 import logging
+import re
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, File, UploadFile, Query
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/knowledge", tags=["知识库"])
+
+UPLOAD_DIR = Path(__file__).parent.parent.parent.parent / "data" / "knowledge_files"
 
 # 延迟导入 KnowledgeBase，避免启动时加载嵌入模型
 _kb_instance: Optional[Any] = None
@@ -37,6 +40,33 @@ def _get_kb() -> Any:
             except Exception as e:
                 logger.warning(f"加载知识库文件失败: {e}")
     return _kb_instance
+
+
+def _chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]:
+    """将长文本切分为重叠的块"""
+    text = text.strip()
+    if len(text) <= chunk_size:
+        return [text] if text else []
+
+    chunks = []
+    start = 0
+    while start < len(text):
+        end = min(start + chunk_size, len(text))
+        # 尝试在句子边界切分
+        if end < len(text):
+            # 找最近的换行或句号
+            boundary = max(
+                text.rfind('\n', start, end),
+                text.rfind('. ', start, end),
+                text.rfind('。', start, end),
+            )
+            if boundary > start + chunk_size // 2:
+                end = boundary + 1
+        chunk = text[start:end].strip()
+        if chunk:
+            chunks.append(chunk)
+        start = end - overlap if end < len(text) else end
+    return chunks
 
 
 class DocumentCreate(BaseModel):
@@ -202,3 +232,68 @@ async def clear_knowledge():
     kb = _get_kb()
     kb.clear()
     return {"success": True, "message": "Knowledge base cleared"}
+
+
+ALLOWED_UPLOAD_EXTENSIONS = {".md", ".txt", ".markdown", ".rst", ".tex", ".json", ".csv"}
+
+
+@router.post("/upload")
+async def upload_knowledge_file(
+    file: UploadFile = File(...),
+    chunk_size: int = Query(500, description="分块大小(字符数)"),
+    overlap: int = Query(50, description="重叠字符数"),
+):
+    """上传 md/txt 文件到知识库，自动分块并持久保存"""
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in ALLOWED_UPLOAD_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"不支持 {ext} 格式，仅支持: {', '.join(ALLOWED_UPLOAD_EXTENSIONS)}")
+
+    content = await file.read()
+    text = content.decode("utf-8", errors="replace")
+
+    # 保存原始文件到 uploads 目录
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    save_path = UPLOAD_DIR / (file.filename or "uploaded_file")
+    save_path.write_bytes(content)
+
+    # 分块
+    chunks = _chunk_text(text, chunk_size=chunk_size, overlap=overlap)
+
+    kb = _get_kb()
+    doc_ids = []
+    source_name = file.filename or "upload"
+
+    if len(chunks) == 1:
+        # 短文档直接添加
+        doc_id = kb.add_document(
+            title=source_name,
+            content=chunks[0],
+            source=f"file:{source_name}",
+            metadata={"file_type": ext, "chunk_index": 0, "total_chunks": 1},
+        )
+        doc_ids.append(doc_id)
+    else:
+        # 长文档按块添加
+        for i, chunk in enumerate(chunks):
+            doc_id = kb.add_document(
+                title=f"{source_name} [块{i+1}/{len(chunks)}]",
+                content=chunk,
+                source=f"file:{source_name}",
+                metadata={"file_type": ext, "chunk_index": i, "total_chunks": len(chunks)},
+            )
+            doc_ids.append(doc_id)
+
+    # 自动保存到磁盘
+    kb_file = Path(__file__).parent.parent.parent.parent / "data" / "knowledge_base.json"
+    kb_file.parent.mkdir(parents=True, exist_ok=True)
+    kb.save(str(kb_file))
+
+    logger.info(f"Uploaded {source_name}: {len(chunks)} chunks, {len(text)} chars")
+    return {
+        "success": True,
+        "filename": source_name,
+        "total_chars": len(text),
+        "chunks": len(chunks),
+        "doc_ids": doc_ids,
+        "saved_to": str(kb_file),
+    }

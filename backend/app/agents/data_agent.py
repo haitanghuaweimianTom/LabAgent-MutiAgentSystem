@@ -16,7 +16,7 @@ class DataAgent(BaseAgent):
     name = "data_agent"
     label = "数据分析师"
     description = "上传、分析、预处理数据，并撰写Python代码进行深度分析"
-    default_model = "minimax-m2.7"
+    default_model = ""
 
     def __init__(self, data_dir: str = "./data", **kwargs):
         super().__init__(**kwargs)

@@ -371,7 +371,7 @@ class BaseAgent(ABC):
     name: str = "base_agent"
     label: str = "Agent"
     description: str = ""
-    default_model: str = "minimax-m2.7"
+    default_model: str = ""
 
     # 子类可以重写这个属性来使用 Claude Code 后端
     default_llm_backend: str = "minimax"
@@ -385,13 +385,15 @@ class BaseAgent(ABC):
         api_key: Optional[str] = None,
         api_base_url: Optional[str] = None,
         llm_backend: Optional[str] = None,
+        provider_id: Optional[str] = None,
     ):
         self.model = model or self.default_model
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.mcp_tools = mcp_tools or []
         self.api_key = api_key or ""
-        self.api_base_url = api_base_url or "https://api.minimax.chat/v1"
+        self.api_base_url = api_base_url or ""
+        self.provider_id = provider_id or ""
 
         # LLM 后端: "minimax" (默认) | "claude" | provider_id
         from ..config import get_settings
@@ -403,8 +405,9 @@ class BaseAgent(ABC):
         else:
             self.llm_backend = self.default_llm_backend
 
-        # 从默认 Provider 获取 API 配置（如果未显式提供 api_key）
-        if not self.api_key:
+        # 从指定的 Provider 获取 API 配置（如果指定了 provider_id 或缺少 api_key/api_host）
+        self._provider_auth_field: str = ""
+        if self.provider_id or not self.api_key or not self.api_base_url:
             self._resolve_provider_config()
 
         self._claude_model = settings.claude_model
@@ -413,20 +416,30 @@ class BaseAgent(ABC):
         self._claude_mcp_tools = settings.claude_mcp_tools.split(",") if settings.claude_mcp_tools else []
 
     def _resolve_provider_config(self) -> None:
-        """从当前默认 Provider 解析 API 配置"""
-        try:
-            from ..core.provider_config import get_default_provider
+        """从当前指定的 Provider（或全局默认）解析 API 配置"""
+        from ..core.provider_config import get_custom_provider, get_default_provider
+        provider = None
+        if self.provider_id:
+            provider = get_custom_provider(self.provider_id)
+        if not provider:
             provider = get_default_provider()
-            if provider and provider.get("api_key") and provider.get("api_host"):
-                self.api_key = provider["api_key"]
-                self.api_base_url = provider["api_host"]
-                self.model = self.model or next(
+        if provider and provider.get("api_key") and provider.get("api_host"):
+            self.api_key = provider["api_key"]
+            self.api_base_url = provider["api_host"]
+            self.provider_id = provider.get("id", self.provider_id)
+            meta = provider.get("meta", {})
+            self._provider_auth_field = meta.get("auth_field", "")
+            # 如果 model 未指定或是旧默认值，使用 provider 的第一个可用模型
+            if not self.model or self.model == self.default_model:
+                first_model = next(
                     (m.get("name") for m in provider.get("models", []) if m.get("enabled")),
-                    self.model
+                    None
                 )
-                logger.info(f"[{self.name}] 使用默认 Provider: {provider['name']} ({provider['type']})")
-        except Exception as e:
-            logger.debug(f"[{self.name}] 解析 Provider 配置失败: {e}")
+                if first_model:
+                    self.model = first_model
+            logger.info(f"[{self.name}] 使用 Provider: {provider['name']} ({provider['type']}) model={self.model}")
+        elif provider:
+            logger.warning(f"[{self.name}] Provider {provider.get('name')} 缺少 api_key 或 api_host")
 
     # 子类可以重写此属性以获得更大的token限制
     _max_tokens_override: int = 0
@@ -641,14 +654,15 @@ class BaseAgent(ABC):
 
     def _get_api_format(self) -> str:
         """从 provider 元数据或 llm_backend 推断 API 格式"""
-        try:
-            from ..core.provider_config import get_default_provider
+        from ..core.provider_config import get_custom_provider, get_default_provider
+        provider = None
+        if self.provider_id:
+            provider = get_custom_provider(self.provider_id)
+        if not provider:
             provider = get_default_provider()
-            if provider:
-                meta = provider.get("meta", {})
-                return meta.get("api_format", "openai_chat")
-        except Exception:
-            pass
+        if provider:
+            meta = provider.get("meta", {})
+            return meta.get("api_format", "openai_chat")
         if self.llm_backend == "anthropic":
             return "anthropic"
         return "openai_chat"
@@ -658,12 +672,22 @@ class BaseAgent(ABC):
         messages: List[Dict[str, str]],
         temperature: Optional[float],
     ) -> Dict[str, Any]:
-        """调用 Anthropic Messages API"""
-        headers = {
-            "x-api-key": self.api_key,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json",
-        }
+        """调用 Anthropic Messages API，支持多种认证方式"""
+        # 根据 auth_field 选择认证头
+        if self._provider_auth_field == "anthropic_auth_token":
+            # 阿里云 TokenPlan / Kimi Coding: Authorization Bearer + anthropic-version
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            }
+        else:
+            # 标准 Anthropic: x-api-key
+            headers = {
+                "x-api-key": self.api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            }
         payload = {
             "model": self.model,
             "max_tokens": self.effective_max_tokens,

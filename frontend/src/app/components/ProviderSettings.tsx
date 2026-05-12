@@ -12,6 +12,12 @@ const API_FORMATS = [
   { id: 'ollama_chat', label: 'Ollama Chat', desc: '/api/chat' },
 ];
 
+const AUTH_FIELDS = [
+  { id: 'bearer_token', label: 'Bearer Token', desc: 'Authorization: Bearer <key>' },
+  { id: 'x_api_key', label: 'x-api-key', desc: 'Anthropic 原生: x-api-key: <key>' },
+  { id: 'anthropic_auth_token', label: 'ANTHROPIC_AUTH_TOKEN', desc: '阿里云TokenPlan/Kimi Coding 等兼容格式' },
+];
+
 const CATEGORY_COLORS: Record<string, string> = {
   official: '#3498db',
   cn_official: '#e67e22',
@@ -70,7 +76,7 @@ export default function ProviderSettings() {
 
   // Add form
   const [showAdd, setShowAdd] = useState(false);
-  const [addForm, setAddForm] = useState({ name: '', type: 'openai', api_key: '', api_host: '', model: '', api_format: 'openai_chat' });
+  const [addForm, setAddForm] = useState({ name: '', type: 'openai', api_key: '', api_host: '', model: '', api_format: 'openai_chat', auth_field: 'bearer_token' });
   const [adding, setAdding] = useState(false);
 
   // Test
@@ -82,6 +88,34 @@ export default function ProviderSettings() {
 
   // Show presets
   const [showPresets, setShowPresets] = useState(false);
+
+  // JSON import
+  const [showJsonImport, setShowJsonImport] = useState(false);
+  const [jsonText, setJsonText] = useState('');
+  const [importingJson, setImportingJson] = useState(false);
+
+  const handleJsonImport = async () => {
+    if (!jsonText.trim()) { setMsg('请输入 JSON 内容'); return; }
+    let parsed: any;
+    try { parsed = JSON.parse(jsonText); } catch { setMsg('JSON 格式错误，请检查后重试'); return; }
+    setImportingJson(true);
+    try {
+      const res = await fetch(apiBase() + '/providers/import-json', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(parsed),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMsg(`✓ Provider "${data.provider?.name || '未知'}" 已从 JSON 导入`);
+        setShowJsonImport(false);
+        setJsonText('');
+        load();
+      } else {
+        setMsg(data.detail || '导入失败');
+      }
+    } catch { setMsg('导入失败'); } finally { setImportingJson(false); }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -141,14 +175,14 @@ export default function ProviderSettings() {
           api_key: addForm.api_key.trim(),
           api_host: addForm.api_host.trim(),
           models,
-          meta: { api_format: addForm.api_format },
+          meta: { api_format: addForm.api_format, auth_field: addForm.auth_field },
         }),
       });
       const data = await res.json();
       if (data.success) {
         setMsg(`Provider "${addForm.name}" 已添加`);
         setShowAdd(false);
-        setAddForm({ name: '', type: 'openai', api_key: '', api_host: '', model: '', api_format: 'openai_chat' });
+        setAddForm({ name: '', type: 'openai', api_key: '', api_host: '', model: '', api_format: 'openai_chat', auth_field: 'bearer_token' });
         load();
       } else {
         setMsg(data.detail || data.error || '添加失败');
@@ -239,6 +273,12 @@ export default function ProviderSettings() {
           </div>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <button
+              onClick={() => setShowJsonImport(!showJsonImport)}
+              style={{ padding: '0.5rem 1rem', background: 'rgba(241,196,15,0.15)', border: '1px solid rgba(241,196,15,0.3)', borderRadius: 8, color: '#f1c40f', fontSize: '0.85rem', cursor: 'pointer', fontWeight: 600 }}
+            >
+              📋 JSON 导入
+            </button>
+            <button
               onClick={() => setShowPresets(!showPresets)}
               style={{ padding: '0.5rem 1rem', background: 'rgba(155,89,182,0.15)', border: '1px solid rgba(155,89,182,0.3)', borderRadius: 8, color: '#9b59b6', fontSize: '0.85rem', cursor: 'pointer', fontWeight: 600 }}
             >
@@ -253,6 +293,34 @@ export default function ProviderSettings() {
           </div>
         </div>
       </div>
+
+      {/* JSON import modal */}
+      {showJsonImport && (
+        <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(241,196,15,0.2)', borderRadius: 14, padding: '1.5rem' }}>
+          <span style={{ fontSize: '1rem', color: '#f1c40f', fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>📋 粘贴 CC Switch JSON</span>
+          <p style={{ color: '#888', fontSize: '0.8rem', marginBottom: '1rem', lineHeight: 1.5 }}>
+            支持 CC Switch 配置 JSON，系统自动提取 API 地址、Key 和模型名称并创建 Provider。
+          </p>
+          <textarea
+            value={jsonText}
+            onChange={e => setJsonText(e.target.value)}
+            rows={10}
+            placeholder={`{\n  "env": {\n    "ANTHROPIC_BASE_URL": "https://api.kimi.com/coding/",\n    "ANTHROPIC_AUTH_TOKEN": "sk-...",\n    "ANTHROPIC_MODEL": "kimi-for-coding"\n  },\n  "model": "kimi-for-coding"\n}`}
+            style={{
+              width: '100%', padding: '0.75rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)',
+              borderRadius: 8, color: '#e0e0e0', fontSize: '0.85rem', fontFamily: 'monospace', resize: 'vertical', boxSizing: 'border-box',
+            }}
+          />
+          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
+            <button onClick={handleJsonImport} disabled={importingJson} style={{ padding: '0.6rem 1.5rem', background: 'linear-gradient(135deg, #f1c40f, #e67e22)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>
+              {importingJson ? '导入中...' : '确认导入'}
+            </button>
+            <button onClick={() => { setShowJsonImport(false); setJsonText(''); }} style={{ padding: '0.6rem 1.5rem', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: '#aaa', cursor: 'pointer' }}>
+              取消
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Presets by category */}
       {showPresets && Object.keys(presetsByCategory).length > 0 && (
@@ -313,7 +381,13 @@ export default function ProviderSettings() {
               {API_FORMATS.map(fmt => (
                 <button
                   key={fmt.id}
-                  onClick={() => setAddForm(f => ({ ...f, api_format: fmt.id }))}
+                  onClick={() => {
+                    setAddForm(f => ({ ...f, api_format: fmt.id }));
+                    // Auto-set auth_field based on API format
+                    if (fmt.id === 'anthropic') setAddForm(f => ({ ...f, auth_field: 'x_api_key' }));
+                    else if (fmt.id === 'ollama_chat') setAddForm(f => ({ ...f, auth_field: 'bearer_token' }));
+                    else setAddForm(f => ({ ...f, auth_field: 'bearer_token' }));
+                  }}
                   style={{
                     padding: '0.4rem 0.7rem',
                     background: addForm.api_format === fmt.id ? 'rgba(52,152,219,0.2)' : 'rgba(0,0,0,0.2)',
@@ -327,6 +401,33 @@ export default function ProviderSettings() {
                   {fmt.label}
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* Auth field selector */}
+          <div style={{ marginBottom: '1rem' }}>
+            <div style={{ color: '#ddd', fontSize: '0.85rem', marginBottom: '0.5rem' }}>认证方式</div>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              {AUTH_FIELDS.map(af => (
+                <button
+                  key={af.id}
+                  onClick={() => setAddForm(f => ({ ...f, auth_field: af.id }))}
+                  style={{
+                    padding: '0.4rem 0.7rem',
+                    background: addForm.auth_field === af.id ? 'rgba(243,156,18,0.2)' : 'rgba(0,0,0,0.2)',
+                    border: `1px solid ${addForm.auth_field === af.id ? 'rgba(243,156,18,0.5)' : 'rgba(255,255,255,0.1)'}`,
+                    borderRadius: 8,
+                    color: addForm.auth_field === af.id ? '#f39c12' : '#aaa',
+                    cursor: 'pointer',
+                    fontSize: '0.8rem',
+                  }}
+                >
+                  {af.label}
+                </button>
+              ))}
+            </div>
+            <div style={{ color: '#666', fontSize: '0.75rem', marginTop: '0.3rem' }}>
+              {AUTH_FIELDS.find(af => af.id === addForm.auth_field)?.desc}
             </div>
           </div>
 
@@ -361,7 +462,7 @@ export default function ProviderSettings() {
             <button onClick={handleAdd} disabled={adding} style={{ padding: '0.6rem 1.5rem', background: 'linear-gradient(135deg, #2ecc71, #27ae60)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>
               {adding ? '添加中...' : '确认添加'}
             </button>
-            <button onClick={() => { setShowAdd(false); setAddForm({ name: '', type: 'openai', api_key: '', api_host: '', model: '', api_format: 'openai_chat' }); }} style={{ padding: '0.6rem 1.5rem', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: '#aaa', cursor: 'pointer' }}>
+            <button onClick={() => { setShowAdd(false); setAddForm({ name: '', type: 'openai', api_key: '', api_host: '', model: '', api_format: 'openai_chat', auth_field: 'bearer_token' }); }} style={{ padding: '0.6rem 1.5rem', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: '#aaa', cursor: 'pointer' }}>
               取消
             </button>
           </div>

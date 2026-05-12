@@ -246,3 +246,104 @@ async def discover_tools(body: Dict[str, Any] = {}) -> Dict[str, Any]:
         "total_servers": len(servers),
         "total_tools": len(tools),
     }
+
+
+@router.post("/import-json", response_model=Dict[str, Any])
+async def import_mcp_json(body: Dict[str, Any]) -> Dict[str, Any]:
+    """导入标准 MCP JSON 配置
+
+    支持两种格式:
+
+    1. Cherry Studio / Claude Desktop 标准格式:
+    {
+      "mcpServers": {
+        "server_name": {
+          "command": "npx",
+          "args": ["-y", "@modelcontextprotocol/server-xxx"],
+          "env": {"API_KEY": "xxx"}
+        }
+      }
+    }
+
+    2. HTTP/SSE 传输格式:
+    {
+      "mcpServers": {
+        "server_name": {
+          "url": "http://localhost:8080/mcp",
+          "headers": {"Authorization": "Bearer xxx"}
+        }
+      }
+    }
+    """
+    from ..mcp.config import MCPServerConfig
+    from ..mcp.schemas import detect_server_type, InstallSource, McpServerType
+
+    mcp_servers = body.get("mcpServers", {})
+    if not mcp_servers:
+        raise HTTPException(status_code=400, detail="缺少 mcpServers 字段")
+
+    mcp_manager = get_mcp_manager()
+    imported = []
+    failed = []
+
+    for server_name, server_config in mcp_servers.items():
+        try:
+            command = server_config.get("command", "")
+            args = server_config.get("args", [])
+            env = server_config.get("env", {})
+            url = server_config.get("url")
+            headers = server_config.get("headers", {})
+
+            server_type = McpServerType.STREAMABLE_HTTP if url else McpServerType.STDIO
+
+            config = MCPServerConfig(
+                name=server_name,
+                command=command,
+                args=args,
+                env=env,
+                enabled=True,
+                description=f"从 JSON 导入: {server_name}",
+                url=url,
+                headers=headers,
+                tags=["imported"],
+                disabled_tools=[],
+                install_source=InstallSource.MANUAL,
+                is_trusted=True,
+                server_type=server_type,
+            )
+
+            mcp_manager.add_custom_server(config)
+            imported.append(server_name)
+        except Exception as e:
+            failed.append({"name": server_name, "error": str(e)})
+
+    return {
+        "success": True,
+        "imported": imported,
+        "failed": failed,
+        "total": len(mcp_servers),
+    }
+
+
+@router.post("/export-json", response_model=Dict[str, Any])
+async def export_mcp_json() -> Dict[str, Any]:
+    """导出为标准 MCP JSON 格式 (Cherry Studio / Claude Desktop 兼容)"""
+    mcp_manager = get_mcp_manager()
+    config = mcp_manager.export_config()
+
+    # 转换为标准 mcpServers 格式
+    mcp_servers = {}
+    for name, srv_config in config.get("mcpServers", {}).items():
+        entry = {}
+        if srv_config.get("command"):
+            entry["command"] = srv_config["command"]
+        if srv_config.get("args"):
+            entry["args"] = srv_config["args"]
+        if srv_config.get("env"):
+            entry["env"] = srv_config["env"]
+        if entry:
+            mcp_servers[name] = entry
+
+    return {
+        "mcpServers": mcp_servers,
+    }

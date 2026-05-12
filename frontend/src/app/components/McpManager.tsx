@@ -55,6 +55,11 @@ export default function McpManager() {
   const [showAddTool, setShowAddTool] = useState(false);
   const [newTool, setNewTool] = useState({ name: '', server: '', description: '' });
 
+  // JSON import/export
+  const [showJsonImport, setShowJsonImport] = useState(false);
+  const [jsonText, setJsonText] = useState('');
+  const [importingJson, setImportingJson] = useState(false);
+
   const AGENTS = ['research_agent', 'analyzer_agent', 'modeler_agent', 'solver_agent', 'writer_agent'];
 
   const load = useCallback(async () => {
@@ -132,17 +137,43 @@ export default function McpManager() {
 
   const handleExportConfig = async () => {
     try {
-      const res = await fetch(apiBase() + '/mcp/config/export');
+      const res = await fetch(apiBase() + '/mcp/export-json');
       if (res.ok) {
         const data = await res.json();
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = url; a.download = 'mcp_config.json'; a.click();
+        a.href = url; a.download = 'mcp_servers.json'; a.click();
         URL.revokeObjectURL(url);
-        setMsg('配置已导出');
+        setMsg('MCP 配置已导出');
       }
     } catch { setMsg('导出失败'); }
+  };
+
+  const handleJsonImport = async () => {
+    if (!jsonText.trim()) { setMsg('请输入 JSON 内容'); return; }
+    let parsed: any;
+    try { parsed = JSON.parse(jsonText); } catch { setMsg('JSON 格式错误，请检查后重试'); return; }
+    if (!parsed.mcpServers || typeof parsed.mcpServers !== 'object') {
+      setMsg('缺少 mcpServers 字段'); return;
+    }
+    setImportingJson(true);
+    try {
+      const res = await fetch(apiBase() + '/mcp/import-json', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(parsed),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMsg(`✓ 成功导入 ${data.imported?.length || 0} 个服务器` + (data.failed?.length ? `，${data.failed.length} 个失败` : ''));
+        setShowJsonImport(false);
+        setJsonText('');
+        load();
+      } else {
+        setMsg(data.detail || '导入失败');
+      }
+    } catch { setMsg('导入失败'); } finally { setImportingJson(false); }
   };
 
   const AGENT_LABELS: Record<string, string> = {
@@ -162,10 +193,33 @@ export default function McpManager() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
           <span style={{ fontSize: '1.1rem', color: '#fff', fontWeight: 600 }}>🔗 MCP 服务器</span>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button onClick={handleExportConfig} style={{ padding: '0.4rem 0.8rem', background: 'rgba(52,152,219,0.15)', border: '1px solid rgba(52,152,219,0.3)', borderRadius: 6, color: '#3498db', fontSize: '0.78rem', cursor: 'pointer' }}>导出配置</button>
+            <button onClick={() => setShowJsonImport(!showJsonImport)} style={{ padding: '0.4rem 0.8rem', background: 'rgba(241,196,15,0.15)', border: '1px solid rgba(241,196,15,0.3)', borderRadius: 6, color: '#f1c40f', fontSize: '0.78rem', cursor: 'pointer' }}>📋 JSON 导入</button>
+            <button onClick={handleExportConfig} style={{ padding: '0.4rem 0.8rem', background: 'rgba(52,152,219,0.15)', border: '1px solid rgba(52,152,219,0.3)', borderRadius: 6, color: '#3498db', fontSize: '0.78rem', cursor: 'pointer' }}>💾 导出</button>
             <button onClick={() => setShowAddServer(!showAddServer)} style={{ padding: '0.4rem 0.8rem', background: 'rgba(46,204,113,0.15)', border: '1px solid rgba(46,204,113,0.3)', borderRadius: 6, color: '#2ecc71', fontSize: '0.78rem', cursor: 'pointer' }}>+ 添加服务器</button>
           </div>
         </div>
+
+        {/* JSON import */}
+        {showJsonImport && (
+          <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: 8, padding: '1rem', marginBottom: '1rem' }}>
+            <span style={{ color: '#f1c40f', fontSize: '0.9rem', fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>📋 粘贴 MCP JSON（Cherry Studio / Claude Desktop 格式）</span>
+            <textarea
+              value={jsonText}
+              onChange={e => setJsonText(e.target.value)}
+              rows={8}
+              placeholder={`{\n  "mcpServers": {\n    "server_name": {\n      "command": "npx",\n      "args": ["-y", "@modelcontextprotocol/server-xxx"],\n      "env": {"API_KEY": "xxx"}\n    }\n  }\n}`}
+              style={{ width: '100%', padding: '0.75rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: '#e0e0e0', fontSize: '0.85rem', fontFamily: 'monospace', resize: 'vertical', boxSizing: 'border-box' }}
+            />
+            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.8rem' }}>
+              <button onClick={handleJsonImport} disabled={importingJson} style={{ padding: '0.5rem 1.2rem', background: 'linear-gradient(135deg, #f1c40f, #e67e22)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>
+                {importingJson ? '导入中...' : '确认导入'}
+              </button>
+              <button onClick={() => { setShowJsonImport(false); setJsonText(''); }} style={{ padding: '0.5rem 1.2rem', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: '#aaa', cursor: 'pointer' }}>
+                取消
+              </button>
+            </div>
+          </div>
+        )}
 
         {showAddServer && (
           <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: 8, padding: '1rem', marginBottom: '1rem' }}>

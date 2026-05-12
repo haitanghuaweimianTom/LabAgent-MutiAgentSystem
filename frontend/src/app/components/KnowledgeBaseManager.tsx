@@ -31,6 +31,10 @@ export default function KnowledgeBaseManager() {
   const [docForm, setDocForm] = useState({ title: '', content: '', source: '' });
   const [adding, setAdding] = useState(false);
 
+  // File upload
+  const [uploading, setUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState<string | null>(null);
+
   // Query
   const [showQuery, setShowQuery] = useState(false);
   const [queryText, setQueryText] = useState('');
@@ -141,6 +145,35 @@ export default function KnowledgeBaseManager() {
     } catch { setMsg('加载失败'); }
   };
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files?.length) return;
+    setUploading(true);
+    setUploadResult(null);
+    for (const file of Array.from(files)) {
+      const formData = new FormData();
+      formData.append('file', file);
+      try {
+        const res = await fetch(apiBase() + '/knowledge/upload?chunk_size=500&overlap=50', {
+          method: 'POST',
+          body: formData,
+        });
+        const data = await res.json();
+        if (data.success) {
+          setUploadResult(`✓ ${data.filename}: ${data.chunks} 个分块, ${data.total_chars} 字符`);
+          load();
+        } else {
+          setUploadResult(`✗ ${file.name}: ${data.detail || '上传失败'}`);
+        }
+      } catch {
+        setUploadResult(`✗ ${file.name}: 上传失败`);
+      }
+    }
+    setUploading(false);
+    // Reset file input
+    e.target.value = '';
+  };
+
   if (loading) return <div style={{ color: '#aaa', textAlign: 'center', padding: '2rem' }}>加载中...</div>;
 
   return (
@@ -158,10 +191,21 @@ export default function KnowledgeBaseManager() {
             <button onClick={handleSave} style={{ padding: '0.4rem 0.8rem', background: 'rgba(52,152,219,0.15)', border: '1px solid rgba(52,152,219,0.3)', borderRadius: 6, color: '#3498db', fontSize: '0.78rem', cursor: 'pointer' }}>💾 保存</button>
             <button onClick={handleLoad} style={{ padding: '0.4rem 0.8rem', background: 'rgba(241,196,15,0.15)', border: '1px solid rgba(241,196,15,0.3)', borderRadius: 6, color: '#f1c40f', fontSize: '0.78rem', cursor: 'pointer' }}>📂 加载</button>
             <button onClick={() => setShowQuery(!showQuery)} style={{ padding: '0.4rem 0.8rem', background: 'rgba(155,89,182,0.15)', border: '1px solid rgba(155,89,182,0.3)', borderRadius: 6, color: '#9b59b6', fontSize: '0.78rem', cursor: 'pointer' }}>🔍 查询</button>
-            <button onClick={() => setShowAdd(!showAdd)} style={{ padding: '0.4rem 0.8rem', background: 'rgba(46,204,113,0.15)', border: '1px solid rgba(46,204,113,0.3)', borderRadius: 6, color: '#2ecc71', fontSize: '0.78rem', cursor: 'pointer' }}>+ 添加文档</button>
+            <label style={{ padding: '0.4rem 0.8rem', background: 'rgba(46,204,113,0.15)', border: '1px solid rgba(46,204,113,0.3)', borderRadius: 6, color: '#2ecc71', fontSize: '0.78rem', cursor: uploading ? 'not-allowed' : 'pointer' }}>
+              {uploading ? '上传中...' : '📤 上传文件'}
+              <input type="file" accept=".md,.txt,.markdown,.rst,.tex,.json,.csv" multiple onChange={handleFileUpload} style={{ display: 'none' }} disabled={uploading} />
+            </label>
+            <button onClick={() => setShowAdd(!showAdd)} style={{ padding: '0.4rem 0.8rem', background: 'rgba(243,156,18,0.15)', border: '1px solid rgba(243,156,18,0.3)', borderRadius: 6, color: '#f39c12', fontSize: '0.78rem', cursor: 'pointer' }}>+ 手动添加</button>
           </div>
         </div>
       </div>
+
+      {/* Upload result */}
+      {uploadResult && (
+        <div style={{ padding: '0.5rem 1rem', background: uploadResult.startsWith('✓') ? 'rgba(46,204,113,0.1)' : 'rgba(231,76,60,0.1)', borderRadius: 8, fontSize: '0.85rem', color: uploadResult.startsWith('✓') ? '#2ecc71' : '#e74c3c' }}>
+          {uploadResult}
+        </div>
+      )}
 
       {/* Stats */}
       {stats && (

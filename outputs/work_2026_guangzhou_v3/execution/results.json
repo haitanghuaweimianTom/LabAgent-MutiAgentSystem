@@ -1,0 +1,46 @@
+{
+  "task1_validation": {
+    "calibrated_params": {
+      "beta_plus": 32.401319,
+      "beta_minus": 19.384484,
+      "sigma_epsilon": 177.336726,
+      "n_observations": 319,
+      "rmse": 177.874
+    },
+    "model_evaluation": {
+      "model_fit_score": 0.159119,
+      "correlation": 0.159119,
+      "simulation_rmse": 63.7503,
+      "asymmetry_ratio": 0.21
+    },
+    "total_adjustments_tracked": 319,
+    "price_transmission_asymmetry": {
+      "beta_plus": 32.401319,
+      "beta_minus": 19.384484,
+      "asymmetry_degree": 13.016835
+    }
+  },
+  "task2_optimization": {
+    "optimal_strategy": {
+      "adjusted_beta_plus": 0.6,
+      "adjusted_beta_minus": 0.4,
+      "buffer_threshold": 40,
+      "score": 4.25
+    },
+    "reference_price_high": 130.0,
+    "reference_price_low": 40.0,
+    "policy_recommendation": "dynamic_buffer_with_sigmoid_trigger"
+  },
+  "task3_robustness": {
+    "simulated_periods": 100,
+    "mean_simulation_delta": -33.7125,
+    "max_simulation_delta": 17.56,
+    "volatility_exposure": 1.5574
+  },
+  "data_summary": {
+    "brent_mean_price": 51.1021,
+    "brent_max_price": 143.95,
+    "brent_min_price": 9.1,
+    "china_total_adjustments": 320
+  }
+}

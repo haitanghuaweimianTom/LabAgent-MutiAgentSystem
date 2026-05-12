@@ -22,6 +22,13 @@ class ApiFormat(str, Enum):
     OLLAMA_CHAT = "ollama_chat"
 
 
+class AuthField(str, Enum):
+    """认证字段类型 — 用户可选择 Provider 使用的认证方式"""
+    BEARER_TOKEN = "bearer_token"     # Authorization: Bearer <key>  (OpenAI/SiliconFlow 等兼容格式)
+    X_API_KEY = "x_api_key"          # x-api-key: <key>             (Anthropic 原生格式)
+    ANTHROPIC_AUTH_TOKEN = "anthropic_auth_token"  # 使用 ANTHROPIC_AUTH_TOKEN (阿里云TokenPlan 等)
+
+
 def type_to_api_format(p_type: str) -> str:
     """Provider type -> API format mapping"""
     mapping = {
@@ -105,8 +112,16 @@ PROVIDER_PRESETS: List[Dict[str, Any]] = [
         "category": ProviderCategory.CN_OFFICIAL,
         "icon": "Aliyun", "icon_color": "#ff6a00",
         "api_host": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-        "meta": {"api_format": "openai_chat"},
+        "meta": {"api_format": "openai_chat", "auth_field": "bearer_token"},
         "models": [{"name": "qwen-plus", "enabled": True}, {"name": "qwen-max", "enabled": True}, {"name": "qwen-turbo", "enabled": True}, {"name": "qwen-long", "enabled": True}],
+    },
+    {
+        "id": "aliyun-tokenplan", "name": "阿里云 TokenPlan (Anthropic兼容)", "type": "anthropic",
+        "category": ProviderCategory.CN_OFFICIAL,
+        "icon": "Aliyun", "icon_color": "#ff6a00",
+        "api_host": "https://token-plan.cn-beijing.maas.aliyuncs.com/apps/anthropic",
+        "meta": {"api_format": "anthropic", "auth_field": "anthropic_auth_token"},
+        "models": [{"name": "glm-5.1", "enabled": True}, {"name": "qwen3.6-plus", "enabled": True}, {"name": "qwen3.6-flash", "enabled": True}, {"name": "qwen-image-2.0", "enabled": True}],
     },
     {
         "id": "siliconflow", "name": "SiliconFlow 硅基流动", "type": "openai",
@@ -129,8 +144,16 @@ PROVIDER_PRESETS: List[Dict[str, Any]] = [
         "category": ProviderCategory.CN_OFFICIAL,
         "icon": "Kimi", "icon_color": "#6c5ce7",
         "api_host": "https://api.moonshot.cn/v1",
-        "meta": {"api_format": "openai_chat"},
+        "meta": {"api_format": "openai_chat", "auth_field": "bearer_token"},
         "models": [{"name": "moonshot-v1-8k", "enabled": True}, {"name": "moonshot-v1-32k", "enabled": True}, {"name": "moonshot-v1-128k", "enabled": True}],
+    },
+    {
+        "id": "kimi-coding", "name": "Kimi Coding (Anthropic兼容)", "type": "anthropic",
+        "category": ProviderCategory.CN_OFFICIAL,
+        "icon": "Kimi", "icon_color": "#6c5ce7",
+        "api_host": "https://api.kimi.com/coding",
+        "meta": {"api_format": "anthropic", "auth_field": "anthropic_auth_token"},
+        "models": [{"name": "kimi-k2.6", "enabled": True}],
     },
     {
         "id": "deepseek", "name": "DeepSeek", "type": "openai",

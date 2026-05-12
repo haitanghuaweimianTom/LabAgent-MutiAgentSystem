@@ -11,7 +11,7 @@ from ..core.provider_config import (
     update_custom_provider, delete_custom_provider, set_default_provider,
     get_default_provider_id, get_provider_models, add_model_to_provider,
     remove_model_from_provider, get_presets, get_presets_by_category,
-    import_preset_as_provider, build_test_config,
+    import_preset_as_provider, build_test_config, parse_cc_switch_json,
 )
 
 logger = logging.getLogger(__name__)
@@ -45,6 +45,35 @@ async def import_preset(body: Dict[str, Any]):
         result = import_preset_as_provider(preset_id)
         if not result:
             raise HTTPException(status_code=404, detail=f"预设 '{preset_id}' 不存在")
+        return {"success": True, "provider": result}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/import-json")
+async def import_cc_switch_json(body: Dict[str, Any]):
+    """导入 CC Switch 风格 Provider JSON
+
+    支持格式:
+    {
+      "env": {
+        "ANTHROPIC_BASE_URL": "...",
+        "ANTHROPIC_AUTH_TOKEN": "...",
+        "ANTHROPIC_MODEL": "..."
+      },
+      "model": "...",
+      ...
+    }
+    """
+    parsed = parse_cc_switch_json(body)
+    if not parsed:
+        raise HTTPException(status_code=400, detail="无法解析 CC Switch JSON：缺少 env 字段")
+
+    if not parsed.get("api_host"):
+        raise HTTPException(status_code=400, detail="JSON 中未找到 API 地址（需包含 ANTHROPIC_BASE_URL 或 OPENAI_BASE_URL）")
+
+    try:
+        result = add_custom_provider(parsed)
         return {"success": True, "provider": result}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -161,17 +190,28 @@ async def test_provider(provider_id: str, body: Optional[Dict[str, Any]] = None)
     api_host = test_cfg.get("api_host", "")
     model = test_cfg.get("model", "") or "gpt-3.5-turbo"
     api_format = test_cfg.get("api_format", "openai_chat")
+    auth_field = test_cfg.get("auth_field", "")
 
     if not api_host:
         raise HTTPException(status_code=400, detail="api_host 不能为空")
 
     try:
         if api_format == "anthropic":
-            headers = {
-                "x-api-key": api_key,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            }
+            # 根据认证字段决定 header
+            if auth_field == "anthropic_auth_token":
+                # 阿里云 TokenPlan / Kimi Coding: 使用 ANTHROPIC_AUTH_TOKEN
+                headers = {
+                    "Authorization": f"Bearer {api_key}",
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                }
+            else:
+                # 标准 Anthropic: 使用 x-api-key
+                headers = {
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                }
             payload = {"model": model or "claude-3-haiku-20240307", "max_tokens": 10, "messages": [{"role": "user", "content": "Hi"}]}
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(f"{api_host}/v1/messages", headers=headers, json=payload)
