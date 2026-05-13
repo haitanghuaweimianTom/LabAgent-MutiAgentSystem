@@ -1,10 +1,14 @@
-# 数学建模论文全自动生成系统 v2.5
+# 数学建模论文全自动生成系统 v2.6
 
 > **融合 LLM-MM-Agent + Cherry Studio + crewAI + CC Switch 架构，集成 15 类经典数学建模算法库**
 >
 > 全自动分段生成 | CrewAI Agent 协作 | Claude CLI 默认代码生成 | 分层持久记忆 | AI-Scientist 创意分析 | 5 步图表流水线 | Markdown/LaTeX/Word 三格式交付 | Web UI 交互 | CC Switch 风格 Provider/MCP/知识库管理
 
 ---
+## 部分论文效果展示
+<img width="927" height="948" alt="image" src="https://github.com/user-attachments/assets/251b6d4d-ea50-4de1-85b9-dfe05acb1816" />
+<img width="1918" height="980" alt="image" src="https://github.com/user-attachments/assets/6453889f-a98a-4422-a47f-352ccd49ad6f" />
+<img width="1918" height="980" alt="image" src="https://github.com/user-attachments/assets/c02ad407-331a-4928-8a9b-925f2dbf2d29" />
 
 ## 目录
 
