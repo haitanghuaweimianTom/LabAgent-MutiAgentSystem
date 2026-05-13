@@ -49,9 +49,11 @@ class TaskResultResponse(BaseModel):
 
 class TaskCreateRequest(BaseModel):
     problem_text: str
+    project_name: Optional[str] = None  # 项目名，如 "work_2026_guangzhou"
     workflow: Optional[List[Dict[str, Any]]] = None
     mode: Optional[str] = "batch"  # "batch"=一次性, "sequential"=逐个递进
     options: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    data_files: Optional[List[str]] = None  # 前端选中的数据文件名列表（为空则使用全部上传文件）
 
 
 class TaskCancelRequest(BaseModel):

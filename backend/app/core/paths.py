@@ -5,6 +5,7 @@
 """
 import os
 from pathlib import Path
+from typing import Optional
 
 # backend/app/core/paths.py → backend/app/ → backend/ → 项目根目录
 # _BACKEND_DIR = backend/app/ (Path(__file__).parent.parent)
@@ -44,6 +45,35 @@ def get_task_data_dir() -> Path:
 def get_output_dir() -> Path:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     return OUTPUT_DIR
+
+
+# ===== 项目感知路径（v3.1 新增）=====
+
+def get_project_base_dir(project_name: Optional[str]) -> Path:
+    """获取项目根目录。无项目时返回全局项目根。"""
+    if project_name:
+        return _PROJECT_ROOT / "outputs" / project_name
+    return _PROJECT_ROOT
+
+
+def get_project_data_dir(project_name: Optional[str]) -> Path:
+    """获取项目数据目录。无项目时回退到全局 uploads。"""
+    if project_name:
+        d = _PROJECT_ROOT / "outputs" / project_name / "data"
+    else:
+        d = DATA_DIR
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def get_project_output_dir(project_name: Optional[str]) -> Path:
+    """获取项目输出目录。无项目时回退到全局 output/。"""
+    if project_name:
+        d = _PROJECT_ROOT / "outputs" / project_name / "output"
+    else:
+        d = OUTPUT_DIR
+    d.mkdir(parents=True, exist_ok=True)
+    return d
 
 
 def ensure_dirs() -> None:

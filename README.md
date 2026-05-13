@@ -128,7 +128,31 @@ npm install -g @anthropic-ai/claude-code
 
 ### 准备赛题与数据
 
-#### 目录结构要求
+#### 项目隔离（推荐 via Web UI）
+
+系统支持按**项目**隔离数据文件与输出目录。在 Web UI 中：
+
+1. **创建/选择项目**：在「生成」页顶部的下拉框中选择已有项目，或点击「+ 新建项目」
+2. **上传数据**：切换到「数据」标签，文件将自动保存到该项目的 `data/` 子目录
+3. **提交任务**：系统会读取项目内的数据文件，并将所有输出（代码、论文、JSON）保存到该项目的 `output/` 子目录
+
+项目目录结构：
+
+```
+outputs/{project_name}/
+├── data/                    # 项目专属数据文件（上传时自动创建）
+└── output/
+    ├── code/                # Solver 生成的 Python 代码
+    ├── papers/              # Writer 生成的论文
+    ├── models.json          # 模型描述
+    └── solves.json          # 求解结果
+```
+
+无项目时回退到全局路径：
+- 数据：`backend/data/uploads/`
+- 输出：`output/`
+
+#### 目录结构要求（CLI 模式）
 
 **方式 A：全自动扫描模式（`USETHIS` 文件夹）**
 
@@ -663,8 +687,9 @@ MathModel-MutiAgentSystem/
 | `POST` | `/tasks/{id}/pause` | 暂停任务 |
 | `POST` | `/tasks/{id}/resume` | 恢复任务 |
 | `POST` | `/tasks/export` | 导出结果到桌面 |
-| `POST` | `/data/upload` | 上传数据文件 |
-| `GET`  | `/data/files` | 列出已上传文件 |
+| `POST` | `/data/upload` | 上传数据文件（支持 `?project_name=`） |
+| `GET`  | `/data/files` | 列出已上传文件（支持 `?project_name=`） |
+| `DELETE` | `/data/files/{name}` | 删除文件（支持 `?project_name=`） |
 | `GET`  | `/workflows` | 列出预定义工作流 |
 | `GET`  | `/info` | 系统信息（Provider 状态等） |
 | `POST` | `/settings` | 更新运行时设置 |
@@ -886,6 +911,7 @@ curl http://localhost:8000/health
 
 | 版本 | 日期 | 主要更新 |
 |------|------|----------|
+| **v2.6** | 2026-05-13 | **项目隔离版**：支持按 `project_name` 隔离数据文件与输出目录（Web UI 项目选择器 + 项目感知数据端点）；SolverAgent 输出目录跟随项目；前后端完整兼容无项目时的全局回退行为 |
 | **v2.5** | 2026-05-12 | **CC Switch 集成版**：CC Switch 风格 Provider 管理系统（15+ 预设、5 大分类、5 种 API 格式、一键导入预设）；MCP 系统增强（stdio/SSE/StreamableHttp 传输类型、标签分类、per-app 启用、禁用工具）；知识库 RESTful API（文档 CRUD、TF-IDF 语义检索、Agent 自动注入上下文）；Settings 页面 4 标签重构（Provider/MCP/知识库/系统设置）；69/69 全量测试通过 |
 | **v2.4** | 2026-05-11 | **智能增强版**：Algorithm/Coding 智能体默认使用 Claude Code CLI 生成；GMemory 风格的分层持久记忆系统（每个 Agent 独立记忆库 + 共享记忆）；AI-Scientist v2 风格创意研究视角生成（问题分析前生成 5 个不同研究角度）；5 步图表流水线修复（规划→验证→生成→重试→模板保底），100% 保证图表产出 |
 | **v2.3** | 2026-05-09 | **通用化重构**：LLM 驱动的通用图表引擎（ChartDesigner）自动分析结果数据并生成图表，自动插入论文对应章节；修复 LaTeX 多行公式（`\begin{equation}` 等跨行环境）渲染问题；删除所有题目特定的硬编码图表逻辑，系统完全通用；CrewAI Agent 协作默认启用 SEQUENTIAL 模式，支持 `CREW_PROCESS_MODE` 环境变量切换；新增 `run_auto.py` / `run_finance.py` / `run_coursework.py` 三种自动扫描脚本 |

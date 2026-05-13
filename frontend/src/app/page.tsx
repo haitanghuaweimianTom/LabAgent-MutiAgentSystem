@@ -11,6 +11,7 @@ import TaskHistory from './components/TaskHistory';
 import WorkflowManager from './components/WorkflowManager';
 import AgentManager from './components/AgentManager';
 import SettingsPage from './components/SettingsPage';
+import { useAppStore } from './store/useAppStore';
 
 declare global {
   interface Window {
@@ -52,6 +53,10 @@ export default function Home() {
   // Submitting
   const [submitting, setSubmitting] = useState(false);
 
+  const selectedFiles = useAppStore((s) => s.selectedFiles);
+  const activeProjectId = useAppStore((s) => s.activeProjectId);
+  const addTaskToProject = useAppStore((s) => s.addTaskToProject);
+
   const handleSubmit = async (params: {
     problemText: string;
     projectName: string;
@@ -62,6 +67,8 @@ export default function Home() {
   }) => {
     setSubmitting(true);
     try {
+      // 如果前端有勾选文件，则只提交勾选的；否则后端会使用全部上传文件
+      const dataFiles = selectedFiles.size > 0 ? Array.from(selectedFiles) : undefined;
       const res = await fetch(apiBase() + '/tasks/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -74,10 +81,12 @@ export default function Home() {
             template: params.template,
             use_critique: params.useCritique,
           },
+          data_files: dataFiles,
         }),
       });
       const data = await res.json();
-      setTaskId(data.task_id);
+      const newTaskId = data.task_id;
+      setTaskId(newTaskId);
       setTaskStatus('running');
       setProgress(0);
       setCurrentStep('等待启动');
@@ -85,7 +94,11 @@ export default function Home() {
       setPaused(false);
       setPhase('idle');
       setTab('generate');
-      startSSE(data.task_id);
+      // 关联任务到当前项目
+      if (activeProjectId && newTaskId) {
+        addTaskToProject(activeProjectId, newTaskId);
+      }
+      startSSE(newTaskId);
     } catch (err) {
       console.error(err);
       alert('提交失败，请确认后端已启动');

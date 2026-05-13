@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import styles from './ProblemInput.module.css';
+import { useAppStore } from '../store/useAppStore';
 
 const WORKFLOWS = [
   { id: 'standard', name: '标准流程', desc: '研究→分析→建模→求解→论文（推荐）' },
@@ -36,16 +37,28 @@ interface ProblemInputProps {
 }
 
 export default function ProblemInput({ onSubmit, submitting, taskStatus, progress }: ProblemInputProps) {
-  const [projectName, setProjectName] = useState('');
+  const projects = useAppStore((s) => s.projects);
+  const activeProjectId = useAppStore((s) => s.activeProjectId);
+  const setActiveProject = useAppStore((s) => s.setActiveProject);
+  const createProject = useAppStore((s) => s.createProject);
+
+  const activeProject = projects.find((p) => p.id === activeProjectId);
+  const [projectName, setProjectName] = useState(activeProject?.name || '');
   const [problemText, setProblemText] = useState('');
   const [workflow, setWorkflow] = useState('standard');
   const [template, setTemplate] = useState('math_modeling');
   const [mode, setMode] = useState('sequential');
   const [useCritique, setUseCritique] = useState(true);
   const [ocrLoading, setOcrLoading] = useState(false);
+  const [newProjectName, setNewProjectName] = useState('');
+  const [showNewProject, setShowNewProject] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const apiBase = () => window.__API_BASE__ || 'http://localhost:8000/api/v1';
+
+  useEffect(() => {
+    if (activeProject) setProjectName(activeProject.name);
+  }, [activeProjectId]);
 
   const handleOcrUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -54,18 +67,29 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
     const formData = new FormData();
     formData.append('file', file);
     try {
-      const res = await fetch(apiBase() + '/data/upload', { method: 'POST', body: formData });
+      const res = await fetch(apiBase() + '/data/ocr', { method: 'POST', body: formData });
       const data = await res.json();
-      const text = data.cleaned_text || data.raw_text || '';
+      const text = data.text || '';
       if (text) {
         setProblemText(prev => prev ? prev + '\n\n--- OCR识别内容 ---\n' + text : text);
       }
     } catch {} finally { setOcrLoading(false); }
   };
 
+  const handleCreateProject = () => {
+    const name = newProjectName.trim();
+    if (!name) { alert('请输入项目名称'); return; }
+    const id = createProject(name);
+    setActiveProject(id);
+    setProjectName(name);
+    setShowNewProject(false);
+    setNewProjectName('');
+  };
+
   const handleSubmit = () => {
     if (!problemText.trim()) { alert('请输入问题描述'); return; }
-    onSubmit({ problemText, projectName: projectName.trim() || '未命名项目', workflow, template, mode, useCritique });
+    const finalProjectName = projectName.trim() || activeProject?.name || '未命名项目';
+    onSubmit({ problemText, projectName: finalProjectName, workflow, template, mode, useCritique });
   };
 
   const isRunning = taskStatus === 'running' || taskStatus === 'phase1' || taskStatus === 'phase2';
@@ -74,6 +98,38 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
     <div className={styles.container}>
       <div className={styles.section}>
         <div className={styles.sectionTitle}>📝 赛题输入</div>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.5rem' }}>
+          <select
+            style={{ flex: 1, padding: '0.5rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: '#e0e0e0', fontSize: '0.9rem' }}
+            value={activeProjectId || ''}
+            onChange={e => {
+              const id = e.target.value;
+              if (id === '__new__') { setShowNewProject(true); return; }
+              setActiveProject(id || null);
+              const p = projects.find((pr) => pr.id === id);
+              if (p) setProjectName(p.name);
+            }}
+          >
+            <option value="">全局项目池</option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+            <option value="__new__">+ 新建项目</option>
+          </select>
+          {showNewProject && (
+            <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
+              <input
+                style={{ padding: '0.5rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: '#e0e0e0', fontSize: '0.9rem', width: 140 }}
+                placeholder="项目名称"
+                value={newProjectName}
+                onChange={e => setNewProjectName(e.target.value)}
+                maxLength={60}
+              />
+              <button onClick={handleCreateProject} style={{ padding: '0.4rem 0.6rem', background: 'linear-gradient(135deg, #2ecc71, #27ae60)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: '0.8rem' }}>创建</button>
+              <button onClick={() => setShowNewProject(false)} style={{ padding: '0.4rem 0.6rem', background: 'rgba(231,76,60,0.15)', border: '1px solid rgba(231,76,60,0.3)', borderRadius: 6, color: '#e74c3c', cursor: 'pointer', fontSize: '0.8rem' }}>取消</button>
+            </div>
+          )}
+        </div>
         <input
           className={styles.projectInput}
           placeholder="输入项目名称（如：2025A 板凳龙）"

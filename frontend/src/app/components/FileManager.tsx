@@ -26,16 +26,20 @@ export default function FileManager({ taskId }: FileManagerProps) {
   const toggleFile = useAppStore((s) => s.toggleFileSelection);
   const selectAll = useAppStore((s) => s.selectAllFiles);
   const clearSelection = useAppStore((s) => s.clearFileSelection);
+  const activeProject = useAppStore((s) => s.projects.find((p) => p.id === s.activeProjectId));
+  const projectName = activeProject?.name || '';
 
   const loadFiles = async () => {
     setLoading(true);
     try {
-      const res = await fetch(apiBase() + '/data/files');
+      const url = new URL(apiBase() + '/data/files');
+      if (projectName) url.searchParams.set('project_name', projectName);
+      const res = await fetch(url.toString());
       if (res.ok) setFiles(await res.json());
     } catch {} finally { setLoading(false); }
   };
 
-  useEffect(() => { loadFiles(); }, []);
+  useEffect(() => { loadFiles(); }, [projectName]);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const fileList = e.target.files;
@@ -46,7 +50,9 @@ export default function FileManager({ taskId }: FileManagerProps) {
       formData.append('file', file);
       if (taskId) formData.append('task_id', taskId);
       try {
-        await fetch(apiBase() + '/data/upload', { method: 'POST', body: formData });
+        const url = new URL(apiBase() + '/data/upload');
+        if (projectName) url.searchParams.set('project_name', projectName);
+        await fetch(url.toString(), { method: 'POST', body: formData });
       } catch {}
     }
     setUploading(false);
@@ -56,7 +62,9 @@ export default function FileManager({ taskId }: FileManagerProps) {
   const handleDelete = async (fileName: string) => {
     if (!confirm(`确定删除文件 "${fileName}" 吗？`)) return;
     try {
-      await fetch(apiBase() + '/data/files/' + encodeURIComponent(fileName), { method: 'DELETE' });
+      const url = new URL(apiBase() + '/data/files/' + encodeURIComponent(fileName));
+      if (projectName) url.searchParams.set('project_name', projectName);
+      await fetch(url.toString(), { method: 'DELETE' });
       clearSelection();
       loadFiles();
     } catch {}
@@ -67,7 +75,9 @@ export default function FileManager({ taskId }: FileManagerProps) {
     if (!confirm(`确定批量删除 ${selectedFiles.size} 个文件吗？`)) return;
     for (const name of Array.from(selectedFiles)) {
       try {
-        await fetch(apiBase() + '/data/files/' + encodeURIComponent(name), { method: 'DELETE' });
+        const url = new URL(apiBase() + '/data/files/' + encodeURIComponent(name));
+        if (projectName) url.searchParams.set('project_name', projectName);
+        await fetch(url.toString(), { method: 'DELETE' });
       } catch {}
     }
     clearSelection();
@@ -79,13 +89,13 @@ export default function FileManager({ taskId }: FileManagerProps) {
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <span className={styles.title}>📁 数据文件管理</span>
+        <span className={styles.title}>📁 数据文件管理{projectName ? ` · ${projectName}` : ''}</span>
         <label className={styles.uploadBtn}>
           {uploading ? '上传中...' : '📤 批量上传'}
           <input type="file" accept=".csv,.xlsx,.xls,.json,.txt,.tsv,.parquet,.png,.jpg,.jpeg,.pdf" multiple onChange={handleUpload} style={{ display: 'none' }} disabled={uploading} />
         </label>
       </div>
-      <div className={styles.hint}>支持 CSV · Excel · JSON · 图片 · PDF · 可多选批量删除</div>
+      <div className={styles.hint}>支持 CSV · Excel · JSON · 图片 · PDF · 可多选批量删除{projectName ? ' · 文件将保存到项目目录' : ' · 全局文件池'}</div>
 
       {files.length > 0 && (
         <div className={styles.batchBar}>

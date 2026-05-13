@@ -21,7 +21,7 @@ from ..agents import (
 from ..config import get_settings
 from ..core.chat_room import get_chat_room
 from ..core.runtime_config import get_runtime_api_key
-from ..core.paths import get_data_dir
+from ..core.paths import get_data_dir, get_project_data_dir, get_project_output_dir
 from ..core.task_persistence import (
     save_task_metadata, save_task_messages, save_task_result,
     load_task_messages, load_task_result, list_all_tasks,
@@ -107,21 +107,36 @@ def get_orchestrator() -> Orchestrator:
     return _orchestrator
 
 
-def get_uploaded_files() -> list:
-    """获取已上传的数据文件路径（从 uploads 目录和项目根目录）"""
+def get_uploaded_files(selected_names: Optional[List[str]] = None, project_name: Optional[str] = None) -> list:
+    """获取已上传的数据文件路径
+
+    Args:
+        selected_names: 如果提供，只返回文件名在该列表中的文件
+        project_name: 项目名，指定时优先从项目 data 目录读取
+    """
     files = []
+    target_dir = get_project_data_dir(project_name)
 
-    # 1. 从 uploads 目录获取
-    if DATA_DIR.exists():
-        files.extend([str(f) for f in DATA_DIR.iterdir() if f.is_file()])
+    # 1. 从目标数据目录获取（项目目录或全局 uploads）
+    if target_dir.exists():
+        for f in target_dir.iterdir():
+            if f.is_file():
+                if selected_names is not None:
+                    if f.name in selected_names:
+                        files.append(str(f))
+                else:
+                    files.append(str(f))
 
-    # 2. 从项目根目录获取（附件1-4.xlsx 等数据文件）
-    if PROJECT_ROOT.exists():
+    # 2. 从项目根目录获取（附件1-4.xlsx 等数据文件）——仅无项目时保留旧行为
+    if not project_name and PROJECT_ROOT.exists():
         for f in PROJECT_ROOT.iterdir():
             if f.is_file() and f.suffix in [".xlsx", ".xls", ".csv", ".json"]:
-                # 跳过非数据文件
                 if f.name.startswith("附件") or f.name in ["data.json", "problem.json"]:
-                    files.append(str(f))
+                    if selected_names is not None:
+                        if f.name in selected_names:
+                            files.append(str(f))
+                    else:
+                        files.append(str(f))
 
     # 去重
     seen = set()
@@ -152,25 +167,40 @@ async def submit_task(req: TaskCreateRequest):
         current_step="等待启动",
     )
 
-    # 收集已上传的数据文件
-    data_files = get_uploaded_files()
-    logger.info(f"Task {task_id}: found {len(data_files)} data files")
+    # 收集已上传的数据文件（若前端传了 data_files 则按勾选过滤）
+    selected_names = req.data_files
+    data_files = get_uploaded_files(selected_names=selected_names, project_name=req.project_name)
+    logger.info(f"Task {task_id}: found {len(data_files)} data files (selected={len(selected_names) if selected_names else 'all'}, project={req.project_name})")
 
-    asyncio.create_task(_run_workflow(task_id, req.problem_text, req.workflow, data_files, req.mode))
+    # 保存数据文件列表到任务元数据，供 phase1/phase2 复用
+    save_task_metadata(
+        task_id=task_id,
+        problem_text=req.problem_text,
+        status="running",
+        created_at=created_at,
+        total_steps=0,
+        progress=0,
+        current_step="等待启动",
+        data_files=data_files,
+        project_name=req.project_name,
+    )
+
+    asyncio.create_task(_run_workflow(task_id, req.problem_text, req.workflow, data_files, req.mode, req.project_name))
     return {
         "task_id": task_id,
         "status": "running",
         "message": "任务已提交，开始执行",
         "created_at": created_at,
         "data_files_count": len(data_files),
+        "project_name": req.project_name,
     }
 
 
-async def _run_workflow(task_id: str, problem_text: str, workflow, data_files: list, mode: str = "batch"):
+async def _run_workflow(task_id: str, problem_text: str, workflow, data_files: list, mode: str = "batch", project_name: Optional[str] = None):
     try:
         orch = get_orchestrator()
         # execute_workflow 内部会保存结果
-        await orch.execute_workflow(task_id, problem_text, workflow, data_files=data_files, mode=mode)
+        await orch.execute_workflow(task_id, problem_text, workflow, data_files=data_files, mode=mode, project_name=project_name)
         logger.info(f"Task {task_id} completed and saved")
     except Exception as e:
         logger.error(f"Task {task_id} failed: {e}")
@@ -335,19 +365,22 @@ async def run_phase1(task_id: str):
         raise HTTPException(status_code=404, detail="Task not found")
 
     problem_text = meta.get("problem_text", "")
-    data_files = get_uploaded_files()
+    project_name = meta.get("project_name")
+    data_files = meta.get("data_files", [])
+    if not data_files:
+        data_files = get_uploaded_files(project_name=project_name)
 
     # 异步执行阶段1
-    asyncio.create_task(_run_phase1_workflow(task_id, problem_text, data_files))
+    asyncio.create_task(_run_phase1_workflow(task_id, problem_text, data_files, project_name))
 
     return {"task_id": task_id, "status": "running", "phase": "phase1", "message": "阶段1执行中..."}
 
 
-async def _run_phase1_workflow(task_id: str, problem_text: str, data_files: list):
+async def _run_phase1_workflow(task_id: str, problem_text: str, data_files: list, project_name: Optional[str] = None):
     from ..core.task_persistence import load_task_metadata, save_task_result, save_task_metadata
     try:
         orch = get_orchestrator()
-        result = await orch.execute_phase1(task_id, problem_text, data_files)
+        result = await orch.execute_phase1(task_id, problem_text, data_files, project_name=project_name)
         logger.info(f"Phase1 completed for {task_id}")
         save_task_result(task_id, {
             "task_id": task_id,
@@ -389,18 +422,21 @@ async def run_phase2(task_id: str, req: dict = None):
     mode = req.get("mode", "batch") if req else "batch"
 
     problem_text = meta.get("problem_text", "")
-    data_files = get_uploaded_files()
+    project_name = meta.get("project_name")
+    data_files = meta.get("data_files", [])
+    if not data_files:
+        data_files = get_uploaded_files(project_name=project_name)
 
-    asyncio.create_task(_run_phase2_workflow(task_id, problem_text, sub_problems, data_files, mode))
+    asyncio.create_task(_run_phase2_workflow(task_id, problem_text, sub_problems, data_files, mode, project_name))
 
     return {"task_id": task_id, "status": "running", "phase": "phase2", "mode": mode, "message": f"阶段2执行中（{'逐个递进' if mode == 'sequential' else '批量'}建模求解）..."}
 
 
-async def _run_phase2_workflow(task_id: str, problem_text: str, sub_problems: List, data_files: list, mode: str = "batch"):
+async def _run_phase2_workflow(task_id: str, problem_text: str, sub_problems: List, data_files: list, mode: str = "batch", project_name: Optional[str] = None):
     from ..core.task_persistence import load_task_metadata, save_task_result, save_task_metadata
     try:
         orch = get_orchestrator()
-        result = await orch.execute_phase2(task_id, problem_text, sub_problems, data_files, mode=mode)
+        result = await orch.execute_phase2(task_id, problem_text, sub_problems, data_files, mode=mode, project_name=project_name)
         logger.info(f"Phase2 completed for {task_id} (mode={mode})")
 
         steps = orch.task_history.get(task_id, [])
@@ -445,9 +481,12 @@ async def confirm_subproblems(task_id: str, req: dict):
         raise HTTPException(status_code=400, detail="sub_problems不能为空")
 
     problem_text = meta.get("problem_text", "")
-    data_files = get_uploaded_files()
+    project_name = meta.get("project_name")
+    data_files = meta.get("data_files", [])
+    if not data_files:
+        data_files = get_uploaded_files(project_name=project_name)
 
-    asyncio.create_task(_run_phase2_workflow(task_id, problem_text, sub_problems, data_files))
+    asyncio.create_task(_run_phase2_workflow(task_id, problem_text, sub_problems, data_files, project_name=project_name))
 
     return {"task_id": task_id, "status": "running", "phase": "phase2", "message": f"开始批量建模求解{len(sub_problems)}个子问题..."}
 

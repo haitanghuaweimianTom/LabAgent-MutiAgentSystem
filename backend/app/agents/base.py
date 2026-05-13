@@ -756,11 +756,16 @@ class BaseAgent(ABC):
             return await self._call_claude_backend(messages, temperature)
 
         # ===== 注入知识库上下文 =====
-        kb_context = self._inject_knowledge_context(messages[-1]["content"])
+        last_content = messages[-1]["content"]
+        query_text = last_content if isinstance(last_content, str) else ""
+        kb_context = self._inject_knowledge_context(query_text)
         if kb_context:
             for msg in messages:
                 if msg.get("role") == "user":
-                    msg["content"] = msg["content"] + kb_context
+                    if isinstance(msg["content"], str):
+                        msg["content"] = msg["content"] + kb_context
+                    elif isinstance(msg["content"], list):
+                        msg["content"].append({"type": "text", "text": kb_context})
                     break
 
         # ===== 检查 API Key =====

@@ -1,10 +1,9 @@
-"""求解Agent - 编程求解（Claude CLI 全自动闭环）
+"""求解Agent - 编程求解（Claude CLI 优先 + HTTP API 回退）
 
-核心变化（v3.0）：
-- 不再通过 call_llm() 获取代码文本后再自己执行
-- 而是将整个编程任务全权委托给 Claude Code CLI
-- Claude CLI 在 output/code/ 目录写 .py 文件并执行
-- SolverAgent 只接收 Claude CLI 返回的结构化结果
+核心变化（v3.2）：
+- 优先尝试 Claude Code CLI 全自动编程（写文件+执行+修正）
+- Claude CLI 不可用时，自动回退到 call_llm() + 本地 subprocess 执行
+- 回退路径同样生成完整 .py 文件、执行并解析 JSON 结果
 
 v3.1 扩展：
 - 支持多代码文件生成（数据处理、求解、可视化等独立脚本）
@@ -16,6 +15,8 @@ import logging
 import os
 import re
 import subprocess
+import sys
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 from .base import BaseAgent, AgentFactory
 
@@ -853,6 +854,7 @@ class SolverAgent(BaseAgent):
         problem_context: str,
         sp_id: int = 1,
         max_retries: int = 3,
+        project_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         【全自动编程 v3.0】将整个编程+执行任务委托给 Claude Code CLI。
@@ -862,6 +864,7 @@ class SolverAgent(BaseAgent):
             problem_context：完整的问题描述（含模型、数据、目标）
             sp_id：子问题编号（生成文件名 solver_sub{sp_id}.py）
             max_retries：最大执行修正次数
+            project_name：项目名称（用于项目隔离输出目录）
 
         返回结构（兼容旧接口）：
             {
@@ -875,8 +878,8 @@ class SolverAgent(BaseAgent):
                 "numerical_results": {}
             }
         """
-        from ..core.paths import get_output_dir
-        output_dir = str(get_output_dir())
+        from ..core.paths import get_project_output_dir
+        output_dir = str(get_project_output_dir(project_name))
         code_dir = os.path.join(output_dir, "code")
         os.makedirs(code_dir, exist_ok=True)
         file_path = os.path.join(code_dir, f"solver_sub{sp_id}.py")
@@ -910,53 +913,124 @@ class SolverAgent(BaseAgent):
     "interpretation": "结果解释"
 }}"""
 
+        # ===== 第一步：尝试 Claude Code CLI（优先）=====
+        coder_result = None
         try:
-            # ===== _call_claude_coder 现在返回 Dict（包含写文件+执行结果）=====
             coder_result = await self._call_claude_coder(
                 task_description=task_description,
                 system_instruction=CLAUDE_CODER_SYSTEM,
                 workspace_dir=output_dir,
                 timeout=300,
             )
+            if coder_result.get("success"):
+                exec_output = coder_result.get("execution_output", "")
+                final_code = coder_result.get("code", initial_code)
+                numerical_results = coder_result.get("numerical_results", {})
+                if isinstance(exec_output, str) and exec_output.startswith("{"):
+                    try:
+                        numerical_results = json.loads(exec_output)
+                    except json.JSONDecodeError:
+                        pass
+                return {
+                    "success": True,
+                    "code": final_code,
+                    "file_path": coder_result.get("file_path", file_path),
+                    "execution_result": {
+                        "success": True,
+                        "output": exec_output,
+                        "stderr": coder_result.get("execution_stderr", ""),
+                        "env": "claude_cli",
+                    },
+                    "attempts": coder_result.get("attempts", 1),
+                    "error": coder_result.get("execution_stderr", ""),
+                    "key_findings": coder_result.get("key_findings", []),
+                    "numerical_results": numerical_results,
+                }
+            logger.warning(f"[{self.name}] Claude CLI 返回失败，准备回退到 HTTP API: {coder_result.get('execution_stderr', '')[:200]}")
+        except Exception as e:
+            logger.warning(f"[{self.name}] Claude CLI 不可用，回退到 HTTP API: {e}")
 
-            # coder_result 已经是结构化 Dict（不再需要解析 JSON）
-            exec_ok = coder_result.get("success", False)
-            exec_output = coder_result.get("execution_output", "")
-            exec_stderr = coder_result.get("execution_stderr", "")
-            final_code = coder_result.get("code", initial_code)
-            final_file_path = coder_result.get("file_path", file_path)
+        # ===== 第二步：回退到 HTTP API（call_llm + 本地执行）=====
+        try:
+            messages = [
+                {"role": "system", "content": CLAUDE_CODER_SYSTEM},
+                {"role": "user", "content": task_description},
+            ]
+            response = await self.call_llm(messages=messages, temperature=0.3)
+            content = response.get("choices", [{}])[0].get("message", {}).get("content", "")
 
-            # 尝试解析执行输出中的 JSON
-            numerical_results = coder_result.get("numerical_results", {})
-            if isinstance(exec_output, str) and exec_output.startswith("{"):
+            # 提取代码
+            raw_code = _extract_code_from_response(content)
+            if not raw_code:
+                # 尝试从 JSON 中提取
                 try:
-                    numerical_results = json.loads(exec_output)
+                    start = content.find("{")
+                    end = content.rfind("}") + 1
+                    if start != -1 and end > start:
+                        parsed = json.loads(content[start:end])
+                        raw_code = parsed.get("code", "")
+                except Exception:
+                    pass
+
+            if not raw_code:
+                raise RuntimeError("LLM 未返回可执行代码")
+
+            # 写入文件
+            Path(file_path).write_text(raw_code, encoding="utf-8")
+
+            # 本地执行
+            proc = subprocess.run(
+                [sys.executable, "-X", "utf8", file_path],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=120,
+            )
+
+            stdout_text = proc.stdout.strip()
+            stderr_text = proc.stderr.strip()
+            exec_ok = proc.returncode == 0
+
+            # 尝试从 stdout 解析 JSON 结果
+            numerical_results = {}
+            key_findings = []
+            if stdout_text.startswith("{"):
+                try:
+                    numerical_results = json.loads(stdout_text)
+                    if isinstance(numerical_results, dict):
+                        key_findings = numerical_results.get("key_findings", [])
+                        if "numerical_results" in numerical_results:
+                            numerical_results = numerical_results["numerical_results"]
                 except json.JSONDecodeError:
                     pass
 
             return {
                 "success": exec_ok,
-                "code": final_code,
-                "file_path": final_file_path,
+                "code": raw_code,
+                "file_path": file_path,
                 "execution_result": {
                     "success": exec_ok,
-                    "output": exec_output,
-                    "stderr": exec_stderr,
-                    "env": "claude_cli",
+                    "output": stdout_text[:5000],
+                    "stderr": stderr_text[:2000],
+                    "env": "http_api_fallback",
                 },
-                "attempts": coder_result.get("attempts", 1),
-                "error": exec_stderr,
-                "key_findings": coder_result.get("key_findings", []),
+                "attempts": 1,
+                "error": stderr_text if not exec_ok else "",
+                "key_findings": key_findings,
                 "numerical_results": numerical_results,
             }
 
         except Exception as e:
-            logger.error(f"[{self.name}] _run_code_with_autofix 全自动编程异常: {e}")
+            logger.error(f"[{self.name}] HTTP API 回退也失败: {e}")
             return {
                 "success": False,
                 "code": initial_code,
                 "file_path": file_path,
-                "execution_result": {"error": str(e)},
+                "execution_result": {
+                    "error": str(e),
+                    "claude_cli_error": coder_result.get("execution_stderr", "") if coder_result else "Claude CLI 未尝试或不可用",
+                },
                 "attempts": 0,
                 "error": str(e),
                 "key_findings": [],
@@ -1106,11 +1180,13 @@ class SolverAgent(BaseAgent):
                 sol_result = fallback
 
             # ====== 全自动编程：通过 Claude CLI 写文件+执行 ======
+            project_name = context.get("project_name") if context else None
             exec_info = await self._run_code_with_autofix(
                 initial_code=raw_code,
                 problem_context=f"{sp_name}: {objective[:100]}",
                 sp_id=sp_id,
                 max_retries=3,
+                project_name=project_name,
             )
 
             # 把执行结果写入sol_result
@@ -1287,11 +1363,13 @@ class SolverAgent(BaseAgent):
             result = fallback
 
         # 真正执行代码（通过 Claude CLI 全自动）
+        project_name = context.get("project_name") if context else None
         exec_info = await self._run_code_with_autofix(
             initial_code=raw_code,
             problem_context=f"{sp_name}: {model_result.get('objective_function', '')[:100]}",
             sp_id=sub_idx + 1,
             max_retries=3,
+            project_name=project_name,
         )
 
         exec_result = exec_info.get("execution_result", {})
@@ -1382,11 +1460,13 @@ class SolverAgent(BaseAgent):
 """
 
             # ===== 直接调用 _run_code_with_autofix（全自动 Claude CLI 编程）=====
+            project_name = context.get("project_name") if context else None
             exec_info = await self._run_code_with_autofix(
                 initial_code=raw_code,
                 problem_context=problem_context,
                 sp_id=sp_id,
                 max_retries=3,
+                project_name=project_name,
             )
 
             # ===== 构造求解结果 =====

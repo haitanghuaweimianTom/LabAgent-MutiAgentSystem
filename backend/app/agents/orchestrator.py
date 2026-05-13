@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional
 from .base import BaseAgent, AgentFactory
 from ..schemas import TaskStatus, TaskStep, TaskStatusResponse
 from ..core.chat_room import ChatRoom, create_chat_room, get_chat_room
-from ..core.paths import get_output_dir
+from ..core.paths import get_project_output_dir
 
 logger = logging.getLogger(__name__)
 
@@ -68,13 +68,15 @@ class Orchestrator:
         task_id: str,
         problem_text: str,
         data_files: Optional[List[str]] = None,
+        project_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """阶段1：分析 + 数据 + 文献，结束后暂停等待用户确认"""
-        logger.info(f"Orchestrator Phase1 for task {task_id}")
+        logger.info(f"Orchestrator Phase1 for task {task_id} (project={project_name})")
         room = create_chat_room(task_id, problem_text)
         self.task_history[task_id] = []
         self._task_phase[task_id] = "phase1"
         self._task_paused[task_id] = False
+        self._current_project_name = project_name
 
         context_base = {
             "problem_text": problem_text,
@@ -153,6 +155,7 @@ class Orchestrator:
         sub_problems: List[Dict[str, Any]],
         data_files: Optional[List[str]] = None,
         mode: str = "batch",
+        project_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """阶段2：建模 + 求解 → 论文
         mode: "batch"       一次性建模/求解所有子问题（默认）
@@ -162,13 +165,14 @@ class Orchestrator:
         room = get_chat_room(task_id) or create_chat_room(task_id, problem_text)
         self._task_phase[task_id] = "phase2"
         self._task_paused[task_id] = False
+        self._current_project_name = project_name
 
         # ====== 逐个交替模式：建模+求解交替进行 ======
         if mode == "sequential":
-            return await self._execute_phase2_sequential(task_id, problem_text, sub_problems, data_files)
+            return await self._execute_phase2_sequential(task_id, problem_text, sub_problems, data_files, project_name=project_name)
 
         # ====== 批量模式（原有逻辑）======
-        return await self._execute_phase2_batch(task_id, problem_text, sub_problems, data_files)
+        return await self._execute_phase2_batch(task_id, problem_text, sub_problems, data_files, project_name=project_name)
 
     async def _execute_phase2_batch(
         self,
@@ -176,6 +180,7 @@ class Orchestrator:
         problem_text: str,
         sub_problems: List[Dict[str, Any]],
         data_files: Optional[List[str]],
+        project_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """批量模式：先全部建模，再全部求解，最后写论文"""
         room = get_chat_room(task_id) or create_chat_room(task_id, problem_text)
@@ -273,6 +278,7 @@ class Orchestrator:
                     "section_results": edited_section, "total_sub_problems": len(sub_problems),
                     "data_result": phase1_results.get("data_agent", {}),
                     "research_result": phase1_results.get("research_agent", {}),
+                    "project_name": project_name,
                 },
             )
             self._task_pause_data[task_id]["solver_agent"] = solve_output
@@ -297,7 +303,7 @@ class Orchestrator:
             all_results["solver_agent"] = {"error": str(e)}
         task_step.completed_at = datetime.now()
 
-        return await self._write_paper_and_finish(task_id, problem_text, sub_problems, edited_section, all_results, phase1_results, context_base)
+        return await self._write_paper_and_finish(task_id, problem_text, sub_problems, edited_section, all_results, phase1_results, context_base, project_name=project_name)
 
     async def _execute_phase2_sequential(
         self,
@@ -305,6 +311,7 @@ class Orchestrator:
         problem_text: str,
         sub_problems: List[Dict[str, Any]],
         data_files: Optional[List[str]],
+        project_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         逐个交替模式：对每个子问题，先建模，再求解，
@@ -440,6 +447,7 @@ class Orchestrator:
                         "research_result": phase1_results.get("research_agent", {}),
                         "previous_solutions": completed_solutions,
                         "previous_solution_summary": prev_solve_summary,
+                        "project_name": project_name,
                     },
                 )
                 task_step.output_data = {"solve": solve_output}
@@ -476,7 +484,7 @@ class Orchestrator:
         room.post("coordinator", f"✅ 全部 {len(sub_problems)} 个子问题建模+求解完成！", "broadcast")
 
         # 写论文（使用完整的 section_results）
-        return await self._write_paper_and_finish(task_id, problem_text, sub_problems, section_results, all_results, phase1_results, context_base)
+        return await self._write_paper_and_finish(task_id, problem_text, sub_problems, section_results, all_results, phase1_results, context_base, project_name=project_name)
 
     async def _write_paper_and_finish(
         self,
@@ -487,6 +495,7 @@ class Orchestrator:
         all_results: Dict[str, Any],
         phase1_results: Dict[str, Any],
         context_base: Dict[str, Any],
+        project_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """写论文并返回最终结果（batch和sequential共用）"""
         from ..core.task_persistence import save_task_metadata
@@ -525,14 +534,14 @@ class Orchestrator:
         if self.task_history[task_id]:
             self.task_history[task_id][-1].status = TaskStatus.COMPLETED
 
-        room.post("coordinator", f"🎉 完成！共 {len(sub_problems)} 个子问题，{len(section_results)} 个章节。", "broadcast")
+        room.post("coordinator", f"完成！共 {len(sub_problems)} 个子问题，{len(section_results)} 个章节。", "broadcast")
 
         # ===== 保存代码和论文到 output 目录 =====
         try:
             saved_files = self._save_output_files(
-                task_id, problem_text, section_results, all_results
+                task_id, problem_text, section_results, all_results, project_name=project_name
             )
-            room.post("coordinator", f"📁 已保存 {len(saved_files)} 个文件到 output 目录", "broadcast")
+            room.post("coordinator", f"已保存 {len(saved_files)} 个文件到 output 目录", "broadcast")
         except Exception as e:
             logger.error(f"保存输出文件失败: {e}")
 
@@ -582,16 +591,17 @@ class Orchestrator:
         problem_text: str,
         section_results: List[Dict[str, Any]],
         all_results: Dict[str, Any],
+        project_name: Optional[str] = None,
     ) -> Dict[str, List[str]]:
         """
-        将求解器生成的代码和论文写入 output 目录。
+        将求解器生成的代码和论文写入 output 目录（支持项目隔离）。
         - output/code/        → 各子问题的求解代码
         - output/papers/     → LaTeX 论文
         - output/models.json → 所有子问题的模型描述 JSON
         返回写入的文件路径列表。
         """
         import json
-        output_dir = get_output_dir()
+        output_dir = get_project_output_dir(project_name)
         code_dir = output_dir / "code"
         papers_dir = output_dir / "papers"
         code_dir.mkdir(parents=True, exist_ok=True)
@@ -668,6 +678,7 @@ class Orchestrator:
         workflow: Optional[List[Dict[str, Any]]] = None,
         data_files: Optional[List[str]] = None,
         mode: str = "batch",
+        project_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """执行完整工作流（阶段1完成后直接继续，不等待用户确认）
         mode: "batch" 一次性建模/求解所有子问题
@@ -677,6 +688,7 @@ class Orchestrator:
         room = create_chat_room(task_id, problem_text)
         self.task_history[task_id] = []
         self._task_phase[task_id] = "full"
+        self._current_project_name = project_name
 
         context_base = {
             "problem_text": problem_text,
@@ -730,12 +742,12 @@ class Orchestrator:
 
         if mode == "sequential":
             # 逐个交替模式
-            phase2_result = await self._execute_phase2_sequential(task_id, problem_text, sub_problems, data_files or [])
+            phase2_result = await self._execute_phase2_sequential(task_id, problem_text, sub_problems, data_files or [], project_name=project_name)
             section_results = phase2_result.get("section_results", [])
             all_results.update(phase2_result)
         else:
             # 批量模式
-            phase2_result = await self._execute_phase2_batch(task_id, problem_text, sub_problems, data_files or [])
+            phase2_result = await self._execute_phase2_batch(task_id, problem_text, sub_problems, data_files or [], project_name=project_name)
             section_results = phase2_result.get("section_results", [])
             all_results.update(phase2_result)
 

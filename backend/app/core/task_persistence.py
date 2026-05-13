@@ -34,8 +34,9 @@ def save_task_metadata(
     total_steps: int = 0,
     progress: int = 0,
     current_step: str = "",
+    **extra: Any,
 ) -> None:
-    """保存任务元数据"""
+    """保存任务元数据（支持额外字段）"""
     _ensure_dir()
     file = _task_file(task_id)
 
@@ -60,6 +61,7 @@ def save_task_metadata(
         "progress": progress,
         "current_step": current_step,
         "updated_at": datetime.now().isoformat(),
+        **extra,
     }
 
     file.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
