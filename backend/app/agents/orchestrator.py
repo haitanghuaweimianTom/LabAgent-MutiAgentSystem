@@ -15,6 +15,7 @@ from .base import BaseAgent, AgentFactory
 from ..schemas import TaskStatus, TaskStep, TaskStatusResponse
 from ..core.chat_room import ChatRoom, create_chat_room, get_chat_room
 from ..core.paths import get_project_output_dir
+from ..core.memory import get_memory_manager, WorkingMemory
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,12 @@ class Orchestrator:
         self._task_paused: Dict[str, bool] = {}      # 暂停标志
         self._task_paused_at: Dict[str, str] = {}    # 暂停在哪个Agent
         self._task_pause_data: Dict[str, Dict] = {}  # 暂停时各Agent的输出（用户可编辑）
+
+        # 任务模板类型
+        self._task_templates: Dict[str, str] = {}    # task_id -> template (math_modeling/coursework/financial_analysis)
+
+        # 工作流类型
+        self._task_workflows: Dict[str, str] = {}    # task_id -> workflow_type (standard/quick/deep_research/code_focused)
 
     def is_paused(self, task_id: str) -> bool:
         return self._task_paused.get(task_id, False)
@@ -69,14 +76,25 @@ class Orchestrator:
         problem_text: str,
         data_files: Optional[List[str]] = None,
         project_name: Optional[str] = None,
+        knowledge_base_id: Optional[str] = None,
+        template: str = "math_modeling",
+        workflow_type: str = "standard",
     ) -> Dict[str, Any]:
         """阶段1：分析 + 数据 + 文献，结束后暂停等待用户确认"""
-        logger.info(f"Orchestrator Phase1 for task {task_id} (project={project_name})")
+        logger.info(f"Orchestrator Phase1 for task {task_id} (project={project_name}, kb={knowledge_base_id}, workflow={workflow_type})")
         room = create_chat_room(task_id, problem_text)
         self.task_history[task_id] = []
         self._task_phase[task_id] = "phase1"
         self._task_paused[task_id] = False
         self._current_project_name = project_name
+        self._task_templates[task_id] = template
+        self._task_workflows[task_id] = workflow_type
+
+        # ===== 初始化记忆系统 =====
+        mm = get_memory_manager()
+        wm, em = mm.create_task_memory(task_id)
+        wm.update_problem(text=problem_text[:500], template=template, workflow_type=workflow_type)
+        em.record("coordinator", "task_start", f"任务开始：{problem_text[:100]}")
 
         context_base = {
             "problem_text": problem_text,
@@ -84,15 +102,34 @@ class Orchestrator:
             "task_id": task_id,
             "data_files": data_files or [],
             "has_data": bool(data_files),
+            "knowledge_base_id": knowledge_base_id,
+            "workflow_type": workflow_type,
+            "working_memory": wm,
         }
         all_results: Dict[str, Any] = {}
 
-        # 并行执行分析 + 数据
+        # 根据工作流类型调整 phase1 步骤
         setup_steps = [
             ("analyzer_agent", "analyze", "问题分析"),
             ("data_agent", "analyze_data", "数据分析"),
-            ("research_agent", "search", "文献搜集"),
         ]
+        if workflow_type == "quick":
+            # 快速模式：跳过文献搜集
+            room.post("coordinator", "⚡ 快速模式：跳过文献搜集，直接进入分析...", "broadcast")
+        elif workflow_type == "deep_research":
+            # 深度研究模式：强化文献搜集（多角度搜索）
+            setup_steps.extend([
+                ("research_agent", "search", "综合文献搜集"),
+                ("research_agent", "search_background", "背景与趋势搜索"),
+                ("research_agent", "search_methods", "方法与模型搜索"),
+            ])
+            room.post("coordinator", "🔬 深度研究模式：启动多轮文献搜集...", "broadcast")
+        elif workflow_type == "code_focused":
+            # 代码聚焦模式：跳过文献搜集，重点在模型构建与求解
+            room.post("coordinator", "💻 代码聚焦模式：跳过文献搜集，直接进入建模与编程...", "broadcast")
+        else:
+            # standard：常规文献搜集
+            setup_steps.append(("research_agent", "search", "文献搜集"))
 
         for agent_name, action, label in setup_steps:
             self._check_pause(task_id)
@@ -112,6 +149,7 @@ class Orchestrator:
                 task_step.error = f"Agent {agent_name} not found"
                 continue
 
+            agent._knowledge_base_id = context_base.get("knowledge_base_id")
             try:
                 output = await agent.execute(
                     task_input={"action": action, "problem_text": problem_text},
@@ -122,6 +160,27 @@ class Orchestrator:
                 task_step.output_data = {agent_name: output}
                 task_step.status = TaskStatus.COMPLETED
                 all_results[agent_name] = output
+
+                # ===== 更新黑板记忆 =====
+                wm.set_result(agent_name, output)
+                if agent_name == "analyzer_agent":
+                    wm.sub_problems = output.get("sub_problems", [])
+                    if output.get("problem_type"):
+                        wm.update_problem(type=output["problem_type"])
+                    if output.get("difficulty"):
+                        wm.update_problem(difficulty=output["difficulty"])
+                    em.record(agent_name, "analysis_complete", f"问题分析完成，识别 {len(wm.sub_problems)} 个子问题")
+                elif agent_name == "data_agent":
+                    wm.data_insights = output.get("insights", [])
+                    em.record(agent_name, "data_complete", f"数据分析完成，{len(wm.data_insights)} 个洞察")
+                elif agent_name == "research_agent":
+                    papers = output.get("papers", [])
+                    methods = output.get("methods", [])
+                    wm.add_literature(papers, source="research_agent")
+                    for m in methods:
+                        wm.add_method(m)
+                    em.record(agent_name, "research_complete", f"文献搜集完成，{len(papers)} 篇文献，{len(methods)} 个方法")
+
                 self._post_agent_result(room, agent_name, label, output)
                 room.post(agent_name, f"{label} 完成！", "broadcast")
             except Exception as e:
@@ -156,23 +215,28 @@ class Orchestrator:
         data_files: Optional[List[str]] = None,
         mode: str = "batch",
         project_name: Optional[str] = None,
+        knowledge_base_id: Optional[str] = None,
+        template: str = "math_modeling",
+        workflow_type: str = "standard",
     ) -> Dict[str, Any]:
         """阶段2：建模 + 求解 → 论文
         mode: "batch"       一次性建模/求解所有子问题（默认）
               "sequential"  逐个建模+求解交替，前序结果递进到后序（完整做完一问再做下一问）
         """
-        logger.info(f"Orchestrator Phase2 for task {task_id}, {len(sub_problems)} sub-problems, mode={mode}")
+        logger.info(f"Orchestrator Phase2 for task {task_id}, {len(sub_problems)} sub-problems, mode={mode}, workflow={workflow_type}")
         room = get_chat_room(task_id) or create_chat_room(task_id, problem_text)
         self._task_phase[task_id] = "phase2"
         self._task_paused[task_id] = False
         self._current_project_name = project_name
+        self._task_templates[task_id] = template
+        self._task_workflows[task_id] = workflow_type
 
         # ====== 逐个交替模式：建模+求解交替进行 ======
         if mode == "sequential":
-            return await self._execute_phase2_sequential(task_id, problem_text, sub_problems, data_files, project_name=project_name)
+            return await self._execute_phase2_sequential(task_id, problem_text, sub_problems, data_files, project_name=project_name, knowledge_base_id=knowledge_base_id, workflow_type=workflow_type)
 
         # ====== 批量模式（原有逻辑）======
-        return await self._execute_phase2_batch(task_id, problem_text, sub_problems, data_files, project_name=project_name)
+        return await self._execute_phase2_batch(task_id, problem_text, sub_problems, data_files, project_name=project_name, knowledge_base_id=knowledge_base_id, workflow_type=workflow_type)
 
     async def _execute_phase2_batch(
         self,
@@ -181,9 +245,20 @@ class Orchestrator:
         sub_problems: List[Dict[str, Any]],
         data_files: Optional[List[str]],
         project_name: Optional[str] = None,
+        knowledge_base_id: Optional[str] = None,
+        workflow_type: str = "standard",
     ) -> Dict[str, Any]:
         """批量模式：先全部建模，再全部求解，最后写论文"""
         room = get_chat_room(task_id) or create_chat_room(task_id, problem_text)
+
+        # ===== 加载/创建记忆 =====
+        mm = get_memory_manager()
+        if not mm.get_working(task_id):
+            mm.create_task_memory(task_id)
+        wm = mm.get_working(task_id)
+        em = mm.get_episodic(task_id)
+        wm.sub_problems = sub_problems
+        wm.update_problem(text=problem_text[:500])
 
         phase1_results = self._task_pause_data.get(task_id, {}).get("phase1_edited", {})
         if not phase1_results:
@@ -197,6 +272,8 @@ class Orchestrator:
             "task_id": task_id,
             "data_files": data_files or [],
             "has_data": bool(data_files),
+            "knowledge_base_id": knowledge_base_id,
+            "working_memory": wm,
         }
 
         section_results: List[Dict[str, Any]] = []
@@ -210,6 +287,7 @@ class Orchestrator:
         self.task_history[task_id].append(task_step)
 
         agent = self.agents.get("modeler_agent")
+        agent._knowledge_base_id = context_base.get("knowledge_base_id")
         try:
             model_output = await agent.execute(
                 task_input={"action": "build_all_models", "problem_text": problem_text},
@@ -223,6 +301,17 @@ class Orchestrator:
             )
             self._task_pause_data[task_id]["modeler_agent"] = model_output
             self._task_pause_data[task_id]["section_results_template"] = self._build_section_results_template(model_output, sub_problems)
+
+            # 更新黑板：模型结果
+            wm.set_result("modeler_agent", model_output)
+            for m in model_output.get("sub_problem_models", []):
+                wm.add_method({
+                    "name": m.get("model_name", ""),
+                    "type": m.get("model_type", ""),
+                    "sub_problem": m.get("sub_problem_name", ""),
+                })
+            em.record("modeler_agent", "modeling_complete", f"建模完成，{len(model_output.get('sub_problem_models', []))} 个模型")
+
             room.post("coordinator", "建模完成，进入求解阶段...", "broadcast")
             self._check_pause(task_id)
 
@@ -270,6 +359,7 @@ class Orchestrator:
         edited_section = self._task_pause_data.get(task_id, {}).get("section_results_edited", section_results)
 
         agent = self.agents.get("solver_agent")
+        agent._knowledge_base_id = context_base.get("knowledge_base_id")
         try:
             solve_output = await agent.execute(
                 task_input={"action": "solve_all", "problem_text": problem_text},
@@ -282,6 +372,15 @@ class Orchestrator:
                 },
             )
             self._task_pause_data[task_id]["solver_agent"] = solve_output
+
+            # 更新黑板：求解结果
+            wm.set_result("solver_agent", solve_output)
+            for s in solve_output.get("sub_problem_solutions", []):
+                findings = s.get("results", {}).get("key_findings", [])
+                if findings:
+                    em.record("solver_agent", "solving_complete", f"{s.get('sub_problem_name', '')}: {'; '.join(str(f) for f in findings[:2])}")
+            em.record("solver_agent", "solving_complete", f"求解完成，{len(solve_output.get('sub_problem_solutions', []))} 个子问题")
+
             self._check_pause(task_id)
 
             task_step.output_data = {"solver_agent": solve_output}
@@ -303,7 +402,7 @@ class Orchestrator:
             all_results["solver_agent"] = {"error": str(e)}
         task_step.completed_at = datetime.now()
 
-        return await self._write_paper_and_finish(task_id, problem_text, sub_problems, edited_section, all_results, phase1_results, context_base, project_name=project_name)
+        return await self._write_paper_and_finish(task_id, problem_text, sub_problems, edited_section, all_results, phase1_results, context_base, project_name=project_name, workflow_type=workflow_type)
 
     async def _execute_phase2_sequential(
         self,
@@ -312,6 +411,8 @@ class Orchestrator:
         sub_problems: List[Dict[str, Any]],
         data_files: Optional[List[str]],
         project_name: Optional[str] = None,
+        knowledge_base_id: Optional[str] = None,
+        workflow_type: str = "standard",
     ) -> Dict[str, Any]:
         """
         逐个交替模式：对每个子问题，先建模，再求解，
@@ -319,6 +420,15 @@ class Orchestrator:
         前序建模和求解结果会递进传递给后序。
         """
         room = get_chat_room(task_id) or create_chat_room(task_id, problem_text)
+
+        # ===== 加载/创建记忆 =====
+        mm = get_memory_manager()
+        if not mm.get_working(task_id):
+            mm.create_task_memory(task_id)
+        wm = mm.get_working(task_id)
+        em = mm.get_episodic(task_id)
+        wm.sub_problems = sub_problems
+        wm.update_problem(text=problem_text[:500])
 
         phase1_results = self._task_pause_data.get(task_id, {}).get("phase1_edited", {})
         if not phase1_results:
@@ -332,6 +442,8 @@ class Orchestrator:
             "task_id": task_id,
             "data_files": data_files or [],
             "has_data": bool(data_files),
+            "knowledge_base_id": knowledge_base_id,
+            "working_memory": wm,
         }
 
         section_results: List[Dict[str, Any]] = []
@@ -387,6 +499,11 @@ class Orchestrator:
                 )
                 task_step.output_data = {"model": model_output}
                 task_step.status = TaskStatus.COMPLETED
+
+                # 更新黑板
+                wm.set_result("modeler_agent", {**wm.results.get("modeler_agent", {}), "last_model": model_output})
+                em.record("modeler_agent", "model_complete", f"[{i+1}] {sp_name}: {model_output.get('model_name', '')}")
+
                 room.post("modeler_agent", f"[{i+1}/{len(sub_problems)}] 建模完成：{sp_name}（{model_output.get('model_name', '')}）", "broadcast")
             except Exception as e:
                 logger.error(f"Sequential modeler sp{sp_id} failed: {e}")
@@ -453,6 +570,11 @@ class Orchestrator:
                 task_step.output_data = {"solve": solve_output}
                 task_step.status = TaskStatus.COMPLETED
 
+                # 更新黑板
+                wm.set_result("solver_agent", {**wm.results.get("solver_agent", {}), "last_solve": solve_output})
+                findings = solve_output.get("results", {}).get("key_findings", [])
+                em.record("solver_agent", "solve_complete", f"[{i+1}] {sp_name}: {'; '.join(str(f) for f in findings[:2]) if findings else '已求解'}")
+
                 # 合并求解结果到 section_results
                 for sr in section_results:
                     if sr.get("sub_problem_id") == sp_id:
@@ -484,7 +606,7 @@ class Orchestrator:
         room.post("coordinator", f"✅ 全部 {len(sub_problems)} 个子问题建模+求解完成！", "broadcast")
 
         # 写论文（使用完整的 section_results）
-        return await self._write_paper_and_finish(task_id, problem_text, sub_problems, section_results, all_results, phase1_results, context_base, project_name=project_name)
+        return await self._write_paper_and_finish(task_id, problem_text, sub_problems, section_results, all_results, phase1_results, context_base, project_name=project_name, workflow_type=workflow_type)
 
     async def _write_paper_and_finish(
         self,
@@ -496,9 +618,14 @@ class Orchestrator:
         phase1_results: Dict[str, Any],
         context_base: Dict[str, Any],
         project_name: Optional[str] = None,
+        workflow_type: str = "standard",
     ) -> Dict[str, Any]:
         """写论文并返回最终结果（batch和sequential共用）"""
         from ..core.task_persistence import save_task_metadata
+        from ..core.memory import get_memory_manager
+        mm = get_memory_manager()
+        wm = mm.get_working(task_id)
+        em = mm.get_episodic(task_id)
         room = context_base.get("chat_room")
         room.post("coordinator", "开始撰写完整论文...", "broadcast")
 
@@ -507,6 +634,8 @@ class Orchestrator:
         self.task_history[task_id].append(task_step)
 
         agent = self.agents.get("writer_agent")
+        agent._knowledge_base_id = context_base.get("knowledge_base_id")
+        template = self._task_templates.get(task_id, "math_modeling")
         try:
             paper_output = await agent.execute(
                 task_input={"action": "write_paper", "problem_text": problem_text},
@@ -518,6 +647,8 @@ class Orchestrator:
                     "analyzer_result": phase1_results.get("analyzer_agent", {}),
                     "data_result": phase1_results.get("data_agent", {}),
                     "research_result": phase1_results.get("research_agent", {}),
+                    "template": template,
+                    "workflow_type": workflow_type,
                 },
             )
 
@@ -534,6 +665,16 @@ class Orchestrator:
         if self.task_history[task_id]:
             self.task_history[task_id][-1].status = TaskStatus.COMPLETED
 
+        # 更新黑板：论文结果
+        if wm:
+            wm.set_result("writer_agent", paper_output)
+            em.record("writer_agent", "paper_complete", f"论文完成：{paper_output.get('title', '未命名')}")
+            # 压缩情景记忆
+            if em:
+                em.compress()
+            # 保存任务记忆
+            mm.save_task_memory(task_id)
+
         room.post("coordinator", f"完成！共 {len(sub_problems)} 个子问题，{len(section_results)} 个章节。", "broadcast")
 
         # ===== 保存代码和论文到 output 目录 =====
@@ -544,6 +685,12 @@ class Orchestrator:
             room.post("coordinator", f"已保存 {len(saved_files)} 个文件到 output 目录", "broadcast")
         except Exception as e:
             logger.error(f"保存输出文件失败: {e}")
+
+        # 提取经验教训（跨任务记忆）
+        try:
+            mm.extract_lessons_from_result(task_id, all_results)
+        except Exception as e:
+            logger.warning(f"Failed to extract lessons from task {task_id}: {e}")
 
         # 返回完整 all_results，包含 modeler_agent、solver_agent、writer_agent
         result = {
@@ -679,16 +826,27 @@ class Orchestrator:
         data_files: Optional[List[str]] = None,
         mode: str = "batch",
         project_name: Optional[str] = None,
+        knowledge_base_id: Optional[str] = None,
+        template: str = "math_modeling",
+        workflow_type: str = "standard",
     ) -> Dict[str, Any]:
         """执行完整工作流（阶段1完成后直接继续，不等待用户确认）
         mode: "batch" 一次性建模/求解所有子问题
               "sequential" 逐个建模/求解，前序结果递进到后序
         """
-        logger.info(f"Orchestrator starting full workflow for task {task_id} (mode={mode})")
+        logger.info(f"Orchestrator starting full workflow for task {task_id} (mode={mode}, template={template}, workflow={workflow_type})")
         room = create_chat_room(task_id, problem_text)
         self.task_history[task_id] = []
         self._task_phase[task_id] = "full"
         self._current_project_name = project_name
+        self._task_templates[task_id] = template
+        self._task_workflows[task_id] = workflow_type
+
+        # ===== 初始化记忆系统 =====
+        mm = get_memory_manager()
+        wm, em = mm.create_task_memory(task_id)
+        wm.update_problem(text=problem_text[:500], template=template, workflow_type=workflow_type)
+        em.record("coordinator", "task_start", f"任务开始（完整流程）：{problem_text[:100]}")
 
         context_base = {
             "problem_text": problem_text,
@@ -696,6 +854,9 @@ class Orchestrator:
             "task_id": task_id,
             "data_files": data_files or [],
             "has_data": bool(data_files),
+            "knowledge_base_id": knowledge_base_id,
+            "workflow_type": workflow_type,
+            "working_memory": wm,
         }
         all_results: Dict[str, Any] = {}
 
@@ -703,12 +864,22 @@ class Orchestrator:
         if task_id not in self._task_pause_data:
             self._task_pause_data[task_id] = {}
 
-        # ====== 阶段1：分析 + 数据 + 文献 ======
+        # ====== 阶段1：根据工作流类型调整步骤 ======
         setup_steps = [
             ("analyzer_agent", "analyze", "问题分析"),
             ("data_agent", "analyze_data", "数据分析"),
-            ("research_agent", "search", "文献搜集"),
         ]
+        if workflow_type == "quick":
+            room.post("coordinator", "⚡ 快速模式：跳过文献搜集，直接进入分析...", "broadcast")
+        elif workflow_type == "deep_research":
+            setup_steps.extend([
+                ("research_agent", "search", "综合文献搜集"),
+                ("research_agent", "search_background", "背景与趋势搜索"),
+                ("research_agent", "search_methods", "方法与模型搜索"),
+            ])
+            room.post("coordinator", "🔬 深度研究模式：启动多轮文献搜集...", "broadcast")
+        else:
+            setup_steps.append(("research_agent", "search", "文献搜集"))
         for agent_name, action, label in setup_steps:
             step_id = f"phase1_{agent_name}"
             task_step = TaskStep(step_id=step_id, agent_name=agent_name, status=TaskStatus.RUNNING, started_at=datetime.now())
@@ -727,6 +898,19 @@ class Orchestrator:
                 task_step.output_data = {agent_name: output}
                 task_step.status = TaskStatus.COMPLETED
                 all_results[agent_name] = output
+
+                # 更新黑板
+                wm.set_result(agent_name, output)
+                if agent_name == "analyzer_agent":
+                    wm.sub_problems = output.get("sub_problems", [])
+                elif agent_name == "data_agent":
+                    wm.data_insights = output.get("insights", [])
+                elif agent_name == "research_agent":
+                    wm.add_literature(output.get("papers", []), source="research_agent")
+                    for m in output.get("methods", []):
+                        wm.add_method(m)
+                em.record(agent_name, f"{action}_complete", f"{label} 完成")
+
                 self._post_agent_result(room, agent_name, label, output)
                 room.post(agent_name, f"{label} 完成！", "broadcast")
             except Exception as e:
@@ -742,12 +926,12 @@ class Orchestrator:
 
         if mode == "sequential":
             # 逐个交替模式
-            phase2_result = await self._execute_phase2_sequential(task_id, problem_text, sub_problems, data_files or [], project_name=project_name)
+            phase2_result = await self._execute_phase2_sequential(task_id, problem_text, sub_problems, data_files or [], project_name=project_name, knowledge_base_id=knowledge_base_id, workflow_type=workflow_type)
             section_results = phase2_result.get("section_results", [])
             all_results.update(phase2_result)
         else:
             # 批量模式
-            phase2_result = await self._execute_phase2_batch(task_id, problem_text, sub_problems, data_files or [], project_name=project_name)
+            phase2_result = await self._execute_phase2_batch(task_id, problem_text, sub_problems, data_files or [], project_name=project_name, knowledge_base_id=knowledge_base_id, workflow_type=workflow_type)
             section_results = phase2_result.get("section_results", [])
             all_results.update(phase2_result)
 
@@ -764,7 +948,22 @@ class Orchestrator:
         """将工作流结果保存到磁盘"""
         try:
             from ..core.task_persistence import save_task_result, save_task_messages, save_task_metadata
+            from ..core.memory import get_memory_manager
             from datetime import datetime as dt
+
+            # 保存记忆 + 提取经验教训
+            mm = get_memory_manager()
+            wm = mm.get_working(task_id)
+            em = mm.get_episodic(task_id)
+            if wm:
+                wm.set_result("section_results", section_results)
+            if em:
+                em.compress()
+            mm.save_task_memory(task_id)
+            try:
+                mm.extract_lessons_from_result(task_id, all_results)
+            except Exception as e:
+                logger.warning(f"Failed to extract lessons: {e}")
 
             # 保存聊天记录
             room = get_chat_room(task_id)

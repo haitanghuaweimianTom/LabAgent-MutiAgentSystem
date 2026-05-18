@@ -1,5 +1,6 @@
 """数学建模多Agent系统 - FastAPI入口"""
 import logging
+import time
 from contextlib import asynccontextmanager
 from typing import Any, Dict
 from fastapi import FastAPI
@@ -18,10 +19,15 @@ from .core.runtime_config import (
 from .routers.tasks import reset_orchestrator
 from .routers.providers import router as providers_router
 from .routers.knowledge import router as knowledge_router
-from .core.provider_config import migrate_legacy_to_new, get_default_provider
+from .routers.projects import router as projects_router
+from .routers.memory import router as memory_router
+from .core.provider_config import migrate_legacy_to_new, get_default_provider, list_custom_providers
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
+
+# 应用启动时间戳（用于计算运行时长）
+_app_start_time: float = 0.0
 
 
 class SettingsUpdate(BaseModel):
@@ -51,6 +57,8 @@ class SettingsUpdate(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global _app_start_time
+    _app_start_time = time.time()
     logger.info("数学建模多Agent系统 启动中...")
     # 确保所有必要目录存在
     from .core.paths import ensure_dirs
@@ -58,9 +66,10 @@ async def lifespan(app: FastAPI):
     # 迁移旧格式 provider 配置
     migrate_legacy_to_new()
     try:
-        from .core.task_persistence import list_all_tasks
+        from .core.task_persistence import list_all_tasks, mark_interrupted_tasks
         tasks = list_all_tasks()
-        logger.info(f"从磁盘恢复 {len(tasks)} 个历史任务")
+        interrupted = mark_interrupted_tasks()
+        logger.info(f"从磁盘恢复 {len(tasks)} 个历史任务（{interrupted} 个中断）")
     except Exception as e:
         logger.warning(f"恢复历史任务失败: {e}")
     yield
@@ -85,6 +94,8 @@ app.include_router(workflows_router, prefix="/api/v1")
 app.include_router(mcp_router, prefix="/api/v1")
 app.include_router(providers_router, prefix="/api/v1")
 app.include_router(knowledge_router, prefix="/api/v1")
+app.include_router(projects_router, prefix="/api/v1")
+app.include_router(memory_router, prefix="/api/v1")
 
 
 @app.get("/")
@@ -99,29 +110,89 @@ async def health():
 
 @app.get("/api/v1/info")
 async def info():
-    from .core.chat_room import list_chat_rooms
+    from . import agents  # noqa: F401 确保所有 agent 模块被加载并注册到 AgentFactory
+    from .agents.base import _find_claude_code, AgentFactory
+    from .core.task_persistence import list_all_tasks
+    from .core.knowledge_manager import get_knowledge_manager
     s = get_settings()
-    from .agents.base import _find_claude_code
     claude_code_path = _find_claude_code()
     default_p = get_default_provider()
+
+    # 任务统计
+    all_tasks = list_all_tasks()
+    active_tasks = [t for t in all_tasks if t.get("status") in ("running", "in_progress")]
+
+    # Provider 列表（脱敏）
+    providers = []
+    for p in list_custom_providers():
+        has_key = bool(p.get("api_key"))
+        has_host = bool(p.get("api_host"))
+        providers.append({
+            "id": p.get("id"),
+            "name": p.get("name"),
+            "type": p.get("type"),
+            "available": has_key and has_host,
+            "model": next((m.get("name") for m in p.get("models", []) if m.get("enabled")), None),
+        })
+
+    # 知识库数量
+    try:
+        kb_count = len(get_knowledge_manager().list_bases())
+    except Exception:
+        kb_count = 0
+
+    # 记忆系统统计
+    memory_stats = {}
+    try:
+        from .core.memory import get_memory_manager
+        mm = get_memory_manager()
+        lessons = mm.get_lessons()
+        memory_stats = {
+            "total_lessons": len(lessons.lessons),
+            "by_category": {},
+        }
+        for l in lessons.lessons:
+            cat = l.get("category", "unknown")
+            memory_stats["by_category"][cat] = memory_stats["by_category"].get(cat, 0) + 1
+    except Exception:
+        pass
+
+    # Agent 列表（含 Orchestrator）
+    agent_list = []
+    for name in AgentFactory.list_agents():
+        cls = AgentFactory._registry[name]
+        agent_list.append({
+            "id": name,
+            "label": getattr(cls, "label", name),
+            "description": getattr(cls, "description", ""),
+        })
+    agent_list.append({
+        "id": "orchestrator",
+        "label": "编排器",
+        "description": "管理两阶段多Agent工作流",
+    })
+
     return {
         "app_name": s.app_name,
         "version": s.app_version,
+        "started_at": _app_start_time,
         "default_model": s.default_model,
-        "api_base_url": s.api_base_url,
-        "team_size": 7,
-        "active_chat_rooms": list_chat_rooms(),
-        "claude_code_available": claude_code_path is not None,
-        "claude_code_path": claude_code_path or "",
-        "claude_model": s.claude_model,
-        "claude_mcp_tools": s.claude_mcp_tools,
-        "claude_mcp_config_path": s.claude_mcp_config_path,
         "default_llm_backend": s.default_llm_backend,
         "default_provider": {
-            "id": default_p["id"] if default_p else None,
-            "name": default_p["name"] if default_p else None,
-            "type": default_p["type"] if default_p else None,
+            "id": default_p.get("id") if default_p else None,
+            "name": default_p.get("name") if default_p else None,
+            "type": default_p.get("type") if default_p else None,
+            "model": next((m.get("name") for m in default_p.get("models", []) if m.get("enabled")), None) if default_p else None,
         } if default_p else None,
+        "agent_count": len(agent_list),
+        "agents": agent_list,
+        "knowledge_base_count": kb_count,
+        "memory_stats": memory_stats,
+        "total_tasks": len(all_tasks),
+        "active_tasks": len(active_tasks),
+        "providers": providers,
+        "claude_code_available": claude_code_path is not None,
+        "claude_code_path": claude_code_path or "",
     }
 
 

@@ -394,6 +394,7 @@ class BaseAgent(ABC):
         self.api_key = api_key or ""
         self.api_base_url = api_base_url or ""
         self.provider_id = provider_id or ""
+        self._knowledge_base_id: Optional[str] = None
 
         # LLM 后端: "minimax" (默认) | "claude" | provider_id
         from ..config import get_settings
@@ -632,25 +633,81 @@ class BaseAgent(ABC):
         """执行任务"""
         pass
 
-    def _inject_knowledge_context(self, query_text: str, top_k: int = 3) -> str:
-        """查询知识库并返回上下文文本（静默失败）"""
+    def _inject_knowledge_context(self, query_text: str, top_k: int = 3, base_id: Optional[str] = None) -> str:
+        """查询知识库并返回上下文文本（静默失败）
+
+        v2 多库版：查询所有知识库，合并上下文注入。
+        若指定了 base_id（或 agent 设置了 _knowledge_base_id），则只查询该知识库。
+        """
         try:
-            project_root = Path(__file__).parent.parent.parent.parent
-            src_path = str(project_root)
-            if src_path not in sys.path:
-                sys.path.insert(0, src_path)
-            from src.knowledge import KnowledgeBase, TfidfEmbedding
-            kb = KnowledgeBase(name="math_modeling", embedding_model=TfidfEmbedding(max_features=2000))
-            kb_file = project_root / "data" / "knowledge_base.json"
-            if kb_file.exists():
-                kb.load(str(kb_file))
-            ctx = kb.query_with_context(query_text, top_k=top_k, max_chars=1500)
-            if ctx:
-                logger.info(f"[{self.name}] 注入知识库上下文 ({len(ctx)} chars)")
-                return f"\n\n## 知识库参考上下文\n{ctx}\n"
+            from ..core.knowledge_manager import get_knowledge_manager
+            km = get_knowledge_manager()
+            target_id = base_id or self._knowledge_base_id
+            if target_id:
+                ctx = km.query_context(target_id, query_text, top_k=top_k, max_chars=1500)
+                if ctx:
+                    logger.info(f"[{self.name}] 注入知识库上下文 (base={target_id}, {len(ctx)} chars)")
+                    return f"\n\n## 知识库参考上下文\n{ctx}\n"
+            else:
+                ctx = km.query_all_context(query_text, top_k=top_k, max_chars=1500)
+                if ctx:
+                    logger.info(f"[{self.name}] 注入知识库上下文 (all bases, {len(ctx)} chars)")
+                    return f"\n\n## 知识库参考上下文\n{ctx}\n"
         except Exception as e:
             logger.debug(f"[{self.name}] 知识库查询失败: {e}")
         return ""
+
+    def _inject_memory_context(self, context: Dict[str, Any]) -> str:
+        """注入记忆系统上下文（黑板状态 + 经验教训）
+
+        从 context 中提取 memory 对象，获取：
+        1. Working Memory 黑板状态（共享任务状态）
+        2. Lessons Memory 历史经验（跨任务复用知识）
+        """
+        parts = []
+
+        # 1. 黑板上下文（角色过滤后的）
+        working = context.get("working_memory")
+        if working:
+            agent_ctx = working.get_context_for_agent(self.name)
+            if agent_ctx.get("agent_results"):
+                result_summary = ", ".join(
+                    f"{k}: {str(v)[:80]}" for k, v in agent_ctx["agent_results"].items() if k != self.name
+                )
+                parts.append(f"\n\n## 【共享黑板状态】\n其他 Agent 的结果：{result_summary}")
+
+            if agent_ctx.get("literature"):
+                lit_count = len(agent_ctx["literature"])
+                parts.append(f"\n\n## 【已搜集文献】\n共 {lit_count} 篇文献，摘要见上下文。")
+
+            if agent_ctx.get("methods"):
+                method_names = [m.get("name", m.get("method", "")) for m in agent_ctx["methods"][:5]]
+                parts.append(f"\n\n## 【候选方法】\n{', '.join(filter(None, method_names))}")
+
+            if agent_ctx.get("decisions"):
+                decs = [f"- {d.get('decision')}: {d.get('reason')}" for d in agent_ctx["decisions"][:5]]
+                parts.append(f"\n\n## 【关键决策】\n" + "\n".join(decs))
+
+            if agent_ctx.get("notes"):
+                notes = [f"- [{n['from']}] {n['content'][:100]}" for n in agent_ctx["notes"][:5]]
+                parts.append(f"\n\n## 【Agent 备注】\n" + "\n".join(notes))
+
+            if agent_ctx.get("data_insights"):
+                insights = [f"- {i}" for i in agent_ctx["data_insights"][:5]]
+                parts.append(f"\n\n## 【数据洞察】\n" + "\n".join(insights))
+
+        # 2. 历史经验教训
+        try:
+            from ..core.memory import get_memory_manager
+            mm = get_memory_manager()
+            problem_type = context.get("problem_type", "")
+            lesson_ctx = mm.get_lessons().get_context_text(problem_type=problem_type, top_k=5)
+            if lesson_ctx:
+                parts.append(lesson_ctx)
+        except Exception as e:
+            logger.debug(f"[{self.name}] 记忆系统查询失败: {e}")
+
+        return "\n".join(parts)
 
     def _get_api_format(self) -> str:
         """从 provider 元数据或 llm_backend 推断 API 格式"""
@@ -766,6 +823,17 @@ class BaseAgent(ABC):
                         msg["content"] = msg["content"] + kb_context
                     elif isinstance(msg["content"], list):
                         msg["content"].append({"type": "text", "text": kb_context})
+                    break
+
+        # ===== 注入记忆系统上下文（黑板状态 + 经验教训）=====
+        mem_context = self._inject_memory_context(context) if context else ""
+        if mem_context:
+            for msg in messages:
+                if msg.get("role") == "user":
+                    if isinstance(msg["content"], str):
+                        msg["content"] = msg["content"] + mem_context
+                    elif isinstance(msg["content"], list):
+                        msg["content"].append({"type": "text", "text": mem_context})
                     break
 
         # ===== 检查 API Key =====
