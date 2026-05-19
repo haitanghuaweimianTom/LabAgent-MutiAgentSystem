@@ -164,7 +164,84 @@
       "source_task": "academic_literature",
       "created_at": "2026-05-18T11:21:29.822546",
       "use_count": 0
+    },
+    {
+      "id": "lesson_16_20260519000001",
+      "category": "writing",
+      "content": "优秀研究生数模论文的行文结构：1.问题重述→2.问题分析→3.模型假设与符号说明→4.模型建立与求解→5.结果分析→6.可靠性分析→7.模型评价→8.结论→9.参考文献→附录。注意"结果分析"、"可靠性分析"、"模型评价"各自作为独立的章节，不能合并或省略。",
+      "problem_type": "通用",
+      "method": "论文结构",
+      "success": true,
+      "source_task": "graduate_paper_analysis",
+      "created_at": "2026-05-19T00:00:01.000000",
+      "use_count": 0
+    },
+    {
+      "id": "lesson_17_20260519000002",
+      "category": "writing",
+      "content": "每个子问题的完整叙述流程（七环节）：①问题分析（本子问题的具体分析和建模思路）→②方法介绍（如使用经典算法/模型，先说明原理）→③模型构建（决策变量→目标函数→约束条件→公式解释）→④算法设计（算法原理→步骤→参数）→⑤求解结果（数值+文字解读）→⑥结果验证（多模型对比或与已知结果对比）→⑦问题小结（简短总结核心结论）。缺一不可。",
+      "problem_type": "通用",
+      "method": "子问题叙述",
+      "success": true,
+      "source_task": "graduate_paper_analysis",
+      "created_at": "2026-05-19T00:00:02.000000",
+      "use_count": 0
+    },
+    {
+      "id": "lesson_18_20260519000003",
+      "category": "writing",
+      "content": "使用经典算法或模型时，必须在建模之前先介绍方法的基本概念和原理。如使用LSTM、随机森林、回归分析、雨流计数法等，需先设立"方法介绍"小节，说明算法原理，再进入模型构建环节。不能直接跳到公式推导。",
+      "problem_type": "通用",
+      "method": "方法介绍",
+      "success": true,
+      "source_task": "graduate_paper_analysis",
+      "created_at": "2026-05-19T00:00:03.000000",
+      "use_count": 0
+    },
+    {
+      "id": "lesson_19_20260519000004",
+      "category": "writing",
+      "content": "多种方法/模型之间要做对比验证。如对比BiLSTM与Nelder-Mead拟合效果、对比优化模型与平均分配方案、对比多种机器学习模型择优使用。通过对比验证增强论文的说服力，体现建模的严谨性。",
+      "problem_type": "通用",
+      "method": "模型对比",
+      "success": true,
+      "source_task": "graduate_paper_analysis",
+      "created_at": "2026-05-19T00:00:04.000000",
+      "use_count": 0
+    },
+    {
+      "id": "lesson_20_20260519000005",
+      "category": "writing",
+      "content": "每个子问题末尾必须有简短的"问题小结"，总结该问题的核心结论和主要发现。同时子问题之间要有逻辑衔接——如果后续问题依赖前面结果，要明确写出"基于上一节的结果……"，不要让各个子问题看起来像完全独立的论文。",
+      "problem_type": "通用",
+      "method": "问题小结",
+      "success": true,
+      "source_task": "graduate_paper_analysis",
+      "created_at": "2026-05-19T00:00:05.000000",
+      "use_count": 0
+    },
+    {
+      "id": "lesson_21_20260519000006",
+      "category": "writing",
+      "content": "摘要的写法：针对每个问题，依次说明"用了什么方法→建立了什么模型→如何求解→主要结果是什么→解决了什么问题→效果怎么样"。研究生优秀论文的摘要通常对每个问题都有1-2句话的概括，最后总结全文的主要贡献和创新点。摘要字数300-500字。",
+      "problem_type": "通用",
+      "method": "摘要写作",
+      "success": true,
+      "source_task": "graduate_paper_analysis",
+      "created_at": "2026-05-19T00:00:06.000000",
+      "use_count": 0
+    },
+    {
+      "id": "lesson_22_20260519000007",
+      "category": "writing",
+      "content": "结果分析章节不能只是数值结果的罗列，要从全局视角分析各问题结果之间的关系。包括：定性讨论、规律性分析、多方案对比、实际意义解释。可靠性分析必须包含模型检验（准确性检验）和敏感性分析（关键参数变动对结果的影响），即使题目未明确要求也必须做。",
+      "problem_type": "通用",
+      "method": "结果分析",
+      "success": true,
+      "source_task": "graduate_paper_analysis",
+      "created_at": "2026-05-19T00:00:07.000000",
+      "use_count": 0
     }
   ],
-  "count": 15
+  "count": 22
 }
