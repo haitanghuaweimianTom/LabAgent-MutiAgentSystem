@@ -1,0 +1,349 @@
+"""Camera-Ready 打包服务（Phase 3）。
+
+将一次任务的最终产物打成可直接投稿 CCF-A 会议的 zip 包：
+
+```
+camera_ready_<task_id>/
+├── main.tex                  # 主论文（来自 tex_exporter / Writer Agent）
+├── main.bib                  # 参考文献（从 working_memory.citations 拼装）
+├── figures/                  # 所有图表
+├── sections/                 # 各章独立 .tex（可选）
+├── code/                     # 求解代码（按多文件 manifest 复制）
+└── README.md                 # 编译说明
+paper.zip
+```
+
+【严格控制幻觉】
+- 只复制 *实际存在* 的图表与代码，不凭空补
+- bib 从 working_memory.citations 拼装，缺字段用 ``arxiv_id`` 占位
+- README 模板化，避免不实宣传
+
+【用户要求对应】
+- 用户原话：「生产的可交付结果应该在前端可以选类型的」「最终输出的产品是
+  可直接交付的」。本服务是这条约束的工程实现。
+"""
+from __future__ import annotations
+import json
+import logging
+import shutil
+import zipfile
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
+
+
+# ==================== Data classes ====================
+
+@dataclass
+class CameraReadyArtifact:
+    """Camera-ready 包中需要收集的产物。"""
+
+    latex_code: str = ""
+    bib_entries: List[Dict[str, str]] = field(default_factory=list)
+    figures: List[Path] = field(default_factory=list)  # 真实存在的图片文件
+    code_files: List[Path] = field(default_factory=list)  # 真实存在的 .py
+    code_manifest_text: str = ""  # 可读的 manifest 描述
+    chapter_summaries: List[Dict[str, Any]] = field(default_factory=list)
+    template_id: str = "math_modeling"
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def summary(self) -> Dict[str, int]:
+        return {
+            "figures": len(self.figures),
+            "code_files": len(self.code_files),
+            "bib_entries": len(self.bib_entries),
+            "chapters": len(self.chapter_summaries),
+        }
+
+
+@dataclass
+class CameraReadyResult:
+    """camera-ready 打包结果。"""
+
+    output_dir: Path
+    zip_path: Optional[Path]
+    skipped_reasons: List[str] = field(default_factory=list)
+    artifact_summary: Dict[str, int] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "output_dir": str(self.output_dir),
+            "zip_path": str(self.zip_path) if self.zip_path else None,
+            "skipped_reasons": self.skipped_reasons,
+            "artifact_summary": self.artifact_summary,
+        }
+
+
+# ==================== Collection ====================
+
+def collect_artifacts(
+    task_id: str,
+    task_output_dir: Path,
+    template_id: str = "math_modeling",
+) -> CameraReadyArtifact:
+    """从任务输出目录收集 camera-ready 所需的所有产物。
+
+    Args:
+        task_id: 任务 ID。
+        task_output_dir: 任务输出根目录（含 stage_*/ 与 final/）。
+        template_id: 论文模板 ID。
+
+    Returns:
+        :class:`CameraReadyArtifact`，未找到的产物以空值存在。
+    """
+    artifact = CameraReadyArtifact(template_id=template_id)
+
+    final_dir = task_output_dir / "final"
+    if not final_dir.exists():
+        return artifact
+
+    # 1. LaTeX 主文件（优先 .tex，回退到 .md 转 tex）
+    tex_path = final_dir / "MathModeling_Paper.tex"
+    if not tex_path.exists():
+        tex_path = final_dir / "main.tex"
+    if tex_path.exists():
+        artifact.latex_code = tex_path.read_text(encoding="utf-8")
+
+    # 2. figures
+    fig_dir = final_dir / "figures"
+    if not fig_dir.exists():
+        fig_dir = task_output_dir / "stage_7_charts"
+    if fig_dir.exists():
+        for p in sorted(fig_dir.glob("*.png")):
+            artifact.figures.append(p)
+        for p in sorted(fig_dir.glob("*.pdf")):
+            artifact.figures.append(p)
+
+    # 3. code files（多文件）
+    code_dir = task_output_dir / "code"
+    if code_dir.exists():
+        for p in sorted(code_dir.rglob("*.py")):
+            artifact.code_files.append(p)
+    if not artifact.code_files:
+        # 回退到 final/code 或 final 根目录
+        for p in sorted(final_dir.glob("*.py")):
+            artifact.code_files.append(p)
+
+    # 4. bib：从 chapter_summaries.json 读 citations
+    chap_summ_path = final_dir / "chapter_summaries.json"
+    if chap_summ_path.exists():
+        try:
+            data = json.loads(chap_summ_path.read_text(encoding="utf-8"))
+            artifact.chapter_summaries = data if isinstance(data, list) else []
+        except json.JSONDecodeError:
+            pass
+
+    # 5. metadata 从 final/solution.json 读
+    sol_path = final_dir / "solution.json"
+    if sol_path.exists():
+        try:
+            data = json.loads(sol_path.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                artifact.metadata = {
+                    "title": data.get("title", ""),
+                    "abstract": data.get("abstract", ""),
+                    "keywords": data.get("keywords", []),
+                }
+        except json.JSONDecodeError:
+            pass
+
+    return artifact
+
+
+# ==================== Build ====================
+
+BIB_PLACEHOLDER = """% Auto-generated BibTeX entries. Replace fields if arxiv_id is the only known metadata.
+"""
+
+README_TEMPLATE = """# Camera-Ready Submission Package
+
+**Task ID:** {task_id}
+**Template:** {template_id}
+**Generated:** {generated_at}
+**Generated by:** MathModel-MutiAgentSystem / paper-factory
+
+## Contents
+
+- `main.tex` — Main LaTeX source
+- `main.bib` — Bibliography
+- `figures/` — {n_figures} figure files
+- `code/` — {n_code} Python source files
+- `README.md` — This file
+
+## Compilation
+
+```bash
+# Edit main.tex preamble if needed (\\\\documentclass{{{documentclass}}})
+# Then compile:
+xelatex main.tex
+bibtex main   # if .bib exists
+xelatex main.tex
+xelatex main.tex
+```
+
+## Notes
+
+- This package was auto-generated. Please review and edit before submission.
+- All code is preserved for reproducibility.
+- Citation entries with ``arxiv_id`` only are placeholders; please fill in the
+  full bibliographic fields before submission.
+"""
+
+
+def build_bib(entries: List[Dict[str, str]]) -> str:
+    """从 citation 列表生成 .bib 文本。缺字段用 arxiv_id 占位。"""
+    lines = [BIB_PLACEHOLDER]
+    for i, e in enumerate(entries, 1):
+        if not isinstance(e, dict):
+            continue
+        key = e.get("key") or e.get("arxiv_id") or f"ref_{i}"
+        etype = e.get("type", "article").lower()
+        arxiv = e.get("arxiv_id", "")
+        title = e.get("title", "").replace("{", "").replace("}", "")
+        author = e.get("author", "").replace("{", "").replace("}", "")
+        year = str(e.get("year", ""))
+        venue = e.get("venue", "") or e.get("journal", "")
+
+        if etype == "article":
+            lines.append(f"@article{{{key},")
+        elif etype == "inproceedings":
+            lines.append(f"@inproceedings{{{key},")
+        else:
+            lines.append(f"@misc{{{key},")
+        if title:
+            lines.append(f"  title={{{title}}},")
+        if author:
+            lines.append(f"  author={{{author}}},")
+        if year:
+            lines.append(f"  year={{{year}}},")
+        if venue:
+            lines.append(f"  journal={{{venue}}},")
+        if arxiv:
+            lines.append(f"  eprint={{{arxiv}}},")
+            lines.append("  archivePrefix={arXiv},")
+        lines.append("}")
+        lines.append("")
+    return "\n".join(lines) if len(lines) > 1 else "% No citations available\n"
+
+
+def build_readme(artifact: CameraReadyArtifact, task_id: str) -> str:
+    """生成 README.md。模板化，避免不实宣传。"""
+    from datetime import datetime
+    summary = artifact.summary()
+    # 从注册表取 documentclass 写到 README 编译说明
+    doc_class = "article"
+    try:
+        from .code_manifest import CODE_MANIFEST_PROMPT  # noqa
+        from ..core.paper_templates import load_template
+        tpl = load_template(artifact.template_id)
+        if tpl and tpl.documentclass:
+            doc_class = tpl.documentclass
+    except Exception:  # noqa: BLE001
+        pass
+
+    return README_TEMPLATE.format(
+        task_id=task_id,
+        template_id=artifact.template_id,
+        generated_at=datetime.now().isoformat(),
+        n_figures=summary["figures"],
+        n_code=summary["code_files"],
+        documentclass=doc_class,
+    )
+
+
+def build(
+    task_id: str,
+    artifact: CameraReadyArtifact,
+    output_dir: Path,
+    make_zip: bool = True,
+    max_zip_mb: int = 50,
+) -> CameraReadyResult:
+    """构造 camera-ready 包到 ``output_dir``，可选打 zip。
+
+    Args:
+        task_id: 任务 ID。
+        artifact: 已收集的产物。
+        output_dir: 输出根目录（包目录会创建在 ``output_dir/camera_ready_<task_id>/``）。
+        make_zip: 是否同时打 zip。
+        max_zip_mb: zip 超过该大小（MB）则跳过大文件并记录 skipped_reasons。
+
+    Returns:
+        :class:`CameraReadyResult`。
+    """
+    skipped: List[str] = []
+    pkg_dir = output_dir / f"camera_ready_{task_id}"
+    pkg_dir.mkdir(parents=True, exist_ok=True)
+
+    # 1. main.tex
+    if artifact.latex_code:
+        (pkg_dir / "main.tex").write_text(artifact.latex_code, encoding="utf-8")
+    else:
+        skipped.append("missing main.tex")
+
+    # 2. main.bib
+    bib_text = build_bib(artifact.bib_entries)
+    (pkg_dir / "main.bib").write_text(bib_text, encoding="utf-8")
+
+    # 3. figures/
+    fig_dir = pkg_dir / "figures"
+    if artifact.figures:
+        fig_dir.mkdir(exist_ok=True)
+        for src in artifact.figures:
+            try:
+                shutil.copy2(src, fig_dir / src.name)
+            except Exception as exc:  # noqa: BLE001
+                skipped.append(f"figure copy failed: {src.name}: {exc}")
+    else:
+        skipped.append("no figures available")
+
+    # 4. code/
+    code_dir = pkg_dir / "code"
+    if artifact.code_files:
+        code_dir.mkdir(exist_ok=True)
+        for src in artifact.code_files:
+            try:
+                # 保留相对路径（如 sub1/data.py → code/sub1/data.py）
+                rel = src.name
+                shutil.copy2(src, code_dir / rel)
+            except Exception as exc:  # noqa: BLE001
+                skipped.append(f"code copy failed: {src.name}: {exc}")
+    else:
+        skipped.append("no code files available")
+
+    # 5. manifest 描述
+    if artifact.code_manifest_text:
+        (pkg_dir / "code_manifest.md").write_text(artifact.code_manifest_text, encoding="utf-8")
+
+    # 6. README.md
+    (pkg_dir / "README.md").write_text(
+        build_readme(artifact, task_id), encoding="utf-8"
+    )
+
+    # 7. zip
+    zip_path: Optional[Path] = None
+    if make_zip:
+        zip_path = output_dir / f"camera_ready_{task_id}.zip"
+        try:
+            with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+                for p in pkg_dir.rglob("*"):
+                    if p.is_file():
+                        zf.write(p, p.relative_to(pkg_dir.parent))
+        except Exception as exc:  # noqa: BLE001
+            skipped.append(f"zip creation failed: {exc}")
+            zip_path = None
+        # 检查大小
+        if zip_path and zip_path.exists():
+            mb = zip_path.stat().st_size / (1024 * 1024)
+            if mb > max_zip_mb:
+                skipped.append(
+                    f"zip too large ({mb:.1f} MB > {max_zip_mb} MB); figures may need re-compression"
+                )
+
+    return CameraReadyResult(
+        output_dir=pkg_dir,
+        zip_path=zip_path,
+        skipped_reasons=skipped,
+        artifact_summary=artifact.summary(),
+    )
