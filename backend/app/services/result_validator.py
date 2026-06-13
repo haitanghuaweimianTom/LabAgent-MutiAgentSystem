@@ -140,3 +140,155 @@ def get_result_validator() -> ResultValidator:
     if _validator is None:
         _validator = ResultValidator()
     return _validator
+
+
+# ====================================================================
+# Phase 7: 跨方法交叉验证 (CrossValidator)
+# ====================================================================
+# 目标：把"同一结论用两种方法重算，差异 > 阈值则报警"做成可调用 API。
+# 严格控制幻觉：
+#   - 不创造数字；只比对 *实际收到* 的两组结果
+#   - 替代方法缺失时返回 skipped=True，不报伪警
+#   - 阈值在 config 中可调（默认 5%）
+# ====================================================================
+
+import asyncio
+from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, List, Optional
+
+
+@dataclass
+class CrossValidationResult:
+    """一次跨方法比对的结果。"""
+
+    method_a: str
+    method_b: str
+    field: str
+    value_a: Any
+    value_b: Any
+    abs_diff: float
+    rel_diff: float
+    diverged: bool
+    threshold: float
+    skipped: bool = False
+    skip_reason: str = ""
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "method_a": self.method_a,
+            "method_b": self.method_b,
+            "field": self.field,
+            "value_a": self.value_a,
+            "value_b": self.value_b,
+            "abs_diff": round(self.abs_diff, 6),
+            "rel_diff": round(self.rel_diff, 4),
+            "diverged": self.diverged,
+            "threshold": self.threshold,
+            "skipped": self.skipped,
+            "skip_reason": self.skip_reason,
+        }
+
+
+ALTERNATIVE_METHODS: Dict[str, Callable[..., Any]] = {}
+
+
+def register_alternative_method(name: str, fn: Callable[..., Any]) -> None:
+    """注册一种替代方法实现。"""
+    ALTERNATIVE_METHODS[name] = fn
+
+
+class CrossValidator:
+    """跨方法交叉验证器。"""
+
+    DEFAULT_THRESHOLD = 0.05  # 5%
+
+    def __init__(self, threshold: float = DEFAULT_THRESHOLD):
+        self.threshold = float(threshold)
+
+    async def cross_check(
+        self,
+        method_a_name: str,
+        method_a_results: Dict[str, Any],
+        method_b_name: str,
+        method_b_results: Dict[str, Any],
+        fields: Optional[List[str]] = None,
+        threshold: Optional[float] = None,
+    ) -> List[CrossValidationResult]:
+        """比对两组结果中指定字段。仅在两组结果都 *实际包含* 字段时才比对，
+        否则返回 ``skipped=True``。
+        """
+        thr = threshold if threshold is not None else self.threshold
+        fields = fields or sorted(set(method_a_results.keys()) & set(method_b_results.keys()))
+
+        results: List[CrossValidationResult] = []
+        for f in fields:
+            a = method_a_results.get(f)
+            b = method_b_results.get(f)
+            if a is None or b is None:
+                results.append(CrossValidationResult(
+                    method_a=method_a_name, method_b=method_b_name,
+                    field=f, value_a=a, value_b=b,
+                    abs_diff=0.0, rel_diff=0.0, diverged=False,
+                    threshold=thr, skipped=True,
+                    skip_reason=f"missing field in {'a' if a is None else 'b'}",
+                ))
+                continue
+            try:
+                a_f, b_f = float(a), float(b)
+            except (TypeError, ValueError):
+                results.append(CrossValidationResult(
+                    method_a=method_a_name, method_b=method_b_name,
+                    field=f, value_a=a, value_b=b,
+                    abs_diff=0.0, rel_diff=0.0, diverged=False,
+                    threshold=thr, skipped=True,
+                    skip_reason=f"non-numeric value",
+                ))
+                continue
+            denom = max(abs(a_f), abs(b_f), 1e-9)
+            rel = abs(a_f - b_f) / denom
+            diverged = rel > thr
+            results.append(CrossValidationResult(
+                method_a=method_a_name, method_b=method_b_name,
+                field=f, value_a=a_f, value_b=b_f,
+                abs_diff=abs(a_f - b_f), rel_diff=rel,
+                diverged=diverged, threshold=thr,
+            ))
+        return results
+
+    async def cross_check_from_methods(
+        self,
+        method_a_name: str,
+        method_b_name: str,
+        problem_text: str,
+        params: Optional[Dict[str, Any]] = None,
+        fields: Optional[List[str]] = None,
+    ) -> List[CrossValidationResult]:
+        """动态调两种注册方法（ALTERNATIVE_METHODS），再 cross_check。"""
+        if method_a_name not in ALTERNATIVE_METHODS:
+            raise KeyError(f"method_a not registered: {method_a_name}")
+        if method_b_name not in ALTERNATIVE_METHODS:
+            raise KeyError(f"method_b not registered: {method_b_name}")
+        params = params or {}
+        a_res, b_res = await asyncio.gather(
+            asyncio.to_thread(ALTERNATIVE_METHODS[method_a_name], problem_text, **params),
+            asyncio.to_thread(ALTERNATIVE_METHODS[method_b_name], problem_text, **params),
+            return_exceptions=True,
+        )
+        if isinstance(a_res, Exception):
+            a_res = {"_error": str(a_res)}
+        if isinstance(b_res, Exception):
+            b_res = {"_error": str(b_res)}
+        return await self.cross_check(
+            method_a_name, a_res, method_b_name, b_res, fields=fields,
+        )
+
+
+_validator_instance: Optional[CrossValidator] = None
+
+
+def get_cross_validator(threshold: float = CrossValidator.DEFAULT_THRESHOLD) -> CrossValidator:
+    """获取全局 CrossValidator。"""
+    global _validator_instance
+    if _validator_instance is None:
+        _validator_instance = CrossValidator(threshold=threshold)
+    return _validator_instance
