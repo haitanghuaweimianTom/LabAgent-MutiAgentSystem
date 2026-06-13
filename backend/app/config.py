@@ -70,6 +70,9 @@ class Settings(BaseSettings):
     # 允许使用 Claude Code 后端的 Agent 列表
     claude_enabled_agents: List[str] = ["analyzer_agent", "modeler_agent", "solver_agent", "research_agent", "writer_agent"]
 
+    # ===== 学术元数据增强配置 =====
+    semantic_scholar_api_key: str = ""
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

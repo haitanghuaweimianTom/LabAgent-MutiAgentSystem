@@ -18,6 +18,9 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from ..core.paths import get_project_data_dir
+from ..services.data_schema import get_schema_extractor
+from ..services.result_validator import get_result_validator
 from .base import BaseAgent, AgentFactory
 
 logger = logging.getLogger(__name__)
@@ -836,6 +839,61 @@ class SolverAgent(BaseAgent):
         "statsmodels", "matplotlib", "openpyxl",
     ]
 
+    def _build_data_schema_context(self, data_result: Dict[str, Any], project_name: Optional[str] = None) -> str:
+        """构建数据 schema 上下文，注入 prompt 以减少路径/列名/类型错误"""
+        analyses = data_result.get("analyses", []) or []
+        if not analyses:
+            return ""
+
+        file_paths = []
+        for a in analyses:
+            file_name = a.get("file_name", "")
+            if not file_name:
+                continue
+            fp = a.get("file_path") or a.get("path")
+            if fp:
+                file_paths.append(fp)
+            elif project_name:
+                file_paths.append(str(get_project_data_dir(project_name) / file_name))
+            else:
+                from ..core.paths import get_data_dir
+                file_paths.append(str(get_data_dir() / file_name))
+
+        schemas = get_schema_extractor().extract_multiple(file_paths)
+        return get_schema_extractor().format_for_prompt(schemas)
+
+    def _classify_execution_error(self, error: str, code: str) -> Dict[str, Any]:
+        """对执行错误进行分类，便于自动修复"""
+        error_lower = (error or "").lower()
+        category = "unknown"
+        fixes = []
+
+        if "filenotfounderror" in error_lower or "no such file or directory" in error_lower:
+            category = "path_error"
+            fixes.append("检查数据文件路径，使用相对路径或从环境变量/参数获取")
+        elif "keyerror" in error_lower:
+            category = "column_error"
+            fixes.append("检查 DataFrame 列名是否与 schema 一致，注意大小写和空格")
+        elif "valueerror" in error_lower or "typeerror" in error_lower:
+            category = "type_error"
+            fixes.append("检查数值类型转换，使用 pd.to_numeric(errors='coerce') 处理异常值")
+        elif "modulenotfounderror" in error_lower or "importerror" in error_lower:
+            category = "dependency_error"
+            fixes.append("安装缺失依赖或改用标准库/已安装库实现")
+        elif "indexerror" in error_lower:
+            category = "index_error"
+            fixes.append("检查数组/DataFrame 索引越界，验证数据非空")
+
+        return {
+            "category": category,
+            "fixes": fixes,
+            "raw_error": error,
+        }
+
+    def _validate_solution_results(self, numerical_results: Dict[str, Any], model: Dict[str, Any]) -> Dict[str, Any]:
+        """验证求解结果合理性"""
+        return get_result_validator().validate(numerical_results, {"model": model})
+
     def _find_conda_exe(self) -> bool:
         """检测conda是否可用（通过 cmd /c conda）"""
         try:
@@ -1119,6 +1177,9 @@ class SolverAgent(BaseAgent):
                     prev_model = prev_sr.get("model", {})
                     prev_model_note += f"    # 前序结果_{j+1}: {prev_model.get('model_name', '模型')} → {prev_model.get('objective_function', '')[:60]}\n"
 
+            # 数据 schema 上下文
+            schema_context = self._build_data_schema_context(data_result, context.get("project_name"))
+
             prompt = f"""你是一个专业的算法工程师。请为数学建模的第{i+1}个子问题设计求解算法并编写完整可运行的Python代码。
 
 【问题背景】
@@ -1132,6 +1193,10 @@ class SolverAgent(BaseAgent):
 决策变量：{json.dumps(decision_vars, ensure_ascii=False)[:200]}
 约束条件：{json.dumps(constraints, ensure_ascii=False)[:200]}
 求解算法：{alg_name}
+
+【数据文件】
+{data_context or '（无数据文件）'}
+{schema_context}
 
 【前序子问题的求解结果（直接代入当前代码）】
 {prev_solution_summary or "（这是第一个子问题，无前序依赖）"}
@@ -1231,6 +1296,13 @@ class SolverAgent(BaseAgent):
 
             sol_result["sub_problem_id"] = sp_id
             sol_result["sub_problem_name"] = sp_name
+            sol_result["validation"] = self._validate_solution_results(
+                sol_result.get("numerical_results", {}), model
+            )
+            if not sol_result.get("execution_success"):
+                sol_result["error_classification"] = self._classify_execution_error(
+                    sol_result.get("execution_error", ""), sol_result.get("code_files", [{}])[0].get("code", "")
+                )
 
             # 记录前序依赖
             if previous_solutions:
@@ -1307,6 +1379,9 @@ class SolverAgent(BaseAgent):
         task_types = detect_task_type(sp_name, model_result)
         template_code = get_template_code(task_types)
 
+        # 数据 schema 上下文
+        schema_context = self._build_data_schema_context(data_result, context.get("project_name"))
+
         prompt = f"""请为以下数学建模问题设计求解算法并编写Python代码。
 
 【问题背景】
@@ -1323,6 +1398,7 @@ class SolverAgent(BaseAgent):
 
 【数据文件】
 {data_context or '（无数据文件）'}
+{schema_context}
 
 请生成完整可运行的Python求解代码，包括数据处理、求解、可视化等步骤。"""
 
@@ -1391,10 +1467,16 @@ class SolverAgent(BaseAgent):
                 "executed": True,
             }]
             logger.info(f"SolverAgent[{sp_name}] 执行成功（尝试{exec_info.get('attempts')}次）")
+            # 结果验证层
+            validation = self._validate_solution_results(result.get("numerical_results", {}), model_result)
+            result["validation"] = validation
         else:
             result["execution_success"] = False
             result["execution_attempts"] = exec_info.get("attempts", 3)
             result["execution_error"] = exec_info.get("error", "")
+            result["error_classification"] = self._classify_execution_error(
+                exec_info.get("error", ""), exec_info.get("code", raw_code)
+            )
             result["code_files"] = [{
                 "filename": f"solver_sub{sub_idx+1}.py",
                 "language": "python",
@@ -1427,6 +1509,7 @@ class SolverAgent(BaseAgent):
             f"- {a.get('file_name', '')}: {a.get('shape', [0,0])[0]}行×{a.get('shape', [0,0])[1]}列"
             for a in analyses
         ])
+        schema_context = self._build_data_schema_context(data_result, context.get("project_name"))
 
         all_solutions = []
         for sr in section_results:
@@ -1457,6 +1540,7 @@ class SolverAgent(BaseAgent):
 
 【数据文件】
 {data_context or '（无数据文件）'}
+{schema_context}
 """
 
             # ===== 直接调用 _run_code_with_autofix（全自动 Claude CLI 编程）=====
@@ -1507,6 +1591,8 @@ class SolverAgent(BaseAgent):
                 "execution_success": exec_ok,
                 "execution_attempts": exec_info.get("attempts", 1),
                 "execution_error": exec_info.get("error", ""),
+                "error_classification": self._classify_execution_error(exec_info.get("error", ""), exec_info.get("code", raw_code)) if not exec_ok else None,
+                "validation": self._validate_solution_results(numerical, model),
             }
 
             all_solutions.append(sol)

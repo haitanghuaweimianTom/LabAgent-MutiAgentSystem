@@ -57,8 +57,33 @@
       "created_at": 1778585746,
       "updated_at": 1778585746,
       "_version": 2
+    },
+    {
+      "id": "minimax",
+      "name": "minimax",
+      "type": "openai",
+      "category": "custom",
+      "meta": {
+        "api_format": "anthropic",
+        "auth_field": "anthropic_auth_token"
+      },
+      "api_key": "sk-cp-wPOYBPl7QAyll27SO0SGc0XzGL7Z6nsURt1Ssyk_qs09HUqNBKy4fWpjxsaPvLcGQr4mbw_cduJ1Qaaq4ZXkHC-YS5_2xXd4-fsgoG9q-NcSZdhL8q5sKms",
+      "api_host": "https://api.minimaxi.com/anthropic",
+      "models": [
+        {
+          "name": "MiniMax-M3",
+          "enabled": true
+        }
+      ],
+      "enabled": true,
+      "icon": "OpenAI",
+      "icon_color": "#10a37f",
+      "notes": "MiniMax Anthropic-compatible endpoint",
+      "created_at": 1781268770,
+      "updated_at": 1781268770,
+      "_version": 2
     }
   ],
-  "default_provider": "kimi",
+  "default_provider": "minimax",
   "_version": 2
 }

@@ -22,6 +22,7 @@ from ..config import get_settings
 from ..core.chat_room import get_chat_room
 from ..core.runtime_config import get_runtime_api_key
 from ..core.paths import get_data_dir, get_project_data_dir, get_project_output_dir
+from ..services.learning import add_lessons_from_task
 from ..core.task_persistence import (
     save_task_metadata, save_task_messages, save_task_result,
     load_task_messages, load_task_result, list_all_tasks,
@@ -156,6 +157,18 @@ async def submit_task(req: TaskCreateRequest):
     orch = get_orchestrator()
     orch.task_history[task_id] = []
 
+    # 提取模板和工作流参数
+    template = (req.options or {}).get("template", "math_modeling")
+    workflow_type = (req.options or {}).get("workflow", "standard")
+
+    # 如果指定了项目名，确保项目存在并同步
+    project_name = req.project_name
+    if project_name and project_name.strip():
+        from ..core.project_persistence import get_project, create_project, add_task_to_project
+        if not get_project(project_name):
+            create_project(name=project_name)
+        add_task_to_project(project_name, task_id)
+
     # 持久化：保存任务元数据
     save_task_metadata(
         task_id=task_id,
@@ -169,8 +182,8 @@ async def submit_task(req: TaskCreateRequest):
 
     # 收集已上传的数据文件（若前端传了 data_files 则按勾选过滤）
     selected_names = req.data_files
-    data_files = get_uploaded_files(selected_names=selected_names, project_name=req.project_name)
-    logger.info(f"Task {task_id}: found {len(data_files)} data files (selected={len(selected_names) if selected_names else 'all'}, project={req.project_name})")
+    data_files = get_uploaded_files(selected_names=selected_names, project_name=project_name)
+    logger.info(f"Task {task_id}: found {len(data_files)} data files (selected={len(selected_names) if selected_names else 'all'}, project={project_name})")
 
     # 保存数据文件列表到任务元数据，供 phase1/phase2 复用
     save_task_metadata(
@@ -182,25 +195,28 @@ async def submit_task(req: TaskCreateRequest):
         progress=0,
         current_step="等待启动",
         data_files=data_files,
-        project_name=req.project_name,
+        project_name=project_name,
+        knowledge_base_id=req.knowledge_base_id,
+        template=template,
+        workflow_type=workflow_type,
     )
 
-    asyncio.create_task(_run_workflow(task_id, req.problem_text, req.workflow, data_files, req.mode, req.project_name))
+    asyncio.create_task(_run_workflow(task_id, req.problem_text, req.workflow, data_files, req.mode, project_name, req.knowledge_base_id, template, workflow_type))
     return {
         "task_id": task_id,
         "status": "running",
         "message": "任务已提交，开始执行",
         "created_at": created_at,
         "data_files_count": len(data_files),
-        "project_name": req.project_name,
+        "project_name": project_name,
     }
 
 
-async def _run_workflow(task_id: str, problem_text: str, workflow, data_files: list, mode: str = "batch", project_name: Optional[str] = None):
+async def _run_workflow(task_id: str, problem_text: str, workflow, data_files: list, mode: str = "batch", project_name: Optional[str] = None, knowledge_base_id: Optional[str] = None, template: str = "math_modeling", workflow_type: str = "standard"):
     try:
         orch = get_orchestrator()
         # execute_workflow 内部会保存结果
-        await orch.execute_workflow(task_id, problem_text, workflow, data_files=data_files, mode=mode, project_name=project_name)
+        await orch.execute_workflow(task_id, problem_text, workflow, data_files=data_files, mode=mode, project_name=project_name, knowledge_base_id=knowledge_base_id, template=template, workflow_type=workflow_type)
         logger.info(f"Task {task_id} completed and saved")
     except Exception as e:
         logger.error(f"Task {task_id} failed: {e}")
@@ -370,17 +386,20 @@ async def run_phase1(task_id: str):
     if not data_files:
         data_files = get_uploaded_files(project_name=project_name)
 
+    template = meta.get("template", "math_modeling")
+    workflow_type = meta.get("workflow_type", "standard")
+
     # 异步执行阶段1
-    asyncio.create_task(_run_phase1_workflow(task_id, problem_text, data_files, project_name))
+    asyncio.create_task(_run_phase1_workflow(task_id, problem_text, data_files, project_name, template, workflow_type))
 
     return {"task_id": task_id, "status": "running", "phase": "phase1", "message": "阶段1执行中..."}
 
 
-async def _run_phase1_workflow(task_id: str, problem_text: str, data_files: list, project_name: Optional[str] = None):
+async def _run_phase1_workflow(task_id: str, problem_text: str, data_files: list, project_name: Optional[str] = None, template: str = "math_modeling", workflow_type: str = "standard"):
     from ..core.task_persistence import load_task_metadata, save_task_result, save_task_metadata
     try:
         orch = get_orchestrator()
-        result = await orch.execute_phase1(task_id, problem_text, data_files, project_name=project_name)
+        result = await orch.execute_phase1(task_id, problem_text, data_files, project_name=project_name, template=template, workflow_type=workflow_type)
         logger.info(f"Phase1 completed for {task_id}")
         save_task_result(task_id, {
             "task_id": task_id,
@@ -427,16 +446,19 @@ async def run_phase2(task_id: str, req: dict = None):
     if not data_files:
         data_files = get_uploaded_files(project_name=project_name)
 
-    asyncio.create_task(_run_phase2_workflow(task_id, problem_text, sub_problems, data_files, mode, project_name))
+    template = meta.get("template", "math_modeling")
+    workflow_type = meta.get("workflow_type", "standard")
+
+    asyncio.create_task(_run_phase2_workflow(task_id, problem_text, sub_problems, data_files, mode, project_name, template, workflow_type))
 
     return {"task_id": task_id, "status": "running", "phase": "phase2", "mode": mode, "message": f"阶段2执行中（{'逐个递进' if mode == 'sequential' else '批量'}建模求解）..."}
 
 
-async def _run_phase2_workflow(task_id: str, problem_text: str, sub_problems: List, data_files: list, mode: str = "batch", project_name: Optional[str] = None):
+async def _run_phase2_workflow(task_id: str, problem_text: str, sub_problems: List, data_files: list, mode: str = "batch", project_name: Optional[str] = None, template: str = "math_modeling", workflow_type: str = "standard"):
     from ..core.task_persistence import load_task_metadata, save_task_result, save_task_metadata
     try:
         orch = get_orchestrator()
-        result = await orch.execute_phase2(task_id, problem_text, sub_problems, data_files, mode=mode, project_name=project_name)
+        result = await orch.execute_phase2(task_id, problem_text, sub_problems, data_files, mode=mode, project_name=project_name, template=template, workflow_type=workflow_type)
         logger.info(f"Phase2 completed for {task_id} (mode={mode})")
 
         steps = orch.task_history.get(task_id, [])
@@ -482,11 +504,13 @@ async def confirm_subproblems(task_id: str, req: dict):
 
     problem_text = meta.get("problem_text", "")
     project_name = meta.get("project_name")
+    template = meta.get("template", "math_modeling")
+    workflow_type = meta.get("workflow_type", "standard")
     data_files = meta.get("data_files", [])
     if not data_files:
         data_files = get_uploaded_files(project_name=project_name)
 
-    asyncio.create_task(_run_phase2_workflow(task_id, problem_text, sub_problems, data_files, project_name=project_name))
+    asyncio.create_task(_run_phase2_workflow(task_id, problem_text, sub_problems, data_files, project_name=project_name, template=template, workflow_type=workflow_type))
 
     return {"task_id": task_id, "status": "running", "phase": "phase2", "message": f"开始批量建模求解{len(sub_problems)}个子问题..."}
 
@@ -750,3 +774,20 @@ async def edit_and_continue(task_id: str, req: dict):
     )
 
     return {"task_id": task_id, "status": "resumed", "message": "已应用编辑，任务继续执行"}
+
+
+@router.post("/{task_id}/feedback")
+async def submit_feedback(task_id: str, req: dict):
+    """提交任务反馈，并提取经验教训存入 LessonsMemory"""
+    result = load_task_result(task_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="任务结果不存在")
+
+    feedback = req.get("feedback", {})
+    count = add_lessons_from_task(task_id, result, feedback)
+
+    return {
+        "task_id": task_id,
+        "lessons_added": count,
+        "message": f"已保存 {count} 条经验教训",
+    }

@@ -804,6 +804,7 @@ class BaseAgent(ABC):
         messages: List[Dict[str, str]],
         stream: bool = False,
         temperature: Optional[float] = None,
+        context: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """调用LLM API，支持 OpenAI / Anthropic / Claude CLI 格式"""
         self._call_context = {"messages": messages, "temperature": temperature}

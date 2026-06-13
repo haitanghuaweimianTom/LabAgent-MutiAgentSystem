@@ -57,8 +57,8 @@ class MCPManager:
         "web_search": MCPServerConfig(
             name="web_search",
             command="npx",
-            args=["-y", "@modelcontextprotocol/server-exa"],
-            description="网页搜索工具",
+            args=["-y", "@nachoretro/internetsearch"],
+            description="网页搜索工具 (DuckDuckGo / Brave)",
             tags=["search", "web"],
             install_source=InstallSource.BUILTIN,
             is_trusted=True,
@@ -66,19 +66,9 @@ class MCPManager:
         "file_system": MCPServerConfig(
             name="file_system",
             command="npx",
-            args=["-y", "@modelcontextprotocol/server-filesystem", "./workspace"],
-            description="文件系统操作工具",
+            args=["-y", "@modelcontextprotocol/server-filesystem", "./workspace", "./output"],
+            description="文件系统操作工具（workspace + output）",
             tags=["filesystem"],
-            install_source=InstallSource.BUILTIN,
-            is_trusted=True,
-        ),
-        "brave_search": MCPServerConfig(
-            name="brave_search",
-            command="npx",
-            args=["-y", "@modelcontextprotocol/server-brave"],
-            env={"BRAVE_API_KEY": ""},
-            description="Brave搜索工具",
-            tags=["search", "web"],
             install_source=InstallSource.BUILTIN,
             is_trusted=True,
         ),
@@ -92,12 +82,35 @@ class MCPManager:
             install_source=InstallSource.BUILTIN,
             is_trusted=True,
         ),
+        "scholarly_research": MCPServerConfig(
+            name="scholarly_research",
+            command="npx",
+            args=["-y", "scholarly-research-mcp"],
+            description="学术论文检索 (Google Scholar, ArXiv, PubMed, JSTOR)",
+            tags=["search", "academic", "paper"],
+            install_source=InstallSource.BUILTIN,
+            is_trusted=True,
+        ),
+        "arxiv_server": MCPServerConfig(
+            name="arxiv_server",
+            command="/home/tomgame/.local/bin/uvx",
+            args=["--from", "arxiv-mcp-server", "arxiv-mcp-server"],
+            description="arXiv 论文检索 (搜索/下载/摘要/引用图谱)",
+            tags=["search", "academic", "paper", "arxiv"],
+            install_source=InstallSource.BUILTIN,
+            is_trusted=True,
+        ),
     }
 
     # 内置工具到服务器的映射
     BUILTIN_TOOLS: Dict[str, str] = {
         "web_search": "web_search",
-        "paper_search": "web_search",
+        "paper_search": "scholarly_research",
+        "arxiv_search": "arxiv_server",
+        "scholar_search": "scholarly_research",
+        "arxiv_download": "arxiv_server",
+        "arxiv_abstract": "arxiv_server",
+        "arxiv_citation": "arxiv_server",
         "file_read": "file_system",
         "file_write": "file_system",
         "code_execute": "file_system",
@@ -241,11 +254,11 @@ class MCPManager:
         if agent_name in self.agent_tools_map:
             return self.agent_tools_map[agent_name]
         agent_tools_map = {
-            "research_agent": ["web_search", "paper_search", "file_write"],
-            "analyzer_agent": ["web_search", "bing_search", "sequentialthinking", "paper_search"],
-            "modeler_agent": ["sequentialthinking", "web_search", "paper_search"],
-            "solver_agent": ["file_read", "file_write", "web_search"],
-            "writer_agent": ["file_read", "file_write", "web_search"],
+            "research_agent": ["web_search", "paper_search", "arxiv_search", "arxiv_download", "arxiv_abstract", "arxiv_citation", "scholar_search", "file_write"],
+            "analyzer_agent": ["web_search", "bing_search", "sequentialthinking", "paper_search", "arxiv_search", "arxiv_abstract", "scholar_search"],
+            "modeler_agent": ["sequentialthinking", "web_search", "paper_search", "arxiv_search", "arxiv_abstract", "scholar_search"],
+            "solver_agent": ["file_read", "file_write", "web_search", "paper_search"],
+            "writer_agent": ["file_read", "file_write", "web_search", "paper_search", "arxiv_abstract"],
         }
         return agent_tools_map.get(agent_name, [])
 

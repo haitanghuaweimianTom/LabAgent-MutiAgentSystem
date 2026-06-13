@@ -15,6 +15,7 @@ const TEMPLATES = [
   { id: 'math_modeling', name: '数学建模竞赛', desc: '12章标准结构，MCM/ICM/高教社杯', chapters: 12 },
   { id: 'coursework', name: '课程作业', desc: '8章简化结构，适合课程报告', chapters: 8 },
   { id: 'financial_analysis', name: '金融分析报告', desc: '10章投资分析结构', chapters: 10 },
+  { id: 'research_survey', name: '研究调研报告', desc: '10章文献综述结构', chapters: 10 },
 ];
 
 const SOLVE_MODES = [
@@ -30,6 +31,7 @@ interface ProblemInputProps {
     template: string;
     mode: string;
     useCritique: boolean;
+    knowledgeBaseId: string | null;
   }) => void;
   submitting: boolean;
   taskStatus: string;
@@ -41,6 +43,8 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
   const activeProjectId = useAppStore((s) => s.activeProjectId);
   const setActiveProject = useAppStore((s) => s.setActiveProject);
   const createProject = useAppStore((s) => s.createProject);
+  const deleteProject = useAppStore((s) => s.deleteProject);
+  const loadProjects = useAppStore((s) => s.loadProjects);
 
   const activeProject = projects.find((p) => p.id === activeProjectId);
   const [projectName, setProjectName] = useState(activeProject?.name || '');
@@ -54,7 +58,17 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
   const [showNewProject, setShowNewProject] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // Knowledge base selector
+  const knowledgeBases = useAppStore((s) => s.knowledgeBases);
+  const activeKnowledgeBaseId = useAppStore((s) => s.activeKnowledgeBaseId);
+  const [knowledgeBaseId, setKnowledgeBaseId] = useState<string | null>(activeKnowledgeBaseId);
+
   const apiBase = () => window.__API_BASE__ || 'http://localhost:8000/api/v1';
+
+  // 加载项目列表
+  useEffect(() => {
+    loadProjects();
+  }, [loadProjects]);
 
   useEffect(() => {
     if (activeProject) setProjectName(activeProject.name);
@@ -76,10 +90,10 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
     } catch {} finally { setOcrLoading(false); }
   };
 
-  const handleCreateProject = () => {
+  const handleCreateProject = async () => {
     const name = newProjectName.trim();
     if (!name) { alert('请输入项目名称'); return; }
-    const id = createProject(name);
+    const id = await createProject(name);
     setActiveProject(id);
     setProjectName(name);
     setShowNewProject(false);
@@ -89,7 +103,7 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
   const handleSubmit = () => {
     if (!problemText.trim()) { alert('请输入问题描述'); return; }
     const finalProjectName = projectName.trim() || activeProject?.name || '未命名项目';
-    onSubmit({ problemText, projectName: finalProjectName, workflow, template, mode, useCritique });
+    onSubmit({ problemText, projectName: finalProjectName, workflow, template, mode, useCritique, knowledgeBaseId });
   };
 
   const isRunning = taskStatus === 'running' || taskStatus === 'phase1' || taskStatus === 'phase2';
@@ -116,6 +130,27 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
             ))}
             <option value="__new__">+ 新建项目</option>
           </select>
+          {activeProjectId && (
+            <button
+              title="删除当前项目"
+              onClick={async () => {
+                if (!confirm('确定要删除该项目吗？关联的任务记录不会受影响。')) return;
+                await deleteProject(activeProjectId);
+                setProjectName('');
+              }}
+              style={{
+                padding: '0.4rem 0.6rem',
+                background: 'rgba(231,76,60,0.15)',
+                border: '1px solid rgba(231,76,60,0.3)',
+                borderRadius: 6,
+                color: '#e74c3c',
+                cursor: 'pointer',
+                fontSize: '0.8rem',
+              }}
+            >
+              🗑️ 删除
+            </button>
+          )}
           {showNewProject && (
             <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
               <input
@@ -137,6 +172,18 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
           onChange={e => setProjectName(e.target.value)}
           maxLength={60}
         />
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.5rem' }}>
+          <select
+            style={{ flex: 1, padding: '0.5rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: '#e0e0e0', fontSize: '0.9rem' }}
+            value={knowledgeBaseId || ''}
+            onChange={e => setKnowledgeBaseId(e.target.value || null)}
+          >
+            <option value="">📚 使用所有知识库</option>
+            {knowledgeBases.map((kb) => (
+              <option key={kb.id} value={kb.id}>{kb.name}</option>
+            ))}
+          </select>
+        </div>
         <div className={styles.ocrRow}>
           <label className={styles.ocrBtn}>
             {ocrLoading ? '识别中...' : '📷 上传题目图片 / PDF'}

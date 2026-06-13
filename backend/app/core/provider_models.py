@@ -129,7 +129,12 @@ PROVIDER_PRESETS: List[Dict[str, Any]] = [
         "icon": "SiliconFlow", "icon_color": "#6366f1",
         "api_host": "https://api.siliconflow.cn/v1",
         "meta": {"api_format": "openai_chat"},
-        "models": [{"name": "Qwen/Qwen2.5-72B-Instruct", "enabled": True}, {"name": "deepseek-ai/DeepSeek-V3", "enabled": True}, {"name": "THUDM/glm-4-9b-chat", "enabled": True}],
+        "models": [
+            {"name": "Qwen/Qwen3.5-4B", "enabled": True},
+            {"name": "Qwen/Qwen2.5-72B-Instruct", "enabled": True},
+            {"name": "deepseek-ai/DeepSeek-V3", "enabled": True},
+            {"name": "THUDM/glm-4-9b-chat", "enabled": True},
+        ],
     },
     {
         "id": "zhipu", "name": "智谱 AI", "type": "openai",

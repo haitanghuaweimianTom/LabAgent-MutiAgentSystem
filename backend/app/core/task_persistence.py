@@ -141,6 +141,28 @@ def list_all_tasks() -> List[Dict[str, Any]]:
     return tasks
 
 
+def mark_interrupted_tasks() -> int:
+    """启动时将之前标记为 running 的任务改为 interrupted（防止僵尸任务）"""
+    count = 0
+    for task in list_all_tasks():
+        if task.get("status") == "running":
+            tid = task.get("task_id")
+            if tid:
+                task["status"] = "interrupted"
+                task["current_step"] = "系统重启，任务中断"
+                task["completed_at"] = datetime.now().isoformat()
+                try:
+                    _task_file(tid).write_text(
+                        json.dumps(task, ensure_ascii=False, indent=2),
+                        encoding="utf-8",
+                    )
+                    count += 1
+                    logger.info(f"Task {tid} marked as interrupted (system restart)")
+                except Exception as e:
+                    logger.error(f"Failed to mark {tid} as interrupted: {e}")
+    return count
+
+
 def delete_task(task_id: str) -> bool:
     """删除任务所有数据"""
     deleted = False

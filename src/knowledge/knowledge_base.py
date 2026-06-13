@@ -12,8 +12,9 @@ from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime
 
 from .document import Document, DocumentChunker
-from .embeddings import EmbeddingModel, SentenceTransformerEmbedding, TfidfEmbedding
+from .embeddings import EmbeddingModel, SentenceTransformerEmbedding, TfidfEmbedding, create_embedding_model
 from .vector_store import VectorStore, RetrievalResult
+from .rerankers import RerankerModel, create_reranker_model
 
 
 class KnowledgeBase:
@@ -22,6 +23,7 @@ class KnowledgeBase:
     def __init__(
         self,
         embedding_model: Optional[EmbeddingModel] = None,
+        reranker_model: Optional[RerankerModel] = None,
         chunk_size: int = 512,
         chunk_overlap: int = 128,
         name: str = "default",
@@ -32,7 +34,7 @@ class KnowledgeBase:
             chunk_overlap=chunk_overlap,
         )
         self.embedding_model = embedding_model or self._default_embedding_model()
-        self.vector_store = VectorStore(self.embedding_model)
+        self.vector_store = VectorStore(self.embedding_model, reranker_model=reranker_model)
         self._documents: Dict[str, Document] = {}
 
     def _default_embedding_model(self) -> EmbeddingModel:

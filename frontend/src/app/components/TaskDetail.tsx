@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import styles from './TaskDetail.module.css';
 import PaperPreview from './PaperPreview';
 import AlgorithmRecommend from './AlgorithmRecommend';
+import PaperList from './PaperList';
 
 interface Message {
   id: string;
@@ -57,6 +58,11 @@ export default function TaskDetail({ taskId, onDelete }: TaskDetailProps) {
   const [meta, setMeta] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelled, setCancelled] = useState(false);
+  const [feedback, setFeedback] = useState({ overall: 5, category: 'method_selection', comment: '' });
+  const [submittingFeedback, setSubmittingFeedback] = useState(false);
+  const [feedbackSent, setFeedbackSent] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -107,6 +113,40 @@ export default function TaskDetail({ taskId, onDelete }: TaskDetailProps) {
     } catch { alert('导出失败'); } finally { setExporting(false); }
   };
 
+  const handleCancel = async () => {
+    if (!confirm('确定取消该任务？')) return;
+    setCancelling(true);
+    try {
+      const res = await fetch(apiBase() + '/tasks/' + taskId + '/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: '用户手动取消' }),
+      });
+      if (res.ok) {
+        setCancelled(true);
+        if (meta) setMeta({ ...meta, status: 'cancelled' });
+      } else {
+        alert('取消失败');
+      }
+    } catch { alert('取消失败'); } finally { setCancelling(false); }
+  };
+
+  const handleSubmitFeedback = async () => {
+    setSubmittingFeedback(true);
+    try {
+      const res = await fetch(apiBase() + '/tasks/' + taskId + '/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ feedback }),
+      });
+      if (res.ok) {
+        setFeedbackSent(true);
+      } else {
+        alert('反馈提交失败');
+      }
+    } catch { alert('反馈提交失败'); } finally { setSubmittingFeedback(false); }
+  };
+
   const renderMsg = (msg: Message) => (
     <div
       key={msg.id}
@@ -140,6 +180,11 @@ export default function TaskDetail({ taskId, onDelete }: TaskDetailProps) {
       <div className={styles.header}>
         <span className={styles.title}>📄 任务详情: {taskId}</span>
         <div className={styles.actions}>
+          {meta?.status === 'running' && !cancelled && (
+            <button className={styles.cancelBtn} onClick={handleCancel} disabled={cancelling}>
+              {cancelling ? '取消中...' : '⏹ 取消任务'}
+            </button>
+          )}
           <button className={styles.exportBtn} onClick={handleExport} disabled={exporting}>
             {exporting ? '导出中...' : '💾 导出到桌面'}
           </button>
@@ -171,6 +216,15 @@ export default function TaskDetail({ taskId, onDelete }: TaskDetailProps) {
 
       {!loading && activeTab === 'result' && (
         <div className={styles.resultPanel}>
+          {(() => {
+            const researchOutput = result?.output?.research_agent;
+            const papers = researchOutput?.papers || result?.output?.papers || [];
+            const source = researchOutput?.paper_source || 'arXiv';
+            if (papers.length > 0) {
+              return <PaperList papers={papers} source={source} />;
+            }
+            return null;
+          })()}
           {algorithms.length > 0 && (
             <AlgorithmRecommend algorithms={algorithms} />
           )}
@@ -216,6 +270,57 @@ export default function TaskDetail({ taskId, onDelete }: TaskDetailProps) {
             <span className={styles.infoLabel}>当前步骤</span>
             <span className={styles.infoValue}>{meta.current_step || '无'}</span>
           </div>
+
+          {(meta.status === 'completed' || meta.status === 'failed' || cancelled) && (
+            <div className={styles.feedbackSection}>
+              <div className={styles.feedbackTitle}>📝 任务反馈</div>
+              {feedbackSent ? (
+                <div className={styles.feedbackSent}>反馈已提交，感谢！</div>
+              ) : (
+                <>
+                  <div className={styles.feedbackRow}>
+                    <label>整体评分</label>
+                    <select
+                      value={feedback.overall}
+                      onChange={(e) => setFeedback({ ...feedback, overall: parseInt(e.target.value) })}
+                    >
+                      {[5, 4, 3, 2, 1].map((s) => (
+                        <option key={s} value={s}>{s} 星</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className={styles.feedbackRow}>
+                    <label>类别</label>
+                    <select
+                      value={feedback.category}
+                      onChange={(e) => setFeedback({ ...feedback, category: e.target.value })}
+                    >
+                      <option value="method_selection">方法选择</option>
+                      <option value="modeling">建模</option>
+                      <option value="solving">求解</option>
+                      <option value="writing">写作</option>
+                      <option value="data_processing">数据处理</option>
+                    </select>
+                  </div>
+                  <div className={styles.feedbackRow}>
+                    <label>建议/备注</label>
+                    <textarea
+                      value={feedback.comment}
+                      onChange={(e) => setFeedback({ ...feedback, comment: e.target.value })}
+                      placeholder="描述本次任务中有效的方法或需要改进的地方..."
+                    />
+                  </div>
+                  <button
+                    className={styles.feedbackBtn}
+                    onClick={handleSubmitFeedback}
+                    disabled={submittingFeedback}
+                  >
+                    {submittingFeedback ? '提交中...' : '提交反馈'}
+                  </button>
+                </>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

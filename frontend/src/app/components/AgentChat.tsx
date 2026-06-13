@@ -21,7 +21,9 @@ interface AgentChatProps {
   paused: boolean;
   onPause: () => void;
   onResume: () => void;
+  onCancel?: () => void;
   resuming: boolean;
+  cancelling?: boolean;
 }
 
 const TEAM_COLORS: Record<string, string> = {
@@ -100,7 +102,7 @@ function deriveStages(status: string, progress: number, currentStep: string) {
   return stages;
 }
 
-export default function AgentChat({ messages, taskStatus, progress, currentStep, paused, onPause, onResume, resuming }: AgentChatProps) {
+export default function AgentChat({ messages, taskStatus, progress, currentStep, paused, onPause, onResume, onCancel, resuming, cancelling }: AgentChatProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const stages = deriveStages(taskStatus, progress, currentStep || '');
 
@@ -126,7 +128,14 @@ export default function AgentChat({ messages, taskStatus, progress, currentStep,
           </div>
           <div className={styles.chatActions}>
             {isRunning && !paused && (
-              <button className={styles.pauseBtn} onClick={onPause}>⏸ 暂停</button>
+              <>
+                <button className={styles.pauseBtn} onClick={onPause}>⏸ 暂停</button>
+                {onCancel && (
+                  <button className={styles.cancelBtn} onClick={onCancel} disabled={cancelling}>
+                    {cancelling ? '取消中...' : '⏹ 取消'}
+                  </button>
+                )}
+              </>
             )}
             {paused && (
               <button className={styles.resumeBtn} onClick={onResume} disabled={resuming}>

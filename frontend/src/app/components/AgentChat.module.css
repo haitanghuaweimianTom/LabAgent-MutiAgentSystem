@@ -60,6 +60,19 @@
 .resumeBtn:hover { background: rgba(46,204,113,0.5); }
 .resumeBtn:disabled { opacity: 0.5; cursor: not-allowed; }
 
+.cancelBtn {
+  padding: 0.35rem 0.8rem;
+  background: rgba(231,76,60,0.3);
+  border: 1px solid rgba(231,76,60,0.5);
+  border-radius: 6px;
+  color: #e74c3c;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.cancelBtn:hover { background: rgba(231,76,60,0.5); }
+.cancelBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
 .messages {
   height: 480px;
   overflow-y: auto;

@@ -29,9 +29,10 @@
 """
 
 from .document import Document, DocumentChunker
-from .embeddings import EmbeddingModel, SentenceTransformerEmbedding, TfidfEmbedding
+from .embeddings import EmbeddingModel, SentenceTransformerEmbedding, TfidfEmbedding, OpenAIEmbedding, OllamaEmbedding, VoyageAIEmbedding, create_embedding_model
 from .vector_store import VectorStore
 from .knowledge_base import KnowledgeBase
+from .rerankers import RerankerModel, CrossEncoderReranker, TfidfReranker, NoOpReranker, VoyageAIReranker, BailianReranker, JinaReranker, TEIReranker, create_reranker_model
 
 __all__ = [
     "Document",
@@ -39,6 +40,19 @@ __all__ = [
     "EmbeddingModel",
     "SentenceTransformerEmbedding",
     "TfidfEmbedding",
+    "OpenAIEmbedding",
+    "OllamaEmbedding",
+    "VoyageAIEmbedding",
+    "create_embedding_model",
     "VectorStore",
     "KnowledgeBase",
+    "RerankerModel",
+    "CrossEncoderReranker",
+    "TfidfReranker",
+    "NoOpReranker",
+    "VoyageAIReranker",
+    "BailianReranker",
+    "JinaReranker",
+    "TEIReranker",
+    "create_reranker_model",
 ]

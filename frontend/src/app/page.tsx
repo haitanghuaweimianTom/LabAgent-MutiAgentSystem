@@ -11,6 +11,8 @@ import TaskHistory from './components/TaskHistory';
 import WorkflowManager from './components/WorkflowManager';
 import AgentManager from './components/AgentManager';
 import SettingsPage from './components/SettingsPage';
+import PdfManager from './components/PdfManager';
+import MemoryManager from './components/MemoryManager';
 import { useAppStore } from './store/useAppStore';
 
 declare global {
@@ -31,7 +33,7 @@ interface Message {
 }
 
 export default function Home() {
-  const [tab, setTab] = useState<'dashboard' | 'generate' | 'files' | 'history' | 'agents' | 'workflows' | 'settings'>('dashboard');
+  const [tab, setTab] = useState<'dashboard' | 'generate' | 'files' | 'pdf' | 'history' | 'agents' | 'workflows' | 'memory' | 'settings'>('dashboard');
 
   // Task state
   const [taskId, setTaskId] = useState<string | null>(null);
@@ -44,6 +46,8 @@ export default function Home() {
   // Pause/Resume
   const [paused, setPaused] = useState(false);
   const [resuming, setResuming] = useState(false);
+
+  const [cancelling, setCancelling] = useState(false);
 
   // Phase workflow
   const [phase, setPhase] = useState<'idle' | 'phase1' | 'phase2_confirm' | 'phase2'>('idle');
@@ -64,6 +68,7 @@ export default function Home() {
     template: string;
     mode: string;
     useCritique: boolean;
+    knowledgeBaseId: string | null;
   }) => {
     setSubmitting(true);
     try {
@@ -82,6 +87,7 @@ export default function Home() {
             use_critique: params.useCritique,
           },
           data_files: dataFiles,
+          knowledge_base_id: params.knowledgeBaseId || undefined,
         }),
       });
       const data = await res.json();
@@ -245,6 +251,22 @@ export default function Home() {
     }
   };
 
+  const handleCancel = async () => {
+    if (!taskId) return;
+    if (!confirm('确定取消当前任务？')) return;
+    setCancelling(true);
+    try {
+      await fetch(apiBase() + '/tasks/' + taskId + '/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: '用户手动取消' }),
+      });
+      setTaskStatus('cancelled');
+    } catch {} finally {
+      setCancelling(false);
+    }
+  };
+
   // ========== Edit-and-Continue ==========
   const handleEditAndContinue = async (editedData: Record<string, any>) => {
     if (!taskId) return;
@@ -282,9 +304,11 @@ export default function Home() {
     { id: 'dashboard', label: '🏠 首页', desc: '快速开始' },
     { id: 'generate', label: '🚀 生成', desc: taskStatus === 'running' || taskStatus === 'phase1' || taskStatus === 'phase2' ? `进行中 ${progress}%` : '实时进度' },
     { id: 'files', label: '📁 数据', desc: '文件管理' },
+    { id: 'pdf', label: '📄 PDF', desc: '解析/下载' },
     { id: 'history', label: '📋 历史', desc: '任务记录' },
     { id: 'agents', label: '🤖 Agent', desc: '团队管理' },
     { id: 'workflows', label: '🔄 流程', desc: '工作流' },
+    { id: 'memory', label: '🧠 记忆', desc: '经验教训/任务记忆' },
     { id: 'settings', label: '⚙️ 设置', desc: 'Provider/MCP/知识库/系统' },
   ] as const;
 
@@ -435,7 +459,9 @@ export default function Home() {
               paused={paused}
               onPause={handlePause}
               onResume={handleResume}
+              onCancel={handleCancel}
               resuming={resuming}
+              cancelling={cancelling}
             />
           </div>
         )}
@@ -443,6 +469,11 @@ export default function Home() {
         {/* ===== 数据 ===== */}
         {tab === 'files' && (
           <FileManager taskId={taskId} />
+        )}
+
+        {/* ===== PDF ===== */}
+        {tab === 'pdf' && (
+          <PdfManager />
         )}
 
         {/* ===== 历史 ===== */}
@@ -458,6 +489,11 @@ export default function Home() {
         {/* ===== 工作流 ===== */}
         {tab === 'workflows' && (
           <WorkflowManager />
+        )}
+
+        {/* ===== 记忆 ===== */}
+        {tab === 'memory' && (
+          <MemoryManager />
         )}
 
         {/* ===== 设置（包含 Provider/MCP/知识库/系统 子标签） ===== */}

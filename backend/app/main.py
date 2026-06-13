@@ -21,6 +21,7 @@ from .routers.providers import router as providers_router
 from .routers.knowledge import router as knowledge_router
 from .routers.projects import router as projects_router
 from .routers.memory import router as memory_router
+from .routers.pdf import router as pdf_router
 from .core.provider_config import migrate_legacy_to_new, get_default_provider, list_custom_providers
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -96,6 +97,7 @@ app.include_router(providers_router, prefix="/api/v1")
 app.include_router(knowledge_router, prefix="/api/v1")
 app.include_router(projects_router, prefix="/api/v1")
 app.include_router(memory_router, prefix="/api/v1")
+app.include_router(pdf_router, prefix="/api/v1")
 
 
 @app.get("/")

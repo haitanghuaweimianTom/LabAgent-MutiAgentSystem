@@ -1,0 +1,237 @@
+.container {
+  padding: 1rem;
+  color: #e0e0e0;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.title {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #f39c12;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.statCard {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 1rem;
+  text-align: center;
+}
+
+.statValue {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #2ecc71;
+}
+
+.statLabel {
+  font-size: 0.85rem;
+  color: #aaa;
+  margin-top: 0.3rem;
+}
+
+.tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 0.5rem;
+}
+
+.tab {
+  padding: 0.5rem 1rem;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: #aaa;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.tabActive {
+  background: rgba(243, 156, 18, 0.15);
+  border-color: rgba(243, 156, 18, 0.4);
+  color: #f39c12;
+}
+
+.sectionTitle {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #ddd;
+  margin-bottom: 0.8rem;
+}
+
+.filters {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.input {
+  padding: 0.5rem;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: #e0e0e0;
+  font-size: 0.9rem;
+}
+
+.select {
+  padding: 0.5rem;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: #e0e0e0;
+  font-size: 0.9rem;
+}
+
+.btn {
+  padding: 0.5rem 1rem;
+  background: rgba(52, 152, 219, 0.15);
+  border: 1px solid rgba(52, 152, 219, 0.3);
+  border-radius: 6px;
+  color: #3498db;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.btnDanger {
+  padding: 0.4rem 0.8rem;
+  background: rgba(231, 76, 60, 0.15);
+  border: 1px solid rgba(231, 76, 60, 0.3);
+  border-radius: 6px;
+  color: #e74c3c;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.btnSuccess {
+  padding: 0.5rem 1rem;
+  background: linear-gradient(135deg, #2ecc71, #27ae60);
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 1rem;
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.5rem;
+}
+
+.cardMeta {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+.tag {
+  padding: 0.2rem 0.5rem;
+  background: rgba(52, 152, 219, 0.15);
+  border-radius: 4px;
+  font-size: 0.75rem;
+  color: #3498db;
+}
+
+.tagSuccess {
+  background: rgba(46, 204, 113, 0.15);
+  color: #2ecc71;
+}
+
+.tagWarning {
+  background: rgba(243, 156, 18, 0.15);
+  color: #f39c12;
+}
+
+.content {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: #ccc;
+}
+
+.empty {
+  color: #888;
+  text-align: center;
+  padding: 2rem;
+}
+
+.form {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.formRow {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.textarea {
+  width: 100%;
+  min-height: 80px;
+  padding: 0.5rem;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: #e0e0e0;
+  font-size: 0.9rem;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.jsonView {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 1rem;
+  font-family: 'Fira Code', 'Consolas', monospace;
+  font-size: 0.8rem;
+  color: #ccc;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.taskInput {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}

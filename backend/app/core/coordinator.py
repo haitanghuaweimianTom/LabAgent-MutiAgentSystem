@@ -126,6 +126,7 @@ class Coordinator:
             try:
                 # 执行Agent任务
                 if hasattr(agent, "execute"):
+                    agent._knowledge_base_id = step_context.get("knowledge_base_id")
                     output = await agent.execute(
                         task_input={"action": action, "problem_text": problem_text},
                         context=step_context,

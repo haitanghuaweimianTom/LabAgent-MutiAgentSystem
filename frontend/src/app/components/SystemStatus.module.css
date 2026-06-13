@@ -56,6 +56,9 @@
 
 .providerName { color: #ccc; font-weight: 500; min-width: 120px; }
 .providerDetail { color: #777; font-size: 0.75rem; }
+.providerType { color: #888; font-size: 0.7rem; background: rgba(255,255,255,0.06); padding: 0.1rem 0.35rem; border-radius: 4px; }
+.providerModel { color: #aaa; font-size: 0.75rem; margin-left: auto; }
+.emptyHint { color: #666; font-size: 0.82rem; padding: 0.5rem 0; }
 
 .loading { text-align: center; padding: 1rem; color: #888; font-size: 0.9rem; }
 .error { text-align: center; padding: 1rem; color: #e74c3c; font-size: 0.9rem; }

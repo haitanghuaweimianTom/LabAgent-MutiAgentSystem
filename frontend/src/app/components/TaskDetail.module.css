@@ -44,6 +44,19 @@
 
 .deleteBtn:hover { background: rgba(231,76,60,0.25); }
 
+.cancelBtn {
+  padding: 0.35rem 0.9rem;
+  background: rgba(231,76,60,0.2);
+  border: 1px solid rgba(231,76,60,0.5);
+  border-radius: 6px;
+  color: #e74c3c;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.cancelBtn:hover { background: rgba(231,76,60,0.35); }
+.cancelBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
 .tabs {
   display: flex;
   gap: 0.3rem;
@@ -181,4 +194,70 @@
   color: #ccc;
   flex: 1;
   word-break: break-all;
+}
+
+.feedbackSection {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+
+.feedbackTitle {
+  font-size: 0.95rem;
+  color: #f39c12;
+  font-weight: 700;
+  margin-bottom: 0.8rem;
+}
+
+.feedbackRow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-bottom: 0.8rem;
+}
+
+.feedbackRow label {
+  font-size: 0.8rem;
+  color: #aaa;
+}
+
+.feedbackRow select,
+.feedbackRow textarea {
+  padding: 0.5rem;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 6px;
+  color: #e0e0e0;
+  font-size: 0.85rem;
+  font-family: inherit;
+}
+
+.feedbackRow textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+.feedbackBtn {
+  padding: 0.5rem 1rem;
+  background: linear-gradient(135deg, #3498db, #2980b9);
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.feedbackBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.feedbackSent {
+  color: #2ecc71;
+  font-size: 0.9rem;
+  padding: 0.8rem;
+  background: rgba(46,204,113,0.08);
+  border-radius: 6px;
+  text-align: center;
 }

@@ -54,6 +54,7 @@ class TaskCreateRequest(BaseModel):
     mode: Optional[str] = "batch"  # "batch"=一次性, "sequential"=逐个递进
     options: Optional[Dict[str, Any]] = Field(default_factory=dict)
     data_files: Optional[List[str]] = None  # 前端选中的数据文件名列表（为空则使用全部上传文件）
+    knowledge_base_id: Optional[str] = None  # 指定使用的知识库ID，为空则使用所有知识库
 
 
 class TaskCancelRequest(BaseModel):
@@ -79,3 +80,18 @@ class WorkflowDefinition(BaseModel):
     description: str = ""
     steps: List[WorkflowStep] = []
     enabled: bool = True
+
+
+class ProjectCreateRequest(BaseModel):
+    name: str
+    description: str = ""
+
+
+class ProjectResponse(BaseModel):
+    id: str
+    name: str
+    description: str = ""
+    created_at: float = 0
+    updated_at: float = 0
+    task_ids: List[str] = []
+    path: str = ""

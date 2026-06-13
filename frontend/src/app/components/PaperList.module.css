@@ -1,0 +1,245 @@
+.container {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 1rem;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.8rem 1rem;
+  background: rgba(0, 0, 0, 0.2);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.title {
+  font-size: 0.95rem;
+  color: #fff;
+  font-weight: 600;
+}
+
+.list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.empty {
+  text-align: center;
+  padding: 2rem;
+  color: #888;
+  font-size: 0.9rem;
+}
+
+.card {
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 10px;
+  padding: 0.8rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  transition: border-color 0.2s;
+}
+
+.card:hover {
+  border-color: rgba(52, 152, 219, 0.3);
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+}
+
+.titleLink {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #3498db;
+  text-decoration: none;
+  line-height: 1.4;
+  flex: 1;
+}
+
+.titleLink:hover {
+  text-decoration: underline;
+}
+
+.year {
+  font-size: 0.78rem;
+  color: #888;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.authors {
+  font-size: 0.8rem;
+  color: #aaa;
+  margin-bottom: 0.4rem;
+  line-height: 1.4;
+}
+
+.meta {
+  display: flex;
+  gap: 0.3rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 0.4rem;
+}
+
+.tag {
+  font-size: 0.75rem;
+  color: #e0c080;
+  background: rgba(224, 192, 128, 0.1);
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+}
+
+.category {
+  font-size: 0.75rem;
+  color: #a0e0a0;
+  background: rgba(160, 224, 160, 0.1);
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+}
+
+.pdfLink {
+  font-size: 0.75rem;
+  color: #e74c3c;
+  text-decoration: none;
+  margin-left: auto;
+  padding: 0.15rem 0.4rem;
+  border: 1px solid rgba(231, 76, 60, 0.3);
+  border-radius: 4px;
+}
+
+.pdfLink:hover {
+  background: rgba(231, 76, 60, 0.15);
+}
+
+.toggleBtn {
+  font-size: 0.78rem;
+  color: #888;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.2rem 0;
+  text-align: left;
+}
+
+.toggleBtn:hover {
+  color: #ccc;
+}
+
+.abstract {
+  font-size: 0.82rem;
+  color: #bbb;
+  line-height: 1.6;
+  margin-top: 0.4rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.citation {
+  font-size: 0.75rem;
+  color: #e8a0a0;
+  background: rgba(232, 160, 160, 0.1);
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+}
+
+.venue {
+  font-size: 0.75rem;
+  color: #c0a0e8;
+  background: rgba(192, 160, 232, 0.1);
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.doi {
+  font-size: 0.75rem;
+  color: #a0c0e8;
+  text-decoration: none;
+  padding: 0.15rem 0.4rem;
+  border: 1px solid rgba(160, 192, 232, 0.3);
+  border-radius: 4px;
+}
+
+.doi:hover {
+  background: rgba(160, 192, 232, 0.15);
+}
+
+.fields {
+  display: flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.4rem;
+}
+
+.fieldTag {
+  font-size: 0.72rem;
+  color: #888;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+}
+
+.tldr {
+  font-size: 0.8rem;
+  color: #aaa;
+  margin-bottom: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 6px;
+  border-left: 2px solid rgba(52, 152, 219, 0.4);
+  line-height: 1.5;
+}
+
+.tldrLabel {
+  color: #3498db;
+  font-weight: 600;
+  margin-right: 0.3rem;
+}
+
+.relevance {
+  font-size: 0.75rem;
+  color: #f39c12;
+  background: rgba(243, 156, 18, 0.1);
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+}
+
+.extraction {
+  font-size: 0.8rem;
+  color: #bbb;
+  margin-bottom: 0.5rem;
+  padding: 0.5rem 0.7rem;
+  background: rgba(46, 204, 113, 0.05);
+  border-radius: 6px;
+  border-left: 2px solid rgba(46, 204, 113, 0.4);
+  line-height: 1.5;
+}
+
+.extraction > div {
+  margin-bottom: 0.25rem;
+}
+
+.extraction strong {
+  color: #2ecc71;
+  margin-right: 0.3rem;
+}
