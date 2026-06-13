@@ -234,6 +234,79 @@ class PdfProcessingService:
                 pass
         return "pymupdf4llm"
 
+    # ====================================================================
+    # Phase 5: 统一 PDF 解析入口（直接传路径，绕过 file_id 抽象）
+    # ====================================================================
+
+    async def parse_file(
+        self,
+        file_path: Path,
+        mode: str = "auto",
+        pages: Optional[List[int]] = None,
+        options: Optional[Dict[str, Any]] = None,
+    ) -> "PdfParseResult":
+        """Phase 5 统一入口：直接传文件路径。
+
+        Args:
+            file_path: 本地 PDF 绝对路径。
+            mode: ``"auto"`` / ``"pymupdf4llm"`` / ``"vision"`` / ``"mineru"``。
+                ``auto`` 时按启发式（pages<20 && size<5MB → pymupdf；else → vision/mineru）
+            pages: 页码列表（1-based）；None 表示全部。
+            options: 透传到 parser（如 vision_provider / vision_max_pages）。
+
+        Returns:
+            :class:`PdfParseResult` 统一结构。失败时 ``errors`` 非空。
+        """
+        options = options or {}
+        if not file_path.exists():
+            return PdfParseResult(
+                text="", errors=[f"file not found: {file_path}"]
+            )
+
+        # 自动选择策略
+        actual_mode = mode
+        if mode == "auto":
+            actual_mode = self._auto_select_strategy_for_path(file_path, options)
+
+        parser = pdf_parser_registry.get(actual_mode)
+        if parser is None:
+            # fallback 到 pymupdf4llm
+            logger.debug(f"parser '{actual_mode}' not available; fall back to pymupdf4llm")
+            parser = PyMuPDF4LLMParser()
+            actual_mode = "pymupdf4llm"
+
+        try:
+            return await parser.parse(file_path, pages=pages, options=options)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"parse_file failed for {file_path} (mode={actual_mode}): {exc}")
+            return PdfParseResult(
+                text="", errors=[f"parse failed (mode={actual_mode}): {exc}"],
+            )
+
+    @staticmethod
+    def _auto_select_strategy_for_path(file_path: Path, options: Dict[str, Any]) -> str:
+        """Phase 5 启发式：按页数 + 文件大小 + 视觉请求选 strategy。
+
+        - 显式 ``use_vision=True`` + vision_provider → vision
+        - pages < 20 && size < 5MB → pymupdf4llm（快）
+        - pages >= 20 || size >= 5MB → vision（高质量，但需要 vision provider）
+        - 默认 → pymupdf4llm
+        """
+        use_vision = options.get("use_vision", False)
+        if use_vision and options.get("vision_provider"):
+            return "vision"
+        try:
+            size_mb = file_path.stat().st_size / (1024 * 1024)
+            import fitz
+            doc = fitz.open(str(file_path))
+            pages = len(doc)
+            doc.close()
+            if pages >= 20 or size_mb >= 5:
+                return "vision"  # 长文档或大文件建议 vision
+            return "pymupdf4llm"
+        except Exception:
+            return "pymupdf4llm"
+
 
 # 全局服务实例
 _pdf_service: Optional[PdfProcessingService] = None
