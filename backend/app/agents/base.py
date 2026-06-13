@@ -7,6 +7,10 @@ import shutil
 import subprocess
 import sys
 import tempfile
+
+# v3.4 通用化（CCF-A 论文工厂 Phase 1D）：演示用代码模板从本文件迁出到
+# ``demo_code_templates``。``_mock_response`` 不再持有任何 CUMCM 领域字符串。
+from .demo_code_templates import DEMO_CODE_TEMPLATES, DEMO_KEYWORD_TO_TEMPLATE
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -626,6 +630,39 @@ class BaseAgent(ABC):
     @abstractmethod
     def get_system_prompt(self) -> str:
         """返回系统提示词"""
+
+    # ------------------------------------------------------------------
+    # 演示用代码模板选取（Phase 1D：硬编码字符串迁出到 ``demo_code_templates``）
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _select_demo_code_template(block_lower: str) -> str:
+        """根据子问题文本（小写）选取一个演示用代码模板字符串。
+
+        仅当 ``_mock_response`` 被调用时（即 LLM Key 缺失）才生效。
+        真实 LLM 路径下，本函数不会被调用。
+
+        选取优先级（顺序敏感，先匹配先返回）：
+        1. ``optics_multi`` — 多光束干涉（关键词含 "多光束" / "多束" 等）
+        2. ``optics_double`` — 双光束干涉 / 红外反射 / 薄膜
+        3. ``newsvendor`` — 报童 / 库存 / 订货
+        4. ``forecast`` — ARIMA / 时间序列
+        5. ``sensitivity`` — 灵敏度 / 稳健性
+        6. ``topsis`` — 综合评价 / TOPSIS / AHP
+        7. ``lp_fallback`` — 通用线性规划兜底
+
+        Args:
+            block_lower: 子问题文本的 lowercase 字符串。
+
+        Returns:
+            Python 代码字符串（直接拼接到 ``code_files[0]["code"]``）。
+        """
+        # 顺序遍历：第一个命中即返回
+        for tpl_id, (_tpl_name, keywords) in DEMO_KEYWORD_TO_TEMPLATE.items():
+            if any(kw in block_lower for kw in keywords):
+                return DEMO_CODE_TEMPLATES[tpl_id]
+        # 兜底
+        return DEMO_CODE_TEMPLATES["lp_fallback"]
         pass
 
     @abstractmethod
@@ -1299,307 +1336,9 @@ class BaseAgent(ABC):
                 sp_name = first_line if first_line else f"子问题{sp_id}"
                 block_lower = block_content.lower()
 
-                # 根据每个子问题的内容选择代码模板
-                if any(kw in block_lower for kw in ["干涉", "外延", "厚度", "折射率", "光程差", "双光束", "多光束", "SiC", "碳化硅", "红外", "波数", "反射率", "菲涅尔", "薄膜", "膜厚"]):
-                    if any(kw in block_lower for kw in ["多光束", "多次反射", "airy", "多束", "硅晶圆"]):
-                        # 多光束干涉求解（Airy公式拟合）
-                        code = '''import numpy as np
-from scipy.optimize import minimize, curve_fit
-
-def airy_formula_reflectance(delta, R1, R2):
-    """Airy公式：多光束干涉反射率"""
-    r1, r2 = np.sqrt(R1), np.sqrt(R2)
-    num = R1 + R2 - 2*r1*r2*np.cos(delta)
-    den = 1 + R1*R2 - 2*r1*r2*np.cos(delta)
-    return num / den
-
-def compute_phase_delta(wavenumber, thickness, n_eff, angle_rad):
-    """计算相位差 δ = 4π·n·d·cosθ/λ = 4π·n·d·cosθ·wavenumber"""
-    wavelength = 1e4 / wavenumber  # 波数(cm⁻¹)转波长(μm)
-    delta = 4 * np.pi * n_eff * thickness * np.cos(angle_rad) / wavelength
-    return delta
-
-def fit_thickness_multi_beam(wavenumber, reflectance, angle_deg, n_eff=2.6, initial_d=5.0):
-    """
-    多光束干涉模型拟合求厚度
-    wavenumber: 波数(cm⁻¹)
-    reflectance: 反射率(%)
-    angle_deg: 入射角(10或15)
-    n_eff: 等效折射率
-    """
-    angle_rad = np.radians(angle_deg)
-    # 简化版Airy拟合（忽略半波损失细节）
-    def residual(d):
-        delta = 4 * np.pi * n_eff * d * np.cos(angle_rad) * wavenumber * 1e-4
-        r1 = (1 - n_eff) / (1 + n_eff)
-        r2 = (n_eff - 1) / (n_eff + 1)  # 近似村底
-        model = (r1**2 + r2**2 - 2*np.abs(r1*r2)*np.cos(delta)) / (1 + r1**2*r2**2 - 2*np.abs(r1*r2)*np.cos(delta))
-        return np.sum((model * 100 - reflectance)**2)  # 反射率是%
-
-    result = minimize(residual, initial_d, method='Nelder-Mead')
-    return {"thickness_um": round(result.x[0], 4), "RMSE": round(np.sqrt(result.fun/len(wavenumber)), 4)}
-
-def multi_beam_analysis(file_path, angle_deg):
-    """
-    多光束干涉分析主函数
-    file_path: Excel文件路径（含波数-反射率数据）
-    """
-    import pandas as pd
-    df = pd.read_excel(file_path)
-    wavenumber = df.iloc[:, 0].values  # 波数 cm⁻¹
-    reflectance = df.iloc[:, 1].values  # 反射率 %
-
-    # 粗略FFT估算初始厚度
-    spectrum = reflectance - reflectance.mean()
-    fft_result = np.fft.fft(spectrum)
-    freq = np.fft.fftfreq(len(wavenumber), d=wavenumber[1]-wavenumber[0])
-    peak_idx = np.argmax(np.abs(fft_result[1:len(fft_result)//2])) + 1
-    freq_peak = np.abs(freq[peak_idx])
-    # 相位周期对应的间距：Δ(1/ν) = 1/freq_peak
-    if freq_peak > 0:
-        delta_nu = 1 / freq_peak
-        n_est, angle_rad = 2.6, np.radians(angle_deg)
-        d_init = delta_nu * n_est * np.cos(angle_rad) / 2
-    else:
-        d_init = 5.0
-
-    result = fit_thickness_multi_beam(wavenumber, reflectance, angle_deg, initial_d=d_init)
-    print(f"多光束模型厚度: {result[\'thickness_um\']:.4f} μm, RMSE: {result[\'RMSE\']}")
-    return result
-
-def analyze_multi_beam_both_angles():
-    """分析附件3和附件4（硅晶圆片），判断多光束效应"""
-    r10 = multi_beam_analysis('附件3.xlsx', 10)
-    r15 = multi_beam_analysis('附件4.xlsx', 15)
-    # 比较10°和15°结果，若差异大则多光束效应显著
-    print(f"10°厚度: {r10[\'thickness_um\']}, 15°厚度: {r15[\'thickness_um\']}")
-    if abs(r10[\'thickness_um\'] - r15[\'thickness_um\']) > 0.5:
-        print("⚠ 多光束干涉效应显著，建议使用Airy公式拟合")
-    else:
-        print("✓ 双光束模型足够，多光束效应不显著")
-
-if __name__ == "__main__":
-    print("=== 多光束干涉分析（硅晶圆片）===")
-    analyze_multi_beam_both_angles()'''
-                    else:
-                        # 双光束干涉模型（FFT频域分析）
-                        code = '''import numpy as np
-from scipy.optimize import minimize
-import pandas as pd
-
-def load_spectrum(file_path):
-    """加载反射光谱数据"""
-    df = pd.read_excel(file_path)
-    wavenumber = df.iloc[:, 0].values  # 波数 cm⁻¹
-    reflectance = df.iloc[:, 1].values  # 反射率 %
-    return wavenumber, reflectance
-
-def extract_peaks(wavenumber, reflectance, num_peaks=10):
-    """提取干涉峰波数位置（用于计算峰间距）"""
-    from scipy.signal import find_peaks
-    spectrum = reflectance - np.mean(reflectance)
-    peaks, _ = find_peaks(spectrum, distance=50, height=np.std(spectrum))
-    peak_wavenumbers = wavenumber[peaks]
-    # 取最明显的num_peaks个峰
-    if len(peak_wavenumbers) > num_peaks:
-        peak_heights = reflectance[peaks]
-        sorted_idx = np.argsort(peak_heights)[-num_peaks:]
-        peak_wavenumbers = np.sort(peak_wavenumbers[sorted_idx])
-    return peak_wavenumbers
-
-def fft_thickness_estimate(wavenumber, reflectance, n_eff=2.6, angle_deg=10):
-    """
-    FFT频域法估计外延层厚度
-    原理：反射光谱的干涉周期对应的空间频率 → 厚度
-    公式：d = 1/(2·n·cosθ·Δν)，其中Δν是相邻干涉峰的波数差
-    """
-    # 去直流分量
-    spectrum = reflectance - np.mean(reflectance)
-    n = len(wavenumber)
-
-    # FFT
-    fft_vals = np.fft.fft(spectrum)
-    freqs = np.fft.fftfreq(n, d=wavenumber[1] - wavenumber[0])
-
-    # 取正频率部分（排除零频率）
-    pos_mask = freqs > 0
-    pos_freqs = freqs[pos_mask]
-    pos_power = np.abs(fft_vals[pos_mask])**2
-
-    # 找主峰（干涉周期对应的空间频率）
-    peak_idx = np.argmax(pos_power)
-    dominant_freq = pos_freqs[peak_idx]
-
-    # 换算为峰间距 Δν = 1/dominant_freq
-    if dominant_freq > 0:
-        delta_nu = 1 / dominant_freq
-        angle_rad = np.radians(angle_deg)
-        d_estimate = delta_nu * n_eff * np.cos(angle_rad) / 2  # μm
-    else:
-        d_estimate = None
-
-    return d_estimate, dominant_freq, delta_nu if dominant_freq > 0 else None
-
-def least_squares_fit_thickness(wavenumber, reflectance, angle_deg, n_eff=2.6, d_init=5.0):
-    """
-    非线性最小二乘法拟合精确厚度
-    模型：反射率极小条件 → 2nd·cosθ = m/ν
-    其中 m 为干涉级次（整数），需同时估计
-    """
-    angle_rad = np.radians(angle_deg)
-
-    def residual(params):
-        d, n = params[0], params[1]
-        if d <= 0 or n <= 1:
-            return 1e20
-        # 相位差
-        delta = 4 * np.pi * n * d * np.cos(angle_rad) / (1e4 / wavenumber)
-        # 双光束干涉模型（R = R1 + R2 + 2√(R1R2)cosδ 简化）
-        r1 = np.abs((1 - n) / (1 + n))
-        r2 = np.abs((n - 1) / (n + 1))
-        # 相位导致干涉：极小值在 δ = (2m+1)π
-        model = r1**2 + r2**2 - 2*r1*r2*np.cos(delta)
-        return np.sum((model * 100 - reflectance)**2)
-
-    result = minimize(residual, [d_init, n_eff], method='Nelder-Mead',
-                      options={'xatol': 1e-6, 'fatol': 1e-6})
-    d_fit, n_fit = result.x
-    rmse = np.sqrt(result.fun / len(wavenumber))
-    return {"thickness_um": round(d_fit, 4), "n_eff": round(n_fit, 4), "RMSE": round(rmse, 4)}
-
-def analyze_siC_sample(file_path_10, file_path_15):
-    """
-    综合分析碳化硅样品（双入射角数据）
-    1. FFT初估
-    2. 最小二乘精拟合
-    3. 多角度联合拟合
-    """
-    print("=== 碳化硅外延层厚度分析 ===")
-    for fp in [file_path_10, file_path_15]:
-        wn, ref = load_spectrum(fp)
-        d_fft, freq, dnu = fft_thickness_estimate(wn, ref, n_eff=2.6, angle_deg=10)
-        print(f"FFT估算: d ≈ {d_fft:.4f} μm (freq={freq:.4f} cm)")
-
-        result_ls = least_squares_fit_thickness(wn, ref, angle_deg=10, n_eff=2.6, d_init=d_fft or 5.0)
-        print(f"最小二乘: d={result_ls[\'thickness_um\']:.4f} μm, n={result_ls[\'n_eff\']}, RMSE={result_ls[\'RMSE\']}")
-
-if __name__ == "__main__":
-    print("=== 碳化硅外延层厚度测定（双光束干涉模型）===")
-    # 附件1（10°入射角）
-    # analyze_siC_sample('附件1.xlsx', '附件2.xlsx')
-    print("请加载附件数据运行分析")'''
-                elif any(kw in block_lower for kw in ["订货", "库存", "报童", "随机"]):
-                    code = '''import numpy as np
-from scipy.stats import norm
-
-def solve_newsvendor(mu, sigma, p, c, o, h):
-    """报童模型求解最优订货量"""
-    critical_ratio = (p - c + o) / (p - c + h + o)
-    q_star = norm.ppf(critical_ratio, loc=mu, scale=sigma)
-    return {"optimal_qty": round(q_star, 2), "critical_ratio": round(critical_ratio, 3)}
-
-def monte_carlo_verify(mu, sigma, q_star, p, c, o, h, n=10000):
-    """蒙特卡洛模拟验证"""
-    demand = np.random.normal(mu, sigma, n)
-    revenue = np.minimum(q_star, demand) * p
-    costs = c * q_star + h * np.maximum(0, q_star - demand) + o * np.maximum(0, demand - q_star)
-    profit = revenue - costs
-    return {"mean_profit": round(np.mean(profit), 2), "std_profit": round(np.std(profit), 2), "fill_rate": round(np.mean(demand <= q_star), 3)}
-
-if __name__ == "__main__":
-    # 示例：某蔬菜品类参数
-    result = solve_newsvendor(mu=50, sigma=8, p=8, c=3, o=2, h=0.5)
-    print(f"最优订货量: {result[\'optimal_qty\']:.1f} kg")
-    verified = monte_carlo_verify(mu=50, sigma=8, q_star=result["optimal_qty"], p=8, c=3, o=2, h=0.5)
-    print(f"期望利润: {verified[\'mean_profit\']:.1f}元, 缺货率: {1-verified[\'fill_rate\']:.1%}")'''
-                elif any(kw in block_lower for kw in ["预测", "时序", "arima", "需求"]):
-                    code = '''import numpy as np
-from statsmodels.tsa.arima.model import ARIMA
-
-def forecast_arima(sales_data, order=(1,1,1), steps=7):
-    """ARIMA时间序列预测"""
-    model = ARIMA(sales_data, order=order)
-    fitted = model.fit()
-    forecast = fitted.forecast(steps=steps)
-    return {"forecast": list(np.round(forecast, 1)), "summary": str(fitted.summary())}
-
-if __name__ == "__main__":
-    data = [45, 52, 48, 55, 50, 47, 53, 49, 51, 46, 54, 50, 48, 56, 52, 49, 55, 51, 47, 53, 50, 48, 55, 52, 49, 54, 51, 48, 56, 50]
-    result = forecast_arima(data, order=(1,1,1), steps=7)
-    print("未来7天预测销量:", result["forecast"])'''
-                elif any(kw in block_lower for kw in ["灵敏度", "稳健性", "参数"]):
-                    code = '''import numpy as np
-import matplotlib.pyplot as plt
-
-def sensitivity_analysis(base_params, param_ranges):
-    """
-    One-at-a-Time sensitivity analysis
-    base_params: base parameter dict {'param_name': value}
-    param_ranges: parameter perturbation ranges {'param_name': [values]}
-    """
-    results = {}
-    for param_name, perturbed in param_ranges.items():
-        base_val = base_params.get(param_name, 1.0)
-        outputs = []
-        for val in perturbed:
-            params = dict(base_params)
-            params[param_name] = val
-            # Calculate objective function (example: profit function)
-            profit = params['price'] * params['demand'] - params['cost'] * val
-            outputs.append(profit)
-        results[param_name] = {
-            "perturbed_values": perturbed,
-            "outputs": outputs,
-            "sensitivity": (max(outputs) - min(outputs)) / (max(perturbed) - min(perturbed) + 1e-9)
-        }
-    return results
-
-if __name__ == "__main__":
-    params = {'price': 8, 'cost': 3, 'demand': 50, 'holding_cost': 0.5, 'stockout_cost': 2}
-    ranges = {
-        'demand': np.linspace(40, 60, 11),
-        'holding_cost': np.linspace(0.2, 0.8, 7),
-        'stockout_cost': np.linspace(1.0, 3.0, 9),
-    }
-    sa_results = sensitivity_analysis(params, ranges)
-    for k, v in sa_results.items():
-        print(f"{k}: sensitivity={v[\'sensitivity\']:.4f}")'''
-                elif any(kw in block_lower for kw in ["评价", "topsis", "综合", "品类", "ahp"]):
-                    code = '''import numpy as np
-
-def topsis_evaluate(decision_matrix, weights, beneficial_indices):
-    norm_matrix = decision_matrix / np.sqrt((decision_matrix ** 2).sum(axis=0))
-    weighted = norm_matrix * weights
-    ideal_pos = weighted.max(axis=0)
-    ideal_neg = weighted.min(axis=0)
-    for idx in beneficial_indices:
-        ideal_pos[idx], ideal_neg[idx] = ideal_neg[idx], ideal_pos[idx]
-    d_pos = np.sqrt(((weighted - ideal_pos) ** 2).sum(axis=1))
-    d_neg = np.sqrt(((weighted - ideal_neg) ** 2).sum(axis=1))
-    closeness = d_neg / (d_pos + d_neg)
-    rankings = np.argsort(closeness)[::-1] + 1
-    return {"rankings": rankings.tolist(), "closeness": closeness.tolist(), "best": rankings[0]}
-
-if __name__ == "__main__":
-    data = np.array([[50, 0.1, 0.95, 1000], [45, 0.08, 0.92, 950], [55, 0.12, 0.98, 1200], [48, 0.09, 0.94, 980], [52, 0.11, 0.96, 1100]])
-    weights = np.array([0.3, 0.2, 0.3, 0.2])
-    result = topsis_evaluate(data, weights, beneficial_indices=[0, 2, 3])
-    print("品类排名:", result["rankings"])
-    print("贴近度:", [round(c, 3) for c in result["closeness"]])'''
-                else:
-                    code = '''import numpy as np
-from scipy.optimize import linprog
-
-def solve_lp(c, A_ub=None, b_ub=None, bounds=None):
-    result = linprog(c, A_ub=A_ub, b_ub=b_ub, bounds=bounds)
-    if result.success:
-        return {"optimal_value": round(result.fun, 4), "optimal_solution": [round(x, 4) for x in result.x], "status": "最优解"}
-    return {"status": f"求解失败: {result.message}"}
-
-if __name__ == "__main__":
-    c = [1, 2, 3]
-    result = solve_lp(c)
-    print(result)'''
+                # 根据每个子问题的内容选择代码模板（Phase 1D：硬编码字符串迁出到
+                # ``demo_code_templates``，让 ``base.py`` 恢复领域无关）。
+                code = self._select_demo_code_template(block_lower)
 
                 solutions.append({
                     "sub_problem_id": sp_id,
