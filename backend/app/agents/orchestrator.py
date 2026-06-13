@@ -109,6 +109,7 @@ class Orchestrator:
             "has_data": bool(data_files),
             "knowledge_base_id": knowledge_base_id,
             "workflow_type": workflow_type,
+            "template": template,
             "working_memory": wm,
         }
         all_results: Dict[str, Any] = {}
@@ -278,6 +279,7 @@ class Orchestrator:
             "data_files": data_files or [],
             "has_data": bool(data_files),
             "knowledge_base_id": knowledge_base_id,
+            "template": self._task_templates.get(task_id, "math_modeling"),
             "working_memory": wm,
         }
 
@@ -448,6 +450,7 @@ class Orchestrator:
             "data_files": data_files or [],
             "has_data": bool(data_files),
             "knowledge_base_id": knowledge_base_id,
+            "template": self._task_templates.get(task_id, "math_modeling"),
             "working_memory": wm,
         }
 
@@ -861,6 +864,7 @@ class Orchestrator:
             "has_data": bool(data_files),
             "knowledge_base_id": knowledge_base_id,
             "workflow_type": workflow_type,
+            "template": template,
             "working_memory": wm,
         }
         all_results: Dict[str, Any] = {}
