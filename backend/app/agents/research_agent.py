@@ -570,10 +570,17 @@ class ResearchAgent(BaseAgent):
 
         # 步骤1.5：相关性评分与 Top-K 过滤
         top_k = task_input.get("top_k", 10)
+        template_id = context.get("template", "math_modeling")
         if verified_papers:
             verified_papers = self._score_papers(verified_papers, query)
+            # ====== Phase 4：可插拔 Reranker 增强排序 ======
+            # 默认用 TfidfReranker（零外部依赖）；
+            # research_paper 模板默认升级为 CrossEncoder（如可用，失败回退）。
+            verified_papers = self._apply_reranker(
+                verified_papers, query, template_id=template_id, top_k=top_k,
+            )
             verified_papers = self._top_k_papers(verified_papers, top_k=top_k)
-            logger.info(f"Top-{top_k} papers selected after relevance scoring")
+            logger.info(f"Top-{top_k} papers selected after relevance scoring + reranker")
 
         # 步骤1.6：深度调研模式抽取方法/结论/数据集/局限性
         if action == "deep_search" and verified_papers:
@@ -661,3 +668,92 @@ class ResearchAgent(BaseAgent):
             fallback["mcp_search_used"] = True
             fallback["raw_mcp_result"] = mcp_result[:2000]
         return fallback
+
+    # ====================================================================
+    # Phase 4: 可插拔 Reranker 接入
+    # ====================================================================
+
+    # 模板 -> Reranker 优先选择
+    _TEMPLATE_RERANKER_HINT = {
+        "research_paper": "cross_encoder",
+        "ieee_conference": "cross_encoder",
+        "neurips_2024": "cross_encoder",
+        "acm_sigconf": "cross_encoder",
+        "springer_lncs": "cross_encoder",
+        "math_modeling": "tfidf",
+        "coursework": "tfidf",
+        "financial_analysis": "tfidf",
+        "research_survey": "tfidf",
+    }
+
+    def _resolve_reranker_name(self, template_id: str) -> str:
+        return self._TEMPLATE_RERANKER_HINT.get(template_id, "tfidf")
+
+    def _apply_reranker(
+        self,
+        papers: List[Dict[str, Any]],
+        query: str,
+        template_id: str = "math_modeling",
+        top_k: int = 10,
+    ) -> List[Dict[str, Any]]:
+        """对 _score_papers 后的论文列表做 Reranker 二次排序。
+
+        - 模板默认 TFIDF（零外部依赖，本地计算）
+        - research_paper 系列默认 CrossEncoder（如 sentence-transformers 不可用则回退 TFIDF）
+        - 失败 / 缺失依赖时 **不** 影响主流程
+        """
+        if not papers or len(papers) < 2:
+            return papers
+
+        reranker_name = self._resolve_reranker_name(template_id)
+        try:
+            from src.knowledge.rerankers import create_reranker_model
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(f"src.knowledge.rerankers not importable: {exc}")
+            return papers
+
+        try:
+            reranker = create_reranker_model(reranker_name)
+            if reranker is None:
+                logger.debug(f"reranker '{reranker_name}' not available; skip")
+                return papers
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(f"reranker init failed: {exc}; fall back to TFIDF")
+            try:
+                reranker = create_reranker_model("tfidf")
+            except Exception:
+                return papers
+            if reranker is None:
+                return papers
+
+        # 把 papers 转成 Document 列表
+        try:
+            from src.knowledge.document import Document
+            documents = []
+            for p in papers:
+                text = f"{p.get('title', '')}\n\n{p.get('abstract', '')}"
+                documents.append(Document(text=text, metadata=p))
+
+            results = reranker.rerank(query, documents, top_k=len(documents))
+            # 把 score 写回 papers 并按 rank 排序
+            id_to_paper = {id(p): p for p in papers}
+            reranked: List[Dict[str, Any]] = []
+            for rr in results:
+                meta = rr.document.metadata or {}
+                # 用 metadata 找原 paper（按 id 一一对应）
+                # 简单做法：metadata dict 与 paper dict 是同一个对象
+                for p in papers:
+                    if p is meta or p.get("arxiv_id") == meta.get("arxiv_id"):
+                        p["rerank_score"] = round(rr.score, 4)
+                        p["rerank_rank"] = rr.rank
+                        reranked.append(p)
+                        break
+            # 如果 metadata 引用丢了，回退到按 score 排序
+            if not reranked:
+                for rr, p in zip(results, papers):
+                    p["rerank_score"] = round(rr.score, 4)
+                    reranked.append(p)
+            return reranked
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"reranker '{reranker_name}' failed: {exc}; keep original order")
+            return papers
