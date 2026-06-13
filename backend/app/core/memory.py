@@ -299,6 +299,91 @@ class LessonsMemory:
                 l["use_count"] = l.get("use_count", 0) + 1
                 break
 
+    def retrieve_relevant(
+        self,
+        problem_text: str = "",
+        problem_type: str = "",
+        category: str = "",
+        top_k: int = 3,
+        increment: bool = True,
+    ) -> List[Dict[str, Any]]:
+        """Phase 4：检索 + 自动 use_count +1 闭环。
+
+        与 :meth:`query` 的区别：
+        - 自动 ``increment_use``（使用越多的经验越有价值，排序时权重更高）
+        - 接受 ``problem_text``（除 problem_type 外，用文本关键词兜底匹配）
+        - 返回前自动 ``save()`` 持久化 use_count 变化
+
+        默认 :class:`MemoryManager` 走 :meth:`query`（不触发递增）。
+        orchestrator 调本方法让学习闭环真正转起来。
+        """
+        results = self.lessons
+
+        if category:
+            results = [l for l in results if l.get("category") == category]
+
+        # 双重匹配：先按 problem_type，再按 problem_text 关键词
+        if problem_type:
+            typed = [
+                l for l in results
+                if problem_type.lower() in l.get("problem_type", "").lower()
+            ]
+            if typed:
+                results = typed
+        if problem_text and results == self.lessons:
+            # 退化为文本关键词匹配
+            text_lower = problem_text.lower()
+            results = [
+                l for l in results
+                if any(kw in l.get("content", "").lower() or kw in l.get("problem_type", "").lower()
+                       for kw in self._extract_keywords(text_lower))
+            ]
+
+        results.sort(key=lambda l: l.get("use_count", 0), reverse=True)
+        top = results[:top_k]
+
+        if increment and top:
+            for l in top:
+                l["use_count"] = l.get("use_count", 0) + 1
+            self.save()  # 持久化
+            logger.debug(
+                f"retrieve_relevant: incremented use_count for {len(top)} lessons"
+            )
+        return top
+
+    @staticmethod
+    def _extract_keywords(text: str, top_n: int = 8) -> List[str]:
+        """极简关键词提取：按空白/标点切分 + 长度过滤 + 滑动窗口。
+
+        中文场景下没有空格分隔，额外使用 2-4 字符滑动窗口覆盖短语。
+        """
+        import re
+        # 1) 显式分词
+        tokens = re.split(r"[\s,。;；、!?？()()【】\[\]【】<>/\\|]+", text)
+        seen: set = set()
+        keywords: List[str] = []
+        # 优先长 token
+        for t in sorted(tokens, key=len, reverse=True):
+            t = t.strip().lower()
+            if len(t) >= 3 and t not in seen:
+                seen.add(t)
+                keywords.append(t)
+            if len(keywords) >= top_n:
+                break
+        # 2) 中文滑动窗口（覆盖无空格文本）
+        text_lower = text.lower()
+        for n in (4, 3, 2):
+            for i in range(0, len(text_lower) - n + 1):
+                w = text_lower[i : i + n]
+                if not re.search(r"[一-鿿]", w):
+                    continue  # 跳过纯英文/数字
+                if w not in seen:
+                    seen.add(w)
+                    keywords.append(w)
+                if len(keywords) >= top_n * 2:
+                    return keywords
+        return keywords
+
     def get_context_text(self, problem_type: str = "", top_k: int = 5) -> str:
         """获取格式化的经验上下文（注入 Agent prompt）"""
         lessons = self.query(problem_type=problem_type, top_k=top_k)
