@@ -1,0 +1,207 @@
+'use client';
+
+/**
+ * 任务状态机 hook（Phase 6）。
+ *
+ * 9 阶段状态枚举与后端 orchestrator 对齐：
+ *   idle / phase1_running / phase1_reviewing
+ *   / phase2_running / peer_review / revising
+ *   / finalizing / completed / failed / paused
+ *
+ * 数据流：
+ * - 初始化时 GET /tasks/{id} 拉取全量状态
+ * - 通过 SSE /tasks/{id}/stream 订阅 phase_changed 事件
+ * - WS 断线时自动重连；重连成功后重新 GET 全量
+ */
+
+import { useEffect, useState, useRef, useCallback } from 'react';
+
+export type TaskStateName =
+  | 'idle'
+  | 'phase1_running'
+  | 'phase1_reviewing'
+  | 'phase2_running'
+  | 'peer_review'
+  | 'revising'
+  | 'finalizing'
+  | 'completed'
+  | 'failed'
+  | 'paused';
+
+export interface TaskState {
+  taskId: string;
+  name: TaskStateName;
+  progressPercentage: number;
+  currentStep: string;
+  error?: string | null;
+  templateId?: string;
+  peerReview?: {
+    overallScore: number;
+    recommendation: 'accept' | 'revise' | 'reject';
+  } | null;
+}
+
+const STATE_RANK: Record<TaskStateName, number> = {
+  idle: 0,
+  phase1_running: 1,
+  phase1_reviewing: 2,
+  phase2_running: 3,
+  peer_review: 4,
+  revising: 5,
+  finalizing: 6,
+  completed: 7,
+  failed: 7,
+  paused: 1, // 可恢复
+};
+
+export function rankState(s: TaskStateName): number {
+  return STATE_RANK[s] ?? 0;
+}
+
+export function isTerminalState(s: TaskStateName): boolean {
+  return s === 'completed' || s === 'failed';
+}
+
+interface UseTaskStateOptions {
+  taskId: string | null;
+  apiBase?: string;
+  /** 是否启用 SSE 实时订阅。默认 true。 */
+  subscribe?: boolean;
+  /** 断线重连间隔 ms。默认 3000。 */
+  reconnectMs?: number;
+}
+
+export function useTaskState(options: UseTaskStateOptions): {
+  state: TaskState | null;
+  error: string | null;
+  loading: boolean;
+  refresh: () => Promise<void>;
+} {
+  const { taskId, subscribe = true, reconnectMs = 3000 } = options;
+  const apiBase = options.apiBase || (typeof window !== 'undefined' && (window as any).__API_BASE__) || 'http://localhost:8000/api/v1';
+
+  const [state, setState] = useState<TaskState | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const esRef = useRef<EventSource | null>(null);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const fetchState = useCallback(async () => {
+    if (!taskId) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`${apiBase}/tasks/${taskId}/status`);
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+      }
+      const data = await res.json();
+      setState({
+        taskId,
+        name: mapBackendStatusToState(data.status, data.current_step),
+        progressPercentage: data.progress_percentage ?? 0,
+        currentStep: data.current_step ?? '',
+        error: data.error,
+      });
+    } catch (e: any) {
+      setError(e?.message ?? 'failed to fetch task state');
+    } finally {
+      setLoading(false);
+    }
+  }, [taskId, apiBase]);
+
+  // SSE 订阅
+  useEffect(() => {
+    if (!taskId || !subscribe) return;
+
+    const connect = () => {
+      try {
+        const es = new EventSource(`${apiBase}/tasks/${taskId}/stream`);
+        esRef.current = es;
+
+        es.addEventListener('phase_changed', (evt: MessageEvent) => {
+          try {
+            const payload = JSON.parse(evt.data);
+            setState((prev) => prev ? { ...prev, ...payload } : null);
+          } catch {
+            // ignore parse errors
+          }
+        });
+
+        es.addEventListener('peer_review_done', (evt: MessageEvent) => {
+          try {
+            const payload = JSON.parse(evt.data);
+            setState((prev) => prev ? {
+              ...prev,
+              name: 'peer_review',
+              peerReview: {
+                overallScore: payload.overall_score ?? 0,
+                recommendation: payload.recommendation ?? 'revise',
+              },
+            } : null);
+          } catch { /* ignore */ }
+        });
+
+        es.addEventListener('revision_done', (evt: MessageEvent) => {
+          try {
+            const payload = JSON.parse(evt.data);
+            setState((prev) => prev ? {
+              ...prev,
+              name: 'revising',
+              peerReview: {
+                overallScore: payload.overall_score ?? 0,
+                recommendation: payload.recommendation ?? 'revise',
+              },
+            } : null);
+          } catch { /* ignore */ }
+        });
+
+        es.onerror = () => {
+          es.close();
+          esRef.current = null;
+          // 自动重连
+          if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+          reconnectTimerRef.current = setTimeout(connect, reconnectMs);
+        };
+      } catch (e) {
+        // ignore
+      }
+    };
+
+    connect();
+    return () => {
+      if (esRef.current) {
+        esRef.current.close();
+        esRef.current = null;
+      }
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
+    };
+  }, [taskId, apiBase, subscribe, reconnectMs]);
+
+  // 初始 fetch + 每次 taskId 变化时重新拉
+  useEffect(() => {
+    fetchState();
+  }, [fetchState]);
+
+  return { state, error, loading, refresh: fetchState };
+}
+
+function mapBackendStatusToState(status: string, currentStep: string): TaskStateName {
+  const s = (status ?? '').toLowerCase();
+  if (s === 'completed') return 'completed';
+  if (s === 'failed') return 'failed';
+  if (s === 'paused' || s === 'interrupted') return 'paused';
+  if (s === 'phase1_completed' || s === 'phase1_completed_reviewing') return 'phase1_reviewing';
+  if (s === 'phase2_running' || s === 'running') {
+    // 粗略根据 current_step 推断子状态
+    if (currentStep?.includes('peer_review')) return 'peer_review';
+    if (currentStep?.includes('revise')) return 'revising';
+    if (currentStep?.includes('final')) return 'finalizing';
+    return 'phase2_running';
+  }
+  if (s === 'phase1_running') return 'phase1_running';
+  return 'phase1_running';
+}

@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import styles from './ProblemInput.module.css';
 import { useAppStore } from '../store/useAppStore';
+import { TemplateSelector, TEMPLATE_OPTIONS } from './TemplateSelector';
 
 const WORKFLOWS = [
   { id: 'standard', name: '标准流程', desc: '研究→分析→建模→求解→论文（推荐）' },
@@ -11,12 +12,9 @@ const WORKFLOWS = [
   { id: 'code_focused', name: '代码优先', desc: '强化求解与调试，适合计算密集型' },
 ];
 
-const TEMPLATES = [
-  { id: 'math_modeling', name: '数学建模竞赛', desc: '12章标准结构，MCM/ICM/高教社杯', chapters: 12 },
-  { id: 'coursework', name: '课程作业', desc: '8章简化结构，适合课程报告', chapters: 8 },
-  { id: 'financial_analysis', name: '金融分析报告', desc: '10章投资分析结构', chapters: 10 },
-  { id: 'research_survey', name: '研究调研报告', desc: '10章文献综述结构', chapters: 10 },
-];
+// Phase 6: 8 模板统一管理（4 旧 + 4 新 CCF-A 目标）。
+// 旧 hardcoded 4 模板已被 TemplateSelector 组件替代。
+const TEMPLATES = TEMPLATE_OPTIONS;
 
 const SOLVE_MODES = [
   { id: 'sequential', name: '逐个递进', desc: '前序结果递进至后序' },
@@ -220,20 +218,12 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
         </div>
 
         <div className={styles.optionGroup}>
-          <div className={styles.optionLabel}>论文模板</div>
-          <div className={styles.optionCards}>
-            {TEMPLATES.map(tpl => (
-              <div
-                key={tpl.id}
-                className={`${styles.optionCard} ${template === tpl.id ? styles.optionCardActive : ''}`}
-                onClick={() => setTemplate(tpl.id)}
-              >
-                <div className={styles.optionCardName}>{tpl.name}</div>
-                <div className={styles.optionCardDesc}>{tpl.desc}</div>
-                <div className={styles.optionCardMeta}>{tpl.chapters} 章</div>
-              </div>
-            ))}
-          </div>
+          <div className={styles.optionLabel}>论文模板（{TEMPLATES.length} 选 1）</div>
+          <TemplateSelector
+            value={template}
+            onChange={(t) => setTemplate(t)}
+            disabled={submitting}
+          />
         </div>
 
         <div className={styles.optionGroup}>
