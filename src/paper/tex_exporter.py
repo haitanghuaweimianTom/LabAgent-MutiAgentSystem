@@ -1,8 +1,16 @@
 r"""
-Markdown to MCM/ICM LaTeX exporter
-==================================
+Markdown to LaTeX exporter (Phase 1E: paper_templates 接入)
+============================================================
 
-Converts system-generated Markdown papers into compilable mcmthesis .tex files.
+Converts system-generated Markdown papers into compilable .tex files.
+默认输出 ``mcmthesis`` 兼容 .tex（向后兼容）；通过 ``template_id`` 参数
+可切换为 [paper_templates](../backend/app/core/paper_templates/) 注册表
+中的其他模板（IEEE / NeurIPS / ACM / Springer 等）。
+
+**重要**：本转换器对 **mcmthesis** 路径做了深度调优（``\mcmsetup`` / 标题
+页 / sheet 等）。对其他模板，仅做"基础兼容"输出（``\documentclass`` 切换 +
+``cls_file`` 复制 + 通用结构）。**复杂 CCF-A 模板（IEEE 双栏 / NeurIPS）
+建议走 Writer Agent 的章节级生成路径，不依赖本转换器**。
 
 Features:
 - Headings mapped to \section / \subsection / \subsubsection
@@ -16,17 +24,34 @@ Features:
 import re
 import shutil
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Optional, Tuple
+
+# Phase 1E 整改：从 [paper_templates](../backend/app/core/paper_templates/) 取
+# documentclass/cls_file 而非硬编码 mcmthesis。
+try:
+    from backend.app.core.paper_templates import load_template as _load_template_from_registry
+except Exception:  # noqa: BLE001
+    _load_template_from_registry = None  # 兼容 src/ 目录独立运行
 
 
 class MarkdownToTexConverter:
-    """Converts Markdown text to mcmthesis-compatible LaTeX."""
+    """Converts Markdown text to paper-template-driven LaTeX.
 
-    def __init__(self, template_dir: Path, output_dir: Path):
+    Args:
+        template_dir: ``cls`` 文件所在目录（默认 ``config/latex_templates/``）。
+        output_dir: 输出目录（.tex + figures/ + cls 都会落在这里）。
+        template_id: paper_templates 注册表中的模板 ID，默认 ``math_modeling``。
+            传入 ``None`` 或不存在的 ID 时，``documentclass`` 走 ``article`` 兜底。
+    """
+
+    def __init__(self, template_dir: Path, output_dir: Path, template_id: Optional[str] = None):
         self.template_dir = template_dir
         self.output_dir = output_dir
         self.figures_dir = output_dir / "figures"
         self.figures_dir.mkdir(parents=True, exist_ok=True)
+        # 解析 template_id → (documentclass, cls_file)
+        self.template_id = template_id or "math_modeling"
+        self.documentclass, self.cls_file = self._resolve_template(self.template_id)
 
     def convert(self, md_text: str, title: str = "数学建模论文") -> str:
         """Convert full Markdown paper to LaTeX source."""
@@ -255,8 +280,32 @@ class MarkdownToTexConverter:
         out.append(f"\\end{{{env}}}")
         return idx - 1
 
+    def _resolve_template(self, template_id: str) -> Tuple[str, str]:
+        """从 paper_templates 注册表取 ``(documentclass, cls_file)``。
+
+        找不到时返回 ``("article", "")`` 兜底（保证 .tex 一定可编译）。
+        """
+        if _load_template_from_registry is None:
+            return ("article", "")
+        try:
+            tpl = _load_template_from_registry(template_id)
+            if tpl:
+                return (tpl.documentclass or "article", tpl.cls_file or "")
+        except Exception:  # noqa: BLE001
+            pass
+        return ("article", "")
+
     def _build_document(self, body: str, title: str) -> str:
-        return f"""\\documentclass{{mcmthesis}}
+        r"""构造完整 LaTeX 文档。
+
+        Phase 1E 改造：根据 ``self.documentclass`` 切换 preamble。
+        - 当 documentclass == "cumcmthesis" 时：保留 \mcmsetup 完整结构。
+        - 其他 documentclass：使用 paper_templates 提供的 preamble，
+          退化为 ``\documentclass{X}`` + 标准包 + title + body + \end{document}``。
+        """
+        if self.documentclass == "cumcmthesis":
+            # CUMCM 专属 \mcmsetup 结构（保留以兼容旧 4 套模板）
+            return f"""\\documentclass{{mcmthesis}}
 \\mcmsetup{{
     CTeX = true,
     tcn = 00000000,
@@ -285,16 +334,54 @@ class MarkdownToTexConverter:
 
 \\end{{document}}
 """
+        # 通用 preamble：用于 IEEE / NeurIPS / ACM / Springer / article 等
+        return f"""\\documentclass{{{self.documentclass}}}
+\\usepackage{{ctex}}
+\\usepackage{{amsmath,amssymb}}
+\\usepackage{{graphicx}}
+\\usepackage{{booktabs}}
+\\usepackage{{hyperref}}
+\\usepackage{{listings}}
+\\usepackage{{xcolor}}
+\\usepackage{{geometry}}
+\\geometry{{margin=1in}}
+
+\\title{{{title}}}
+
+\\begin{{document}}
+\\maketitle
+
+{body}
+
+\\end{{document}}
+"""
 
     def export(self, md_path: Path, tex_path: Path) -> Path:
-        """Export Markdown file to compilable TeX file."""
+        """Export Markdown file to compilable TeX file.
+
+        Phase 1E 改造：根据 ``self.cls_file``（从 paper_templates 注册表查得）
+        复制对应 ``.cls`` 到 tex 同级目录，使 xelatex 编译能找到文档类。
+        """
         md_text = md_path.read_text(encoding="utf-8")
         tex_text = self.convert(md_text)
         tex_path.parent.mkdir(parents=True, exist_ok=True)
         tex_path.write_text(tex_text, encoding="utf-8")
 
-        cls_src = self.template_dir / "mcmthesis.cls"
-        if cls_src.exists():
-            shutil.copy2(cls_src, tex_path.parent / "mcmthesis.cls")
+        # 优先用注册表声明的 cls_file，回退到 template_dir 下与 documentclass 同名
+        cls_copied = False
+        if self.cls_file:
+            cls_path = Path(self.cls_file)
+            if not cls_path.is_absolute():
+                # 相对路径：相对项目根解析
+                project_root = Path(__file__).resolve().parents[2]
+                cls_path = project_root / cls_path
+            if cls_path.exists():
+                shutil.copy2(cls_path, tex_path.parent / cls_path.name)
+                cls_copied = True
+        if not cls_copied:
+            # 兜底：尝试 self.template_dir 下的 ``<documentclass>.cls``
+            cls_src = self.template_dir / f"{self.documentclass}.cls"
+            if cls_src.exists():
+                shutil.copy2(cls_src, tex_path.parent / f"{self.documentclass}.cls")
 
         return tex_path

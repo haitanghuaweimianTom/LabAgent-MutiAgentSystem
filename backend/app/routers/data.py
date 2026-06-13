@@ -175,8 +175,13 @@ def _build_vision_messages(base64_image: str, prompt: str, api_format: str) -> L
 
 
 @router.post("/ocr")
-async def ocr_upload(file: UploadFile = File(...)):
-    """上传图片/PDF，调用 LLM Vision 提取文本"""
+async def ocr_upload(file: UploadFile = File(...), domain: str = "general"):
+    """上传图片/PDF，调用 LLM Vision 提取文本。
+
+    Phase 1E 整改：接受 ``domain`` 查询参数（math_modeling / research_paper / general），
+    默认 ``general``。严格控制幻觉：只输出图片中实际出现的文字，不补充。
+    旧调用方不传 domain 时行为与重构前完全等价。
+    """
     ext = Path(file.filename or "").suffix.lower()
     if ext not in {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".pdf"}:
         raise HTTPException(status_code=400, detail=f"不支持的文件类型: {ext}")
@@ -202,7 +207,14 @@ async def ocr_upload(file: UploadFile = File(...)):
     # 确定 API 格式以选择正确的 vision message 格式
     api_format = agent._get_api_format()
 
-    prompt = "请提取这张图片中的所有文本内容。如果是数学建模赛题，请完整保留题目描述、公式、表格和附件说明。保持原有排版格式，不要遗漏任何信息。"
+    # 严格控制幻觉：只输出图片中实际可见的内容，不补充。
+    prompt = (
+        "请提取这张图片中的所有文本内容，"
+        "只输出图片中实际出现的文字、公式、表格与图表说明，"
+        "不要补充任何图片里没有的信息。"
+        "如果属于数学建模/科研/工程类题目，完整保留题目描述、公式、表格和附件说明。"
+        "保持原有排版格式，不要遗漏任何信息。"
+    )
     messages = _build_vision_messages(base64_image, prompt, api_format)
 
     try:

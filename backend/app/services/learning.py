@@ -4,29 +4,67 @@
 - 从任务结果中提取经验教训
 - 结合用户反馈生成 LessonsMemory 条目
 - 权威来源搜索与验证
+
+Phase 1E 整改：
+- 新增 ``AGENT_CATEGORY_MAP`` 替代类内 CATEGORY_MAP，方便从 paper_templates
+  注册表/外部注入覆盖。
+- ``extract_from_task`` 接受可选 ``template_id`` 参数，从注册表取
+  acceptance_threshold（CCF-A 默认 85，竞赛 75），动态决定哪些章节算
+  "low score"。零破坏：默认 template_id="math_modeling"，阈值 75。
 """
 import logging
 from typing import Any, Dict, List, Optional
 
 from ..core.memory import get_memory_manager
+from ..core.paper_templates import load_template as _load_template_from_registry
 
 logger = logging.getLogger(__name__)
+
+
+# Agent 名 → lesson category 的全局映射（与具体模板解耦）。
+# 任何 paper_templates 配置都可复用这套 6 个 agent 分类。
+AGENT_CATEGORY_MAP: Dict[str, str] = {
+    "analyzer_agent": "method_selection",
+    "data_agent": "data_processing",
+    "modeler_agent": "modeling",
+    "solver_agent": "solving",
+    "writer_agent": "writing",
+    "research_agent": "method_selection",
+}
+
+
+def _resolve_acceptance_threshold(template_id: Optional[str]) -> int:
+    """桥接 paper_templates 注册表，回退到 75（旧模板默认）。"""
+    try:
+        tpl = _load_template_from_registry(template_id)
+        if tpl and tpl.acceptance_threshold:
+            return tpl.acceptance_threshold
+    except Exception:  # noqa: BLE001
+        pass
+    return 75
 
 
 class LessonExtractor:
     """从任务结果中提取可复用的经验教训"""
 
-    CATEGORY_MAP = {
-        "analyzer_agent": "method_selection",
-        "data_agent": "data_processing",
-        "modeler_agent": "modeling",
-        "solver_agent": "solving",
-        "writer_agent": "writing",
-        "research_agent": "method_selection",
-    }
+    # v1 兼容：保留类内 CATEGORY_MAP 默认值
+    CATEGORY_MAP = AGENT_CATEGORY_MAP
 
-    def extract_from_task(self, task_id: str, result: Dict[str, Any], feedback: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
-        """分析任务结果，返回建议添加的经验列表"""
+    def extract_from_task(
+        self,
+        task_id: str,
+        result: Dict[str, Any],
+        feedback: Optional[Dict[str, Any]] = None,
+        template_id: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """分析任务结果，返回建议添加的经验列表。
+
+        Args:
+            task_id: 任务 ID。
+            result: 任务完整结果 dict（含 output / problem_text）。
+            feedback: 用户反馈 dict（可选）。
+            template_id: 论文模板 ID（用于决定章节评分门槛；CCF-A 85，竞赛 75）。
+        """
         lessons: List[Dict[str, Any]] = []
         if not result:
             return lessons
@@ -82,14 +120,18 @@ class LessonExtractor:
                     "source_task": task_id,
                 })
 
-        # 3. 从写作结果中提取经验
+        # 3. 从写作结果中提取经验（章节评分低于模板 acceptance_threshold 视为低分）
+        threshold = _resolve_acceptance_threshold(template_id)
         writer_output = output.get("writer_agent", {})
         chapters = writer_output.get("chapters", [])
-        low_score_chapters = [c for c in chapters if c.get("score", 100) < 75]
+        low_score_chapters = [c for c in chapters if c.get("score", 100) < threshold]
         if low_score_chapters:
             lessons.append({
                 "category": "writing",
-                "content": f"写作章节评分偏低，需关注：{', '.join(c.get('title', '') for c in low_score_chapters)}",
+                "content": (
+                    f"写作章节评分低于模板 {template_id or 'math_modeling'} 门槛 "
+                    f"{threshold}，需关注：{', '.join(c.get('title', '') for c in low_score_chapters)}"
+                ),
                 "problem_type": problem_type,
                 "method": "chapter_writing",
                 "success": False,
@@ -157,10 +199,19 @@ def get_authority_searcher() -> AuthoritySearcher:
     return _authority_searcher
 
 
-def add_lessons_from_task(task_id: str, result: Dict[str, Any], feedback: Optional[Dict[str, Any]] = None) -> int:
-    """便捷函数：提取并保存任务经验教训"""
+def add_lessons_from_task(
+    task_id: str,
+    result: Dict[str, Any],
+    feedback: Optional[Dict[str, Any]] = None,
+    template_id: Optional[str] = None,
+) -> int:
+    """便捷函数：提取并保存任务经验教训。
+
+    Phase 1E 新增 ``template_id`` 参数：从注册表取 acceptance_threshold 决定
+    哪些章节算低分。旧调用方不传时回退到 math_modeling（75 分）。
+    """
     extractor = get_lesson_extractor()
-    lessons = extractor.extract_from_task(task_id, result, feedback)
+    lessons = extractor.extract_from_task(task_id, result, feedback, template_id=template_id)
     if not lessons:
         return 0
 
@@ -168,5 +219,5 @@ def add_lessons_from_task(task_id: str, result: Dict[str, Any], feedback: Option
     for lesson in lessons:
         mm.get_lessons().add_lesson(**lesson)
     mm.save_lessons()
-    logger.info(f"从任务 {task_id} 提取并保存 {len(lessons)} 条经验")
+    logger.info(f"从任务 {task_id} 提取并保存 {len(lessons)} 条经验 (template={template_id})")
     return len(lessons)
