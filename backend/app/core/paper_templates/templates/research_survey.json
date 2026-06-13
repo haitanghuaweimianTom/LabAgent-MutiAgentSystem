@@ -1,0 +1,139 @@
+{
+  "id": "research_survey",
+  "name": "研究现状调研 / 文献综述",
+  "domain": "survey",
+  "description": "10 章文献综述结构，适合学术调研、技术趋势分析。",
+  "documentclass": "article",
+  "cls_file": "",
+  "bib_style": "plain",
+  "language": "zh",
+  "acceptance_threshold": 75,
+  "min_pages": 10,
+  "max_pages": 30,
+  "citation_style": "numeric",
+  "chapter_plan": [
+    {
+      "id": "abstract",
+      "title": "摘要",
+      "section_level": 0,
+      "prompt_role": "撰写调研报告摘要和关键词。",
+      "requirements": [
+        "200-400字",
+        "说明调研目标、检索策略、主要发现、结论"
+      ]
+    },
+    {
+      "id": "introduction",
+      "title": "1 引言",
+      "section_level": 1,
+      "prompt_role": "撰写引言。",
+      "requirements": [
+        "说明调研背景和动机",
+        "明确研究问题和调研范围",
+        "概述报告结构"
+      ]
+    },
+    {
+      "id": "background",
+      "title": "2 研究背景与问题定义",
+      "section_level": 1,
+      "prompt_role": "撰写研究背景与问题定义。",
+      "requirements": [
+        "定义核心概念",
+        "描述问题的重要性和应用场景",
+        "梳理相关背景"
+      ]
+    },
+    {
+      "id": "search_strategy",
+      "title": "3 文献检索策略",
+      "section_level": 1,
+      "prompt_role": "撰写文献检索策略。",
+      "requirements": [
+        "说明检索关键词和数据库（如 arXiv）",
+        "说明筛选标准和Top-K过滤方法",
+        "列出检索结果数量"
+      ]
+    },
+    {
+      "id": "methods_survey",
+      "title": "4 现有方法综述",
+      "section_level": 1,
+      "prompt_role": "撰写现有方法综述。",
+      "requirements": [
+        "按类别或时间线组织文献",
+        "对每篇高相关论文说明：方法、创新点、优缺点",
+        "使用表格对比不同方法"
+      ]
+    },
+    {
+      "id": "datasets",
+      "title": "5 数据集与实验设置",
+      "section_level": 1,
+      "prompt_role": "撰写数据集与实验设置。",
+      "requirements": [
+        "汇总文献中使用的数据集",
+        "说明评价指标和实验设置",
+        "使用表格汇总"
+      ]
+    },
+    {
+      "id": "results_discussion",
+      "title": "6 结果对比与讨论",
+      "section_level": 1,
+      "prompt_role": "撰写结果对比与讨论。",
+      "requirements": [
+        "对比各方法的关键结果",
+        "讨论性能差异的原因",
+        "指出方法适用场景"
+      ]
+    },
+    {
+      "id": "challenges",
+      "title": "7 挑战与局限",
+      "section_level": 1,
+      "prompt_role": "撰写挑战与局限。",
+      "requirements": [
+        "总结当前研究面临的主要挑战",
+        "列出各文献指出的局限性"
+      ]
+    },
+    {
+      "id": "future",
+      "title": "8 未来研究方向",
+      "section_level": 1,
+      "prompt_role": "撰写未来研究方向。",
+      "requirements": [
+        "基于现有文献提出未来研究趋势",
+        "指出潜在的研究机会"
+      ]
+    },
+    {
+      "id": "conclusion",
+      "title": "9 结论",
+      "section_level": 1,
+      "prompt_role": "撰写结论。",
+      "requirements": [
+        "总结主要发现",
+        "回答引言中提出的问题"
+      ]
+    },
+    {
+      "id": "references",
+      "title": "10 参考文献",
+      "section_level": 0,
+      "prompt_role": "撰写参考文献。",
+      "requirements": ["规范引用已有文献"]
+    }
+  ],
+  "system_prompt": "你是一个专业的学术调研报告写作专家，擅长撰写文献综述、研究现状调研和技术趋势分析报告。\n\n【报告格式要求】\n生成结构完整的学术调研报告，使用 article 文档类：\n- 标题页（\\maketitle）\n- 摘要：200-400字\n- 关键词：3-5个\n- 章节：1 引言 → 2 研究背景与问题定义 → 3 文献检索策略 → 4 现有方法综述 → 5 数据集与实验设置 → 6 结果对比与讨论 → 7 挑战与局限 → 8 未来研究方向 → 9 结论 → 10 参考文献\n\n【调研报告特点】\n- 以文献为核心，系统梳理研究现状\n- 重视方法分类和对比\n- 使用大量表格进行方法/数据集/结果对比\n- 客观评价各方法的优缺点\n- 明确提出未来研究方向\n\n【各章节写作要求】\n\n**引言**：\n- 说明调研背景和动机\n- 明确研究问题和调研范围\n- 概述报告结构\n\n**研究背景与问题定义**：\n- 定义核心概念\n- 描述问题的重要性和应用场景\n\n**文献检索策略**：\n- 说明检索关键词、数据库、筛选标准\n- 报告检索结果数量\n\n**现有方法综述**：\n- 按类别或时间线组织\n- 对每篇重要论文说明方法、创新点、优缺点\n- 使用表格对比\n\n**数据集与实验设置**：\n- 汇总常用数据集和评价指标\n\n**结果对比与讨论**：\n- 对比关键结果，分析性能差异原因\n\n**挑战与局限**：\n- 总结当前研究面临的主要挑战\n\n**未来研究方向**：\n- 基于现有文献提出趋势和机会\n\n【引号使用规范（强制约束）】\nLaTeX 源代码中所有引号必须严格遵守以下规则：\n1. 中文正文中的引用、强调：必须使用中文双引号 \"中文内容\" 和中文单引号 '中文内容'\n2. 英文摘要或纯英文段落：使用 LaTeX 原生英文引号 `` 和 ''\n3. 数学公式内：不使用任何引号\n4. 严禁在中文正文中使用 `` 或 '' 等 LaTeX 英文引号\n5. 严禁使用反引号 ` 作为中文引用的开引号\n\n请严格按以下JSON格式返回（必须以JSON开头和结尾，不要有任何其他文字）：\n{\n    \"title\": \"报告标题\",\n    \"abstract\": \"摘要（200-400字）\",\n    \"keywords\": [\"关键词1\", \"关键词2\", \"关键词3\"],\n    \"latex_code\": \"完整LaTeX源代码\",\n    \"sections\": {\n        \"引言\": \"主要内容摘要\",\n        \"研究背景与问题定义\": \"主要内容摘要\",\n        \"文献检索策略\": \"主要内容摘要\",\n        \"现有方法综述\": \"主要内容摘要\",\n        \"数据集与实验设置\": \"主要内容摘要\",\n        \"结果对比与讨论\": \"主要内容摘要\",\n        \"挑战与局限\": \"主要内容摘要\",\n        \"未来研究方向\": \"主要内容摘要\",\n        \"结论\": \"主要内容摘要\"\n    }\n}",
+  "preamble": "\\documentclass{article}\n\\usepackage{ctex}\n\\usepackage{amsmath,amssymb,graphicx,booktabs,longtable}\n\\usepackage[margin=1in]{geometry}\n\n\\title{研究现状调研报告}\n\\author{调研团队}\n\\date{\\today}\n\n\\begin{document}\n\n\\maketitle\n",
+  "metadata_defaults": {
+    "author": "调研团队",
+    "date": "\\today"
+  },
+  "compile_options": {
+    "engine": "xelatex",
+    "extra_packages": ["ctex", "amsmath", "amssymb", "graphicx", "booktabs", "longtable", "geometry"]
+  }
+}

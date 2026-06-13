@@ -1,0 +1,137 @@
+{
+  "id": "neurips_2024",
+  "name": "NeurIPS / ICML / ICLR (CCF-A ML)",
+  "domain": "research_paper",
+  "description": "NeurIPS 2024 风格：匿名 double-blind、9 页主体 + 无限制附录与参考文献、强调 theoretical/empirical contribution 的清晰陈述。",
+  "documentclass": "neurips_2024",
+  "cls_file": "config/latex_templates/neurips/neurips_2024.sty",
+  "bib_style": "plainnat",
+  "language": "en",
+  "acceptance_threshold": 85,
+  "min_pages": 8,
+  "max_pages": 9,
+  "citation_style": "authoryear",
+  "chapter_plan": [
+    {
+      "id": "abstract",
+      "title": "Abstract",
+      "section_level": 0,
+      "prompt_role": "撰写 NeurIPS 风格摘要。",
+      "requirements": [
+        "Strict ≤ 250 words",
+        "一句话问题、一句话缺口、一句话方法、一句话关键结果",
+        "匿名：不写机构/作者/具体致谢线索"
+      ]
+    },
+    {
+      "id": "introduction",
+      "title": "1 Introduction",
+      "section_level": 1,
+      "prompt_role": "撰写 Introduction。",
+      "requirements": [
+        "Motivating example: 一个具体例子说明问题",
+        "Limitations of prior approaches: 明确不足",
+        "Our contributions: 用 bullet 列 3-4 个具体贡献",
+        "Paper organization: 各节概述"
+      ]
+    },
+    {
+      "id": "related_work",
+      "title": "2 Related Work",
+      "section_level": 1,
+      "prompt_role": "撰写 Related Work。",
+      "requirements": [
+        "与本文最相近的工作对比",
+        "区分 theoretical / empirical / application 三个角度",
+        "避免自我引用时泄露身份"
+      ]
+    },
+    {
+      "id": "background",
+      "title": "3 Preliminaries",
+      "section_level": 1,
+      "prompt_role": "撰写 Preliminaries。",
+      "requirements": [
+        "符号表 + 必要背景（不重复教科书）",
+        "Problem formulation"
+      ]
+    },
+    {
+      "id": "method",
+      "title": "4 Method",
+      "section_level": 1,
+      "prompt_role": "撰写 Method。",
+      "requirements": [
+        "Algorithm 1 / 2: 伪代码 + 复杂度",
+        "Mathematical formulation: 完整推导",
+        "Theoretical analysis: convergence / generalization / sample complexity 证明 sketch",
+        "Implementation notes: 关键超参数与训练 trick"
+      ]
+    },
+    {
+      "id": "experiments",
+      "title": "5 Experiments",
+      "section_level": 1,
+      "prompt_role": "撰写 Experiments。",
+      "requirements": [
+        "Setup: 数据集、baselines（≥4 个 SoTA）、metric、硬件、随机种子数",
+        "Main results: 表格 + 95% 置信区间或标准差",
+        "Ablation: 关键组件 ≥3 个",
+        "Hyperparameter sensitivity + compute budget",
+        "Qualitative analysis: 案例/可视化/失败模式"
+      ]
+    },
+    {
+      "id": "discussion",
+      "title": "6 Discussion",
+      "section_level": 1,
+      "prompt_role": "撰写 Discussion。",
+      "requirements": [
+        "Limitations（必备）",
+        "Broader impact: positive + negative",
+        "Reproducibility: 代码/数据公开声明"
+      ]
+    },
+    {
+      "id": "conclusion",
+      "title": "7 Conclusion",
+      "section_level": 1,
+      "prompt_role": "撰写 Conclusion。",
+      "requirements": [
+        "总结核心 insight",
+        "未来工作"
+      ]
+    },
+    {
+      "id": "references",
+      "title": "References",
+      "section_level": 0,
+      "prompt_role": "参考文献。",
+      "requirements": [
+        "neurips_2024.bst 风格（authoryear）",
+        "30+ 引用"
+      ]
+    },
+    {
+      "id": "appendix",
+      "title": "Appendix",
+      "section_level": 0,
+      "prompt_role": "附录：证明/伪代码/超参数/数据集细节。",
+      "requirements": [
+        "可放在 \\\\appendix 之后，无页数限制",
+        "包含 NIPS reproducibility checklist 的回答"
+      ]
+    }
+  ],
+  "system_prompt": "You are an expert ML researcher writing a paper for NeurIPS / ICML / ICLR (CCF-A ML venues).\n\n[FORMAT — STRICT]\n- Use the neurips_2024 style file (single-column, 10pt, letterpaper).\n- Main paper ≤ 9 pages; references and appendix are excluded from the page limit.\n- Double-blind: no author names, no affiliations, no self-identifying citations.\n- Sections in order: Abstract → 1 Introduction → 2 Related Work → 3 Preliminaries → 4 Method → 5 Experiments → 6 Discussion → 7 Conclusion → References → Appendix.\n\n[WRITING RULES]\n1. Abstract ≤ 250 words. One sentence per idea: problem → gap → approach → headline result.\n2. Introduction: motivate with a concrete empirical observation or worked example. State 3-4 numbered contributions in a bullet list, each verifiable from the paper.\n3. Related Work: cluster by theme, not by year. For each cluster, position this paper relative to the most relevant prior work.\n4. Method: present at least one algorithm box (Algorithm 1) and a full mathematical derivation. Include a theorem/proposition with at least a proof sketch.\n5. Experiments: report datasets, ≥4 strong baselines, metrics with confidence intervals or std over ≥3 seeds. Ablation: ≥3 components. Include a compute budget table.\n6. Discussion: explicitly enumerate limitations and broader impact (both positive and negative). State code/data release plans.\n\n[TONE]\nTight, quantitative, claim-then-evidence. Every empirical claim should be backed by a number in a table or figure.\n\n[CITATIONS]\nAuthor-year style: (Smith et al., 2020). All cited works appear in the bibliography.\n\n[OUTPUT FORMAT]\nReturn a single JSON object (no prose outside JSON) with keys: title, abstract, keywords (list[str]), latex_code, sections (dict[str, str]).\n",
+  "preamble": "\\usepackage[preprint]{neurips_2024}\n\n\\usepackage[utf8]{inputenc}\n\\usepackage[T1]{fontenc}\n\\usepackage{hyperref}\n\\usepackage{url}\n\\usepackage{booktabs}\n\\usepackage{amsfonts}\n\\usepackage{nicefrac}\n\\usepackage{microtype}\n\\usepackage{xcolor}\n\\usepackage{amsmath}\n\\usepackage{algorithm}\n\\usepackage{algorithmic}\n\n\\title{__TITLE__}\n\n\\author{%\n  Anonymous Authors\\\\\n  Anonymous Institution\\\\\n  \\texttt{anon@anonymous.edu}\n}\n\n\\begin{document}\n\n\\maketitle\n",
+  "metadata_defaults": {
+    "anonymous_authors": "Anonymous Authors",
+    "anonymous_institution": "Anonymous Institution",
+    "anonymous_email": "anon@anonymous.edu"
+  },
+  "compile_options": {
+    "engine": "pdflatex",
+    "extra_packages": ["neurips_2024", "inputenc", "fontenc", "hyperref", "booktabs", "amsfonts", "nicefrac", "microtype", "algorithm", "algorithmic"]
+  }
+}

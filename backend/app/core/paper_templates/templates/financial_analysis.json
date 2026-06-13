@@ -1,0 +1,128 @@
+{
+  "id": "financial_analysis",
+  "name": "金融分析报告",
+  "domain": "financial_analysis",
+  "description": "9 章投资分析/资产定价/量化策略/风险评估结构。",
+  "documentclass": "article",
+  "cls_file": "",
+  "bib_style": "plain",
+  "language": "zh",
+  "acceptance_threshold": 75,
+  "min_pages": 10,
+  "max_pages": 30,
+  "citation_style": "numeric",
+  "chapter_plan": [
+    {
+      "id": "abstract",
+      "title": "执行摘要",
+      "section_level": 0,
+      "prompt_role": "撰写执行摘要和关键词。",
+      "requirements": [
+        "200-400字",
+        "精炼概括研究目的→数据来源→分析方法→关键发现→投资建议",
+        "投资建议必须明确具体",
+        "包含关键数值结果"
+      ]
+    },
+    {
+      "id": "market_overview",
+      "title": "1 投资背景与市场概述",
+      "section_level": 1,
+      "prompt_role": "撰写投资背景与市场概述。",
+      "requirements": [
+        "说明研究实际动机和意义",
+        "描述宏观背景、市场热点",
+        "文献回顾聚焦最相关文献",
+        "明确研究目标和主要贡献"
+      ]
+    },
+    {
+      "id": "data",
+      "title": "2 数据描述与预处理",
+      "section_level": 1,
+      "prompt_role": "撰写数据描述与预处理。",
+      "requirements": [
+        "说明数据来源、时间范围、频率、样本量",
+        "描述性统计",
+        "预处理步骤和变换说明",
+        "用图表展示数据特征"
+      ]
+    },
+    {
+      "id": "methods",
+      "title": "3 分析框架与方法",
+      "section_level": 1,
+      "prompt_role": "撰写分析框架与方法。",
+      "requirements": [
+        "说明方法选择依据",
+        "经典金融模型写出核心公式和假设",
+        "符号说明清晰",
+        "讨论模型局限性和适用条件"
+      ]
+    },
+    {
+      "id": "modeling",
+      "title": "4 资产/策略建模",
+      "section_level": 1,
+      "prompt_role": "撰写资产/策略建模。",
+      "requirements": [
+        "详细描述模型构建过程",
+        "量化策略说明逻辑、信号、持仓、调仓",
+        "参数估计方法说明"
+      ]
+    },
+    {
+      "id": "empirical",
+      "title": "5 实证分析与回测结果",
+      "section_level": 1,
+      "prompt_role": "撰写实证分析与回测结果。",
+      "requirements": [
+        "定量给出收益率、波动率、夏普比率、最大回撤等",
+        "表格对比不同模型/策略",
+        "图表展示累计收益、净值等",
+        "每个图表必须有文字解释",
+        "适当插入可用图表"
+      ]
+    },
+    {
+      "id": "risk",
+      "title": "6 风险分析",
+      "section_level": 1,
+      "prompt_role": "撰写风险分析。",
+      "requirements": [
+        "VaR分析、CVaR/ES、压力测试、灵敏度分析",
+        "风险指标明确数值",
+        "讨论流动性风险、模型风险"
+      ]
+    },
+    {
+      "id": "conclusion",
+      "title": "7 投资建议与结论",
+      "section_level": 1,
+      "prompt_role": "撰写投资建议与结论。",
+      "requirements": [
+        "投资建议明确、具体、可操作",
+        "基于前文分析结果，前后一致",
+        "风险提示不可或缺",
+        "总结主要发现和贡献"
+      ]
+    },
+    {
+      "id": "references",
+      "title": "参考文献",
+      "section_level": 0,
+      "prompt_role": "撰写参考文献。",
+      "requirements": ["规范引用已有文献"]
+    }
+  ],
+  "system_prompt": "你是一个专业的金融分析报告写作专家，擅长撰写投资分析、风险评估、资产定价、量化策略、投资组合优化等金融领域的分析报告。\n\n【报告格式要求】\n生成专业的金融分析报告，使用 article 文档类：\n- 封面/标题页（\\maketitle）\n- 执行摘要（Executive Summary）：200-400字\n- 关键词：3-5个\n- 章节：1 投资背景与市场概述 → 2 数据描述与预处理 → 3 分析框架与方法 → 4 资产/策略建模 → 5 实证分析与回测结果 → 6 风险分析 → 7 投资建议与结论 → 8 参考文献\n- 附录：代码、补充数据表格\n\n【金融分析报告特点】\n- 数据驱动：大量使用图表、数据表格支撑论点\n- 风险意识：必须包含定量风险评估\n- 实用性：给出明确可执行的投资建议或策略结论\n- 专业术语：正确使用金融学术语\n- 可复现性：说明数据来源、处理步骤、参数设置\n\n【引号使用规范（强制约束）】\nLaTeX 源代码中所有引号必须严格遵守以下规则：\n1. 中文正文中的引用、强调、金融产品名、指标名：必须使用中文双引号 \"中文内容\" 和中文单引号 '中文内容'\n2. 英文摘要或纯英文段落：使用 LaTeX 原生英文引号 `` 和 ''\n3. 数学公式内：不使用任何引号\n4. 严禁在中文正文中使用 `` 或 '' 等 LaTeX 英文引号\n5. 严禁使用反引号 ` 作为中文引用的开引号\n\n请严格按以下JSON格式返回（必须以JSON开头和结尾，不要有任何其他文字）：\n{\n    \"title\": \"报告标题\",\n    \"abstract\": \"执行摘要（200-400字）\",\n    \"keywords\": [\"关键词1\", \"关键词2\", \"关键词3\"],\n    \"latex_code\": \"完整LaTeX源代码\",\n    \"sections\": {\n        \"投资背景与市场概述\": \"主要内容摘要\",\n        \"数据描述与预处理\": \"主要内容摘要\",\n        \"分析框架与方法\": \"主要内容摘要\",\n        \"资产/策略建模\": \"主要内容摘要\",\n        \"实证分析与回测结果\": \"主要内容摘要\",\n        \"风险分析\": \"主要内容摘要\",\n        \"投资建议与结论\": \"主要内容摘要\"\n    }\n}",
+  "preamble": "\\documentclass{article}\n\\usepackage{ctex}\n\\usepackage{amsmath,amssymb,graphicx,booktabs}\n\\usepackage[margin=1in]{geometry}\n\n\\title{金融分析报告}\n\\author{分析团队}\n\\date{\\today}\n\n\\begin{document}\n\n\\maketitle\n",
+  "metadata_defaults": {
+    "author": "分析团队",
+    "date": "\\today"
+  },
+  "compile_options": {
+    "engine": "xelatex",
+    "extra_packages": ["ctex", "amsmath", "amssymb", "graphicx", "booktabs", "geometry"]
+  }
+}

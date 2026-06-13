@@ -1,0 +1,99 @@
+{
+  "id": "springer_lncs",
+  "name": "Springer LNCS (CCF-B 但广泛使用)",
+  "domain": "research_paper",
+  "description": "Springer Lecture Notes in Computer Science 双栏模板。适合 IFIP / EuroSys 类会议与 Springer 旗下期刊。",
+  "documentclass": "llncs",
+  "cls_file": "config/latex_templates/springer/llncs.cls",
+  "bib_style": "splncs04",
+  "language": "en",
+  "acceptance_threshold": 80,
+  "min_pages": 8,
+  "max_pages": 14,
+  "citation_style": "numeric",
+  "chapter_plan": [
+    {
+      "id": "abstract",
+      "title": "Abstract",
+      "section_level": 0,
+      "prompt_role": "撰写 Abstract。",
+      "requirements": [
+        "150-200 words",
+        "Keywords 紧随 abstract 之后（脚注式）"
+      ]
+    },
+    {
+      "id": "introduction",
+      "title": "1 Introduction",
+      "section_level": 1,
+      "prompt_role": "Introduction。",
+      "requirements": [
+        "Motivation + gap + approach + 贡献"
+      ]
+    },
+    {
+      "id": "related_work",
+      "title": "2 Related Work",
+      "section_level": 1,
+      "prompt_role": "Related Work。",
+      "requirements": [
+        "与本文最相关工作对比"
+      ]
+    },
+    {
+      "id": "preliminaries",
+      "title": "3 Preliminaries",
+      "section_level": 1,
+      "prompt_role": "Preliminaries。",
+      "requirements": [
+        "符号表 + 必要背景"
+      ]
+    },
+    {
+      "id": "method",
+      "title": "4 Method",
+      "section_level": 1,
+      "prompt_role": "Method。",
+      "requirements": [
+        "完整数学推导 + 关键算法"
+      ]
+    },
+    {
+      "id": "experiments",
+      "title": "5 Experiments",
+      "section_level": 1,
+      "prompt_role": "Experiments。",
+      "requirements": [
+        "Setup + 主结果 + 消融 + 敏感性"
+      ]
+    },
+    {
+      "id": "conclusion",
+      "title": "6 Conclusion",
+      "section_level": 1,
+      "prompt_role": "Conclusion。",
+      "requirements": [
+        "总结 + 未来工作"
+      ]
+    },
+    {
+      "id": "references",
+      "title": "References",
+      "section_level": 0,
+      "prompt_role": "References。",
+      "requirements": [
+        "splncs04.bst 格式 (numeric, square brackets, alphabetical)"
+      ]
+    }
+  ],
+  "system_prompt": "You are an expert researcher writing a paper for Springer LNCS (Lecture Notes in Computer Science).\n\n[FORMAT — STRICT]\n- Use the llncs document class (two-column, 10pt, A4).\n- Page limit: 8-14 pages including references (excluding supplementary material).\n- Sections in order: Abstract → 1 Introduction → 2 Related Work → 3 Preliminaries → 4 Method → 5 Experiments → 6 Conclusion → References.\n\n[WRITING RULES]\n1. Abstract: 150-200 words.\n2. Keywords: 3-5 keywords placed right after the abstract as a footnote-style block.\n3. Introduction: motivate the problem, state the gap, present the approach, list 3-4 concrete contributions.\n4. Related Work: cluster by theme, contrast with state-of-the-art.\n5. Preliminaries: notation table, problem formulation, necessary background.\n6. Method: detailed mathematical derivations, algorithm boxes, complexity analysis.\n7. Experiments: setup, baselines (≥4), metrics, main results, ablations (≥3 components), sensitivity.\n8. Conclusion: brief summary, future work.\n\n[TONE]\nFormal, precise, theoretical-leaning where appropriate.\n\n[CITATIONS]\nSpringer numeric, square brackets, alphabetical: [1], [AB12], [3, 4].\n\n[OUTPUT FORMAT]\nReturn a single JSON object (no prose outside JSON) with keys: title, abstract, keywords (list[str]), latex_code, sections (dict[str, str]).\n",
+  "preamble": "\\documentclass{llncs}\n\n\\usepackage{booktabs}\n\\usepackage{amsmath}\n\\usepackage{graphicx}\n\\usepackage{url}\n\\usepackage{hyperref}\n\n\\begin{document}\n\n\\title{__TITLE__}\n\n\\titlerunning{__SHORT_TITLE__}\n\n\\author{__AUTHORS__}\n\n\\authorrunning{__AUTHORS_SHORT__}\n\n\\institute{__AFFILIATIONS__\\\\\n\\email{__EMAILS__}}\n\n\\maketitle\n\n\\begin{abstract}\n__ABSTRACT__\\\\\n\\textbf{Keywords:} __KEYWORDS__\n\\end{abstract}\n",
+  "metadata_defaults": {
+    "short_title": "Short Title",
+    "authors_short": "Authors"
+  },
+  "compile_options": {
+    "engine": "pdflatex",
+    "extra_packages": ["llncs", "booktabs", "amsmath", "graphicx", "url", "hyperref"]
+  }
+}

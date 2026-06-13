@@ -1,0 +1,150 @@
+{
+  "id": "ieee_conference",
+  "name": "IEEE Conference (CCF-A: S&P / CCS / SIGCOMM / VLDB …)",
+  "domain": "research_paper",
+  "description": "IEEE 双栏会议模板，覆盖大多数 CCF-A 系统/安全/网络/数据库会议。强调 Related Work、Method、Experiments（含 baselines + ablation）、Reproducibility。",
+  "documentclass": "IEEEtran",
+  "cls_file": "config/latex_templates/ieee/IEEEtran.cls",
+  "bib_style": "ieeetr",
+  "language": "en",
+  "acceptance_threshold": 85,
+  "min_pages": 6,
+  "max_pages": 12,
+  "citation_style": "numeric",
+  "chapter_plan": [
+    {
+      "id": "abstract",
+      "title": "Abstract",
+      "section_level": 0,
+      "prompt_role": "撰写论文摘要。",
+      "requirements": [
+        "150-250 words",
+        "明确指出问题、已有方法的不足、本文方法、关键结果",
+        "避免引用图表编号；不写 'in this paper' 等冗余短语"
+      ]
+    },
+    {
+      "id": "keywords",
+      "title": "Index Terms",
+      "section_level": 0,
+      "prompt_role": "列出 3-5 个关键词。",
+      "requirements": [
+        "3-5 keywords, comma-separated, italicized in LaTeX"
+      ]
+    },
+    {
+      "id": "introduction",
+      "title": "I. Introduction",
+      "section_level": 1,
+      "prompt_role": "撰写 Introduction。",
+      "requirements": [
+        "Problem: 真实场景中的具体痛点与挑战",
+        "Limitations of Prior Work: 已有方法的局限性（明确说 'X is limited because…'）",
+        "Our Approach: 本文的核心方法概述（1-2 段）",
+        "Contributions: 3-5 个 bullet 的具体贡献（不要空话）",
+        "Roadmap: 本文组织结构"
+      ]
+    },
+    {
+      "id": "related_work",
+      "title": "II. Related Work",
+      "section_level": 1,
+      "prompt_role": "撰写 Related Work。",
+      "requirements": [
+        "按主题分类组织（不要按时间线）",
+        "每段对比已有方法与本文的差异",
+        "明确本文相对 State-of-the-Art 的位置",
+        "至少 20 篇近 3-5 年顶会/期刊引用"
+      ]
+    },
+    {
+      "id": "background",
+      "title": "III. Background and Preliminaries",
+      "section_level": 1,
+      "prompt_role": "撰写 Background / Preliminaries。",
+      "requirements": [
+        "定义核心符号表（Notation Table）",
+        "回顾必要的基础概念（不重复教科书内容）",
+        "Problem Formulation: 形式化的问题定义"
+      ]
+    },
+    {
+      "id": "method",
+      "title": "IV. Method",
+      "section_level": 1,
+      "prompt_role": "撰写 Method 部分。",
+      "requirements": [
+        "Overview: 系统/算法架构图与文字说明",
+        "组件 1-3：每个组件独立 subsection，详尽数学推导",
+        "完整符号表 + 关键公式的直觉解释（intuition）",
+        "复杂度分析（时间 + 空间）",
+        "正确性论证（correctness proof 或形式化保证）"
+      ]
+    },
+    {
+      "id": "experiments",
+      "title": "V. Experiments",
+      "section_level": 1,
+      "prompt_role": "撰写 Experiments。",
+      "requirements": [
+        "Experimental Setup: 数据集、基线、实现细节、硬件环境",
+        "Main Results: 至少 3 张结果表/图，附统计显著性检验（p-value）",
+        "Ablation Study: 至少剥离 3 个组件",
+        "Sensitivity Analysis: 关键超参数的影响",
+        "Case Study: 真实场景案例（可选但推荐）",
+        "Discussion: 失败案例与边界条件"
+      ]
+    },
+    {
+      "id": "discussion",
+      "title": "VI. Discussion",
+      "section_level": 1,
+      "prompt_role": "撰写 Discussion。",
+      "requirements": [
+        "Threats to Validity: internal / external / construct validity",
+        "Limitations: 诚实说明本文不覆盖的场景",
+        "Ethical Considerations: 数据隐私、双重用途、潜在滥用"
+      ]
+    },
+    {
+      "id": "conclusion",
+      "title": "VII. Conclusion",
+      "section_level": 1,
+      "prompt_role": "撰写 Conclusion。",
+      "requirements": [
+        "总结核心贡献",
+        "展望未来工作（1-2 段）"
+      ]
+    },
+    {
+      "id": "references",
+      "title": "References",
+      "section_level": 0,
+      "prompt_role": "参考文献。",
+      "requirements": [
+        "使用 IEEE 引用格式（numeric, square brackets）",
+        "30+ 引用，含近期顶会/期刊"
+      ]
+    },
+    {
+      "id": "appendix",
+      "title": "Appendix",
+      "section_level": 0,
+      "prompt_role": "附录：补充材料。",
+      "requirements": [
+        "证明细节、伪代码、超参数搜索空间、数据集细节、可复现性 checklist"
+      ]
+    }
+  ],
+  "system_prompt": "You are an expert researcher writing an IEEE conference paper targeting CCF-A venues (S&P, CCS, SIGCOMM, VLDB, etc.).\n\n[CRITICAL EVALUATION CRITERIA]\nReviewers will judge: novelty, technical soundness, experimental rigor, clarity, reproducibility, and impact.\n\n[STRUCTURAL REQUIREMENTS — STRICT]\n- Use IEEEtran document class in 10pt, conference mode, two-column layout.\n- Page limit: 6-12 main pages excluding references and appendix.\n- Sections must be in this order: Abstract → Index Terms → I. Introduction → II. Related Work → III. Background & Preliminaries → IV. Method → V. Experiments → VI. Discussion → VII. Conclusion → References → Appendix.\n\n[WRITING RULES]\n1. Abstract: 150-250 words. State the problem, the gap in prior work, your approach, and the strongest quantitative result. No citations, no 'in this paper'.\n2. Introduction: motivate with a concrete real-world example or measurement; articulate limitations of prior work explicitly ('X is limited by Y'); state 3-5 concrete contributions as bullet points.\n3. Related Work: group by theme, not by chronology. For every group, position your work relative to the state-of-the-art.\n4. Background: a notation table with all symbols, a problem formulation section, and only the minimum preliminaries needed.\n5. Method: present the architecture overview first, then each component in its own subsection. Provide mathematical derivations, complexity analysis, and correctness arguments.\n6. Experiments: state datasets, baselines, metrics, hardware, and hyperparameters explicitly. Include main results, ablations (≥3 components), sensitivity analysis, and a case study when possible. Report statistical significance (p-values, confidence intervals).\n7. Discussion: cover threats to validity (internal/external/construct), limitations honestly, and ethical considerations.\n8. Conclusion: concise summary and future work.\n\n[TONE]\nPrecise, quantitative, claim-then-evidence. Avoid hedging like 'very' or 'really'. Every claim should be backed by a reference or experiment.\n\n[CITATION STYLE]\nIEEE numeric: [1], [2, 3], [4]-[6]. All cited works appear in the bibliography.\n\n[OUTPUT FORMAT]\nReturn a single JSON object (no prose outside JSON) with keys: title, abstract, keywords (list[str]), latex_code, sections (dict[str, str]).\n",
+  "preamble": "\\documentclass[conference]{IEEEtran}\n\\IEEEoverridecommandlockouts\n\\usepackage{cite}\n\\usepackage{amsmath,amssymb,amsfonts}\n\\usepackage{algorithmic}\n\\usepackage{graphicx}\n\\usepackage{textcomp}\n\\usepackage{xcolor}\n\\usepackage{booktabs}\n\\usepackage{url}\n\\usepackage{hyperref}\n\n\\def\\BibTeX{{\\rm B\\kern-.05em{\\sc i\\kern-.025em b}\\kern-.08em\n    T\\kern-.1667em\\lower.7ex\\hbox{E}\\kern-.125emX}}\n\n\\begin{document}\n\n\\title{__TITLE__}\n\n\\author{\n\\IEEEauthorblockN{__AUTHORS__}\n\\IEEEauthorblockA{__AFFILIATIONS__}\n\\IEEEauthorblockA{__EMAILS__}\n}\n\n\\maketitle\n",
+  "metadata_defaults": {
+    "authors": ["Author A", "Author B"],
+    "affiliations": ["University X"],
+    "emails": ["a@x.edu"]
+  },
+  "compile_options": {
+    "engine": "pdflatex",
+    "extra_packages": ["cite", "amsmath", "amssymb", "algorithmic", "graphicx", "textcomp", "booktabs", "hyperref"]
+  }
+}
