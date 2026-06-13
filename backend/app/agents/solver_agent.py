@@ -29,6 +29,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from ..core.paths import get_project_data_dir
 from ..services.data_schema import get_schema_extractor
+from ..services.code_manifest import (
+    CodeManifest, parse_manifest_from_dict, validate_manifest,
+)
 from ..services.result_validator import get_result_validator
 from .base import BaseAgent, AgentFactory
 
@@ -1331,6 +1334,14 @@ class SolverAgent(BaseAgent):
                 sol_result["depends_on_results"] = [ps.get("sub_problem_id") for ps in previous_solutions]
                 sol_result["dependency_note"] = f"该求解使用前序{len(previous_solutions)}个子问题的结果作为输入"
 
+            # ====== Phase 3：CodeManifest 校验（软约束，记录但不阻塞） ======
+            # 强制拆文件硬规则已在 system prompt 编码；此处仅记录 manifest 校验结果
+            # 供 camera_ready 打包与 peer review 使用。
+            sol_result["code_manifest"] = self._build_manifest_report(
+                sol_result.get("code_files", []),
+                sub_problem_id=sp_id,
+            )
+
             all_solutions.append(sol_result)
             previous_solutions.append(sol_result)
             logger.info(f"SolverAgent: 逐个求解完成 {i+1}/{len(section_results)} - {sp_name}")
@@ -1615,6 +1626,10 @@ class SolverAgent(BaseAgent):
                 "execution_error": exec_info.get("error", ""),
                 "error_classification": self._classify_execution_error(exec_info.get("error", ""), exec_info.get("code", raw_code)) if not exec_ok else None,
                 "validation": self._validate_solution_results(numerical, model),
+                # Phase 3: CodeManifest 校验（与 _solve_sequential 一致）
+                "code_manifest": self._build_manifest_report(
+                    sol.get("code_files", []), sub_problem_id=sp_id,
+                ),
             }
 
             all_solutions.append(sol)
@@ -1666,4 +1681,54 @@ class SolverAgent(BaseAgent):
             },
             "sub_problem_index": sub_idx,
             "sub_problem_name": sp_name,
+        }
+
+    # ====================================================================
+    # Phase 3: CodeManifest 校验 (软约束)
+    # ====================================================================
+
+    def _build_manifest_report(
+        self,
+        code_files: List[Dict[str, Any]],
+        sub_problem_id: Any = None,
+    ) -> Dict[str, Any]:
+        """对 LLM 产出的 code_files 解析并校验 CodeManifest。
+
+        这是软约束：记录 valid/issues/warnings 但 **不阻塞** 主流程。
+        原因：复杂任务拆文件的硬规则已在 system prompt 中显式编码，
+        校验只是事后审计与下游 camera-ready 打包的输入。
+        """
+        if not code_files:
+            return {
+                "sub_problem_id": sub_problem_id,
+                "manifest": None,
+                "valid": False,
+                "issues": ["empty code_files"],
+                "warnings": [],
+                "file_count": 0,
+            }
+        # 容错：LLM 可能返回 [str] 或 [{path, code}] 或 [{filename, code}]
+        normalized: List[Dict[str, Any]] = []
+        for cf in code_files:
+            if isinstance(cf, str):
+                normalized.append({"path": "solver.py", "role": "solver", "code": cf})
+            elif isinstance(cf, dict):
+                # 兼容 filename / path 两种 key
+                if "path" not in cf and "filename" in cf:
+                    cf = {**cf, "path": cf["filename"]}
+                normalized.append(cf)
+
+        manifest = parse_manifest_from_dict({"files": normalized})
+        report = validate_manifest(manifest)
+        if not report.valid:
+            logger.info(
+                f"CodeManifest validation issues for sub_problem={sub_problem_id}: {report.issues}"
+            )
+        return {
+            "sub_problem_id": sub_problem_id,
+            "manifest": manifest.to_dict(),
+            "valid": report.valid,
+            "issues": report.issues,
+            "warnings": report.warnings,
+            "file_count": len(manifest.files),
         }

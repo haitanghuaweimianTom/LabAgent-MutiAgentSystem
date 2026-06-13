@@ -515,6 +515,118 @@ async def confirm_subproblems(task_id: str, req: dict):
     return {"task_id": task_id, "status": "running", "phase": "phase2", "message": f"开始批量建模求解{len(sub_problems)}个子问题..."}
 
 
+# ====================================================================
+# Phase 3: Camera-Ready 打包端点
+# ====================================================================
+
+@router.post("/{task_id}/camera-ready")
+async def build_camera_ready(task_id: str, req: Optional[dict] = None):
+    """把任务产物打成 camera-ready zip（Phase 3）。
+
+    Body（可选）:
+        ``template_id``: 论文模板 ID（默认从 task meta 读）
+        ``make_zip``: 是否同时打 zip（默认 True）
+        ``max_zip_mb``: zip 大小上限（默认 50MB）
+
+    返回:
+        ``output_dir``: 产物目录（``output/camera_ready_<task_id>/``）
+        ``zip_path``: zip 文件路径（如 make_zip=True）
+        ``skipped_reasons``: 缺失的产物记录
+        ``artifact_summary``: 收集到的产物数量
+    """
+    from ..core.task_persistence import load_task_metadata
+    from ..services.camera_ready import (
+        collect_artifacts, build, CameraReadyArtifact,
+    )
+    from ..core.paths import get_project_output_dir
+
+    req = req or {}
+    meta = load_task_metadata(task_id)
+    if not meta:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    template_id = req.get("template_id") or meta.get("template", "math_modeling")
+    make_zip = bool(req.get("make_zip", True))
+    max_zip_mb = int(req.get("max_zip_mb", 50))
+
+    project_name = meta.get("project_name") or task_id
+    try:
+        task_output_dir = get_project_output_dir(project_name)
+    except Exception:
+        task_output_dir = Path("./output") / f"work_{project_name}"
+
+    if not task_output_dir.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Task output dir not found: {task_output_dir}",
+        )
+
+    # 收集产物
+    artifact = collect_artifacts(task_id, task_output_dir, template_id=template_id)
+
+    # 把求解 Agent 输出的 code_manifest 摘要注入（如果有）
+    try:
+        result_path = task_output_dir / "final" / "solution.json"
+        if result_path.exists():
+            sol = json.loads(result_path.read_text(encoding="utf-8"))
+            # 从求解器结果中提 code_manifest 文本（多 sub 时合并）
+            sp_solutions = sol.get("solver_agent", {}).get("sub_problem_solutions", []) or []
+            manifest_lines = []
+            for sp_sol in sp_solutions:
+                cm = sp_sol.get("code_manifest") or {}
+                if cm and cm.get("manifest"):
+                    for f in cm["manifest"].get("files", []):
+                        manifest_lines.append(f"- {f.get('path')} (role={f.get('role')}): {f.get('description', '')}")
+            if manifest_lines:
+                artifact.code_manifest_text = "# Code Manifest\n" + "\n".join(manifest_lines)
+            # bib entries 从 chapter_summaries 收集（实际有 arxiv_id 的条目）
+            bib = []
+            chap_sum = sol.get("writer_agent", {}).get("chapters", []) or []
+            for ch in chap_sum:
+                for cit in ch.get("citations", []) or []:
+                    if isinstance(cit, dict) and (cit.get("arxiv_id") or cit.get("key")):
+                        bib.append(cit)
+            artifact.bib_entries = bib
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"camera-ready 收集 bib 失败: {exc}")
+
+    # 打包
+    output_root = task_output_dir
+    result = build(
+        task_id=task_id,
+        artifact=artifact,
+        output_dir=output_root,
+        make_zip=make_zip,
+        max_zip_mb=max_zip_mb,
+    )
+    return result.to_dict()
+
+
+@router.get("/{task_id}/camera-ready")
+async def get_camera_ready_status(task_id: str):
+    """查询 camera-ready 产物状态（不重新打包）。"""
+    from ..core.task_persistence import load_task_metadata
+    from ..core.paths import get_project_output_dir
+
+    meta = load_task_metadata(task_id)
+    if not meta:
+        raise HTTPException(status_code=404, detail="Task not found")
+    project_name = meta.get("project_name") or task_id
+    try:
+        task_output_dir = get_project_output_dir(project_name)
+    except Exception:
+        task_output_dir = Path("./output") / f"work_{project_name}"
+
+    pkg = task_output_dir / f"camera_ready_{task_id}"
+    zip_path = task_output_dir / f"camera_ready_{task_id}.zip"
+    return {
+        "task_id": task_id,
+        "package_dir": str(pkg) if pkg.exists() else None,
+        "zip_path": str(zip_path) if zip_path.exists() else None,
+        "exists": pkg.exists() or zip_path.exists(),
+    }
+
+
 @router.post("/{task_id}/cancel")
 async def cancel(task_id: str, req: TaskCancelRequest):
     orch = get_orchestrator()
