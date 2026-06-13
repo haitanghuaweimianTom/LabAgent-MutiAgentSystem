@@ -8,6 +8,15 @@
 v3.1 扩展：
 - 支持多代码文件生成（数据处理、求解、可视化等独立脚本）
 - 扩展模板库覆盖12+种常见数学建模任务类型
+
+v3.3 通用化（CCF-A 论文工厂 Phase 1C）：
+- 抽出 ``BASE_SYSTEM_PROMPT`` 领域无关的 system prompt。
+- 新增 ``FILE_SPLIT_RULES`` 硬规则段，由 ``get_system_prompt()`` 自动拼接。
+  复杂任务必须按需拆为多文件（避免上下文稀释 + 注意力分散），
+  与 [[code-generation-modular-preference]] 强一致。
+- 新增 ``TEMPLATE_DOMAINS`` 给 ``CODE_TEMPLATES`` 打 ``domain`` 标签
+  （``optimization`` / ``stats`` / ``ml`` / ``general``），便于未来
+  按 ``template_id`` 注入相关模板集合。零破坏：``CODE_TEMPLATES`` 字典本身不变。
 """
 
 import json
@@ -28,7 +37,49 @@ logger = logging.getLogger(__name__)
 # 默认执行超时（秒）- _execute_code 备用方法使用
 CODE_EXEC_TIMEOUT = 60
 
-# ====== Claude Code 全自动编程的系统提示词 ======
+# ====== v3.3 通用化：领域无关的 system prompt 与硬规则 ======
+
+BASE_SYSTEM_PROMPT = """你是一个专业的算法工程师，擅长用 Python 解决科研/工程中的算法与建模问题。
+你的任务不仅包括核心求解，还包括数据处理、可视化、结果验证等辅助工作。
+
+重要：你必须以JSON格式输出，不要有任何其他文字！"""
+
+
+# "按需拆文件"硬规则（v3.3 显式编码，与 [[code-generation-modular-preference]] 强一致）。
+# LLM 生成代码时必须按本节约束决定产物是单文件还是多文件。
+FILE_SPLIT_RULES = """
+
+【代码生成：按需拆分为多文件（硬规则，违反将被回退重做）】
+
+为避免上下文稀释与注意力分散，**复杂任务必须拆分为多个 .py 文件**。
+当以下任一条件满足时，**必须**拆分（不要把所有逻辑塞进单个长文件）：
+
+1. 单一文件估算 > 300 行
+2. 涉及 3 个以上职责（数据加载 / 特征工程 / 模型训练 / 评估 / 可视化）
+3. 子问题数量 ≥ 2
+4. 需要复用 helper 函数于 ≥ 2 个下游 notebook / 脚本
+
+【命名约定】
+- data_process_<sub_id>.py —— 数据处理与特征工程
+- model_<sub_id>.py —— 模型/算法定义
+- train_<sub_id>.py —— 训练流程
+- eval_<sub_id>.py —— 评估与指标计算
+- viz_<sub_id>.py —— 图表生成
+- utils.py —— 公共工具
+
+【产物 manifest】
+若你产出了多文件，请在返回 JSON 中给出 ``code_files`` 列表（数组），每项
+形如 ``{"path": "data_process_sub1.py", "role": "data_processing", "code": "..."}``。
+单文件时也建议给出 ``code_files=[{"path": "solver.py", "role": "solver", "code": "..."}]``
+以便下游 ``orchestrator`` 统一消费。
+
+【入口文件】
+若拆分多文件，必须有一个清晰的入口（默认 ``solver_sub<N>.py`` 或
+``main.py``），该入口负责 import 各子模块并按顺序执行。
+"""
+
+
+# ====== Claude Code 全自动编程的系统提示词（保留以兼容 Claude CLI 路径） ======
 CLAUDE_CODER_SYSTEM = """你是一个专业的算法工程师，擅长用 Python 实现数学模型的求解算法。
 
 【工作流程】
@@ -1096,37 +1147,8 @@ class SolverAgent(BaseAgent):
             }
 
     def get_system_prompt(self) -> str:
-        return """你是一个专业的算法工程师，擅长用Python实现数学模型的求解算法。
-你的任务不仅包括核心求解，还包括数据处理、可视化等辅助工作。
-
-重要：你必须以JSON格式输出，不要有任何其他文字！
-
-对于每个子问题，你应该生成多个代码文件以完成不同类型的任务：
-- 数据处理（如 data_process_{N}.py）：数据清洗、转换、特征工程
-- 求解（如 solver_{N}.py）：核心算法实现
-- 可视化（如 visualize_{N}.py）：生成图表并保存到文件
-
-输出格式：
-{
-    "code_files": [
-        {"filename": "data_process_{N}.py", "language": "python", "code": "完整可运行Python代码", "description": "数据预处理"},
-        {"filename": "solver_{N}.py", "language": "python", "code": "完整可运行Python代码", "description": "核心求解算法"},
-        {"filename": "visualize_{N}.py", "language": "python", "code": "完整可运行Python代码", "description": "结果可视化"}
-    ],
-    "algorithm_steps": ["步骤1：...", "步骤2：...", "..."],
-    "results": {
-        "key_findings": ["关键发现1", "关键发现2"],
-        "numerical_results": {"结果变量名": 数值, ...},
-        "interpretation": "结果解释"
-    },
-    "visualizations": [{"type": "折线图", "description": "图表说明"}],
-    "validation": {
-        "passed": true/false,
-        "tests": ["测试1", "测试2"],
-        "error_analysis": "误差分析",
-        "sensitivity_analysis": "灵敏度分析结论"
-    }
-}"""
+        # v3.3：BASE_SYSTEM_PROMPT（领域无关） + FILE_SPLIT_RULES（硬规则）。
+        return BASE_SYSTEM_PROMPT + FILE_SPLIT_RULES
 
     async def execute(self, task_input: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
         action = task_input.get("action", "solve")
