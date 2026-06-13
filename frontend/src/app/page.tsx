@@ -14,6 +14,9 @@ import SettingsPage from './components/SettingsPage';
 import PdfManager from './components/PdfManager';
 import MemoryManager from './components/MemoryManager';
 import { useAppStore } from './store/useAppStore';
+import { useTaskState } from './hooks/useTaskState';
+import { TaskStatusBadge } from './components/TaskStatusBadge';
+import { CameraReadyPanel } from './components/CameraReadyPanel';
 
 declare global {
   interface Window {
@@ -42,6 +45,18 @@ export default function Home() {
   const [currentStep, setCurrentStep] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [eventSource, setEventSource] = useState<EventSource | null>(null);
+  // Phase 6 (A3): useTaskState hook 接管后端 9 阶段状态机。
+  // 保留旧 state 变量以兼容旧 setTaskStatus 调用；hook 通过 sync effect 同步。
+  const taskState = useTaskState({ taskId });
+
+  // 同步 hook → 旧 state（避免破坏旧组件依赖）
+  useEffect(() => {
+    if (taskState.state) {
+      setTaskStatus(taskState.state.name);
+      setProgress(taskState.state.progressPercentage);
+      setCurrentStep(taskState.state.currentStep);
+    }
+  }, [taskState.state]);
 
   // Pause/Resume
   const [paused, setPaused] = useState(false);
@@ -451,6 +466,21 @@ export default function Home() {
               </div>
             )}
 
+            {/* Phase 6 (A3): 任务状态机可视化 */}
+            {taskState.state && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '0.8rem', flexWrap: 'wrap' }}>
+                <TaskStatusBadge
+                  state={taskState.state.name}
+                  progressPercentage={taskState.state.progressPercentage}
+                />
+                {taskState.state.currentStep && (
+                  <span style={{ color: '#aaa', fontSize: '0.85rem' }}>
+                    {taskState.state.currentStep}
+                  </span>
+                )}
+              </div>
+            )}
+
             <AgentChat
               messages={messages}
               taskStatus={taskStatus}
@@ -463,6 +493,13 @@ export default function Home() {
               resuming={resuming}
               cancelling={cancelling}
             />
+
+            {/* Phase 6 (A3): 完成后 Camera-Ready 打包 */}
+            {taskState.state?.name === 'completed' && taskId && (
+              <div style={{ marginTop: '1rem' }}>
+                <CameraReadyPanel taskId={taskId} templateId={taskState.state.templateId} />
+              </div>
+            )}
           </div>
         )}
 

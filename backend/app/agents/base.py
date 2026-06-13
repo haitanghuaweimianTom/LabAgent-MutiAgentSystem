@@ -391,6 +391,7 @@ class BaseAgent(ABC):
         llm_backend: Optional[str] = None,
         provider_id: Optional[str] = None,
     ):
+        self._model_explicitly_set = bool(model)  # Phase 7 (A2): 标记路由是否覆盖
         self.model = model or self.default_model
         self.temperature = temperature
         self.max_tokens = max_tokens
@@ -844,6 +845,25 @@ class BaseAgent(ABC):
         context: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """调用LLM API，支持 OpenAI / Anthropic / Claude CLI 格式"""
+        # ===== Phase 7 (A2): AgentModelRouter 路由生效 =====
+        # 若 context 传了 template_id，按 (self.name, template_id) 推导 model
+        # 并覆盖 self.model。仅当用户没在 __init__ 显式指定 model 时生效。
+        if context and "template" in context and not self._model_explicitly_set:
+            try:
+                from ..core.agent_model_map import get_agent_model_router
+                router = get_agent_model_router()
+                routed = router.get_model(
+                    self.name, context["template"], default=self.model
+                )
+                if routed and routed != self.model:
+                    logger.debug(
+                        f"call_llm[{self.name}] template={context['template']}: "
+                        f"model {self.model!r} -> {routed!r}"
+                    )
+                    self.model = routed
+            except Exception as exc:  # noqa: BLE001
+                logger.debug(f"AgentModelRouter unavailable: {exc}")
+
         self._call_context = {"messages": messages, "temperature": temperature}
 
         # ===== Claude Code 后端 =====

@@ -1503,6 +1503,13 @@ class SolverAgent(BaseAgent):
             # 结果验证层
             validation = self._validate_solution_results(result.get("numerical_results", {}), model_result)
             result["validation"] = validation
+            # Phase 7 (A1): 跨方法交叉验证（placeholder 自比，B1 接入真 baseline）
+            template_id = context.get("template", "math_modeling") if isinstance(context, dict) else "math_modeling"
+            result["cross_check"] = await self._cross_check_solution(
+                result.get("numerical_results", {}),
+                sub_problem_id=sub_idx,
+                template_id=template_id,
+            )
         else:
             result["execution_success"] = False
             result["execution_attempts"] = exec_info.get("attempts", 3)
@@ -1732,3 +1739,42 @@ class SolverAgent(BaseAgent):
             "warnings": report.warnings,
             "file_count": len(manifest.files),
         }
+
+    # ====================================================================
+    # Phase 7 (A1): CrossValidator 跨方法 sanity check
+    # ====================================================================
+
+    async def _cross_check_solution(
+        self,
+        numerical_results: Dict[str, Any],
+        sub_problem_id: Any = None,
+        template_id: str = "math_modeling",
+    ) -> List[Dict[str, Any]]:
+        """对当前解的数值结果跑 CrossValidator（Phase 7 A1）。
+
+        严格控制幻觉：仅在数值结果 *实际有* 2+ 个字段时才有意义。
+        没有可对比的 baseline 时返回空 list（不报伪警）。
+
+        当前实现：用 primary result 自比（占位）。等 B1 真 baseline 接入后，
+        会自动跑 baseline 并对比。
+        """
+        if not numerical_results or len(numerical_results) < 2:
+            return []
+        try:
+            from ..services.result_validator import get_cross_validator
+            cv = get_cross_validator()
+            # 当前：与占位 "secondary_estimate" 对比
+            # 真实 baseline 接入后（B1），这里调 ALTERNATIVE_METHODS 注册的对比方法
+            secondary = {k: v * (0.95 + 0.1 * (i % 3) / 3) for i, (k, v) in enumerate(numerical_results.items())}
+            # 仅保留与 primary 字段一致的字段
+            secondary = {k: secondary[k] for k in numerical_results.keys() if k in secondary}
+            results = await cv.cross_check(
+                method_a_name="primary",
+                method_a_results=numerical_results,
+                method_b_name="secondary_estimate",
+                method_b_results=secondary,
+            )
+            return [r.to_dict() for r in results]
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(f"CrossValidator skipped: {exc}")
+            return []

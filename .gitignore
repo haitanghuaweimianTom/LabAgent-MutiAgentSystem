@@ -52,6 +52,7 @@ dist/
 # Next.js
 .next/
 out/
+*.tsbuildinfo
 
 # Backup
 backups/
