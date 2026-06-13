@@ -1633,11 +1633,21 @@ class SolverAgent(BaseAgent):
                 "execution_error": exec_info.get("error", ""),
                 "error_classification": self._classify_execution_error(exec_info.get("error", ""), exec_info.get("code", raw_code)) if not exec_ok else None,
                 "validation": self._validate_solution_results(numerical, model),
-                # Phase 3: CodeManifest 校验（与 _solve_sequential 一致）
-                "code_manifest": self._build_manifest_report(
-                    sol.get("code_files", []), sub_problem_id=sp_id,
-                ),
             }
+
+            # Phase 3: CodeManifest 校验（与 _solve_sequential 一致）
+            # 必须在 sol 构造完成后调用，避免在 dict literal 内引用自身
+            sol["code_manifest"] = self._build_manifest_report(
+                sol.get("code_files", []), sub_problem_id=sp_id,
+            )
+
+            # Phase 7 (A1): 跨方法交叉验证（placeholder 自比，B1 接入真 baseline）
+            template_id = context.get("template", "math_modeling") if isinstance(context, dict) else "math_modeling"
+            sol["cross_check"] = await self._cross_check_solution(
+                sol.get("results", {}).get("numerical_results", {}),
+                sub_problem_id=sp_id,
+                template_id=template_id,
+            )
 
             all_solutions.append(sol)
             logger.info(

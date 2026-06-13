@@ -846,7 +846,12 @@ def _resolve_chapter_plan(template_id: str) -> List[ChapterPlan]:
     try:
         tpl = _load_template_from_registry(template_id)
         if tpl and tpl.chapter_plan:
-            return tpl.chapter_plan
+            # 注册表返回的是 dataclass ChapterPlan，writer 内部按 dict 访问，
+            # 统一转成 dict 避免 'ChapterPlan' object is not subscriptable
+            return [
+                cp.to_dict() if hasattr(cp, "to_dict") else cp
+                for cp in tpl.chapter_plan
+            ]
     except Exception:  # noqa: BLE001
         pass
     # 2) 旧 4 套模板的硬编码常量

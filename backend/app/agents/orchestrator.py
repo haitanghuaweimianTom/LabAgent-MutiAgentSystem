@@ -644,6 +644,8 @@ class Orchestrator:
         agent = self.agents.get("writer_agent")
         agent._knowledge_base_id = context_base.get("knowledge_base_id")
         template = self._task_templates.get(task_id, "math_modeling")
+        paper_output: Dict[str, Any] = {}
+        writer_failed = False
         try:
             paper_output = await agent.execute(
                 task_input={"action": "write_paper", "problem_text": problem_text},
@@ -668,6 +670,7 @@ class Orchestrator:
             logger.error(f"WriterAgent failed: {e}")
             task_step.status = TaskStatus.FAILED
             task_step.error = str(e)
+            writer_failed = True
         task_step.completed_at = datetime.now()
 
         if self.task_history[task_id]:
@@ -701,10 +704,11 @@ class Orchestrator:
             logger.warning(f"Failed to extract lessons from task {task_id}: {e}")
 
         # 返回完整 all_results，包含 modeler_agent、solver_agent、writer_agent
+        final_status = "failed" if writer_failed else "completed"
         result = {
             "task_id": task_id,
-            "phase": "completed",
-            "status": "completed",
+            "phase": final_status,
+            "status": final_status,
             "sub_problems_count": len(sub_problems),
             "section_results": section_results,
             "writer_result": all_results.get("writer_agent", {}),
