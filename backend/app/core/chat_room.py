@@ -1,11 +1,15 @@
 """
-Agent 聊天室 - 核心模块
-让所有Agent像团队一样在聊天室中互相沟通、@提及、共享上下文
+Agent 聊天室 - 核心模块（v2：支持实时推送 + 用户消息 + 多 Agent 讨论）
+
+让所有 Agent 像团队一样在聊天室中互相沟通、@提及、共享上下文。
+用户也可以加入讨论，修正工作方向。
 """
+import asyncio
+import json
 import logging
 import uuid
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, AsyncGenerator, Callable, Dict, List, Optional
 from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
@@ -14,17 +18,28 @@ logger = logging.getLogger(__name__)
 @dataclass
 class Message:
     id: str
-    sender: str          # agent名称
+    sender: str          # agent名称 / "user"
     sender_label: str    # 显示名称
     content: str
-    msg_type: str        # text / broadcast / mention / result / error
+    msg_type: str        # text / broadcast / mention / result / error / user_input / discussion
     mentions: List[str] = field(default_factory=list)
     timestamp: datetime = field(default_factory=datetime.now)
     task_id: Optional[str] = None
 
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "sender": self.sender,
+            "sender_label": self.sender_label,
+            "content": self.content,
+            "type": self.msg_type,
+            "mentions": self.mentions,
+            "timestamp": self.timestamp.isoformat(),
+        }
+
 
 class ChatRoom:
-    """聊天室"""
+    """聊天室 v2：支持 SSE 实时推送 + 用户消息 + 讨论线程"""
 
     def __init__(self, room_id: str, task_id: str, problem_text: str):
         self.room_id = room_id
@@ -32,6 +47,20 @@ class ChatRoom:
         self.problem_text = problem_text
         self.messages: List[Message] = []
         self.agents: Dict[str, Dict[str, Any]] = {}
+
+        # SSE 订阅者列表（每个订阅者是一个 asyncio.Queue）
+        self._subscribers: List[asyncio.Queue] = []
+
+        # 用户消息队列（Agent 可以检查是否有用户输入）
+        self._user_messages: List[Message] = []
+
+        # 讨论线程：discuss_id -> list of messages
+        self._discussions: Dict[str, List[Message]] = {}
+
+        # 自动迭代控制
+        self._auto_iterate: bool = True  # 用户未发言时自动迭代
+        self._user_last_spoke_at: Optional[datetime] = None
+        self._waiting_for_user: bool = False  # 是否正在等待用户回复
 
         # 团队成员定义
         self.team = {
@@ -42,6 +71,8 @@ class ChatRoom:
             "modeler_agent": {"label": "建模师", "color": "#27ae60", "role": "建立数学模型"},
             "solver_agent": {"label": "求解器", "color": "#e67e22", "role": "编程求解与验证"},
             "writer_agent": {"label": "写作专家", "color": "#1abc9c", "role": "生成完整LaTeX论文"},
+            "peer_review_agent": {"label": "审稿人", "color": "#8e44ad", "role": "同行评议与质量把关"},
+            "user": {"label": "用户", "color": "#3498db", "role": "人类专家，参与讨论与决策"},
         }
 
         # 系统初始化消息
@@ -66,7 +97,20 @@ class ChatRoom:
             task_id=self.task_id,
         )
         self.messages.append(msg)
+
+        # 异步通知所有 SSE 订阅者
+        self._notify_subscribers(msg)
+
         return msg
+
+    def _notify_subscribers(self, msg: Message) -> None:
+        """通知所有 SSE 订阅者（非阻塞）"""
+        data = json.dumps(msg.to_dict(), ensure_ascii=False)
+        for q in self._subscribers:
+            try:
+                q.put_nowait(data)
+            except asyncio.QueueFull:
+                pass  # 订阅者处理太慢，丢弃
 
     def post(
         self,
@@ -75,20 +119,55 @@ class ChatRoom:
         msg_type: str = "text",
         mentions: Optional[List[str]] = None,
     ) -> Message:
-        """Agent发言"""
+        """Agent 发言"""
         label = self.team.get(sender, {}).get("label", sender)
         msg = self._add_message(sender, label, content, msg_type, mentions)
 
-        # 如果@了某个Agent，同步广播
         if mentions:
             mentioned = ", ".join([self.team.get(m, {}).get("label", m) for m in mentions])
             logger.info(f"[{label}] @{mentioned}: {content[:50]}")
 
         return msg
 
+    def user_post(self, content: str, mentions: Optional[List[str]] = None) -> Message:
+        """用户发言（通过前端输入）"""
+        msg = self._add_message("user", "用户", content, "user_input", mentions)
+        self._user_messages.append(msg)
+        self._user_last_spoke_at = datetime.now()
+        self._waiting_for_user = False
+        logger.info(f"[用户] {content[:80]}")
+        return msg
+
     def broadcast(self, sender: str, content: str) -> Message:
         """广播消息"""
         return self.post(sender, content, "broadcast")
+
+    def start_discussion(self, topic: str, participants: List[str]) -> str:
+        """发起一个讨论线程"""
+        discuss_id = f"disc_{uuid.uuid4().hex[:8]}"
+        self._discussions[discuss_id] = []
+        participant_labels = [self.team.get(p, {}).get("label", p) for p in participants]
+        self.post(
+            "coordinator",
+            f"📢 发起讨论：{topic}\n参与人：{', '.join(participant_labels)}",
+            "discussion",
+            mentions=participants,
+        )
+        return discuss_id
+
+    def post_to_discussion(self, discuss_id: str, sender: str, content: str) -> Optional[Message]:
+        """在讨论线程中发言"""
+        if discuss_id not in self._discussions:
+            return None
+        label = self.team.get(sender, {}).get("label", sender)
+        msg = self._add_message(sender, label, content, "discussion")
+        self._discussions[discuss_id].append(msg)
+        return msg
+
+    def get_discussion(self, discuss_id: str) -> List[Dict[str, Any]]:
+        """获取讨论线程的所有消息"""
+        msgs = self._discussions.get(discuss_id, [])
+        return [m.to_dict() for m in msgs]
 
     def get_messages(self, after_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """获取消息列表"""
@@ -97,30 +176,82 @@ class ChatRoom:
             msgs = self.messages[idx + 1:]
         else:
             msgs = self.messages
+        return [m.to_dict() for m in msgs]
 
-        return [
-            {
-                "id": m.id,
-                "sender": m.sender,
-                "sender_label": m.sender_label,
-                "content": m.content,
-                "type": m.msg_type,
-                "mentions": m.mentions,
-                "timestamp": m.timestamp.isoformat(),
-            }
-            for m in msgs
-        ]
+    def get_user_messages_since(self, since: Optional[datetime] = None) -> List[Message]:
+        """获取用户消息（用于 Agent 检查用户是否有新输入）"""
+        if since is None:
+            return list(self._user_messages)
+        return [m for m in self._user_messages if m.timestamp > since]
+
+    def has_user_input(self) -> bool:
+        """检查是否有用户输入（用于自动迭代判断）"""
+        return len(self._user_messages) > 0 and (
+            self._user_last_spoke_at is not None
+            and (self._waiting_for_user or True)
+        )
+
+    def set_waiting_for_user(self, waiting: bool = True) -> None:
+        """设置是否正在等待用户回复"""
+        self._waiting_for_user = waiting
+
+    def should_auto_iterate(self) -> bool:
+        """判断是否应该自动迭代（用户未发言时）"""
+        if not self._auto_iterate:
+            return False
+        # 如果正在等待用户回复，且用户已发言，则不自动迭代
+        if self._waiting_for_user and self._user_last_spoke_at:
+            return False
+        return True
 
     def get_context(self, for_agent: Optional[str] = None) -> str:
-        """获取对话上下文摘要（供LLM使用）"""
+        """获取对话上下文摘要（供 LLM 使用）"""
         recent = self.messages[-20:] if len(self.messages) > 20 else self.messages
         lines = []
         for m in recent:
-            lines.append(f"[{m.sender_label}] {m.content}")
+            prefix = f"[{m.sender_label}]"
+            if m.msg_type == "user_input":
+                prefix = f"[👤 用户]"
+            elif m.msg_type == "discussion":
+                prefix = f"[💬 讨论-{m.sender_label}]"
+            lines.append(f"{prefix} {m.content}")
         return "\n".join(lines)
 
+    # ===== SSE 订阅 =====
 
-# 全局聊天室管理
+    def subscribe(self) -> asyncio.Queue:
+        """订阅消息推送（返回一个 Queue，SSE 端点从中读取）"""
+        q: asyncio.Queue = asyncio.Queue(maxsize=100)
+        self._subscribers.append(q)
+        return q
+
+    def unsubscribe(self, q: asyncio.Queue) -> None:
+        """取消订阅"""
+        if q in self._subscribers:
+            self._subscribers.remove(q)
+
+    async def message_stream(self) -> AsyncGenerator[str, None]:
+        """SSE 消息流生成器"""
+        q = self.subscribe()
+        try:
+            # 先发送历史消息
+            for msg in self.messages:
+                yield f"data: {json.dumps(msg.to_dict(), ensure_ascii=False)}\n\n"
+            # 然后实时推送新消息
+            while True:
+                try:
+                    data = await asyncio.wait_for(q.get(), timeout=30.0)
+                    yield f"data: {data}\n\n"
+                except asyncio.TimeoutError:
+                    # 发送心跳
+                    yield ": heartbeat\n\n"
+        except asyncio.CancelledError:
+            pass
+        finally:
+            self.unsubscribe(q)
+
+
+# ===== 全局聊天室管理 =====
 _chat_rooms: Dict[str, ChatRoom] = {}
 
 

@@ -590,6 +590,52 @@ async def get_messages(task_id: str):
     return room.get_messages()
 
 
+@router.post("/{task_id}/messages")
+async def post_user_message(task_id: str, req: dict):
+    """用户向聊天室发送消息（参与 Agent 讨论）。"""
+    room = get_chat_room(task_id)
+    if not room:
+        raise HTTPException(status_code=404, detail="聊天室不存在")
+
+    content = req.get("content", "").strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="消息内容不能为空")
+
+    mentions = req.get("mentions", [])
+    msg = room.user_post(content, mentions=mentions)
+    return {"message_id": msg.id, "status": "sent"}
+
+
+@router.get("/{task_id}/messages/stream")
+async def stream_messages(task_id: str):
+    """SSE 实时推送聊天室消息。"""
+    room = get_chat_room(task_id)
+    if not room:
+        raise HTTPException(status_code=404, detail="聊天室不存在")
+
+    return StreamingResponse(
+        room.message_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@router.post("/{task_id}/discuss")
+async def start_discussion(task_id: str, req: dict):
+    """发起多 Agent 讨论。"""
+    room = get_chat_room(task_id)
+    if not room:
+        raise HTTPException(status_code=404, detail="聊天室不存在")
+
+    topic = req.get("topic", "").strip()
+    participants = req.get("participants", ["analyzer_agent", "modeler_agent", "peer_review_agent"])
+    if not topic:
+        raise HTTPException(status_code=400, detail="讨论主题不能为空")
+
+    discuss_id = room.start_discussion(topic, participants)
+    return {"discuss_id": discuss_id, "participants": participants}
+
+
 @router.get("/")
 async def list_tasks():
     """列出所有任务（从持久化存储，完整元数据）"""

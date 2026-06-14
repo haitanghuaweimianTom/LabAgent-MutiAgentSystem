@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import styles from './AgentChat.module.css';
 import StageProgress from './StageProgress';
 
@@ -24,6 +24,8 @@ interface AgentChatProps {
   onCancel?: () => void;
   resuming: boolean;
   cancelling?: boolean;
+  taskId?: string | null;
+  onUserSend?: (content: string) => void;
 }
 
 const TEAM_COLORS: Record<string, string> = {
@@ -34,8 +36,9 @@ const TEAM_COLORS: Record<string, string> = {
   modeler_agent: '#27ae60',
   solver_agent: '#e67e22',
   writer_agent: '#1abc9c',
+  peer_review_agent: '#8e44ad',
   system: '#95a5a6',
-  user: '#2ecc71',
+  user: '#3498db',
 };
 
 const TEAM_LABELS: Record<string, string> = {
@@ -46,6 +49,7 @@ const TEAM_LABELS: Record<string, string> = {
   modeler_agent: '建模师',
   solver_agent: '求解器',
   writer_agent: '写作专家',
+  peer_review_agent: '审稿人',
   system: '系统',
   user: '你',
 };
@@ -67,7 +71,6 @@ function deriveStages(status: string, progress: number, currentStep: string) {
 
   if (status === 'idle' || status === 'pending') return stages;
 
-  // Phase 1 includes analysis
   if (status === 'phase1' || status === 'running') {
     stages[0].status = 'running';
     stages[0].progress = Math.min(progress * 2, 100);
@@ -102,8 +105,13 @@ function deriveStages(status: string, progress: number, currentStep: string) {
   return stages;
 }
 
-export default function AgentChat({ messages, taskStatus, progress, currentStep, paused, onPause, onResume, onCancel, resuming, cancelling }: AgentChatProps) {
+export default function AgentChat({
+  messages, taskStatus, progress, currentStep, paused, onPause, onResume, onCancel, resuming, cancelling,
+  taskId, onUserSend,
+}: AgentChatProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [userInput, setUserInput] = useState('');
+  const [sending, setSending] = useState(false);
   const stages = deriveStages(taskStatus, progress, currentStep || '');
 
   useEffect(() => {
@@ -111,6 +119,34 @@ export default function AgentChat({ messages, taskStatus, progress, currentStep,
   }, [messages]);
 
   const isRunning = taskStatus === 'running' || taskStatus === 'phase1' || taskStatus === 'phase2';
+  const isWaiting = currentStep?.includes('waiting') || currentStep?.includes('等待');
+
+  const handleSend = async () => {
+    const content = userInput.trim();
+    if (!content || !taskId) return;
+    setSending(true);
+    try {
+      const apiBase = () => (typeof window !== 'undefined' && (window as any).__API_BASE__) || 'http://localhost:8000/api/v1';
+      await fetch(`${apiBase()}/tasks/${taskId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content }),
+      });
+      setUserInput('');
+      onUserSend?.(content);
+    } catch (e) {
+      console.error('发送消息失败:', e);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
 
   return (
     <div className={styles.container}>
@@ -152,14 +188,16 @@ export default function AgentChat({ messages, taskStatus, progress, currentStep,
           {messages.map(msg => (
             <div
               key={msg.id}
-              className={msg.type === 'result' ? styles.msgResult : styles.msg}
+              className={msg.type === 'result' ? styles.msgResult : msg.type === 'user_input' ? styles.msgUser : msg.type === 'discussion' ? styles.msgDiscuss : styles.msg}
               style={{ borderLeftColor: TEAM_COLORS[msg.sender] || '#666' }}
             >
               <div className={styles.msgHeader}>
                 <span style={{ color: TEAM_COLORS[msg.sender] || '#666', fontWeight: 600 }}>
-                  {msg.sender_label}
+                  {msg.sender === 'user' ? '👤 ' : ''}{msg.sender_label}
                 </span>
                 {msg.type === 'result' && <span className={styles.resultBadge}>📋 详细结果</span>}
+                {msg.type === 'discussion' && <span className={styles.discussBadge}>💬 讨论</span>}
+                {msg.type === 'user_input' && <span className={styles.userBadge}>👤 用户</span>}
                 <span className={styles.msgTime}>{formatTime(msg.timestamp)}</span>
               </div>
               <div className={msg.type === 'result' ? styles.msgContentResult : styles.msgContent}>
@@ -173,6 +211,31 @@ export default function AgentChat({ messages, taskStatus, progress, currentStep,
             </div>
           ))}
           <div ref={messagesEndRef} />
+        </div>
+
+        {/* 用户输入区域 */}
+        <div className={styles.inputArea}>
+          <div className={styles.inputRow}>
+            <textarea
+              className={styles.inputBox}
+              placeholder={isWaiting ? 'Agent 正在等待您的反馈，请输入意见...' : '参与讨论：输入您的想法、建议或修正方向...'}
+              value={userInput}
+              onChange={e => setUserInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              rows={2}
+              disabled={sending}
+            />
+            <button
+              className={styles.sendBtn}
+              onClick={handleSend}
+              disabled={!userInput.trim() || sending}
+            >
+              {sending ? '...' : '发送'}
+            </button>
+          </div>
+          <div className={styles.inputHint}>
+            Enter 发送 · Shift+Enter 换行 · 您的消息会实时出现在 Agent 讨论中
+          </div>
         </div>
       </div>
     </div>

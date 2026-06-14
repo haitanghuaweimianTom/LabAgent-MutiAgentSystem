@@ -132,3 +132,100 @@
 
 .listItem { padding-left: 0.5rem; color: #aaa; }
 .boldLine { font-weight: 700; color: #fff; margin-top: 0.3rem; }
+
+/* 用户消息样式 */
+.msgUser {
+  padding: 0.7rem 0.9rem;
+  margin-bottom: 0.5rem;
+  border-radius: 8px;
+  border-left: 3px solid #3498db;
+  background: rgba(52,152,219,0.08);
+}
+
+/* 讨论消息样式 */
+.msgDiscuss {
+  padding: 0.7rem 0.9rem;
+  margin-bottom: 0.5rem;
+  border-radius: 8px;
+  border-left: 3px solid #8e44ad;
+  background: rgba(142,68,173,0.05);
+}
+
+.discussBadge {
+  font-size: 0.7rem;
+  padding: 0.1rem 0.5rem;
+  background: rgba(142,68,173,0.2);
+  color: #8e44ad;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+.userBadge {
+  font-size: 0.7rem;
+  padding: 0.1rem 0.5rem;
+  background: rgba(52,152,219,0.2);
+  color: #3498db;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+/* 用户输入区域 */
+.inputArea {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+
+.inputRow {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+
+.inputBox {
+  flex: 1;
+  padding: 0.6rem 0.8rem;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 8px;
+  color: #e0e0e0;
+  font-size: 0.9rem;
+  resize: none;
+  font-family: inherit;
+  line-height: 1.5;
+}
+.inputBox:focus {
+  outline: none;
+  border-color: rgba(52,152,219,0.5);
+  box-shadow: 0 0 0 2px rgba(52,152,219,0.1);
+}
+.inputBox::placeholder {
+  color: #555;
+}
+
+.sendBtn {
+  padding: 0.6rem 1rem;
+  background: linear-gradient(135deg, #3498db, #2980b9);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.sendBtn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #2980b9, #2471a3);
+}
+.sendBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.inputHint {
+  margin-top: 0.3rem;
+  font-size: 0.72rem;
+  color: #555;
+  text-align: center;
+}

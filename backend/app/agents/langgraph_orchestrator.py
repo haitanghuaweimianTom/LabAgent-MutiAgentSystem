@@ -129,6 +129,7 @@ class LangGraphOrchestrator:
             "results": {},
             "sub_problems": [],
             "should_pause": False,
+            "revision_count": 0,
         }
 
         try:
@@ -161,6 +162,7 @@ class LangGraphOrchestrator:
         builder.add_node("analyzer", self._node_analyzer)
         builder.add_node("data", self._node_data)
         builder.add_node("research", self._node_research)
+        builder.add_node("discuss_approach", self._node_discuss_approach)
         builder.add_node("modeler", self._node_modeler)
         builder.add_node("iterative_solver", self._node_iterative_solver)
         builder.add_node("writer", self._node_writer)
@@ -169,6 +171,7 @@ class LangGraphOrchestrator:
         builder.add_node("fact_check", self._node_fact_check)
         builder.add_node("cannot_solve", self._node_cannot_solve)
         builder.add_node("self_collect", self._node_self_collect)
+        builder.add_node("wait_user", self._node_wait_user)
 
         # 入口
         builder.set_entry_point("preflight_decision")
@@ -195,6 +198,7 @@ class LangGraphOrchestrator:
             {
                 "revise": "writer",
                 "accept": "fact_check",
+                "wait_user": "wait_user",
                 "abort": "cannot_solve",
             },
         )
@@ -210,15 +214,26 @@ class LangGraphOrchestrator:
             },
         )
 
+        # 条件边：research 后决定是否讨论
+        builder.add_conditional_edges(
+            "research",
+            self._route_after_research,
+            {
+                "discuss": "discuss_approach",
+                "proceed": "modeler",
+            },
+        )
+
         # 普通顺序边
         builder.add_edge("analyzer", "data")
         builder.add_edge("data", "research")
-        builder.add_edge("research", "modeler")
+        builder.add_edge("discuss_approach", "modeler")
         builder.add_edge("modeler", "iterative_solver")
         builder.add_edge("writer", "peer_review")
         builder.add_edge("fact_check", END)
         builder.add_edge("cannot_solve", END)
         builder.add_edge("self_collect", "preflight_decision")
+        builder.add_edge("wait_user", END)
 
         return builder.compile()
 
@@ -542,8 +557,9 @@ class LangGraphOrchestrator:
         output["_contract"] = get_contract_validator().validate("writer_agent", output)
 
         new_results = {**state.get("results", {}), "writer_agent": output}
-        self._post_chat(task_id, "writer_agent", "论文写作完成")
-        return {**state, "results": new_results, "current_step": "writer_done"}
+        revision_count = state.get("revision_count", 0) + 1
+        self._post_chat(task_id, "writer_agent", f"论文写作完成（第 {revision_count} 稿）")
+        return {**state, "results": new_results, "current_step": "writer_done", "revision_count": revision_count}
 
     async def _node_peer_review(self, state: TaskState) -> TaskState:
         """调用 peer_review_agent 进行同行评议。"""
@@ -621,8 +637,86 @@ class LangGraphOrchestrator:
 
     async def _node_self_collect(self, state: TaskState) -> TaskState:
         """自主搜集数据：标记已尝试，避免无限循环。"""
-        # 标记已尝试 self_collect，_route_preflight 会检测此标志避免循环
         return {**state, "current_step": "self_collect_done", "phase": "self_collected"}
+
+    async def _node_discuss_approach(self, state: TaskState) -> TaskState:
+        """多 Agent 讨论：分析师、建模师、研究员讨论研究方案。
+
+        每个 Agent 看到其他 Agent 的分析结果后给出自己的意见，
+        形成讨论记录，最终由协调者综合决策。
+        """
+        task_id = state["task_id"]
+        problem_text = state["problem_text"]
+        results = state.get("results", {})
+        room = get_chat_room(task_id)
+
+        # 参与讨论的 Agent
+        participants = ["analyzer_agent", "modeler_agent", "research_agent"]
+        discussion_points = []
+
+        # 构造讨论上下文
+        context_summary = []
+        for agent_name in ["analyzer_agent", "data_agent", "research_agent"]:
+            out = results.get(agent_name, {})
+            if out:
+                summary = str(out)[:300]
+                context_summary.append(f"【{agent_name}】{summary}")
+
+        discuss_prompt = (
+            f"## 研究课题讨论\n\n"
+            f"**问题**：{problem_text[:300]}\n\n"
+            f"**已有分析**：\n" + "\n".join(context_summary) + "\n\n"
+            f"请从你的专业角度给出：\n"
+            f"1. 对研究方向的建议\n"
+            f"2. 推荐的建模方法\n"
+            f"3. 潜在风险和注意事项\n"
+            f"4. 创新点建议\n"
+            f"请简洁回答（100字以内）。"
+        )
+
+        for agent_name in participants:
+            agent = self.agents.get(agent_name)
+            if not agent:
+                continue
+            try:
+                resp = await agent.call_llm([
+                    {"role": "system", "content": f"你是{self._agent_context(state).get('chat_room', room).team.get(agent_name, {}).get('role', agent_name) if room else agent_name}。请参与团队讨论。"},
+                    {"role": "user", "content": discuss_prompt},
+                ], temperature=0.5)
+                content = resp.get("choices", [{}])[0].get("message", {}).get("content", "")
+                if content:
+                    discussion_points.append({"agent": agent_name, "opinion": content})
+                    if room:
+                        room.post(agent_name, f"💡 {content}", "discussion")
+            except Exception as exc:
+                logger.debug(f"Discuss from {agent_name} failed: {exc}")
+
+        # 协调者综合决策
+        if discussion_points and room:
+            opinions = "\n".join([f"- {d['agent']}: {d['opinion']}" for d in discussion_points])
+            room.post("coordinator", f"📋 讨论总结：\n{opinions}\n\n综合各方意见，继续推进研究。", "discussion")
+
+        self._post_chat(task_id, "coordinator", f"团队讨论完成，{len(discussion_points)} 位 Agent 参与")
+        return {
+            **state,
+            "current_step": "discuss_done",
+            "results": {**results, "discussion": discussion_points},
+        }
+
+    async def _node_wait_user(self, state: TaskState) -> TaskState:
+        """等待用户输入：通知前端，暂停执行。
+
+        用户可以通过 POST /{task_id}/messages 发送消息，
+        然后通过 POST /{task_id}/resume 恢复执行。
+        """
+        task_id = state["task_id"]
+        room = get_chat_room(task_id)
+        if room:
+            room.set_waiting_for_user(True)
+            room.post("coordinator", "⏸️ 已暂停等待您的反馈。请在聊天框中输入您的意见，然后点击「继续执行」。", "broadcast")
+
+        self._update_progress(task_id, state["problem_text"], 85, "等待用户反馈")
+        return {**state, "current_step": "waiting_for_user", "should_pause": True}
 
     # ------------------------------------------------------------------
     # 条件路由
@@ -657,11 +751,25 @@ class LangGraphOrchestrator:
     def _route_peer_review(self, state: TaskState) -> str:
         review = state.get("results", {}).get("peer_review_agent", {})
         rec = (review.get("recommendation") or "").lower()
-        if rec == "accept":
+        score = review.get("overall_score", 0)
+
+        if rec == "accept" or score >= 4.0:
             return "accept"
         if rec == "reject":
             return "abort"
-        return "revise"
+
+        # 用户已发言 → 等待用户指导修订方向
+        room = get_chat_room(state["task_id"])
+        if room and room.has_user_input():
+            return "wait_user"
+
+        # 用户未发言 → 自动迭代修订（直到高质量或达到上限）
+        revision_count = state.get("revision_count", 0)
+        if revision_count < 3:
+            return "revise"
+
+        # 达到修订上限 → 等待用户决定
+        return "wait_user"
 
     def _route_solver(self, state: TaskState) -> str:
         attempts = state.get("solver_attempts", [])
@@ -680,6 +788,14 @@ class LangGraphOrchestrator:
             return "escalate"
 
         return "retry"
+
+    def _route_after_research(self, state: TaskState) -> str:
+        """research 后决定是否进入讨论。"""
+        workflow = state.get("workflow_type", "standard")
+        # deep_research 和 research_paper 模式进入讨论
+        if workflow in ("deep_research", "research_paper"):
+            return "discuss"
+        return "proceed"
 
     # ------------------------------------------------------------------
     # 工具方法

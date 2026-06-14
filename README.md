@@ -64,9 +64,17 @@
 - MCP 工具管理：stdio / SSE / StreamableHttp 三种传输
 - 知识库 RAG：TF-IDF 语义检索 + Agent 自动注入
 
+### 多智能体实时协作讨论
+- **Agent 讨论协议**：`discuss_approach` 节点让分析师、建模师、研究员在研究方案阶段互相讨论，形成讨论记录。
+- **用户实时参与**：前端 AgentChat 支持用户输入消息，实时出现在 Agent 讨论流中。用户可以修正方向、提出建议、指定方法。
+- **自动迭代**：用户不发言时，系统自动迭代修订论文（peer review → writer 修订 → 再审），最多 3 轮，直到评分 ≥ 4.0。
+- **等待用户决策**：达到修订上限或用户主动发言后，系统暂停等待用户指导。
+- **SSE 实时推送**：ChatRoom 支持消息订阅，前端实时收到每条 Agent 发言（无需轮询）。
+
 ### Web UI（Next.js 14）
 - 首页 / 生成 / 数据 / PDF / 历史 / Agent / 流程 / 记忆 / 设置 9 个 Tab
 - SSE 实时消息流 + 任务状态机可视化 + Camera-Ready 面板
+- 用户可在 Agent 讨论中实时发言，参与决策
 - 暂停 / 恢复 / 取消 / Edit-and-Continue 完整生命周期
 - 13+ React 组件 + Zustand 状态管理
 

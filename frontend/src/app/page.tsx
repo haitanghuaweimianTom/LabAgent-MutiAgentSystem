@@ -520,6 +520,7 @@ export default function Home() {
               onCancel={handleCancel}
               resuming={resuming}
               cancelling={cancelling}
+              taskId={taskId}
             />
 
             {/* Phase 6 (A3): 完成后 Camera-Ready 打包 */}
