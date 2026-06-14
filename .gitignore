@@ -40,8 +40,12 @@ setup_kimi.py
 
 # Output
 output/
+outputs/
 data/
 *.log
+backend/data/memory/lessons.json
+backend/data/memory/working/
+backend/data/memory/episodic/
 
 # Node
 node_modules/
@@ -69,6 +73,12 @@ Thumbs.db
 *.out
 *.toc
 *.synctex.gz
+*.fls
+*.fdb_latexmk
+*.nav
+*.snm
+*.vrb
+main.pdf
 
 # Third-party cloned repositories
 src/knowledge/figures4papers/

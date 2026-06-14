@@ -936,6 +936,7 @@ class WriterAgent(BaseAgent):
         template = context.get("template", "math_modeling")
         literature = context.get("literature", [])
         project_name = context.get("project_name")
+        peer_review_feedback = task_input.get("review_feedback") or context.get("peer_review_feedback")
 
         logger.info(f"WriterAgent chapter-by-chapter generation (template={template}) with {len(section_results)} sections")
 
@@ -965,6 +966,7 @@ class WriterAgent(BaseAgent):
                 literature=literature,
                 available_figures=available_figures,
                 template=template,
+                peer_review_feedback=peer_review_feedback,
             )
             chapters.append(chapter)
 
@@ -1001,23 +1003,33 @@ class WriterAgent(BaseAgent):
         return result
 
     def _discover_available_figures(self, project_name: Optional[str]) -> List[str]:
-        """扫描项目输出目录，发现可用图表文件"""
+        """扫描项目输出目录，发现可用图表文件。
+
+        v4.2: SolverAgent 实际将图表保存到 output/code/，因此优先扫描该路径；
+        同时保留对 final/figures/ 和旧 outputs/{project_name}/ 的回退扫描。
+        """
         figures: List[str] = []
         if not project_name:
             return figures
 
-        base_dir = Path(__file__).parent.parent.parent / "outputs" / project_name
-        if not base_dir.exists():
-            return figures
+        project_root = Path(__file__).parent.parent.parent
+        search_roots: List[Path] = [
+            project_root / "output" / "code",
+            project_root / "output" / project_name / "code",
+            project_root / "output" / project_name / "figures",
+            project_root / "outputs" / project_name,
+        ]
 
-        for ext in ("*.png", "*.jpg", "*.jpeg", "*.pdf", "*.eps"):
-            for path in base_dir.rglob(ext):
-                # 返回相对路径，便于 LaTeX 引用
-                try:
-                    rel = path.relative_to(Path(__file__).parent.parent.parent)
-                    figures.append(str(rel))
-                except ValueError:
-                    figures.append(str(path))
+        for base_dir in search_roots:
+            if not base_dir.exists():
+                continue
+            for ext in ("*.png", "*.jpg", "*.jpeg", "*.pdf", "*.eps"):
+                for path in base_dir.rglob(ext):
+                    try:
+                        rel = path.relative_to(project_root)
+                        figures.append(str(rel))
+                    except ValueError:
+                        figures.append(str(path))
 
         # 去重并排序
         return sorted(list(set(figures)))
@@ -1071,6 +1083,7 @@ class WriterAgent(BaseAgent):
         literature: List,
         available_figures: List[str],
         template: str,
+        peer_review_feedback: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """生成单个章节， critique 未通过则重写"""
         chapter_latex = ""
@@ -1096,6 +1109,7 @@ class WriterAgent(BaseAgent):
                 available_figures=available_figures,
                 template=template,
                 previous_issues=previous_issues,
+                peer_review_feedback=peer_review_feedback if attempt == 1 else None,
             )
 
             critique = await self._critique_chapter(
@@ -1138,6 +1152,7 @@ class WriterAgent(BaseAgent):
         available_figures: List[str],
         template: str,
         previous_issues: List[str],
+        peer_review_feedback: Optional[Dict[str, Any]] = None,
     ) -> Tuple[str, str]:
         """调用 LLM 生成单个章节"""
         # 前2章摘要
@@ -1181,6 +1196,12 @@ class WriterAgent(BaseAgent):
 
         if previous_issues:
             prompt_parts.append("## 上次评审未通过问题（请重点修正）\n" + "\n".join(previous_issues))
+
+        # v4.2: 同行评审修订反馈（来自 Orchestrator 的 revision loop）
+        if peer_review_feedback:
+            feedback_text = self._format_peer_review_feedback(peer_review_feedback)
+            if feedback_text:
+                prompt_parts.append("## 同行评审修改建议（必须在本次修订中处理）\n" + feedback_text)
 
         # 章节特殊说明
         if plan["id"] == "modeling":
@@ -1287,6 +1308,10 @@ class WriterAgent(BaseAgent):
         # v4.1: 委托 _resolve_preamble，自动桥接注册表与旧 preamble。
         preamble = _resolve_preamble(template)
 
+        # v4.2: 替换 preamble 中的元数据占位符（优先使用已提取的 title/abstract/keywords）。
+        metadata = self._build_paper_metadata(chapters, template)
+        preamble, skipped_placeholders = self._substitute_preamble_placeholders(preamble, template, metadata)
+
         body_parts: List[str] = []
         sections_summary: Dict[str, str] = {}
 
@@ -1318,10 +1343,112 @@ class WriterAgent(BaseAgent):
 \\end{{document}}
 """
 
-        return {
+        result = {
             "latex_code": latex_code,
             "sections": sections_summary,
         }
+        if skipped_placeholders:
+            result["skipped_placeholders"] = skipped_placeholders
+        return result
+
+    def _build_paper_metadata(self, chapters: List[Dict[str, Any]], template: str) -> Dict[str, Any]:
+        """从章节结果与模板默认值构建论文元数据。"""
+        title = self._extract_title(chapters, "", template)
+        abstract = self._extract_abstract(chapters, template)
+        keywords = self._extract_keywords(chapters, template)
+        return {
+            "title": title,
+            "abstract": abstract,
+            "keywords": keywords,
+        }
+
+    def _substitute_preamble_placeholders(
+        self,
+        preamble: str,
+        template_id: str,
+        metadata: Dict[str, Any],
+    ) -> Tuple[str, List[str]]:
+        """替换 preamble 中的占位符。返回 (替换后的 preamble, 被替换为空值的占位符列表)。
+
+        严格控制幻觉：只使用模板 metadata_defaults 或已生成章节中实际存在的值；
+        无对应值时用空字符串替换占位符，避免保留 `__TITLE__` 导致 LaTeX 编译失败。
+        对替换值中的特殊 LaTeX 字符进行转义。
+        """
+        try:
+            tpl = _load_template_from_registry(template_id)
+            defaults = tpl.metadata_defaults if tpl else {}
+        except Exception:  # noqa: BLE001
+            defaults = {}
+
+        title = metadata.get("title") or defaults.get("title", "")
+        authors = defaults.get("authors", ["Anonymous"])
+        affiliations = defaults.get("affiliations", ["Institution"])
+        emails = defaults.get("emails", ["email@example.com"])
+        keywords = metadata.get("keywords") or defaults.get("keywords", [])
+        conference = defaults.get("conference_name", "")
+        year = defaults.get("year", str(datetime.now().year))
+
+        # 格式化字段
+        authors_str = ", ".join(authors) if isinstance(authors, list) else str(authors)
+        affiliations_str = "; ".join(affiliations) if isinstance(affiliations, list) else str(affiliations)
+        emails_str = ", ".join(emails) if isinstance(emails, list) else str(emails)
+        keywords_str = ", ".join(keywords) if isinstance(keywords, list) else str(keywords)
+
+        def _escape(s: str) -> str:
+            """对 LaTeX 特殊字符进行转义（保留已有命令）。"""
+            s = s.replace("\\", "\\textbackslash{}")
+            s = s.replace("{", "\\{")
+            s = s.replace("}", "\\}")
+            s = s.replace("$", "\\$")
+            s = s.replace("&", "\\&")
+            s = s.replace("#", "\\#")
+            s = s.replace("^", "\\^{}")
+            s = s.replace("_", "\\_")
+            s = s.replace("%", "\\%")
+            s = s.replace("~", "\\textasciitilde{}")
+            return s
+
+        substitutions = {
+            "__TITLE__": _escape(title),
+            "__AUTHORS__": _escape(authors_str),
+            "__AFFILIATIONS__": _escape(affiliations_str),
+            "__EMAILS__": _escape(emails_str),
+            "__ABSTRACT__": _escape(metadata.get("abstract", "")),
+            "__KEYWORDS__": _escape(keywords_str),
+            "__CONFERENCE_NAME__": _escape(conference),
+            "__CONFERENCE_FULL_NAME__": _escape(defaults.get("conference_full_name", conference or "CCF-A Conference")),
+            "__LOCATION__": _escape(defaults.get("location", "")),
+            "__DATE__": _escape(defaults.get("date", "")),
+            "__YEAR__": _escape(year),
+            "__SHORT_TITLE__": _escape(title[:50] if title else ""),
+            "__AUTHORS_SHORT__": _escape(authors_str.split(",")[0].strip() + " et al." if "," in authors_str else authors_str),
+            "__CITY__": _escape(defaults.get("city", "")),
+            "__STATE__": _escape(defaults.get("state", "")),
+            "__COUNTRY__": _escape(defaults.get("country", "")),
+            "__DOI__": _escape(defaults.get("doi", "")),
+            "__ISBN__": _escape(defaults.get("isbn", "")),
+        }
+
+        # ACM CCS Concepts（如果模板提供）
+        ccs_xml = defaults.get("ccs_xml", "")
+        ccs_concepts = defaults.get("ccs_concepts", "")
+        substitutions["__CCS_XML__"] = ccs_xml
+        substitutions["__CCS_CONCEPTS__"] = ccs_concepts
+
+        skipped: List[str] = []
+        for placeholder, value in substitutions.items():
+            if placeholder in preamble:
+                if not value and placeholder not in ("__CCS_XML__", "__CCS_CONCEPTS__"):
+                    skipped.append(placeholder)
+                preamble = preamble.replace(placeholder, str(value))
+
+        # 检查是否有未识别的占位符残留（空值已替换，因此这里只报告非空情况）
+        for m in re.finditer(r"__[A-Z_]+__", preamble):
+            ph = m.group(0)
+            if ph not in skipped:
+                skipped.append(ph)
+
+        return preamble, list(set(skipped))
 
     def _cumcm_preamble(self) -> str:
         return r"""\documentclass[withoutpreface]{cumcmthesis}
@@ -1397,14 +1524,26 @@ class WriterAgent(BaseAgent):
 """
 
     def _default_appendix(self, section_results: List) -> str:
+        """生成默认附录代码块。
+
+        v4.2: 不再硬截断到 2000 字符；完整保留代码，仅在单段过长时按 8000 字符分块，
+        避免 lstlisting 环境溢出。
+        """
+        MAX_LSTLISTING_CHARS = 8000
         code_blocks = []
         for idx, sp in enumerate(section_results):
             solve = sp.get("solve", {}) or {}
             code_files = solve.get("code_files", []) if isinstance(solve, dict) else []
             for cf in code_files:
                 code = cf.get("code", "")
-                if code:
-                    code_blocks.append(f"% 子问题{idx+1} 代码\n\\begin{{lstlisting}}[language=python]\n{code[:2000]}\n\\end{{lstlisting}}")
+                if not code:
+                    continue
+                filename = cf.get("filename", f"sub{idx+1}.py")
+                code_blocks.append(f"% 子问题{idx+1} 代码: {filename}")
+                # 分块，避免单个 lstlisting 过长
+                for start in range(0, len(code), MAX_LSTLISTING_CHARS):
+                    chunk = code[start:start + MAX_LSTLISTING_CHARS]
+                    code_blocks.append(f"\\begin{{lstlisting}}[language=python]\n{chunk}\n\\end{{lstlisting}}")
         if not code_blocks:
             code_blocks.append("% 核心代码待补充")
         return "\\newpage\n\\begin{appendices}\n\\section{Python求解代码}\n" + "\n\n".join(code_blocks) + "\n\\end{appendices}"
@@ -1498,6 +1637,42 @@ class WriterAgent(BaseAgent):
         for fig in relevant[:10]:
             lines.append(f"- {fig}")
         lines.append("插入示例：\\begin{figure}[H]\\centering\\includegraphics[width=0.8\\textwidth]{{{fig}}}\\caption{{图表标题}}\\end{figure}}")
+        return "\n".join(lines)
+
+    def _format_peer_review_feedback(self, feedback: Dict[str, Any]) -> str:
+        """将 peer_review 反馈格式化为写入 prompt 的文本。"""
+        lines: List[str] = []
+        overall = feedback.get("overall_score")
+        if overall is not None:
+            lines.append(f"总体评分: {overall}/5")
+        scores = feedback.get("scores", {})
+        if scores:
+            lines.append("分项评分: " + ", ".join(f"{k}={v}" for k, v in scores.items()))
+        comments = feedback.get("comments", {})
+        if comments:
+            major = comments.get("major", [])
+            minor = comments.get("minor", [])
+            if major:
+                lines.append("主要意见:")
+                for c in major:
+                    lines.append(f"  - {c}")
+            if minor:
+                lines.append("次要意见:")
+                for c in minor:
+                    lines.append(f"  - {c}")
+        edits = feedback.get("suggested_edits", [])
+        if edits:
+            lines.append("建议编辑:")
+            for ed in edits:
+                if isinstance(ed, dict):
+                    loc = ed.get("location", "")
+                    suggestion = ed.get("suggestion", "")
+                    lines.append(f"  - {'[' + loc + '] ' if loc else ''}{suggestion}")
+                else:
+                    lines.append(f"  - {ed}")
+        round_num = feedback.get("round")
+        if round_num:
+            lines.append(f"（第 {round_num} 轮修订）")
         return "\n".join(lines)
 
     def _build_literature_summary(self, literature: List) -> str:

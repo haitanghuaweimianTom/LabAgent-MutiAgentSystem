@@ -497,7 +497,10 @@ export default function Home() {
             {/* Phase 6 (A3): 完成后 Camera-Ready 打包 */}
             {taskState.state?.name === 'completed' && taskId && (
               <div style={{ marginTop: '1rem' }}>
-                <CameraReadyPanel taskId={taskId} templateId={taskState.state.templateId} />
+                <CameraReadyPanel
+                  taskId={taskId}
+                  templateId={taskState.state?.templateId || 'math_modeling'}
+                />
               </div>
             )}
           </div>

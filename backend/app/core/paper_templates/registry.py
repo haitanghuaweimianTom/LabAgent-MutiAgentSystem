@@ -114,6 +114,10 @@ class PaperTemplate:
     def chapters_by_id(self) -> Dict[str, ChapterPlan]:
         return {ch.id: ch for ch in self.chapter_plan}
 
+    def get_metadata_defaults(self) -> Dict[str, Any]:
+        """返回模板默认元数据（未来可扩展为用户覆盖）。"""
+        return dict(self.metadata_defaults or {})
+
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)
         return d

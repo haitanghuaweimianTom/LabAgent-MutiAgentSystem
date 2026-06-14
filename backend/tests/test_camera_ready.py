@@ -156,7 +156,7 @@ def test_readme_includes_task_id_and_template():
     assert "**Task ID:** task_xyz" in readme
     assert "**Template:** ieee_conference" in readme
     assert "xelatex main.tex" in readme
-    assert "Auto-generated" in readme
+    assert "auto-generated" in readme.lower()
 
 
 def test_readme_uses_registry_documentclass():
@@ -178,9 +178,15 @@ def test_readme_uses_cumcm_for_math_modeling():
 
 def test_artifact_summary_counts():
     art = CameraReadyArtifact()
-    assert art.summary() == {
-        "figures": 0, "code_files": 0, "bib_entries": 0, "chapters": 0
-    }
+    s = art.summary()
+    # 4 个核心字段必须存在且为 0
+    assert s["figures"] == 0
+    assert s["code_files"] == 0
+    assert s["bib_entries"] == 0
+    assert s["chapters"] == 0
+    # v4.2 新增的 cls/sty 字段
+    assert s.get("cls_files", 0) == 0
+    assert s.get("sty_files", 0) == 0
 
 
 def test_build_result_to_dict(sample_task_dir, tmp_path):

@@ -5,6 +5,7 @@ import styles from './TaskDetail.module.css';
 import PaperPreview from './PaperPreview';
 import AlgorithmRecommend from './AlgorithmRecommend';
 import PaperList from './PaperList';
+import { useTaskState } from '../hooks/useTaskState';
 
 interface Message {
   id: string;
@@ -52,7 +53,8 @@ function formatTime(iso: string) {
 }
 
 export default function TaskDetail({ taskId, onDelete }: TaskDetailProps) {
-  const [activeTab, setActiveTab] = useState<'messages' | 'result' | 'info'>('messages');
+  const [activeTab, setActiveTab] = useState<'messages' | 'result' | 'peer_review' | 'info'>('messages');
+  const taskState = useTaskState({ taskId });
   const [messages, setMessages] = useState<Message[]>([]);
   const [result, setResult] = useState<any>(null);
   const [meta, setMeta] = useState<any>(null);
@@ -193,7 +195,7 @@ export default function TaskDetail({ taskId, onDelete }: TaskDetailProps) {
       </div>
 
       <div className={styles.tabs}>
-        {(['messages', 'result', 'info'] as const).map(t => (
+        {(['messages', 'result', 'peer_review', 'info'] as const).map(t => (
           <button
             key={t}
             className={`${styles.tab} ${activeTab === t ? styles.tabActive : ''}`}
@@ -201,6 +203,7 @@ export default function TaskDetail({ taskId, onDelete }: TaskDetailProps) {
           >
             {t === 'messages' && '💬 讨论记录'}
             {t === 'result' && '📊 结果'}
+            {t === 'peer_review' && '🔍 同行评议'}
             {t === 'info' && 'ℹ️ 详情'}
           </button>
         ))}
@@ -248,6 +251,34 @@ export default function TaskDetail({ taskId, onDelete }: TaskDetailProps) {
                 </div>
               ))}
             </div>
+          )}
+        </div>
+      )}
+
+      {!loading && activeTab === 'peer_review' && (
+        <div className={styles.resultPanel}>
+          {taskState.state?.peerReview ? (
+            <div className={styles.section}>
+              <div className={styles.sectionTitle}>🔍 同行评议结果</div>
+              <div className={styles.infoRow}>
+                <span className={styles.infoLabel}>总体评分</span>
+                <span className={styles.infoValue}>{'★'.repeat(Math.round(taskState.state.peerReview.overallScore))}{'☆'.repeat(5 - Math.round(taskState.state.peerReview.overallScore))} ({taskState.state.peerReview.overallScore}/5)</span>
+              </div>
+              <div className={styles.infoRow}>
+                <span className={styles.infoLabel}>推荐结论</span>
+                <span className={styles.infoValue}>
+                  {taskState.state.peerReview.recommendation === 'accept' && '✅ 接收'}
+                  {taskState.state.peerReview.recommendation === 'revise' && '⚠️ 修订'}
+                  {taskState.state.peerReview.recommendation === 'reject' && '❌ 拒稿'}
+                </span>
+              </div>
+              <PeerReviewDetails taskId={taskId} />
+            </div>
+          ) : (
+            <div className={styles.empty}>暂无同行评议数据。任务完成后若触发了同行评议，将在此显示。</div>
+          )}
+          {taskState.state?.name === 'completed' && meta?.status === 'completed' && (
+            <CameraReadyDownload taskId={taskId} templateId={taskState.state?.templateId || meta?.template || 'math_modeling'} />
           )}
         </div>
       )}
@@ -320,6 +351,133 @@ export default function TaskDetail({ taskId, onDelete }: TaskDetailProps) {
                 </>
               )}
             </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PeerReviewDetails({ taskId }: { taskId: string }) {
+  const [details, setDetails] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(apiBase() + '/tasks/' + taskId + '/result');
+        if (res.ok) {
+          const data = await res.json();
+          const review = data?.output?.peer_review_agent || data?.output?.final_peer_review || data?.peer_review_agent;
+          setDetails(review);
+        }
+      } catch {}
+      setLoading(false);
+    };
+    load();
+  }, [taskId]);
+
+  if (loading) return <div className={styles.empty}>加载评议详情...</div>;
+  if (!details) return <div className={styles.empty}>无详细评议数据</div>;
+
+  const scores = details.scores || {};
+  const comments = details.comments || {};
+  const edits = details.suggested_edits || [];
+
+  return (
+    <div>
+      {Object.keys(scores).length > 0 && (
+        <div className={styles.section}>
+          <div className={styles.sectionTitle}>分项评分</div>
+          {Object.entries(scores).map(([k, v]: [string, any]) => (
+            <div key={k} className={styles.infoRow}>
+              <span className={styles.infoLabel}>{k}</span>
+              <span className={styles.infoValue}>{v}/5</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {(comments.major?.length > 0 || comments.minor?.length > 0) && (
+        <div className={styles.section}>
+          <div className={styles.sectionTitle}>评审意见</div>
+          {(comments.major || []).map((c: string, i: number) => (
+            <div key={`major-${i}`} className={styles.listItem}>• <strong>Major:</strong> {c}</div>
+          ))}
+          {(comments.minor || []).map((c: string, i: number) => (
+            <div key={`minor-${i}`} className={styles.listItem}>• Minor: {c}</div>
+          ))}
+        </div>
+      )}
+      {edits.length > 0 && (
+        <div className={styles.section}>
+          <div className={styles.sectionTitle}>建议编辑</div>
+          {edits.map((ed: any, i: number) => (
+            <div key={i} className={styles.listItem}>
+              • {ed.location ? `[${ed.location}] ` : ''}{ed.suggestion || ed}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CameraReadyDownload({ taskId, templateId }: { taskId: string; templateId: string }) {
+  const [status, setStatus] = useState<'idle' | 'building' | 'ready' | 'error'>('idle');
+  const [pkg, setPkg] = useState<any>(null);
+
+  const build = async () => {
+    setStatus('building');
+    try {
+      const res = await fetch(apiBase() + '/tasks/' + taskId + '/camera-ready', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ template_id: templateId }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setPkg(data);
+        setStatus('ready');
+      } else {
+        setStatus('error');
+      }
+    } catch {
+      setStatus('error');
+    }
+  };
+
+  useEffect(() => {
+    const check = async () => {
+      try {
+        const res = await fetch(apiBase() + '/tasks/' + taskId + '/camera-ready');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.exists) {
+            setPkg(data);
+            setStatus('ready');
+          }
+        }
+      } catch {}
+    };
+    check();
+  }, [taskId]);
+
+  return (
+    <div className={styles.section}>
+      <div className={styles.sectionTitle}>📦 Camera-Ready 下载</div>
+      {status === 'idle' && (
+        <button className={styles.exportBtn} onClick={build}>生成并下载 zip</button>
+      )}
+      {status === 'building' && <div>打包中...</div>}
+      {status === 'error' && <div>打包失败，请稍后重试。</div>}
+      {status === 'ready' && pkg?.zip_path && (
+        <div>
+          <a href={apiBase() + '/tasks/' + taskId + '/camera-ready/download?path=' + encodeURIComponent(pkg.zip_path)} download>
+            ⬇️ 下载 camera-ready.zip
+          </a>
+          {pkg.verification?.success === false && (
+            <div style={{ color: '#e67e22', marginTop: 4 }}>⚠️ 编译验证未通过，请检查 LaTeX 源文件。</div>
           )}
         </div>
       )}

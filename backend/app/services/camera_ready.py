@@ -26,6 +26,7 @@ from __future__ import annotations
 import json
 import logging
 import shutil
+import subprocess
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -48,6 +49,9 @@ class CameraReadyArtifact:
     chapter_summaries: List[Dict[str, Any]] = field(default_factory=list)
     template_id: str = "math_modeling"
     metadata: Dict[str, Any] = field(default_factory=dict)
+    cls_files: List[Path] = field(default_factory=list)  # LaTeX class 文件
+    sty_files: List[Path] = field(default_factory=list)  # LaTeX style 文件
+    collection_skipped: List[str] = field(default_factory=list)  # 收集阶段跳过的原因
 
     def summary(self) -> Dict[str, int]:
         return {
@@ -55,6 +59,8 @@ class CameraReadyArtifact:
             "code_files": len(self.code_files),
             "bib_entries": len(self.bib_entries),
             "chapters": len(self.chapter_summaries),
+            "cls_files": len(self.cls_files),
+            "sty_files": len(self.sty_files),
         }
 
 
@@ -66,6 +72,7 @@ class CameraReadyResult:
     zip_path: Optional[Path]
     skipped_reasons: List[str] = field(default_factory=list)
     artifact_summary: Dict[str, int] = field(default_factory=dict)
+    verification: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -73,6 +80,7 @@ class CameraReadyResult:
             "zip_path": str(self.zip_path) if self.zip_path else None,
             "skipped_reasons": self.skipped_reasons,
             "artifact_summary": self.artifact_summary,
+            "verification": self.verification,
         }
 
 
@@ -93,10 +101,13 @@ def collect_artifacts(
     Returns:
         :class:`CameraReadyArtifact`，未找到的产物以空值存在。
     """
+    skipped: List[str] = []
     artifact = CameraReadyArtifact(template_id=template_id)
 
     final_dir = task_output_dir / "final"
     if not final_dir.exists():
+        skipped.append("final dir not found")
+        artifact.collection_skipped = skipped
         return artifact
 
     # 1. LaTeX 主文件（优先 .tex，回退到 .md 转 tex）
@@ -149,6 +160,28 @@ def collect_artifacts(
         except json.JSONDecodeError:
             pass
 
+    # 6. 收集模板所需的 .cls / .sty 文件
+    try:
+        from ..core.paper_templates import load_template
+        tpl = load_template(template_id)
+        project_root = Path(__file__).parent.parent.parent.parent
+        if tpl and tpl.cls_file:
+            cls_path = Path(tpl.cls_file)
+            if not cls_path.is_absolute():
+                cls_path = project_root / tpl.cls_file
+            if cls_path.exists():
+                artifact.cls_files.append(cls_path)
+            else:
+                skipped.append(f"cls file not found: {tpl.cls_file}")
+        # 同时收集同目录下的 .sty
+        if artifact.cls_files:
+            cls_dir = artifact.cls_files[0].parent
+            for p in sorted(cls_dir.glob("*.sty")):
+                artifact.sty_files.append(p)
+    except Exception as exc:  # noqa: BLE001
+        skipped.append(f"failed to collect cls/sty files: {exc}")
+
+    artifact.collection_skipped = skipped
     return artifact
 
 
@@ -205,6 +238,14 @@ def build_bib(entries: List[Dict[str, str]]) -> str:
         author = e.get("author", "").replace("{", "").replace("}", "")
         year = str(e.get("year", ""))
         venue = e.get("venue", "") or e.get("journal", "")
+        doi = e.get("doi", "")
+        volume = str(e.get("volume", ""))
+        number = str(e.get("number", ""))
+        pages = e.get("pages", "")
+        publisher = e.get("publisher", "")
+        booktitle = e.get("booktitle", "")
+        series = e.get("series", "")
+        editor = e.get("editor", "")
 
         if etype == "article":
             lines.append(f"@article{{{key},")
@@ -218,8 +259,26 @@ def build_bib(entries: List[Dict[str, str]]) -> str:
             lines.append(f"  author={{{author}}},")
         if year:
             lines.append(f"  year={{{year}}},")
-        if venue:
+        if etype == "article" and venue:
             lines.append(f"  journal={{{venue}}},")
+        elif etype == "inproceedings" and venue:
+            lines.append(f"  booktitle={{{venue}}},")
+        elif venue:
+            lines.append(f"  howpublished={{{venue}}},")
+        if volume:
+            lines.append(f"  volume={{{volume}}},")
+        if number:
+            lines.append(f"  number={{{number}}},")
+        if pages:
+            lines.append(f"  pages={{{pages}}},")
+        if publisher:
+            lines.append(f"  publisher={{{publisher}}},")
+        if series:
+            lines.append(f"  series={{{series}}},")
+        if editor:
+            lines.append(f"  editor={{{editor}}},")
+        if doi:
+            lines.append(f"  doi={{{doi}}},")
         if arxiv:
             lines.append(f"  eprint={{{arxiv}}},")
             lines.append("  archivePrefix={arXiv},")
@@ -253,6 +312,98 @@ def build_readme(artifact: CameraReadyArtifact, task_id: str) -> str:
     )
 
 
+def _build_metadata_json(
+    task_id: str,
+    artifact: CameraReadyArtifact,
+    skipped_reasons: List[str],
+) -> Dict[str, Any]:
+    """生成 metadata.json 内容。"""
+    from datetime import datetime
+    from ..core.paper_templates import load_template
+
+    doc_class = "article"
+    engine = "xelatex"
+    try:
+        tpl = load_template(artifact.template_id)
+        if tpl:
+            doc_class = tpl.documentclass or doc_class
+            engine = tpl.compile_options.get("engine", engine)
+    except Exception:  # noqa: BLE001
+        pass
+
+    summary = artifact.summary()
+    return {
+        "task_id": task_id,
+        "template_id": artifact.template_id,
+        "documentclass": doc_class,
+        "engine": engine,
+        "generated_at": datetime.now().isoformat(),
+        "metadata": {
+            "title": artifact.metadata.get("title", ""),
+            "abstract": artifact.metadata.get("abstract", ""),
+            "keywords": artifact.metadata.get("keywords", []),
+        },
+        "artifact_summary": summary,
+        "skipped_reasons": skipped_reasons,
+    }
+
+
+def _verify_compilation(pkg_dir: Path, template_id: str) -> Dict[str, Any]:
+    """尝试编译 main.tex，返回验证结果（不阻断打包）。"""
+    from ..core.paper_templates import load_template
+
+    main_tex = pkg_dir / "main.tex"
+    if not main_tex.exists():
+        return {"success": False, "message": "main.tex not found", "pdf_path": None}
+
+    engine = "xelatex"
+    try:
+        tpl = load_template(template_id)
+        if tpl:
+            engine = tpl.compile_options.get("engine", engine)
+    except Exception:  # noqa: BLE001
+        pass
+
+    # 优先使用 latexmk；若不可用则使用 engine 直接编译一次
+    engines_to_try = ["latexmk", engine]
+    if engine != "xelatex":
+        engines_to_try.append("xelatex")
+
+    for eng in engines_to_try:
+        cmd_path = shutil.which(eng)
+        if not cmd_path:
+            continue
+        cmd: List[str]
+        if eng == "latexmk":
+            cmd = [eng, "-pdf", "-interaction=nonstopmode", "-silent", "main.tex"]
+        else:
+            cmd = [eng, "-interaction=nonstopmode", "main.tex"]
+        try:
+            proc = subprocess.run(
+                cmd,
+                cwd=str(pkg_dir),
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+            pdf_path = pkg_dir / "main.pdf"
+            success = pdf_path.exists()
+            return {
+                "success": success,
+                "engine": eng,
+                "returncode": proc.returncode,
+                "message": "ok" if success else f"{eng} failed (rc={proc.returncode})",
+                "pdf_path": str(pdf_path) if success else None,
+                "stderr_snippet": proc.stderr[:2000] if not success or proc.returncode != 0 else "",
+            }
+        except subprocess.TimeoutExpired:
+            return {"success": False, "engine": eng, "message": "compilation timeout", "pdf_path": None}
+        except Exception as exc:  # noqa: BLE001
+            return {"success": False, "engine": eng, "message": str(exc), "pdf_path": None}
+
+    return {"success": False, "message": "no latex engine available", "pdf_path": None}
+
+
 def build(
     task_id: str,
     artifact: CameraReadyArtifact,
@@ -272,7 +423,7 @@ def build(
     Returns:
         :class:`CameraReadyResult`。
     """
-    skipped: List[str] = []
+    skipped: List[str] = list(getattr(artifact, "collection_skipped", []))
     pkg_dir = output_dir / f"camera_ready_{task_id}"
     pkg_dir.mkdir(parents=True, exist_ok=True)
 
@@ -298,15 +449,27 @@ def build(
     else:
         skipped.append("no figures available")
 
-    # 4. code/
+    # 4. code/（保留相对子目录结构）
     code_dir = pkg_dir / "code"
     if artifact.code_files:
         code_dir.mkdir(exist_ok=True)
         for src in artifact.code_files:
             try:
-                # 保留相对路径（如 sub1/data.py → code/sub1/data.py）
+                # 尽量保留原始相对路径；若无法解析则平铺
                 rel = src.name
-                shutil.copy2(src, code_dir / rel)
+                code_src_root = src
+                # 向上寻找可能的 code 根目录（output/code 或 final）
+                for parent in src.parents:
+                    if parent.name in ("code", "final") or parent == output_dir:
+                        code_src_root = parent
+                        break
+                try:
+                    rel = src.relative_to(code_src_root)
+                except ValueError:
+                    rel = Path(src.name)
+                dst = code_dir / rel
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src, dst)
             except Exception as exc:  # noqa: BLE001
                 skipped.append(f"code copy failed: {src.name}: {exc}")
     else:
@@ -321,7 +484,38 @@ def build(
         build_readme(artifact, task_id), encoding="utf-8"
     )
 
-    # 7. zip
+    # 7. .cls / .sty 文件（让 zip 拿到即可编译）
+    if artifact.cls_files:
+        for src in artifact.cls_files:
+            try:
+                shutil.copy2(src, pkg_dir / src.name)
+            except Exception as exc:  # noqa: BLE001
+                skipped.append(f"cls copy failed: {src.name}: {exc}")
+    if artifact.sty_files:
+        for src in artifact.sty_files:
+            try:
+                shutil.copy2(src, pkg_dir / src.name)
+            except Exception as exc:  # noqa: BLE001
+                skipped.append(f"sty copy failed: {src.name}: {exc}")
+
+    # 8. metadata.json
+    metadata = _build_metadata_json(task_id, artifact, skipped)
+    (pkg_dir / "metadata.json").write_text(
+        json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+    # 9. 编译验证（不阻断打包）
+    verification = _verify_compilation(pkg_dir, artifact.template_id)
+    if not verification.get("success"):
+        skipped.append(f"compilation verification: {verification.get('message', 'failed')}")
+
+    # 8b. 将 verification 写回 metadata.json
+    metadata["verification"] = verification
+    (pkg_dir / "metadata.json").write_text(
+        json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+    # 10. zip
     zip_path: Optional[Path] = None
     if make_zip:
         zip_path = output_dir / f"camera_ready_{task_id}.zip"
@@ -346,4 +540,5 @@ def build(
         zip_path=zip_path,
         skipped_reasons=skipped,
         artifact_summary=artifact.summary(),
+        verification=verification,
     )

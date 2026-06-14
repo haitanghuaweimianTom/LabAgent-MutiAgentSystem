@@ -102,6 +102,13 @@ export function useTaskState(options: UseTaskStateOptions): {
         progressPercentage: data.progress_percentage ?? 0,
         currentStep: data.current_step ?? '',
         error: data.error,
+        templateId: data.template_id ?? data.template ?? '',
+        peerReview: data.peer_review
+          ? {
+              overallScore: data.peer_review.overall_score ?? 0,
+              recommendation: normalizeRecommendation(data.peer_review.recommendation),
+            }
+          : null,
       });
     } catch (e: any) {
       setError(e?.message ?? 'failed to fetch task state');
@@ -122,7 +129,23 @@ export function useTaskState(options: UseTaskStateOptions): {
         es.addEventListener('phase_changed', (evt: MessageEvent) => {
           try {
             const payload = JSON.parse(evt.data);
-            setState((prev) => prev ? { ...prev, ...payload } : null);
+            setState((prev) => {
+              if (!prev) return null;
+              const next: TaskState = { ...prev, ...payload };
+              if (payload.template_id || payload.template) {
+                next.templateId = payload.template_id ?? payload.template;
+              }
+              if (payload.peer_review) {
+                next.peerReview = {
+                  overallScore: payload.peer_review.overall_score ?? 0,
+                  recommendation: normalizeRecommendation(payload.peer_review.recommendation),
+                };
+              }
+              if (payload.name && isValidStateName(payload.name)) {
+                next.name = payload.name;
+              }
+              return next;
+            });
           } catch {
             // ignore parse errors
           }
@@ -204,4 +227,26 @@ function mapBackendStatusToState(status: string, currentStep: string): TaskState
   }
   if (s === 'phase1_running') return 'phase1_running';
   return 'phase1_running';
+}
+
+function isValidStateName(name: string): name is TaskStateName {
+  return [
+    'idle',
+    'phase1_running',
+    'phase1_reviewing',
+    'phase2_running',
+    'peer_review',
+    'revising',
+    'finalizing',
+    'completed',
+    'failed',
+    'paused',
+  ].includes(name);
+}
+
+function normalizeRecommendation(r: string): 'accept' | 'revise' | 'reject' {
+  const s = (r ?? '').toLowerCase();
+  if (s.includes('accept')) return 'accept';
+  if (s.includes('reject')) return 'reject';
+  return 'revise';
 }

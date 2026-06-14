@@ -1,0 +1,72 @@
+% Minimal NeurIPS 2024 style file
+% Based on the official NeurIPS LaTeX style (simplified for distribution).
+% Provides letterpaper, 10pt, single-column layout with anonymous author block.
+
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{neurips_2024}[2024/05/20 v1.0 Minimal NeurIPS 2024 style]
+
+% Preprint option (default: shows author block; for submission set [preprint])
+\newif\if@neuripsfinal\@neuripsfinalfalse
+\DeclareOption{final}{\@neuripsfinaltrue}
+\DeclareOption{preprint}{\@neuripsfinaltrue}
+\DeclareOption{camera}{\@neuripsfinaltrue}
+\ProcessOptions\relax
+
+% Required packages
+\RequirePackage[letterpaper, margin=1in]{geometry}
+\RequirePackage{times}
+\RequirePackage{titlesec}
+\RequirePackage{fancyhdr}
+\RequirePackage{lastpage}
+\RequirePackage{enumitem}
+\RequirePackage{caption}
+
+% Line spacing
+\renewcommand{\baselinestretch}{0.994}
+
+% Page style
+\pagestyle{fancy}
+\fancyhf{}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0pt}
+
+% Title formatting
+\renewcommand{\@maketitle}{%
+  \newpage
+  \null
+  \vskip -0.2in%
+  \begin{center}%
+    {\LARGE\bfseries\@title\par}%
+    \vskip 0.5em%
+    {\large\lineskip .5em\@author\par}%
+  \end{center}%
+  \par
+  \vskip 0.5em}
+
+% Section formatting
+\titleformat{\section}
+  {\normalfont\Large\bfseries}{\thesection}{1em}{}
+\titleformat{\subsection}
+  {\normalfont\large\bfseries}{\thesubsection}{1em}{}
+\titleformat{\subsubsection}
+  {\normalfont\normalsize\bfseries}{\thesubsubsection}{1em}{}
+
+% Caption formatting
+\captionsetup{font=small,labelfont=bf}
+
+% Reduce list spacing
+\setlist{nosep}
+
+% Abstract formatting
+\renewenvironment{abstract}{%
+  \begin{center}%
+  \begin{minipage}{0.9\textwidth}%
+  \small%
+}{%
+  \end{minipage}%
+  \end{center}%
+  \vskip 0.5em}
+
+% Command aliases for compatibility with official style
+\providecommand{\@noticestring}{}
+\newcommand{\Notice@String}{}

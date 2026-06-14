@@ -456,6 +456,8 @@ async def run_phase2(task_id: str, req: dict = None):
 
 async def _run_phase2_workflow(task_id: str, problem_text: str, sub_problems: List, data_files: list, mode: str = "batch", project_name: Optional[str] = None, template: str = "math_modeling", workflow_type: str = "standard"):
     from ..core.task_persistence import load_task_metadata, save_task_result, save_task_metadata
+    from ..core.paths import get_project_output_dir
+    from ..services.camera_ready import collect_artifacts, build
     try:
         orch = get_orchestrator()
         result = await orch.execute_phase2(task_id, problem_text, sub_problems, data_files, mode=mode, project_name=project_name, template=template, workflow_type=workflow_type)
@@ -474,6 +476,16 @@ async def _run_phase2_workflow(task_id: str, problem_text: str, sub_problems: Li
                         output[key] = merged
 
         save_task_result(task_id, {"task_id": task_id, "output": output, "completed_at": datetime.now().isoformat()})
+
+        # v4.2: 自动触发 camera-ready 打包（仅当 phase2 成功）
+        try:
+            task_output_dir = get_project_output_dir(project_name)
+            artifact = collect_artifacts(task_id, task_output_dir, template_id=template)
+            cr_result = build(task_id, artifact, task_output_dir, make_zip=True, max_zip_mb=50)
+            logger.info(f"Auto camera-ready for {task_id}: zip={cr_result.zip_path}, verification={cr_result.verification}")
+        except Exception as cr_exc:  # noqa: BLE001
+            logger.warning(f"Auto camera-ready failed for {task_id}: {cr_exc}")
+
         meta = load_task_metadata(task_id) or {}
         save_task_metadata(
             task_id=task_id, problem_text=problem_text, status="completed",

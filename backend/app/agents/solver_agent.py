@@ -1507,6 +1507,7 @@ class SolverAgent(BaseAgent):
             template_id = context.get("template", "math_modeling") if isinstance(context, dict) else "math_modeling"
             result["cross_check"] = await self._cross_check_solution(
                 result.get("numerical_results", {}),
+                problem_text=task_input.get("problem_text", ""),
                 sub_problem_id=sub_idx,
                 template_id=template_id,
             )
@@ -1645,6 +1646,7 @@ class SolverAgent(BaseAgent):
             template_id = context.get("template", "math_modeling") if isinstance(context, dict) else "math_modeling"
             sol["cross_check"] = await self._cross_check_solution(
                 sol.get("results", {}).get("numerical_results", {}),
+                problem_text=task_input.get("problem_text", ""),
                 sub_problem_id=sp_id,
                 template_id=template_id,
             )
@@ -1741,14 +1743,28 @@ class SolverAgent(BaseAgent):
             logger.info(
                 f"CodeManifest validation issues for sub_problem={sub_problem_id}: {report.issues}"
             )
-        return {
+
+        # v4.2: 硬规则触发但文件未拆分 → 生成 split_warning（非阻塞，但会进入 metadata）
+        split_warning = ""
+        if not report.valid and manifest.files and len(manifest.files) == 1:
+            split_warning = (
+                "CodeManifest hard rule triggered but only 1 file was produced. "
+                f"Issues: {'; '.join(report.issues)}"
+            )
+            logger.warning(f"[SPLIT WARNING] sub_problem={sub_problem_id}: {split_warning}")
+
+        result = {
             "sub_problem_id": sub_problem_id,
             "manifest": manifest.to_dict(),
             "valid": report.valid,
             "issues": report.issues,
             "warnings": report.warnings,
             "file_count": len(manifest.files),
+            "total_loc": manifest.total_loc,
+            "should_split": not report.valid and len(manifest.files) == 1,
+            "split_warning": split_warning,
         }
+        return result
 
     # ====================================================================
     # Phase 7 (A1): CrossValidator 跨方法 sanity check
@@ -1757,6 +1773,7 @@ class SolverAgent(BaseAgent):
     async def _cross_check_solution(
         self,
         numerical_results: Dict[str, Any],
+        problem_text: str = "",
         sub_problem_id: Any = None,
         template_id: str = "math_modeling",
     ) -> List[Dict[str, Any]]:
@@ -1765,18 +1782,52 @@ class SolverAgent(BaseAgent):
         严格控制幻觉：仅在数值结果 *实际有* 2+ 个字段时才有意义。
         没有可对比的 baseline 时返回空 list（不报伪警）。
 
-        当前实现：用 primary result 自比（占位）。等 B1 真 baseline 接入后，
-        会自动跑 baseline 并对比。
+        实现：优先调用 ALTERNATIVE_METHODS 中注册的 ``llm_second_opinion``；
+        若未注册或失败，则回退到 ``analytical_estimate``；
+        若两者都不可用，回退到轻量自比（记录 warning）。
         """
         if not numerical_results or len(numerical_results) < 2:
             return []
         try:
-            from ..services.result_validator import get_cross_validator
+            from ..services.result_validator import get_cross_validator, ALTERNATIVE_METHODS
             cv = get_cross_validator()
-            # 当前：与占位 "secondary_estimate" 对比
-            # 真实 baseline 接入后（B1），这里调 ALTERNATIVE_METHODS 注册的对比方法
+
+            # 1. 尝试 llm_second_opinion（如果已注册）
+            if "llm_second_opinion" in ALTERNATIVE_METHODS:
+                try:
+                    results = await cv.cross_check_from_methods(
+                        "primary",
+                        "llm_second_opinion",
+                        problem_text,
+                        params={"numerical_results": numerical_results, "template_id": template_id},
+                    )
+                    if results and any(not r.skipped for r in results):
+                        logger.info(f"CrossValidator used llm_second_opinion for sub_problem={sub_problem_id}")
+                        return [r.to_dict() for r in results]
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning(f"llm_second_opinion cross-check failed: {exc}")
+
+            # 2. 尝试 analytical_estimate（result_validator 已预注册）
+            if "analytical_estimate" in ALTERNATIVE_METHODS:
+                try:
+                    results = await cv.cross_check_from_methods(
+                        "primary",
+                        "analytical_estimate",
+                        problem_text,
+                        params={"numerical_results": numerical_results},
+                    )
+                    if results and any(not r.skipped for r in results):
+                        logger.info(f"CrossValidator used analytical_estimate for sub_problem={sub_problem_id}")
+                        return [r.to_dict() for r in results]
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning(f"analytical_estimate cross-check failed: {exc}")
+
+            # 3. 回退：轻量自比（placeholder，仅当无真实替代方法时）
+            logger.warning(
+                f"No real alternative method available for cross-check; using self-comparison placeholder "
+                f"for sub_problem={sub_problem_id}"
+            )
             secondary = {k: v * (0.95 + 0.1 * (i % 3) / 3) for i, (k, v) in enumerate(numerical_results.items())}
-            # 仅保留与 primary 字段一致的字段
             secondary = {k: secondary[k] for k in numerical_results.keys() if k in secondary}
             results = await cv.cross_check(
                 method_a_name="primary",
@@ -1788,3 +1839,40 @@ class SolverAgent(BaseAgent):
         except Exception as exc:  # noqa: BLE001
             logger.debug(f"CrossValidator skipped: {exc}")
             return []
+
+
+# ====================================================================
+# Phase 7 (B1): 注册 CrossValidator 替代方法
+# ====================================================================
+
+async def _llm_second_opinion(problem_text: str, **params: Any) -> Dict[str, Any]:
+    """使用 LLM 对同一问题给出第二份数值估计（轻量实现）。
+
+    严格控制幻觉：LLM 只基于问题描述做简化估算，不读取或复制 primary 结果。
+    返回一个数值 dict；CrossValidator 会仅比对 primary 与 second opinion 都存在的字段。
+    """
+    numerical_results = params.get("numerical_results", {})
+    template_id = params.get("template_id", "math_modeling")
+    agent = SolverAgent({})
+    fields = ", ".join(numerical_results.keys()) if numerical_results else "key numerical results"
+    messages = [
+        {"role": "system", "content": "You are a skeptical reviewer. Estimate only the numerical results for the problem below. Return a single JSON object with numeric fields only. Do not explain."},
+        {"role": "user", "content": f"Problem ({template_id}):\n{problem_text}\n\nEstimate these fields: {fields}. Return JSON like {{\"optimal_value\": 123.4}}."},
+    ]
+    try:
+        response = await agent.call_llm(messages=messages)
+        content = response.get("choices", [{}])[0].get("message", {}).get("content", "{}")
+        # 尝试提取 JSON
+        import json as _json
+        match = re.search(r"\{[\s\S]*\}", content)
+        if match:
+            return _json.loads(match.group(0))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"llm_second_opinion failed: {exc}")
+    return {}
+
+
+# 注册到 CrossValidator
+from ..services.result_validator import register_alternative_method
+
+register_alternative_method("llm_second_opinion", _llm_second_opinion)

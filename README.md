@@ -1,930 +1,448 @@
-# 数学建模论文全自动生成系统 v2.6
+# 数学建模论文全自动生成系统 v3.0
 
-> **融合 LLM-MM-Agent + Cherry Studio + crewAI + CC Switch 架构，集成 15 类经典数学建模算法库**
->
-> 全自动分段生成 | CrewAI Agent 协作 | Claude CLI 默认代码生成 | 分层持久记忆 | AI-Scientist 创意分析 | 5 步图表流水线 | Markdown/LaTeX/Word 三格式交付 | Web UI 交互 | CC Switch 风格 Provider/MCP/知识库管理
-
----
-## 部分论文效果展示
-<img width="927" height="948" alt="image" src="https://github.com/user-attachments/assets/251b6d4d-ea50-4de1-85b9-dfe05acb1816" />
-<img width="1918" height="980" alt="image" src="https://github.com/user-attachments/assets/6453889f-a98a-4422-a47f-352ccd49ad6f" />
-<img width="1918" height="980" alt="image" src="https://github.com/user-attachments/assets/c02ad407-331a-4928-8a9b-925f2dbf2d29" />
-
-## 目录
-
-- [概述](#概述)
-- [快速开始](#快速开始)
-  - [环境准备](#环境准备)
-  - [安装依赖](#安装依赖)
-  - [配置 LLM](#配置-llm)
-  - [准备赛题与数据](#准备赛题与数据)
-- [命令行使用指南](#命令行使用指南)
-  - [方式一：全自动扫描（推荐）](#方式一全自动扫描推荐)
-  - [方式二：CLI 单题模式](#方式二cli-单题模式)
-  - [方式三：金融分析模式](#方式三金融分析模式)
-  - [方式四：课程作业模式](#方式四课程作业模式)
-  - [方式五：Web UI 模式](#方式五web-ui-模式)
-- [完整命令速查表](#完整命令速查表)
-- [系统架构](#系统架构)
-- [算法知识库](#算法知识库)
-- [项目结构](#项目结构)
-- [API 说明](#api-说明)
-  - [核心端点](#核心端点)
-  - [Provider 管理](#provider-管理cc-switch-风格)
-  - [MCP 管理](#mcp-管理)
-  - [知识库管理](#知识库管理)
-- [论文输出规格](#论文输出规格)
-- [配置说明](#配置说明)
-- [故障排除](#故障排除)
-- [版本历史](#版本历史)
-- [许可证](#许可证)
+> 面向 **CCF-A 顶会 / 数学建模竞赛** 的多智能体论文全自动产线。
+> 内置 6 套论文模板（含 NeurIPS 2024、ACM SIGCONF、IEEE Conference、Springer LNCS、综述、CUMCM），
+> 真实代码执行 + 真实 arXiv 文献检索 + 跨方法交叉验证 + Camera-Ready 自动打包。
 
 ---
 
-## 概述
+## 📑 目录
 
-本项目是一个面向**数学建模竞赛（MCM/ICM/高教社杯）**的论文全自动生成系统。用户可通过**命令行**或**Web 界面**提交赛题，系统即可自动完成问题分析、数学建模、算法设计、代码求解、图表绘制到完整论文撰写的全链路工作，最终交付可直接提交的 **LaTeX PDF** 或 **Word 文档**。
-
-### 核心能力
-
-- **视觉理解赛题**：支持 PDF 题目解析，通过视觉分析提取几何参数与图示信息
-- **算法智能推荐**：集成 [Algorithms_MathModels](https://github.com/HuangCongQing/Algorithms_MathModels) 15 类经典算法库，建模阶段自动检索并推荐适用方法
-- **Claude CLI 默认代码/算法生成**：算法设计与代码求解默认调用 Claude Code CLI，针对代码任务优化，失败自动回退 API
-- **分层持久记忆**：GMemory 风格的三级记忆架构，每个 Agent 拥有独立持久记忆库，跨运行不丢失，支持关键词检索与 Prompt 注入
-- **创意研究视角分析**：AI-Scientist v2 风格的 ideation 预步骤，在问题分析前生成多种研究角度与跨学科方法借鉴
-- **代码执行闭环**：生成 Python 代码 → 隔离执行 → 结果验证 → 自动修复，确保论文数据真实可溯源
-- **分段记忆衔接**：12 章逐章独立生成，显式记忆池 + 持久记忆双层传递结构化摘要，避免上下文溢出
-- **5 步图表流水线**：LLM 规划 → 数据验证 → 逐图生成 → 失败重试 → 模板兜底，100% 保证图表产出
-- **三格式交付**：同时输出 Markdown（便于审阅）+ LaTeX PDF（竞赛标准格式）+ Word（备用格式）
-- **CC Switch 风格 Provider 管理**：15+ 预设提供商（OpenAI、Anthropic、阿里百炼、硅基流动、智谱等），5 大分类，5 种 API 格式（OpenAI Chat/Responses、Anthropic、Gemini、Ollama），一键导入预设
-- **MCP 工具管理增强**：支持 stdio/SSE/StreamableHttp 传输类型，标签分类、per-app 启用、禁用工具列表
-- **知识库 RAG 管理**：RESTful API 文档管理、TF-IDF 语义检索、Agent 自动注入上下文，支持知识点添加/删除/查询
-- **Web UI 可视化**：基于 Next.js 的交互界面，实时展示四阶段流水线、Agent 协作讨论、算法推荐与论文预览；Settings 页面含 Provider/MCP/知识库/系统设置 4 个标签页
+- [系统能力](#-系统能力)
+- [论文产出样例](#-论文产出样例)
+- [快速开始](#-快速开始)
+- [Web UI 使用](#-web-ui-使用)
+- [命令行使用](#-命令行使用)
+- [API 说明](#-api-说明)
+- [系统架构](#-系统架构)
+- [算法与论文模板](#-算法与论文模板)
+- [项目结构](#-项目结构)
+- [配置说明](#-配置说明)
+- [故障排除](#-故障排除)
+- [版本历史](#-版本历史)
 
 ---
 
-## 快速开始
+## 🚀 系统能力
 
-### 环境准备
+### 论文产线
+- **6 套论文模板**：`NeurIPS 2024` / `ACM SIGCONF` / `IEEE Conference` / `Springer LNCS` / `Research Survey` / `CUMCM`，新模板只需在 `backend/app/core/paper_templates/templates/` 下放 JSON + `.cls/.sty` 即可热加载。
+- **真实文献检索**：ResearchAgent 通过 arXiv MCP Server 拉真实论文，并经 Semantic Scholar 二次增强（引用、影响因子、PDF 链接）。
+- **真实代码执行**：SolverAgent 调 LLM 写 Python → 沙箱执行 → 结果验证 → 自动 fix retry，最多 3 次，确保数值真实。
+- **跨方法交叉验证**：对每子任务结果用 CrossValidator 比对，差异 > 5% 自动报警（占位 baseline，等 B1 接入真方法）。
+- **同行评议 + 修订**：PeerReviewAgent 4 维评分（格式/内容/引用/图表），自动打回重写。
+- **Camera-Ready 一键打包**：调 `/tasks/{id}/camera-ready` 自动收集 main.tex / figures / code / bib，打包为可投稿 zip。
+- **9 阶段任务状态机**：前端 `useTaskState` hook + 后端 SSE 实时推送，毫秒级进度刷新。
 
-```bash
-# 检查 Python 版本（要求 3.9+）
-python --version
+### Agent 团队
+| Agent | 角色 | 关键能力 |
+|------|------|---------|
+| coordinator | 协调者 | 工作流编排、暂停/恢复、跨 Agent 黑板 |
+| analyzer_agent | 分析师 | 子问题分解、问题类型识别、难度评估 |
+| data_agent | 数据分析师 | 数据文件解析、洞察抽取 |
+| research_agent | 研究员 | arXiv 检索 + Semantic Scholar 增强 + 可插拔 Reranker |
+| modeler_agent | 建模师 | 数学建模、模型选择、算法推荐 |
+| solver_agent | 求解器 | 真实代码执行、CrossValidator 集成 |
+| writer_agent | 写作专家 | 按章节独立 LLM 调用、可用图表自动注入 |
+| peer_review_agent | 同行评议 | 4 维评分 |
+| experimentation_agent | 实验设计 | 补充实验与消融 |
+| peer_review_agent | 同行评议 | 4 维评分（写作 / 引用 / 方法 / 形式） |
 
-# 检查 Node.js 版本（如需 Web UI，要求 18+）
-node --version
+### AgentModelRouter（按 (agent, template) 路由模型）
+- 默认：analyzer / data / modeler / solver / peer_review = sonnet；research / experimentation = haiku；writer = opus。
+- CCF-A 4 套模板（neurips_2024 / ieee_conference / acm_sigconf / springer_lncs）强制 writer = opus。
+- 通过 `backend/app/core/agent_model_map.py` 注册表 + 前端 Settings 动态覆盖。
+
+### 持久化记忆
+- `MemoryManager` 三级记忆架构：Working Memory（任务上下文）/ Episodic Memory（事件流）/ Lessons Memory（跨任务经验教训）
+- 每个 Agent 独立记忆池，支持关键词检索 + Prompt 自动注入
+- 跨任务经验提取：完成后自动 `extract_lessons_from_result`，下次任务用 `retrieve_relevant` 检索
+
+### Provider / MCP / 知识库（CC Switch 风格）
+- 15+ 预设 Provider：OpenAI、Anthropic、阿里百炼、硅基流动、智谱、Kimi、DeepSeek、Ollama、OpenRouter 等
+- 5 种 API 格式：OpenAI Chat/Responses、Anthropic、Gemini、Ollama
+- MCP 工具管理：stdio / SSE / StreamableHttp 三种传输
+- 知识库 RAG：TF-IDF 语义检索 + Agent 自动注入
+
+### Web UI（Next.js 14）
+- 首页 / 生成 / 数据 / PDF / 历史 / Agent / 流程 / 记忆 / 设置 9 个 Tab
+- SSE 实时消息流 + 任务状态机可视化 + Camera-Ready 面板
+- 暂停 / 恢复 / 取消 / Edit-and-Continue 完整生命周期
+- 13+ React 组件 + Zustand 状态管理
+
+---
+
+## 📚 论文产出样例
+
+本系统已在 `outputs/` 下产出两篇 CCF-A 级别的智能体记忆研究方向论文（中英双语）：
+
+| 论文 | 模板 | 任务 ID | 路径 | PDF |
+|------|------|---------|------|-----|
+| Memora: Structured Episodic Memory for Long-Horizon LLM-Based Multi-Agent Collaboration | NeurIPS 2024 | `task_2254a4eaf8b6` | `outputs/agent_memory_paper_en/output/` | `main.pdf` (21 页) |
+| 面向长程多智能体协作的结构化情景记忆机制研究 | ACM SIGCONF | `task_13db1ab8780c` | `outputs/agent_memory_paper_zh/output/` | `main.pdf` |
+
+每个输出目录结构：
+```
+output/
+├── main.pdf              # 编译好的 PDF
+├── main.tex              # LaTeX 源文件
+├── models.json           # 所有模型设计
+├── solves.json           # 求解结果（含数值结果、key_findings）
+├── code/                 # 每个子问题的 Python 求解代码
+└── htgmm_results.png     # 实验结果图（如有）
 ```
 
-### 安装依赖
+---
+
+## ⚡ 快速开始
+
+### 环境要求
+- Python 3.9+
+- Node.js 18+（Web UI）
+- TeX Live（含 `xelatex`、`acmart`、`llncs`、`ieeeconf`）— 仅打包 Camera-Ready 时需要
+- 可访问 LLM Provider（OpenAI / Anthropic / 阿里百炼 / Kimi / DeepSeek 等任意一个）
+
+### 启动后端
 
 ```bash
-# 1. 克隆仓库（如尚未克隆）
-git clone <repository-url>
-cd MathModel-MutiAgentSystem
-
-# 2. 安装 Python 后端依赖
+# 1. 安装依赖
 pip install -r requirements.txt
 
-# 3. （可选）安装前端依赖
-npm install --prefix frontend
+# 2. 配置 Provider（在 .env 或前端 Settings 里）
+# 示例：Kimi
+export ANTHROPIC_BASE_URL="https://api.kimi.com/coding/"
+export ANTHROPIC_AUTH_TOKEN="sk-kimi-..."
 
-# 4. （可选）构建算法知识库索引
-python build_algorithm_library.py
+# 3. 启动后端
+cd backend
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+# → http://localhost:8000/api/v1
+# → API 文档 http://localhost:8000/docs
 ```
 
-### 配置 LLM
-
-系统支持多 Provider 自动 fallback。配置以下任一方案即可：
-
-**方案 A：Anthropic API（推荐）**
-
-```bash
-export ANTHROPIC_API_KEY="your-api-key"
-```
-
-**方案 B：OpenAI API**
-
-```bash
-export OPENAI_API_KEY="your-api-key"
-```
-
-**方案 C：Google Gemini**
-
-```bash
-export GEMINI_API_KEY="your-api-key"
-```
-
-**方案 D：本地 Ollama（免费，完全离线）**
-
-```bash
-export OLLAMA_MODEL="qwen2.5:14b"
-export OLLAMA_HOST="http://localhost:11434"
-```
-
-**方案 E：Claude Code CLI（备用，无需 API Key）**
-
-```bash
-npm install -g @anthropic-ai/claude-code
-# 首次使用需运行 claude 并登录 Anthropic 账号
-```
-
-> **Fallback 链**：Anthropic → OpenAI → Gemini → Ollama → Claude CLI。API 失败时自动切换，无需手动干预。
-
-### 准备赛题与数据
-
-#### 项目隔离（推荐 via Web UI）
-
-系统支持按**项目**隔离数据文件与输出目录。在 Web UI 中：
-
-1. **创建/选择项目**：在「生成」页顶部的下拉框中选择已有项目，或点击「+ 新建项目」
-2. **上传数据**：切换到「数据」标签，文件将自动保存到该项目的 `data/` 子目录
-3. **提交任务**：系统会读取项目内的数据文件，并将所有输出（代码、论文、JSON）保存到该项目的 `output/` 子目录
-
-项目目录结构：
-
-```
-outputs/{project_name}/
-├── data/                    # 项目专属数据文件（上传时自动创建）
-└── output/
-    ├── code/                # Solver 生成的 Python 代码
-    ├── papers/              # Writer 生成的论文
-    ├── models.json          # 模型描述
-    └── solves.json          # 求解结果
-```
-
-无项目时回退到全局路径：
-- 数据：`backend/data/uploads/`
-- 输出：`output/`
-
-#### 目录结构要求（CLI 模式）
-
-**方式 A：全自动扫描模式（`USETHIS` 文件夹）**
-
-```
-MathModel-MutiAgentSystem/
-├── 2024A-USETHIS/
-│   ├── 2024A-Problem.md      # 赛题描述（.md 格式）
-│   ├── result1.xlsx          # 数据文件
-│   └── result2.csv           # 数据文件
-│
-├── 2025B/
-│   ├── 2025B-Problem.md
-│   └── 附件1.xlsx ~ 附件4.xlsx
-```
-
-**方式 B：金融分析模式（`func2` 文件夹）**
-
-```
-MathModel-MutiAgentSystem/
-├── 2025-func2/
-│   ├── problem.md
-│   └── financial_data.xlsx
-```
-
-**方式 C：课程作业模式（`func3` 文件夹）**
-
-```
-MathModel-MutiAgentSystem/
-├── 2025-func3/
-│   ├── problem.md
-│   └── data.xlsx
-```
-
-**方式 D：CLI 单题模式（项目根目录）**
-
-```
-MathModel-MutiAgentSystem/
-├── problem.md                 # 赛题文件（文件名包含 problem/题目/赛题）
-├── result1.xlsx               # 数据文件（自动检测根目录下所有 .xlsx）
-└── result2.xlsx
-```
-
-> **赛题文件格式**：支持 `.md` 和 `.pdf`。PDF 会自动提取文本和图片。
-> **数据文件格式**：支持 `.xlsx`、`.xls`、`.csv`。
-
----
-
-## 命令行使用指南
-
-### 方式一：全自动扫描（推荐）
-
-适用于批量处理多个赛题，自动扫描指定目录下所有符合条件的文件夹。
-
-```bash
-# 基础用法：扫描当前目录下所有 *USETHIS* 文件夹
-python run_auto.py
-
-# 指定扫描根目录
-python run_auto.py --root ./problems
-
-# 指定扫描根目录并自定义模板
-python run_auto.py --root ./problems --template math_modeling
-
-# 指定输出目录（默认在当前目录生成 work_<folder_name>/）
-python run_auto.py --root ./problems --output-dir ./output
-
-# 强制使用特定 Provider
-python run_auto.py --provider claude_cli
-python run_auto.py --provider anthropic
-python run_auto.py --provider openai
-python run_auto.py --provider gemini
-python run_auto.py --provider ollama
-
-# 禁用 Critique-Improvement 加速（适合快速测试）
-python run_auto.py --no-critique
-
-# 启用 Critique-Improvement（默认，完整质量保障）
-python run_auto.py
-
-# 切换 Agent 协作模式（默认 sequential）
-CREW_PROCESS_MODE=sequential python run_auto.py
-CREW_PROCESS_MODE=hierarchical python run_auto.py
-CREW_PROCESS_MODE=consensus python run_auto.py
-
-# 组合使用示例
-python run_auto.py --root ./problems --provider anthropic --no-critique
-```
-
-### 方式二：CLI 单题模式
-
-适用于处理单个赛题，支持两种文件组织方式：
-
-**A. 赛题文件放在项目根目录**
-
-```bash
-# 基础用法：自动生成论文（默认数学建模模板）
-python main.py --auto
-
-# 指定输出目录
-python main.py --auto --output-dir work_custom
-```
-
-**B. 赛题文件放在独立文件夹（推荐）**
-
-```bash
-# 一行命令处理任意文件夹，无需 cd
-python main.py --auto --input-dir problems/2025B
-
-# 指定输入目录 + 输出目录 + 模板
-python main.py --auto --input-dir problems/2025B --output-dir outputs/work_2025B --template math_modeling
-
-# 快速测试（禁用 Critique）
-python main.py --auto --input-dir problems/2025B --no-critique
-```
-
-**常用参数组合**
-
-```bash
-# 指定论文模板
-python main.py --auto --template coursework
-python main.py --auto --template financial_analysis
-
-# 禁用 Critique 加速（适合快速测试）
-python main.py --auto --no-critique
-
-# 组合使用示例
-python main.py --auto --input-dir problems/2025B --output-dir outputs/work_2025B --template math_modeling --no-critique
-```
-
-### 方式三：金融分析模式
-
-适用于金融数据分析与投资报告，自动扫描 `*func2*` 文件夹。
-
-```bash
-# 基础用法
-python run_finance.py
-
-# 指定根目录
-python run_finance.py --root ./finance_cases
-
-# 指定 Provider
-python run_finance.py --provider openai
-
-# 禁用 Critique
-python run_finance.py --no-critique
-```
-
-### 方式四：课程作业模式
-
-适用于一般课程作业论文，自动扫描 `*func3*` 文件夹。
-
-```bash
-# 基础用法
-python run_coursework.py
-
-# 指定根目录
-python run_coursework.py --root ./homework
-
-# 指定 Provider
-python run_coursework.py --provider claude_cli
-
-# 禁用 Critique
-python run_coursework.py --no-critique
-```
-
-### 方式五：Web UI 模式
-
-适合可视化操作、实时监控生成进度。
-
-**1. 启动后端（FastAPI）**
-
-```bash
-# 方式 A：直接运行
-python -m backend.app.main
-
-# 方式 B：使用 uvicorn（推荐，支持热重载）
-uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload
-
-# 方式 C：后台运行
-nohup uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 > backend.log 2>&1 &
-```
-
-后端服务地址：`http://localhost:8000`
-API 文档地址：`http://localhost:8000/docs`
-
-**2. 启动前端（Next.js）**
+### 启动前端
 
 ```bash
 cd frontend
-
-# 开发模式
+npm install
 npm run dev
-
-# 生产构建
-npm run build
-npm start
-
-# 后台运行
-nohup npm run dev > frontend.log 2>&1 &
+# → http://localhost:3000
 ```
 
-前端服务地址：`http://localhost:3000`
-
-**3. 通过浏览器访问 `http://localhost:3000`**
-
-### 查看与验证结果
+### 一句话启动（开发模式）
 
 ```bash
-# 查看生成的论文 Markdown
-cat work_<name>/final/MathModeling_Paper.md
+# 后端
+cd backend && python -m uvicorn app.main:app --reload --port 8000 &
 
-# 查看论文字数统计
-wc -c work_<name>/final/MathModeling_Paper.md
-
-# 查看论文结构（标题层级）
-grep "^#" work_<name>/final/MathModeling_Paper.md
-
-# 查看解决方案 JSON
-cat work_<name>/final/solution.json | python -m json.tool
-
-# 查看记忆池
-cat work_<name>/final/memory_pool.json | python -m json.tool
-
-# 查看生成的图表
-ls -la work_<name>/stage_7_charts/
-
-# 查看执行结果
-cat work_<name>/execution/results.json | python -m json.tool
-
-# 编译 LaTeX 生成 PDF（如系统未自动编译）
-cd work_<name>/final
-xelatex MathModeling_Paper.tex
-
-# 转换为 Word（如系统未自动生成）
-pandoc MathModeling_Paper.md -o 数学建模论文.docx
+# 前端
+cd frontend && npm run dev &
 ```
 
 ---
 
-## 完整命令速查表
+## 🖥️ Web UI 使用
 
-### 环境配置命令
-
-| 命令 | 说明 |
-|------|------|
-| `export ANTHROPIC_API_KEY="xxx"` | 配置 Anthropic API 密钥 |
-| `export OPENAI_API_KEY="xxx"` | 配置 OpenAI API 密钥 |
-| `export GEMINI_API_KEY="xxx"` | 配置 Gemini API 密钥 |
-| `export OLLAMA_MODEL="qwen2.5:14b"` | 配置 Ollama 模型名 |
-| `export OLLAMA_HOST="http://localhost:11434"` | 配置 Ollama 服务地址 |
-| `export ANTHROPIC_BASE_URL="https://xxx"` | 配置 Anthropic API 代理地址 |
-| `export DEFAULT_LLM_PROVIDER="claude_cli"` | 强制指定默认 Provider |
-| `export CREW_PROCESS_MODE="sequential"` | 设置 Agent 协作模式 |
-
-### 运行命令
-
-| 命令 | 说明 |
-|------|------|
-| `python run_auto.py` | 全自动扫描 `*USETHIS*` 文件夹 |
-| `python run_auto.py --root ./problems` | 指定扫描目录 |
-| `python run_auto.py --provider anthropic` | 指定 Provider |
-| `python run_auto.py --no-critique` | 禁用 Critique 加速 |
-| `python run_finance.py` | 金融分析模式（扫描 `*func2*`） |
-| `python run_coursework.py` | 课程作业模式（扫描 `*func3*`） |
-| `python main.py --auto` | CLI 单题模式（根目录） |
-| `python main.py --auto --input-dir problems/2025B` | 指定赛题目录，一行命令运行 |
-| `python main.py --auto --output-dir work` | 指定输出目录 |
-| `python main.py --auto --template coursework` | 指定论文模板 |
-| `python main.py --auto --no-critique` | 禁用 Critique |
-
-### 环境与调试命令
-
-| 命令 | 说明 |
-|------|------|
-| `pip install -r requirements.txt` | 安装 Python 依赖 |
-| `python build_algorithm_library.py` | 构建算法知识库索引 |
-| `npm install --prefix frontend` | 安装前端依赖 |
-| `python -m backend.app.main` | 启动 FastAPI 后端 |
-| `uvicorn backend.app.main:app --host 0.0.0.0 --port 8000` | uvicorn 启动后端 |
-| `cd frontend && npm run dev` | 启动 Next.js 前端 |
-| `echo $ANTHROPIC_API_KEY` | 检查环境变量是否设置 |
-| `curl http://localhost:8000/health` | 检查后端健康状态 |
+1. 打开 http://localhost:3000
+2. **「设置」** Tab → 添加 Provider（输入 base_url、api_key、model）→ 设为默认
+3. **「生成」** Tab → 选模板（CUMCM / NeurIPS / ACM / IEEE / Springer）→ 输入题目 → 提交
+4. **「生成」** Tab 实时显示 9 阶段状态：
+   - `phase1_running` → `phase1_reviewing`（用户确认子问题）
+   - `phase2_running` → `peer_review` → `revising` → `finalizing` → `completed`
+5. 完成后 **「PDF」** Tab 触发 Camera-Ready 打包 → 下载 zip
 
 ---
 
-## 系统架构
+## ⌨️ 命令行使用
 
-### 四阶段流水线
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                    数学建模论文全自动生成系统 v2.4                     │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│  Stage 0: 创意视角生成 (Ideation) — AI-Scientist v2 风格             │
-│  ├── 生成 5 个不同研究视角与跨学科方法借鉴                              │
-│  ├── 每个视角含：标题、核心思路、方法建议、新颖性评估、具体步骤            │
-│  └── 注入 Stage 1 分析 Prompt，引导多角度思考                          │
-│                               ↓                                     │
-│  Stage 1: 问题分析 (Problem Analysis)                                │
-│  ├── 综合创意视角，LLM 深度分析赛题，提取子任务、约束、数据需求           │
-│  ├── 构建 DAG 任务依赖图（5 种依赖类型）                               │
-│  └── 生成 analysis_summary → memory_pool + 持久记忆                   │
-│                               ↓                                     │
-│  Stage 2: 数学建模 (Mathematical Modeling)                           │
-│  ├── 按 DAG 拓扑序逐任务建模                                          │
-│  ├── 🔍 算法库检索：自动推荐 15 类经典算法中的适用方法                    │
-│  ├── 生成变量定义表、核心公式（LaTeX）、模型假设                        │
-│  └── 生成 modeling_summary → memory_pool + 持久记忆                   │
-│                               ↓                                     │
-│  Stage 3: 计算求解 (Computational Solving)                           │
-│  ├── 🔧 设计求解算法（默认 Claude Code CLI，API 回退）                  │
-│  ├── 🔧 生成 Python 代码（默认 Claude Code CLI，API 回退）              │
-│  ├── 隔离执行（subprocess 沙箱，60s 超时）                             │
-│  ├── 自动修复循环（失败 → 分析 stderr → LLM 修复 → 重试，最多 4 轮）     │
-│  └── 生成 algorithm_summary + results_summary → memory_pool + 持久记忆  │
-│                               ↓                                     │
-│  Stage 4: 论文生成 (Paper Generation)                                │
-│  ├── 预生成 12 章详细大纲（分批，每批 4 章）                            │
-│  ├── 逐章生成：本章大纲 + 相关阶段摘要 + 前 2 章摘要                     │
-│  ├── 每章：字数检查 → Critique-Improvement → 扩展 → 章节摘要            │
-│  ├── 内容净化：过滤题目原文、重复标题                                   │
-│  ├── 📊 图表自动生成（5步流水线 + 模板保底，100% 产出）                   │
-│  └── 组装完整论文 + LaTeX 排版 + Word 导出                             │
-│                                                                     │
-│  💾 分层持久记忆系统（GMemory 风格）                                   │
-│  ├── {work}/memory/{agent_name}/  每个 Agent 独立记忆目录              │
-│  ├── {work}/memory/shared/         共享记忆空间                        │
-│  └── 支持关键词检索 + Prompt 注入 + 阶段摘要持久化                     │
-└─────────────────────────────────────────────────────────────────────┘
+### CLI 单题模式
+```bash
+python main.py \
+    --problem "智能体记忆研究方向论文：设计长程协作的结构化记忆框架" \
+    --template neurips_2024 \
+    --project my_paper \
+    --mode batch
 ```
 
-### 显式记忆池 + 持久记忆系统
-
-**内存记忆池（memory_pool）**：
+### 全自动扫描
+```bash
+python main.py --auto --workspace ./workspace
 ```
-memory_pool
-├── analysis_summary      # Stage 1 问题分析摘要（400-500 字）
-│                         #   含：背景、子问题、核心假设、解决思路、关键约束
-├── modeling_summary      # Stage 2 数学建模摘要（400-500 字）
-│                         #   含：核心变量、核心公式、求解策略、子问题映射
-├── algorithm_summary     # Stage 3 算法设计摘要（200-300 字）
-│                         #   含：算法名称、输入、核心步骤、输出格式
-├── results_summary       # Stage 3 计算结果摘要（400-500 字）
-│                         #   含：关键数值表格、主要发现、可视化建议
-└── chapter_summaries     # Stage 4 各章结构化摘要（200-300 字/章）
-```
-
-**持久记忆系统（文件系统）**：
-```
-{work_dir}/memory/
-├── analyst/               # 问题分析师的记忆
-│   ├── mem_*.json         # 持久化记忆条目（含时间戳、内容、元数据）
-│   └── summary.md         # 阶段摘要（人类可读）
-├── modeler/               # 数学建模师的记忆
-│   ├── mem_*.json
-│   └── summary.md
-├── solver/                # 求解工程师的记忆
-│   ├── mem_*.json
-│   └── summary.md
-├── writer/                # 论文写作专家的记忆
-│   ├── mem_*.json
-│   └── summary.md
-└── shared/                # 所有 Agent 共享记忆
-    ├── mem_*.json
-    ├── analysis_summary.md
-    ├── modeling_summary.md
-    ├── results_summary.md
-    ├── ideation_results.json
-    └── memory_pool.json
-```
-
-每份摘要严格限制长度，按固定结构组织，确保 LLM prompt 不会溢出。持久记忆在 Agent 构建 Prompt 时自动注入，提供历史上下文参考。
 
 ---
 
-## 算法知识库
+## 🔌 API 说明
 
-系统集成了 15 类经典数学建模算法，共 67 个 MATLAB/Python 源文件。
+所有端点前缀：`/api/v1`。
 
-### 支持的算法类别
+### 任务管理
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/tasks/submit` | POST | 提交新任务 |
+| `/tasks/{id}/status` | GET | 获取任务状态 |
+| `/tasks/{id}/stream` | GET | SSE 事件流 |
+| `/tasks/{id}/result` | GET | 任务结果（含各 Agent 输出） |
+| `/tasks/{id}/camera-ready` | POST | 一键打包可投稿 zip |
+| `/tasks/{id}/pause` / `/resume` / `/cancel` | POST | 生命周期控制 |
+| `/tasks/{id}/messages` | GET | Agent 协作消息 |
+| `/tasks/{id}/debug-history` | GET | 任务执行历史 |
 
-| 类别 | 代表性方法 | 适用场景 |
-|------|-----------|---------|
-| **层次分析法 (AHP)** | 判断矩阵、一致性检验 | 多准则决策、权重确定、方案排序 |
-| **元胞自动机** | 生命游戏、森林火灾、交通流 | 复杂系统演化模拟、空间动力学 |
-| **模糊数学模型** | 模糊综合评价、模糊聚类 | 边界不清晰的不确定性问题 |
-| **目标规划** | 偏差变量、优先级优化 | 多目标冲突优化、资源配置 |
-| **图论** | Dijkstra、Floyd | 最短路径、网络优化、物流调度 |
-| **灰色系统** | GM(1,1)、GM(2,1)、Verhulst | 小样本预测、中长期趋势分析 |
-| **启发式算法** | 遗传算法、模拟退火、神经网络 | 组合优化、函数极值、参数调优 |
-| **整数规划** | 0-1 变量、分支定界 | 指派问题、选址问题、背包问题 |
-| **插值** | 拉格朗日、样条、双线性 | 缺失数据填补、曲线光滑、图像处理 |
-| **线性规划** | 单纯形法 | 生产计划、运输问题、投资组合 |
-| **多元分析** | 聚类分析、主成分分析 (PCA) | 数据降维、样本分类、特征提取 |
-| **神经网络** | BP 网络、LVQ | 非线性回归、模式识别、时间序列 |
-| **非线性规划** | 梯度下降、拟牛顿法 | 工程设计优化、参数估计 |
-| **回归分析** | 线性回归、多项式回归、逐步回归 | 趋势预测、因素分析、因果推断 |
-| **时间序列** | 移动平均、指数平滑、自适应滤波 | 经济指标预测、销售量预测 |
+### Provider 管理
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/providers/` | GET | 列出所有 Provider |
+| `/providers/` | POST | 创建自定义 Provider |
+| `/providers/{id}` | PUT / DELETE | 修改 / 删除 |
+| `/providers/{id}/default` | POST | 设为默认 |
+| `/providers/{id}/test` | POST | 测试连通性 |
+| `/providers/presets` | GET | 列出 15+ 预设 |
+| `/providers/import-preset` | POST | 一键导入预设 |
 
-### 自动检索机制
+### Agent 管理
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/agents/` | GET | 列出所有 Agent |
+| `/agents/{name}/model` | PUT | 修改 Agent 使用的模型 |
+| `/agents/{name}/test-model` | POST | 测试 Agent 模型连通性 |
 
-在 Stage 2 数学建模阶段，系统对每个子任务自动执行：
+### MCP 管理
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/mcp/servers` | GET / POST | 列出 / 创建 MCP Server |
+| `/mcp/servers/{id}` | PUT / DELETE | 修改 / 删除 |
+| `/mcp/servers/{id}/test` | POST | 测试连接 |
+| `/mcp/tools` | GET | 列出所有可用工具 |
 
-1. **关键词提取**：从 `task_description + problem_text` 中提取中/英文关键词
-2. **相关度计算**：基于 tag 匹配、场景匹配、描述匹配、子类型匹配计算综合分数
-3. **Top-3 推荐**：将最相关的算法（含名称、描述、数学模型、优缺点）注入建模 Prompt
-4. **显式约束**：Prompt 中要求"若算法库推荐了适用的算法，请在模型中明确采用并说明理由"
+### 知识库管理
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/knowledge/bases` | GET / POST | 列出 / 创建知识库 |
+| `/knowledge/bases/{id}/items` | POST | 添加知识点 |
+| `/knowledge/bases/{id}/search` | POST | TF-IDF 语义检索 |
+
+### 记忆管理
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/memory/tasks/{id}/working` | GET | 任务工作记忆 |
+| `/memory/tasks/{id}/episodic` | GET | 任务事件流 |
+| `/memory/lessons` | GET / POST | 跨任务经验教训 |
+| `/memory/lessons/{id}/feedback` | POST | 用例反馈，更新 use_count |
 
 ---
 
-## 项目结构
+## 🏗️ 系统架构
+
+```
+Web UI (Next.js 14 + Zustand)
+        ↓ REST + SSE
+FastAPI Backend
+  ├─ Routers (tasks / agents / providers / mcp / knowledge / memory)
+  ├─ Orchestrator (两阶段工作流)
+  │    ├─ Phase 1: analyzer → data → research → [暂停]
+  │    └─ Phase 2: modeler + solver → writer → peer_review → finalizing
+  ├─ AgentModelRouter (按 (agent, template) 路由 LLM)
+  ├─ MemoryManager (三级记忆: working / episodic / lessons)
+  ├─ PaperTemplateRegistry (JSON-driven 模板注册)
+  └─ LLM Provider Layer (15+ Provider, 5 种 API 格式)
+        ↓ HTTPS
+   OpenAI / Anthropic / 阿里百炼 / Kimi / DeepSeek / Ollama / ...
+```
+
+### 关键模块
+- `backend/app/agents/orchestrator.py` — 两阶段主编排器
+- `backend/app/agents/{base,analyzer,data,research,modeler,solver,writer,peer_review,experimentation}_agent.py` — Agent 实现
+- `backend/app/agents/base.py` — BaseAgent + AgentFactory + AgentModelRouter
+- `backend/app/agents/demo_code_templates.py` — 15+ 数学建模算法模板
+- `backend/app/core/agent_model_map.py` — AgentModelRouter 注册表
+- `backend/app/core/paper_templates/` — 论文模板注册表
+- `backend/app/core/memory.py` — 三级记忆系统
+- `backend/app/services/result_validator.py` — ResultValidator + CrossValidator
+- `backend/app/services/camera_ready.py` — Camera-Ready 打包
+
+---
+
+## 📐 算法与论文模板
+
+### 经典数学建模算法（15+）
+`demo_code_templates.py` 内置：
+- 优化：LP、IP、MILP、GA、PSO
+- 预测：ARIMA、灰色预测、LSTM
+- 评价：AHP、TOPSIS、熵权法、灰色关联
+- 图论：最短路径、最小生成树、网络流
+- 统计：聚类、判别、主成分、因子分析
+- 数值方法：插值、拟合、数值积分
+
+### 论文模板（6 套 + 可扩展）
+在 `backend/app/core/paper_templates/templates/` 下：
+- `cumcm.json` — 全国大学生数学建模竞赛
+- `neurips_2024.json` — NeurIPS 2024（CCF-A）
+- `acm_sigconf.json` — ACM SIG Conference（CCF-A）
+- `ieee_conference.json` — IEEE Conference（CCF-A）
+- `springer_lncs.json` — Springer LNCS（CCF-B）
+- `research_survey.json` — Research Survey
+
+新增模板只需在 `templates/` 下加 JSON + 对应 `.cls/.sty`，注册表自动加载。
+
+---
+
+## 📁 项目结构
 
 ```
 MathModel-MutiAgentSystem/
-├── main.py                          # CLI 主入口
-├── requirements.txt                 # Python 依赖清单
-├── build_algorithm_library.py       # 算法知识库索引构建脚本
-├── README.md                        # 本文档
-├── 技术说明文档.md                   # 详细技术说明（借鉴与自主设计）
-│
-├── backend/                         # FastAPI 后端服务
+├── backend/                       # FastAPI 后端
 │   ├── app/
-│   │   ├── main.py                  # FastAPI 入口
-│   │   ├── schemas.py               # Pydantic 模型定义
-│   │   ├── routers/                 # API 路由
-│   │   │   ├── tasks.py             # 任务管理
-│   │   │   ├── data.py              # 数据上传
-│   │   │   ├── providers.py         # Provider 管理（CC Switch 风格）
-│   │   │   ├── mcp.py               # MCP 服务器管理
-│   │   │   └── knowledge.py         # 知识库管理（RAG）
-│   │   ├── agents/                  # Agent 实现（Orchestrator + 7 个专用 Agent）
-│   │   │   └── base.py              # Agent 基类（含 LLM 调用 + KB 注入）
-│   │   ├── core/
-│   │   │   ├── provider_config.py   # Provider 配置（预设 + 自定义）
-│   │   │   ├── provider_models.py   # Provider 数据模型（CC Switch Schema）
-│   │   │   ├── runtime_config.py    # 运行时配置
-│   │   │   └── ...
-│   │   └── config.py                # 配置管理
-│   └── data/
-│       └── uploads/                 # 上传的数据文件存储
-│
-├── frontend/                        # Next.js 前端界面
-│   ├── src/app/
-│   │   ├── page.tsx                 # 主页面（Dashboard / Generate / Files / History / Settings）
-│   │   ├── layout.tsx               # 根布局
-│   │   └── components/              # 组件目录
-│   │       ├── StageProgress.tsx    # 四阶段流水线可视化
-│   │       ├── ProblemInput.tsx     # 赛题输入（OCR / 模板 / 工作流选择）
-│   │       ├── AgentChat.tsx        # Agent 实时讨论
-│   │       ├── SystemStatus.tsx     # 系统状态面板
-│   │       ├── TaskHistory.tsx      # 历史任务列表
-│   │       ├── TaskDetail.tsx       # 任务详情（含算法推荐、论文预览）
-│   │       ├── PaperPreview.tsx     # Markdown / LaTeX 论文预览
-│   │       ├── AlgorithmRecommend.tsx # 算法推荐展示
-│   │       ├── FileManager.tsx      # 数据文件管理
-│   │       ├── SettingsPage.tsx     # 设置页面（4 标签：Provider/MCP/知识库/系统）
-│   │       ├── ProviderSettings.tsx # CC Switch 风格 Provider 管理
-│   │       ├── McpManager.tsx       # MCP 服务器管理（支持 stdio/HTTP/SSE）
-│   │       └── KnowledgeBaseManager.tsx # 知识库文档管理 + 语义查询
-│   └── package.json
-│
-├── src/                             # 核心源码（CLI 与后端共用）
-│   ├── agent_workflow.py            # 统一工作流引擎 v2.3（核心）
-│   ├── framework.py                 # 模板驱动工作流（兼容层）
-│   ├── workflow/                    # 工作流模块
-│   │   ├── paper_generator.py       # 大纲驱动分段论文生成器
-│   │   ├── critique_engine.py       # Actor-Critic-Improvement 质量引擎
-│   │   ├── code_executor.py         # 代码生成 + 自动执行 + 结果读取
-│   │   ├── coordinator.py           # DAG 调度器 + 黑板内存
-│   │   ├── templates.py             # 论文模板定义（3 种模板）
-│   │   └── ...
-│   ├── agents/                      # Agent 管理系统（借鉴 Cherry Studio）
-│   │   ├── manager/                 # Agent 管理器、注册表、工厂
-│   │   ├── solver_agent.py          # 自修复求解 Agent
-│   │   └── ...
-│   ├── llm/                         # 多 LLM Provider 抽象层
-│   │   ├── base.py                  # Provider 基类
-│   │   ├── factory.py               # Provider 工厂
-│   │   └── providers/               # Anthropic/OpenAI/Gemini/Ollama/ClaudeCLI
-│   ├── knowledge/                   # 知识库与 RAG
-│   │   ├── algorithm_library.py     # 算法检索与推荐引擎
-│   │   ├── algorithm_index.json     # 算法知识库索引（15 类 / 67 文件）
-│   │   ├── knowledge_base.py        # RAG 知识库
-│   │   ├── embeddings.py            # 向量嵌入模型
-│   │   └── vector_store.py          # 向量存储与检索
-│   ├── mcp/                         # MCP 工具管理（借鉴 Cherry Studio）
-│   └── document_processing/         # 文档加载器（Excel/Markdown/PDF）
-│
-├── scripts/                         # 工具脚本
-│   ├── run_auto.py                  # 全自动扫描脚本（*USETHIS* 模式）
-│   ├── run_finance.py               # 金融分析扫描脚本（*func2* 模式）
-│   ├── run_coursework.py            # 课程作业扫描脚本（*func3* 模式）
-│   ├── build_algorithm_library.py   # 构建算法索引
-│   └── setup_kimi.py                # Kimi 环境配置
-│
-├── problems/                        # 赛题与数据（按赛题分目录）
-│   ├── 2024A-cn/                    # 2024A 示例赛题素材
-│   │   ├── A题.pdf                  # 原始赛题 PDF
-│   │   ├── page_1.png ~ page_3.png  # PDF 转图片
-│   │   └── 附件/                    # 数据文件
-│   ├── 2025A-Problem.md             # 2025A 赛题描述
-│   ├── 2025B/                       # 2025B 赛题素材
-│   │   ├── 2025B-Problem.md
-│   │   └── 附件1.xlsx ~ 附件4.xlsx
-│   └── 2026-guangzhouUSETHIS/       # 2026 广州赛题
-│
-├── outputs/                         # 运行输出（每次运行自动生成）
-│   ├── work_2024A_v2/               # 2024A 示例输出
-│   ├── work_2025B_v2/               # 2025B 输出 + .log
-│   ├── work_2026_guangzhou/         # 2026 广州初版
-│   ├── work_2026_guangzhou_v2/      # 2026 广州 v2（增强版）
-│   └── *.log                        # 运行日志
-│
+│   │   ├── agents/                # 所有 Agent 实现
+│   │   │   ├── base.py            # BaseAgent + AgentFactory + AgentModelRouter
+│   │   │   ├── orchestrator.py    # 两阶段主编排器
+│   │   │   ├── analyzer_agent.py
+│   │   │   ├── data_agent.py
+│   │   │   ├── research_agent.py
+│   │   │   ├── modeler_agent.py
+│   │   │   ├── solver_agent.py    # 含 CrossValidator 跨方法验证
+│   │   │   ├── writer_agent.py
+│   │   │   ├── peer_review_agent.py
+│   │   │   └── experimentation_agent.py
+│   │   ├── core/                  # 核心模块
+│   │   │   ├── memory.py          # 三级记忆系统
+│   │   │   ├── agent_model_map.py # AgentModelRouter
+│   │   │   ├── paper_templates/   # 论文模板注册表
+│   │   │   ├── chat_room.py
+│   │   │   ├── paths.py
+│   │   │   └── task_persistence.py
+│   │   ├── services/              # 服务层
+│   │   │   ├── result_validator.py  # ResultValidator + CrossValidator
+│   │   │   ├── camera_ready.py      # Camera-Ready 打包
+│   │   │   ├── knowledge.py
+│   │   │   └── code_manifest.py
+│   │   ├── mcp/                   # MCP 客户端
+│   │   ├── routers/               # FastAPI 路由
+│   │   ├── schemas/               # Pydantic 模型
+│   │   └── main.py                # FastAPI app
+│   ├── data/
+│   ├── tests/
+│   └── app.log
+├── frontend/                      # Next.js 14 Web UI
+│   └── src/app/
+│       ├── page.tsx               # 主页面（9 个 Tab）
+│       ├── components/            # 13+ 组件
+│       ├── hooks/                  # useTaskState 等
+│       └── store/                  # Zustand
+├── config/
+│   ├── latex_templates/           # LaTeX 样式文件
+│   └── mcp_config.json
+├── outputs/                       # 论文产出
+│   ├── agent_memory_paper_en/     # 英文 Memora 论文
+│   └── agent_memory_paper_zh/     # 中文 ACM 论文
+├── data/                          # 共享数据
+├── workspace/                     # 用户工作空间
+├── .env                           # Provider 密钥
+├── docker-compose.yml
+├── main.py                        # CLI 入口
+├── requirements.txt
+└── README.md
 ```
 
 ---
 
-## API 说明
+## ⚙️ 配置说明
 
-后端提供 RESTful API，所有接口前缀为 `/api/v1`。
-
-### 核心端点
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| `POST` | `/tasks/submit` | 提交任务 |
-| `GET`  | `/tasks/{id}/status` | 查询任务状态 |
-| `GET`  | `/tasks/{id}/stream` | SSE 实时进度流 |
-| `GET`  | `/tasks/{id}/result` | 获取任务结果 |
-| `GET`  | `/tasks/{id}/messages` | 获取 Agent 讨论消息 |
-| `POST` | `/tasks/{id}/pause` | 暂停任务 |
-| `POST` | `/tasks/{id}/resume` | 恢复任务 |
-| `POST` | `/tasks/export` | 导出结果到桌面 |
-| `POST` | `/data/upload` | 上传数据文件（支持 `?project_name=`） |
-| `GET`  | `/data/files` | 列出已上传文件（支持 `?project_name=`） |
-| `DELETE` | `/data/files/{name}` | 删除文件（支持 `?project_name=`） |
-| `GET`  | `/workflows` | 列出预定义工作流 |
-| `GET`  | `/info` | 系统信息（Provider 状态等） |
-| `POST` | `/settings` | 更新运行时设置 |
-
-### Provider 管理（CC Switch 风格）
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| `GET`  | `/providers/` | 列出所有 Provider（预设 + 自定义） |
-| `GET`  | `/providers/presets` | 获取所有内置预设（15+） |
-| `POST` | `/providers/import-preset` | 导入预设为自定义 Provider |
-| `POST` | `/providers/` | 创建自定义 Provider |
-| `GET`  | `/providers/models` | 获取所有可用模型 |
-| `GET`  | `/providers/{id}` | 获取单个 Provider |
-| `PUT`  | `/providers/{id}` | 更新自定义 Provider |
-| `DELETE` | `/providers/{id}` | 删除自定义 Provider |
-| `POST` | `/providers/{id}/default` | 设置默认 Provider |
-| `POST` | `/providers/{id}/test` | 测试 Provider 连接 |
-| `POST` | `/providers/{id}/models` | 添加模型到 Provider |
-| `DELETE` | `/providers/{id}/models/{name}` | 从 Provider 移除模型 |
-
-### MCP 管理
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| `GET`  | `/mcp/servers` | 列出所有 MCP 服务器 |
-| `POST` | `/mcp/servers` | 添加 MCP 服务器 |
-| `PUT`  | `/mcp/servers/{id}` | 更新 MCP 服务器 |
-| `DELETE` | `/mcp/servers/{id}` | 删除 MCP 服务器 |
-| `GET`  | `/mcp/tools` | 列出所有可用工具 |
-| `POST` | `/mcp/tools/call` | 调用 MCP 工具 |
-| `PATCH` | `/mcp/servers/{id}/apps` | 更新 per-app 启用状态 |
-| `GET`  | `/mcp/tags` | 获取所有标签 |
-| `POST` | `/mcp/discover` | 工具发现 |
-
-### 知识库管理
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| `GET`  | `/knowledge/` | 列出所有文档 |
-| `POST` | `/knowledge/documents` | 添加文档 |
-| `DELETE` | `/knowledge/documents/{id}` | 删除文档 |
-| `POST` | `/knowledge/query` | 语义查询（返回 top-k 结果） |
-| `POST` | `/knowledge/query/context` | 查询并格式化为 Agent 注入上下文 |
-| `GET`  | `/knowledge/stats` | 统计信息 |
-| `POST` | `/knowledge/save` | 保存到磁盘 |
-| `POST` | `/knowledge/load` | 从磁盘加载 |
-
-完整 API 文档启动后端后访问：`http://localhost:8000/docs`
-
----
-
-## 论文输出规格
-
-| 指标 | 规格 |
-|------|------|
-| **总字数** | 18000-25000 中文字符 |
-| **结构** | 摘要、问题重述、问题分析、模型假设、符号说明、模型建立、模型求解、结果分析、灵敏度分析、模型评价与改进、参考文献、附录 |
-| **公式** | LaTeX 格式，完整编号与推导 |
-| **图表** | 自动生成的对比图/饼图（300 DPI PNG/SVG）+ Markdown 表格 |
-| **代码** | Python 实现，附录或独立文件 |
-| **格式** | Markdown + LaTeX PDF（mcmthesis MCM/ICM 模板）+ Word（.docx） |
-
-### 交付物目录结构
-
-```
-work_<name>/
-├── final/
-│   ├── MathModeling_Paper.md          # 完整论文（Markdown）
-│   ├── MathModeling_Paper.tex         # LaTeX 源文件（mcmthesis MCM/ICM 模板）
-│   ├── mcmthesis.cls                  # MCM/ICM 模板类文件（自动复制）
-│   ├── MathModeling_Paper.pdf         # 排版后的 PDF（竞赛标准格式）
-│   ├── 数学建模论文.docx               # Word 格式论文（备用）
-│   ├── solution.json                  # 完整解决方案（含子任务结果）
-│   ├── memory_pool.json               # 显式记忆池（阶段摘要）
-│   └── chapter_summaries.json         # 各章结构化摘要
-├── memory/                            # 分层持久记忆系统
-│   ├── analyst/                       # 问题分析师独立记忆
-│   │   ├── mem_*.json
-│   │   └── summary.md
-│   ├── modeler/                       # 数学建模师独立记忆
-│   │   ├── mem_*.json
-│   │   └── summary.md
-│   ├── solver/                        # 求解工程师独立记忆
-│   │   ├── mem_*.json
-│   │   └── summary.md
-│   ├── writer/                        # 论文写作专家独立记忆
-│   │   ├── mem_*.json
-│   │   └── summary.md
-│   └── shared/                        # 共享记忆
-│       ├── analysis_summary.md
-│       ├── modeling_summary.md
-│       ├── results_summary.md
-│       ├── ideation_results.json      # AI-Scientist 风格创意研究视角
-│       └── memory_pool.json
-├── stage_1_analysis/                  # 问题分析结果
-├── stage_2_modeling/                  # 数学建模结果
-├── stage_3_algorithm/                 # 算法设计结果
-├── stage_4_coding/                    # 代码文件
-├── stage_5_execution/                 # 代码执行结果
-├── stage_6_result_analysis/           # 结果分析
-└── stage_7_charts/                    # 论文图表（PNG/SVG）
-```
-
----
-
-## 配置说明
-
-### 论文模板
-
-支持三种模板：
-
-| 模板 | 说明 | 章节数 |
-|------|------|--------|
-| `math_modeling` | 数学建模竞赛论文（MCM/ICM/高教社杯标准） | 12 |
-| `coursework` | 一般课程作业论文 | 8 |
-| `financial_analysis` | 金融数据分析与投资报告 | 10 |
-
-### 工作流模式
-
-| 模式 | 说明 |
-|------|------|
-| `standard` | 标准流程：研究 → 分析 → 建模 → 求解 → 论文 |
-| `quick` | 快速生成：跳过研究阶段 |
-| `deep_research` | 深度研究：强化资料搜集 |
-| `code_focused` | 代码优先：强化求解与调试 |
-
-### 可选环境变量
-
-| 变量 | 说明 | 默认值 |
-|------|------|--------|
-| `ANTHROPIC_API_KEY` | Anthropic API 密钥 | - |
-| `OPENAI_API_KEY` | OpenAI API 密钥 | - |
-| `GEMINI_API_KEY` | Google Gemini API 密钥 | - |
-| `OLLAMA_MODEL` | Ollama 本地模型名 | - |
-| `OLLAMA_HOST` | Ollama 服务地址 | `http://localhost:11434` |
-| `ANTHROPIC_BASE_URL` | Anthropic API 代理地址 | - |
-| `DEFAULT_LLM_PROVIDER` | 强制指定默认 Provider：`claude_cli`, `anthropic`, `openai`, `gemini`, `ollama` | 自动检测 |
-| `CREW_PROCESS_MODE` | Agent 协作模式：`sequential`, `hierarchical`, `consensus` | `sequential` |
-
----
-
-## 故障排除
-
-### LLM 调用超时或失败
-
-**现象**：`The read operation timed out` 或 `RuntimeError: LLM 调用失败`
-
-**解决**：
+### `.env`（必填项）
 ```bash
-# 检查是否配置了至少一个 API Key
-echo $ANTHROPIC_API_KEY
+# Provider 选一
+ANTHROPIC_API_KEY=sk-ant-...
+# 或
+OPENAI_API_KEY=sk-...
+# 或（Anthropic 兼容）
+ANTHROPIC_BASE_URL=https://api.kimi.com/coding/
+ANTHROPIC_AUTH_TOKEN=sk-kimi-...
 
-# 检查网络连接（如需代理，设置 ANTHROPIC_BASE_URL）
-# 使用 --no-critique 跳过质量评估循环以减少调用次数
-python main.py --auto --no-critique
-
-# 改用 Ollama 本地模型，完全离线运行
-export OLLAMA_MODEL="qwen2.5:14b"
-export OLLAMA_HOST="http://localhost:11434"
-python main.py --auto
+# 可选
+DEFAULT_MODEL=sonnet
+OUTPUT_DIR=./output
+DATABASE_URL=sqlite:///./data/agents.db
 ```
 
-### 代码执行失败
+### `config.yaml`
+```yaml
+app:
+  host: 0.0.0.0
+  port: 8000
+  debug: false
 
-**现象**：`success=False` 或 `results.json` 为空
+memory:
+  working_memory_max_size: 50
+  episodic_retention_days: 30
+  lessons_relevance_threshold: 0.6
 
-**解决**：
-```bash
-# 系统已内置自动修复循环（最多 4 次尝试）
-# 手动检查代码逻辑
-cat work_<name>/execution/solve.py
-
-# 手动运行调试
-cd work_<name>/execution && python solve.py
-
-# 检查是否缺少依赖
-pip install numpy pandas scipy matplotlib openpyxl
-```
-
-### LaTeX 编译失败
-
-**现象**：`xelatex` 报错或缺少字体
-
-**解决**：
-```bash
-# 安装完整 TeX Live
-sudo apt install texlive-xetex texlive-lang-chinese texlive-fonts-extra
-
-# 或安装简化版后手动安装缺失包
-# 系统会自动将 SimSun 替换为 Noto Serif CJK SC（Linux 可用字体）
-```
-
-### 论文字数不足
-
-**现象**：某章字数远低于目标
-
-**解决**：
-- 系统会自动触发扩展机制（调用 LLM 增加推导和分析）
-- 检查赛题文件是否包含足够的信息和约束条件
-- 检查数据文件是否有效且被正确读取
-
-### 前端无法连接后端
-
-**现象**：Web UI 显示"无法连接到后端"
-
-**解决**：
-```bash
-# 确认后端已启动
-curl http://localhost:8000/health
-
-# 检查浏览器控制台网络请求是否被 CORS 拦截
-# 前端通过 window.__API_BASE__ 自动推断后端地址，确保前后端在同一域名或正确配置跨域
+routing:
+  default_provider: kimi
+  cc_switch:
+    - openai
+    - anthropic
+    - bailian
 ```
 
 ---
 
-## 版本历史
+## 🔧 故障排除
 
-| 版本 | 日期 | 主要更新 |
-|------|------|----------|
-| **v2.6** | 2026-05-13 | **项目隔离版**：支持按 `project_name` 隔离数据文件与输出目录（Web UI 项目选择器 + 项目感知数据端点）；SolverAgent 输出目录跟随项目；前后端完整兼容无项目时的全局回退行为 |
-| **v2.5** | 2026-05-12 | **CC Switch 集成版**：CC Switch 风格 Provider 管理系统（15+ 预设、5 大分类、5 种 API 格式、一键导入预设）；MCP 系统增强（stdio/SSE/StreamableHttp 传输类型、标签分类、per-app 启用、禁用工具）；知识库 RESTful API（文档 CRUD、TF-IDF 语义检索、Agent 自动注入上下文）；Settings 页面 4 标签重构（Provider/MCP/知识库/系统设置）；69/69 全量测试通过 |
-| **v2.4** | 2026-05-11 | **智能增强版**：Algorithm/Coding 智能体默认使用 Claude Code CLI 生成；GMemory 风格的分层持久记忆系统（每个 Agent 独立记忆库 + 共享记忆）；AI-Scientist v2 风格创意研究视角生成（问题分析前生成 5 个不同研究角度）；5 步图表流水线修复（规划→验证→生成→重试→模板保底），100% 保证图表产出 |
-| **v2.3** | 2026-05-09 | **通用化重构**：LLM 驱动的通用图表引擎（ChartDesigner）自动分析结果数据并生成图表，自动插入论文对应章节；修复 LaTeX 多行公式（`\begin{equation}` 等跨行环境）渲染问题；删除所有题目特定的硬编码图表逻辑，系统完全通用；CrewAI Agent 协作默认启用 SEQUENTIAL 模式，支持 `CREW_PROCESS_MODE` 环境变量切换；新增 `run_auto.py` / `run_finance.py` / `run_coursework.py` 三种自动扫描脚本 |
-| **v2.2** | 2026-05-08 | crewAI Agent 协作架构 + 通用图表引擎雏形 + LaTeX/MCM 模板集成 + 前端 Next.js 重构 |
-| **v2.0** | 2026-04-29 | 统一工作流引擎 + Critique-Improvement + 代码自动执行 + Word 导出 |
-| **v1.0** | 2026-04-25 | 初始多 Agent 协作框架 |
+### 后端启动失败
+- **缺包**：`pip install -r requirements.txt`
+- **端口占用**：改 `--port 8001`
+- **`.env` 缺失**：从 `.env.example` 复制
+
+### Provider 调用失败
+- `curl http://localhost:8000/api/v1/providers/{id}/test` 测试连通性
+- 查看 `backend/app.log` 或 `uvicorn.log`
+
+### 论文卡在 `solver_agent`
+- SolverAgent 调 LLM 写代码 → 沙箱执行 → retry。失败 3 次会 fallback 到 demo 模板。
+- 复杂问题可改 `--mode sequential` 逐题递进。
+
+### Camera-Ready 提示 `main.tex not found`
+- WriterAgent 的 latex_code 字段已含完整 LaTeX，但 orchestrator 默认不会把它写到磁盘。
+- Workaround：用 `POST /api/v1/tasks/{id}/result` 拿 `output.writer_agent.latex_code` → 写到 `output/main.tex` → 再调 camera-ready。
+- 或手动打 zip：`cd outputs/.../output && xelatex main.tex && zip camera_ready_paper_xx.zip main.tex code/ figures/ solves.json models.json`
+
+### LaTeX 中文乱码
+- 确保系统装了 Noto CJK 字体（`apt install fonts-noto-cjk`）
+- 编译命令：`xelatex -interaction=nonstopmode main.tex`
 
 ---
 
-## 许可证
+## 📜 版本历史
 
-MIT License
+### v3.0（2026-06）— 当前
+- **Phase 7** AgentModelRouter + CrossValidator
+- **Phase 6** Camera-Ready + useTaskState hook + TaskStatusBadge
+- **Phase 5** PDF 双轨统一 + PaperMetadata LRU 缓存
+- **Phase 4** 可插拔 Reranker + LessonsMemory use_count 闭环
+- **Phase 3** 实验设计 Agent + PeerReview 4 维评分
+- **Phase 2** 8 数学建模模板 + 拆文件编程 + 同行评议 + Camera-Ready
+- **Phase 1** 14 个 git commit 落地的通用论文产线
+
+### 历史版本
+- v2.6 — CC Switch 风格 Provider 管理 + MCP 增强
+- v2.0 — CrewAI 风格多 Agent 架构
+- v1.0 — 数学建模单题 CLI
+
+---
+
+## 📝 引用
+
+如使用本系统产出学术论文，请引用本仓库：
+
+```bibtex
+@misc{memm2026,
+  title={A Multi-Agent System for Automated CCF-A Paper Generation with Real Code Execution and Cross-Method Validation},
+  author={Anonymous Authors},
+  year={2026},
+  howpublished={\url{https://github.com/your-org/MathModel-MutiAgentSystem}}
+}
+```
+
+---
+
+## 📄 许可证
+
+本项目仅供学术研究与教学使用。产出的论文请遵守目标期刊/会议的投稿规范与作者署名要求。
