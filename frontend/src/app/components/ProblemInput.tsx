@@ -30,6 +30,9 @@ interface ProblemInputProps {
     mode: string;
     useCritique: boolean;
     knowledgeBaseId: string | null;
+    dataSource: 'upload' | 'self_collect' | 'upload_and_collect';
+    problemType: string;
+    dataFiles: string[];
   }) => void;
   submitting: boolean;
   taskStatus: string;
@@ -45,11 +48,14 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
   const loadProjects = useAppStore((s) => s.loadProjects);
 
   const activeProject = projects.find((p) => p.id === activeProjectId);
+  const selectedFiles = useAppStore((s) => s.selectedFiles);
   const [projectName, setProjectName] = useState(activeProject?.name || '');
   const [problemText, setProblemText] = useState('');
   const [workflow, setWorkflow] = useState('standard');
   const [template, setTemplate] = useState('math_modeling');
   const [mode, setMode] = useState('sequential');
+  const [dataSource, setDataSource] = useState<'upload' | 'self_collect' | 'upload_and_collect'>('upload');
+  const [problemType, setProblemType] = useState('未知');
   const [useCritique, setUseCritique] = useState(true);
   const [ocrLoading, setOcrLoading] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
@@ -101,7 +107,19 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
   const handleSubmit = () => {
     if (!problemText.trim()) { alert('请输入问题描述'); return; }
     const finalProjectName = projectName.trim() || activeProject?.name || '未命名项目';
-    onSubmit({ problemText, projectName: finalProjectName, workflow, template, mode, useCritique, knowledgeBaseId });
+    const dataFiles = selectedFiles.size > 0 ? Array.from(selectedFiles) : [];
+    onSubmit({
+      problemText,
+      projectName: finalProjectName,
+      workflow,
+      template,
+      mode,
+      useCritique,
+      knowledgeBaseId,
+      dataSource,
+      problemType,
+      dataFiles,
+    });
   };
 
   const isRunning = taskStatus === 'running' || taskStatus === 'phase1' || taskStatus === 'phase2';
@@ -196,6 +214,46 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
           onChange={e => setProblemText(e.target.value)}
           rows={10}
         />
+
+        <div style={{ marginTop: '0.8rem', display: 'grid', gap: '0.6rem', gridTemplateColumns: '1fr 1fr' }}>
+          <div>
+            <div className={styles.optionLabel}>问题类型</div>
+            <select
+              style={{ width: '100%', padding: '0.5rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: '#e0e0e0', fontSize: '0.9rem' }}
+              value={problemType}
+              onChange={e => setProblemType(e.target.value)}
+            >
+              <option value="未知">未知 / 自动判断</option>
+              <option value="优化">优化</option>
+              <option value="预测">预测</option>
+              <option value="评价">评价</option>
+              <option value="分类">分类</option>
+              <option value="仿真">仿真</option>
+              <option value="网络">网络</option>
+              <option value="物理">物理</option>
+              <option value="测量">测量</option>
+              <option value="综合">综合</option>
+            </select>
+          </div>
+          <div>
+            <div className={styles.optionLabel}>数据来源</div>
+            <select
+              style={{ width: '100%', padding: '0.5rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: '#e0e0e0', fontSize: '0.9rem' }}
+              value={dataSource}
+              onChange={e => setDataSource(e.target.value as any)}
+            >
+              <option value="upload">我会上传数据</option>
+              <option value="self_collect">无数据，让系统自己搜集</option>
+              <option value="upload_and_collect">我上传数据，系统再补全</option>
+            </select>
+          </div>
+        </div>
+
+        {dataSource !== 'self_collect' && (
+          <div style={{ marginTop: '0.5rem', color: '#aaa', fontSize: '0.8rem' }}>
+            已勾选 {selectedFiles.size} 个数据文件（请到「数据」标签上传并勾选）
+          </div>
+        )}
       </div>
 
       <div className={styles.section}>

@@ -13,8 +13,21 @@ import tempfile
 from .demo_code_templates import DEMO_CODE_TEMPLATES, DEMO_KEYWORD_TO_TEMPLATE
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TypedDict
 import httpx
+
+
+class ToolDef(TypedDict):
+    name: str
+    description: str
+    parameters: Dict[str, Any]
+
+
+class ToolCall(TypedDict):
+    id: Optional[str]
+    name: str
+    arguments: Dict[str, Any]
+
 
 logger = logging.getLogger(__name__)
 
@@ -764,32 +777,54 @@ class BaseAgent(ABC):
 
     async def _call_anthropic(
         self,
-        messages: List[Dict[str, str]],
+        messages: List[Dict[str, Any]],
         temperature: Optional[float],
+        tools: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
-        """调用 Anthropic Messages API，支持多种认证方式"""
-        # 根据 auth_field 选择认证头
+        """调用 Anthropic Messages API，支持多种认证方式，可选 tools。"""
         if self._provider_auth_field == "anthropic_auth_token":
-            # 阿里云 TokenPlan / Kimi Coding: Authorization Bearer + anthropic-version
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
                 "anthropic-version": "2023-06-01",
                 "content-type": "application/json",
             }
         else:
-            # 标准 Anthropic: x-api-key
             headers = {
                 "x-api-key": self.api_key,
                 "anthropic-version": "2023-06-01",
                 "content-type": "application/json",
             }
-        payload = {
+        payload: Dict[str, Any] = {
             "model": self.model,
             "max_tokens": self.effective_max_tokens,
             "temperature": temperature if temperature is not None else self.temperature,
             "messages": messages,
         }
+        if tools:
+            payload["tools"] = tools
+
         timeout = 300.0 if self.effective_max_tokens > 8192 else 120.0
+
+        def _normalize(data: Dict[str, Any]) -> Dict[str, Any]:
+            content_text = ""
+            tool_calls = []
+            for c in data.get("content", []):
+                if c.get("type") == "text":
+                    content_text += c.get("text", "")
+                elif c.get("type") == "tool_use":
+                    tool_calls.append({
+                        "id": c.get("id"),
+                        "type": "function",
+                        "function": {
+                            "name": c.get("name", ""),
+                            "arguments": json.dumps(c.get("input", {})),
+                        },
+                    })
+            msg: Dict[str, Any] = {"role": "assistant", "content": content_text}
+            if tool_calls:
+                msg["tool_calls"] = tool_calls
+            return {"choices": [{"message": msg}]}
+
         try:
             body_bytes = json.dumps(payload, ensure_ascii=False).encode("utf-8")
             async with httpx.AsyncClient(timeout=timeout) as client:
@@ -801,11 +836,7 @@ class BaseAgent(ABC):
                 response.raise_for_status()
                 text = response.content.decode("utf-8")
                 data = json.loads(text)
-                content_text = ""
-                for c in data.get("content", []):
-                    if c.get("type") == "text":
-                        content_text += c["text"]
-                return {"choices": [{"message": {"role": "assistant", "content": content_text}}]}
+                return _normalize(data)
         except httpx.ReadTimeout:
             logger.warning(f"[{self.name}] Anthropic ReadTimeout, retrying...")
             try:
@@ -818,11 +849,7 @@ class BaseAgent(ABC):
                     response.raise_for_status()
                     text = response.content.decode("utf-8")
                     data = json.loads(text)
-                    content_text = ""
-                    for c in data.get("content", []):
-                        if c.get("type") == "text":
-                            content_text += c["text"]
-                    return {"choices": [{"message": {"role": "assistant", "content": content_text}}]}
+                    return _normalize(data)
             except Exception as e2:
                 logger.error(f"[{self.name}] Anthropic retry failed: {e2}")
                 self._call_context["error"] = str(e2)
@@ -839,15 +866,20 @@ class BaseAgent(ABC):
 
     async def call_llm(
         self,
-        messages: List[Dict[str, str]],
+        messages: List[Dict[str, Any]],
         stream: bool = False,
         temperature: Optional[float] = None,
         context: Optional[Dict[str, Any]] = None,
+        tools: Optional[List[ToolDef]] = None,
+        max_react_iterations: int = 5,
     ) -> Dict[str, Any]:
-        """调用LLM API，支持 OpenAI / Anthropic / Claude CLI 格式"""
+        """调用 LLM API，支持 OpenAI / Anthropic / Claude CLI 格式。
+
+        新增 Phase 2：支持 ReAct 工具循环。传入 tools 时，LLM 会在
+        Thought-Action-Observation 循环中反复调用工具，直到给出最终答案
+        或达到 max_react_iterations。
+        """
         # ===== Phase 7 (A2): AgentModelRouter 路由生效 =====
-        # 若 context 传了 template_id，按 (self.name, template_id) 推导 model
-        # 并覆盖 self.model。仅当用户没在 __init__ 显式指定 model 时生效。
         if context and "template" in context and not self._model_explicitly_set:
             try:
                 from ..core.agent_model_map import get_agent_model_router
@@ -864,14 +896,20 @@ class BaseAgent(ABC):
             except Exception as exc:  # noqa: BLE001
                 logger.debug(f"AgentModelRouter unavailable: {exc}")
 
-        self._call_context = {"messages": messages, "temperature": temperature}
+        self._call_context = {
+            "messages": messages,
+            "temperature": temperature,
+            "tools": [t["name"] for t in tools] if tools else [],
+        }
 
-        # ===== Claude Code 后端 =====
+        # ===== Claude Code 后端（暂不支持 ReAct tools）=====
         if self.llm_backend == "claude":
+            if tools:
+                logger.warning(f"[{self.name}] Claude CLI 后端暂不支持 ReAct tools，忽略 tools")
             return await self._call_claude_backend(messages, temperature)
 
         # ===== 注入知识库上下文 =====
-        last_content = messages[-1]["content"]
+        last_content = messages[-1].get("content", "")
         query_text = last_content if isinstance(last_content, str) else ""
         kb_context = self._inject_knowledge_context(query_text)
         if kb_context:
@@ -899,30 +937,56 @@ class BaseAgent(ABC):
             logger.warning(f"[{self.name}] No API key, returning demo response")
             return self._mock_response(messages)
 
-        # 检测 API 格式（从 provider 元数据或 llm_backend 推断）
+        # ===== ReAct 工具循环 =====
+        if tools:
+            return await self._react_loop(
+                messages=list(messages),
+                tools=tools,
+                temperature=temperature,
+                max_iterations=max_react_iterations,
+            )
+
+        return await self._call_llm_once(messages, temperature)
+
+    async def _call_llm_once(
+        self,
+        messages: List[Dict[str, Any]],
+        temperature: Optional[float] = None,
+        tools: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
+        """单次 LLM 调用（含可选 tools 字段）。"""
         api_format = self._get_api_format()
 
-        # ===== Anthropic Messages 格式 =====
         if api_format == "anthropic":
-            return await self._call_anthropic(messages, temperature)
+            return await self._call_anthropic(messages, temperature, tools=tools)
 
-        # ===== OpenAI Chat Completions 格式（默认） =====
+        # 默认 OpenAI Chat Completions（兼容 openai_chat / openai_responses / ollama_chat）
+        if api_format not in ("openai_chat", "openai_responses", "ollama_chat", "gemini_native"):
+            logger.warning(f"[{self.name}] 未知 api_format={api_format}，回退到 openai_chat")
+
+        if api_format == "gemini_native":
+            # Gemini 原生格式暂不支持 tools，先不带 tools 调用
+            if tools:
+                logger.warning(f"[{self.name}] gemini_native 工具适配未实现，忽略 tools")
+            tools = None
+
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json; charset=utf-8",
         }
-        payload = {
+        payload: Dict[str, Any] = {
             "model": self.model,
             "messages": messages,
             "temperature": temperature if temperature is not None else self.temperature,
             "max_tokens": self.effective_max_tokens,
         }
+        if tools:
+            payload["tools"] = tools
+            payload["tool_choice"] = "auto"
 
-        # 动态超时：modeler/writer需要更长时间
         timeout = 300.0 if self.effective_max_tokens > 8192 else 120.0
 
         try:
-            # 显式使用UTF-8编码，避免Windows默认ASCII问题
             body_bytes = json.dumps(payload, ensure_ascii=False).encode("utf-8")
             async with httpx.AsyncClient(timeout=timeout) as client:
                 response = await client.post(
@@ -931,7 +995,6 @@ class BaseAgent(ABC):
                     content=body_bytes,
                 )
                 response.raise_for_status()
-                # 强制使用UTF-8解码响应
                 text = response.content.decode("utf-8")
                 return json.loads(text)
         except httpx.ReadTimeout:
@@ -952,7 +1015,6 @@ class BaseAgent(ABC):
                 self._call_context["error"] = str(e2)
                 return self._mock_response(messages)
         except (httpx.RemoteProtocolError, httpx.PoolTimeout, OSError) as e:
-            # 服务器意外断开 / 连接池超时 / 网络错误：重试一次
             logger.warning(f"[{self.name}] Connection error: {e}, retrying once...")
             try:
                 body_bytes = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -981,6 +1043,255 @@ class BaseAgent(ABC):
             logger.error(f"[{self.name}] LLM call failed: {e}")
             self._call_context["error"] = str(e)
             return self._mock_response(messages)
+
+    async def _react_loop(
+        self,
+        messages: List[Dict[str, Any]],
+        tools: List[ToolDef],
+        temperature: Optional[float],
+        max_iterations: int,
+    ) -> Dict[str, Any]:
+        """ReAct Thought-Action-Observation 循环。"""
+        api_format = self._get_api_format()
+        tools_payload = self._build_tools_payload(tools, api_format)
+
+        last_response: Optional[Dict[str, Any]] = None
+        for iteration in range(max_iterations):
+            response = await self._call_llm_once(messages, temperature, tools=tools_payload)
+            last_response = response
+            tool_calls = self._parse_tool_calls(response, api_format)
+            if not tool_calls:
+                # LLM 已给出最终答案
+                return response
+
+            # 构造 assistant message（包含 tool_calls）
+            assistant_msg = self._extract_assistant_message(response, api_format)
+            assistant_with_tools = self._inject_tool_calls(assistant_msg, tool_calls, api_format)
+            messages.append(assistant_with_tools)
+
+            # 执行工具并追加 observation messages
+            for tc in tool_calls:
+                observation = await self._execute_tool_call(tc)
+                messages.append(self._build_tool_result_message(tc, observation, api_format))
+
+            logger.info(f"[{self.name}] ReAct iteration {iteration + 1}/{max_iterations}: executed {len(tool_calls)} tool(s)")
+
+        logger.warning(f"[{self.name}] ReAct 达到最大迭代次数 {max_iterations}，返回最后一次响应")
+        return last_response or self._mock_response(messages)
+
+    def _build_tools_payload(self, tools: List[ToolDef], api_format: str) -> List[Dict[str, Any]]:
+        """把统一 ToolDef 转成不同 provider 的 tools 格式。"""
+        if api_format == "anthropic":
+            return [
+                {
+                    "name": t["name"],
+                    "description": t["description"],
+                    "input_schema": t["parameters"],
+                }
+                for t in tools
+            ]
+        # OpenAI / Ollama 通用格式
+        return [
+            {
+                "type": "function",
+                "function": {
+                    "name": t["name"],
+                    "description": t["description"],
+                    "parameters": t["parameters"],
+                },
+            }
+            for t in tools
+        ]
+
+    def _parse_tool_calls(self, response: Dict[str, Any], api_format: str) -> List[ToolCall]:
+        """从 LLM 响应中解析 tool_calls。"""
+        tool_calls: List[ToolCall] = []
+        try:
+            if api_format == "anthropic":
+                msg = response["choices"][0]["message"]
+                for tc in msg.get("tool_calls", []):
+                    tool_calls.append({
+                        "id": tc.get("id"),
+                        "name": tc["function"]["name"],
+                        "arguments": json.loads(tc["function"].get("arguments", "{}")),
+                    })
+            else:
+                msg = response["choices"][0]["message"]
+                for tc in msg.get("tool_calls", []):
+                    args = tc.get("function", {}).get("arguments", "{}")
+                    if isinstance(args, str):
+                        args = json.loads(args)
+                    tool_calls.append({
+                        "id": tc.get("id"),
+                        "name": tc["function"]["name"],
+                        "arguments": args,
+                    })
+        except Exception as e:
+            logger.debug(f"[{self.name}] 未解析到 tool_calls: {e}")
+        return tool_calls
+
+    def _extract_assistant_message(self, response: Dict[str, Any], api_format: str) -> Dict[str, Any]:
+        """从响应中提取 assistant message（不含 tool_calls）。"""
+        try:
+            msg = response["choices"][0]["message"]
+            return {"role": "assistant", "content": msg.get("content", "")}
+        except Exception:
+            return {"role": "assistant", "content": ""}
+
+    def _inject_tool_calls(
+        self,
+        assistant_msg: Dict[str, Any],
+        tool_calls: List[ToolCall],
+        api_format: str,
+    ) -> Dict[str, Any]:
+        """把 tool_calls 注入 assistant message。"""
+        if api_format == "anthropic":
+            # Anthropic 期望 content 是 list，包含 text 和 tool_use
+            content: List[Dict[str, Any]] = []
+            if assistant_msg.get("content"):
+                content.append({"type": "text", "text": str(assistant_msg["content"])})
+            for tc in tool_calls:
+                content.append({
+                    "type": "tool_use",
+                    "id": tc.get("id") or f"toolu_{tc['name']}",
+                    "name": tc["name"],
+                    "input": tc["arguments"],
+                })
+            return {"role": "assistant", "content": content}
+        # OpenAI 格式
+        assistant_msg["tool_calls"] = [
+            {
+                "id": tc.get("id") or f"call_{tc['name']}_{i}",
+                "type": "function",
+                "function": {
+                    "name": tc["name"],
+                    "arguments": json.dumps(tc["arguments"], ensure_ascii=False),
+                },
+            }
+            for i, tc in enumerate(tool_calls)
+        ]
+        return assistant_msg
+
+    def _build_tool_result_message(
+        self,
+        tool_call: ToolCall,
+        observation: str,
+        api_format: str,
+    ) -> Dict[str, Any]:
+        """构造 tool 执行结果 message。"""
+        tool_id = tool_call.get("id") or f"tool_{tool_call['name']}"
+        if api_format == "anthropic":
+            return {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": tool_id,
+                        "content": observation,
+                    }
+                ],
+            }
+        return {
+            "role": "tool",
+            "tool_call_id": tool_id,
+            "name": tool_call["name"],
+            "content": observation,
+        }
+
+    async def _execute_tool_call(self, tool_call: ToolCall) -> str:
+        """执行本地工具调用并返回 observation。"""
+        name = tool_call["name"]
+        args = tool_call.get("arguments", {})
+        logger.info(f"[{self.name}] Executing tool: {name}({args})")
+
+        try:
+            if name == "read_csv_columns":
+                return await self._tool_read_csv_columns(args.get("file_path", ""))
+            if name == "run_python":
+                return await self._tool_run_python(args.get("code", ""))
+            if name == "write_python_snippet":
+                return await self._tool_write_python_snippet(
+                    args.get("code", ""), args.get("path", "")
+                )
+            if name == "search_web":
+                return await self._tool_search_web(args.get("query", ""))
+            if name == "read_paper":
+                return await self._tool_read_paper(args.get("paper_id", ""))
+        except Exception as e:
+            logger.warning(f"[{self.name}] Tool {name} failed: {e}")
+            return f"Error executing tool {name}: {e}"
+
+        return f"Tool '{name}' is not implemented."
+
+    async def _tool_read_csv_columns(self, file_path: str) -> str:
+        from ..services.data_schema import get_schema_extractor
+        schema = get_schema_extractor().extract(file_path)
+        if not schema:
+            return f"Failed to read {file_path}"
+        cols = [c["name"] for c in schema.get("columns", [])]
+        return f"Columns: {', '.join(cols)}"
+
+    async def _tool_run_python(self, code: str) -> str:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
+            f.write(code)
+            f.flush()
+            path = f.name
+        try:
+            proc = subprocess.run(
+                [sys.executable, "-X", "utf8", path],
+                capture_output=True, text=True, timeout=30
+            )
+            out = f"stdout: {proc.stdout[:2000]}"
+            if proc.stderr:
+                out += f"\nstderr: {proc.stderr[:1000]}"
+            return out
+        finally:
+            try:
+                os.unlink(path)
+            except Exception:
+                pass
+
+    async def _tool_write_python_snippet(self, code: str, path: str) -> str:
+        try:
+            target = Path(path)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(code, encoding="utf-8")
+            return f"Written {len(code)} characters to {path}"
+        except Exception as e:
+            return f"Failed to write {path}: {e}"
+
+    async def _tool_search_web(self, query: str) -> str:
+        """调用 research_agent 的搜索能力（若可用）。"""
+        # 尝试从 orchestrator 的 agents 字典获取 research_agent
+        # 由于 BaseAgent 不直接持有 agents dict，走延迟导入
+        try:
+            from ..routers.tasks import get_orchestrator
+            orch = get_orchestrator()
+            agent = orch.agents.get("research_agent")
+            if agent:
+                result = await agent.execute(
+                    task_input={"action": "search", "query": query},
+                    context={},
+                )
+                papers = result.get("papers", [])[:3]
+                if papers:
+                    summaries = []
+                    for p in papers:
+                        title = p.get("title", "")
+                        abstract = (p.get("abstract", "") or "")[:200]
+                        summaries.append(f"- {title}: {abstract}")
+                    return "\n".join(summaries) if summaries else "No results found."
+                return "No results found."
+        except Exception as exc:
+            logger.debug(f"_tool_search_web fallback: {exc}")
+        return (
+            f"Web search for '{query}' is not available. "
+            "Please upload data directly or use research_agent."
+        )
+
+    async def _tool_read_paper(self, paper_id: str) -> str:
+        # Phase 2 MVP：读取论文功能待接入 paper_metadata 服务
+        return f"Read paper {paper_id}: not yet implemented in Phase 2."
 
     async def _call_claude_backend(
         self,

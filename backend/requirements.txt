@@ -36,3 +36,7 @@ openpyxl>=3.1.0
 # 测试
 pytest>=7.4.0
 pytest-asyncio>=0.23.0
+
+# 工作流编排（LangGraph）
+langgraph>=0.2.0,<0.3.0
+langchain-core>=0.3.0

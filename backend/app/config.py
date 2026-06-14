@@ -76,6 +76,11 @@ class Settings(BaseSettings):
     # ===== 学术元数据增强配置 =====
     semantic_scholar_api_key: str = ""
 
+    # ===== LangGraph + ReAct + 自主迭代求解 功能开关 =====
+    use_langgraph_orchestrator: bool = False
+    use_react_tools: bool = True
+    use_iterative_solver: bool = False
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

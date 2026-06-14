@@ -23,6 +23,13 @@ from ..core.chat_room import get_chat_room
 from ..core.runtime_config import get_runtime_api_key
 from ..core.paths import get_data_dir, get_project_data_dir, get_project_output_dir
 from ..services.learning import add_lessons_from_task
+from ..services.preflight import (
+    get_preflight_service,
+    PreflightReport,
+    DataMismatchError,
+    DataCollectionFailedError,
+    DataAdequacy,
+)
 from ..core.task_persistence import (
     save_task_metadata, save_task_messages, save_task_result,
     load_task_messages, load_task_result, list_all_tasks,
@@ -154,12 +161,11 @@ def get_uploaded_files(selected_names: Optional[List[str]] = None, project_name:
 async def submit_task(req: TaskCreateRequest):
     task_id = "task_" + uuid4().hex[:12]
     created_at = datetime.now().isoformat()
-    orch = get_orchestrator()
-    orch.task_history[task_id] = []
 
-    # 提取模板和工作流参数
-    template = (req.options or {}).get("template", "math_modeling")
-    workflow_type = (req.options or {}).get("workflow", "standard")
+    # 提取模板和工作流参数（用户显式选择优先）
+    template = (req.options or {}).get("template")
+    workflow_type = (req.options or {}).get("workflow")
+    mode = req.mode
 
     # 如果指定了项目名，确保项目存在并同步
     project_name = req.project_name
@@ -169,27 +175,144 @@ async def submit_task(req: TaskCreateRequest):
             create_project(name=project_name)
         add_task_to_project(project_name, task_id)
 
-    # 持久化：保存任务元数据
+    # 1. 保存初始预检状态
     save_task_metadata(
         task_id=task_id,
         problem_text=req.problem_text,
-        status="running",
+        status=TaskStatus.PREFLIGHT_RUNNING,
         created_at=created_at,
         total_steps=0,
         progress=0,
-        current_step="等待启动",
+        current_step="preflight 决策中",
     )
 
-    # 收集已上传的数据文件（若前端传了 data_files 则按勾选过滤）
+    # 2. 收集已上传的数据文件
     selected_names = req.data_files
     data_files = get_uploaded_files(selected_names=selected_names, project_name=project_name)
     logger.info(f"Task {task_id}: found {len(data_files)} data files (selected={len(selected_names) if selected_names else 'all'}, project={project_name})")
 
-    # 保存数据文件列表到任务元数据，供 phase1/phase2 复用
+    # 3. Preflight 决策
+    preflight_service = get_preflight_service()
+    try:
+        preflight_report = await preflight_service.decide(
+            problem_text=req.problem_text,
+            data_files=data_files,
+            template=template,
+            workflow_type=workflow_type,
+            mode=mode,
+            project_name=project_name,
+        )
+    except Exception as e:
+        logger.error(f"Task {task_id}: preflight 决策失败: {e}")
+        save_task_metadata(
+            task_id=task_id,
+            problem_text=req.problem_text,
+            status=TaskStatus.FAILED,
+            created_at=created_at,
+            completed_at=datetime.now().isoformat(),
+            error=f"preflight 决策失败: {e}",
+            data_files=data_files,
+            project_name=project_name,
+        )
+        raise HTTPException(status_code=500, detail=f"preflight 决策失败: {e}")
+
+    # 4. 数据不匹配 → 立即 422
+    if preflight_report.data_mismatch_warning:
+        logger.warning(f"Task {task_id}: 数据不匹配 - {preflight_report.data_mismatch_warning}")
+        save_task_metadata(
+            task_id=task_id,
+            problem_text=req.problem_text,
+            status=TaskStatus.CANNOT_SOLVE,
+            created_at=created_at,
+            completed_at=datetime.now().isoformat(),
+            error=preflight_report.data_mismatch_warning,
+            preflight_report=preflight_report.to_dict(),
+            data_schemas=preflight_report.data_schemas,
+            auto_decision_path="data_mismatch",
+            data_files=data_files,
+            project_name=project_name,
+        )
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "数据与题目不匹配",
+                "preflight_report": preflight_report.to_dict(),
+            },
+        )
+
+    # 5. 无数据或数据不足 → 尝试自主搜集（用户允许时）
+    allow_self_collect = req.data_source in ("self_collect", "upload_and_collect")
+    if preflight_report.data_adequacy == DataAdequacy.MISSING and allow_self_collect:
+        save_task_metadata(
+            task_id=task_id,
+            problem_text=req.problem_text,
+            status=TaskStatus.SELF_COLLECTING_DATA,
+            created_at=created_at,
+            total_steps=0,
+            progress=0,
+            current_step="自主搜集数据中",
+            preflight_report=preflight_report.to_dict(),
+            data_schemas=preflight_report.data_schemas,
+            auto_decision_path="llm_collected",
+            data_files=data_files,
+            project_name=project_name,
+        )
+
+        orch = get_orchestrator()
+        research_agent = orch.agents.get("research_agent")
+        if research_agent and preflight_report.collection_plan:
+            try:
+                success, collected = await preflight_service.self_collect_data(
+                    collection_plan=preflight_report.collection_plan,
+                    search_fn=lambda q: research_agent.execute(
+                        task_input={"action": "search", "query": q},
+                        context={},
+                    ),
+                    task_id=task_id,
+                    project_name=project_name,
+                )
+                if success:
+                    # 重新 preflight（包含新搜集到的 URL 列表）
+                    # 当前 self_collect 只保存 URL，未真正下载，因此仍视为 missing
+                    # 后续 Phase 2 工具层实现下载后可在此重新决策
+                    logger.info(f"Task {task_id}: 自主搜集到候选数据 {len(collected)} 条")
+            except Exception as e:
+                logger.warning(f"Task {task_id}: 自主搜集数据异常: {e}")
+
+    # 6. 仍然缺失数据 → 422 要求上传
+    if preflight_report.data_adequacy == DataAdequacy.MISSING and not data_files:
+        logger.warning(f"Task {task_id}: 无数据且无法自主搜集，要求用户上传")
+        save_task_metadata(
+            task_id=task_id,
+            problem_text=req.problem_text,
+            status=TaskStatus.CANNOT_SOLVE,
+            created_at=created_at,
+            completed_at=datetime.now().isoformat(),
+            error="缺少数据，请上传数据文件或允许系统自主搜集",
+            preflight_report=preflight_report.to_dict(),
+            data_schemas=preflight_report.data_schemas,
+            auto_decision_path="user_provided",
+            data_files=data_files,
+            project_name=project_name,
+        )
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "缺少数据，请上传数据文件",
+                "preflight_report": preflight_report.to_dict(),
+            },
+        )
+
+    # 7. 使用推荐配置（用户未显式指定时）
+    final_template = template or preflight_report.recommended_template
+    final_workflow = workflow_type or preflight_report.recommended_workflow
+    final_mode = mode or preflight_report.recommended_mode
+
+    # 8. 保存最终决策到任务元数据
     save_task_metadata(
         task_id=task_id,
         problem_text=req.problem_text,
-        status="running",
+        status=TaskStatus.RUNNING,
         created_at=created_at,
         total_steps=0,
         progress=0,
@@ -197,37 +320,138 @@ async def submit_task(req: TaskCreateRequest):
         data_files=data_files,
         project_name=project_name,
         knowledge_base_id=req.knowledge_base_id,
-        template=template,
-        workflow_type=workflow_type,
+        template=final_template,
+        workflow_type=final_workflow,
+        mode=final_mode,
+        problem_type=preflight_report.problem_type,
+        preflight_report=preflight_report.to_dict(),
+        data_schemas=preflight_report.data_schemas,
+        auto_decision_path="llm_collected" if (not data_files and allow_self_collect) else "user_provided",
     )
 
-    asyncio.create_task(_run_workflow(task_id, req.problem_text, req.workflow, data_files, req.mode, project_name, req.knowledge_base_id, template, workflow_type))
+    # 9. 启动工作流
+    asyncio.create_task(_run_workflow(
+        task_id, req.problem_text, req.workflow, data_files,
+        final_mode, project_name, req.knowledge_base_id,
+        final_template, final_workflow,
+        preflight_report.to_dict(),
+    ))
+
     return {
         "task_id": task_id,
-        "status": "running",
+        "status": TaskStatus.RUNNING,
         "message": "任务已提交，开始执行",
         "created_at": created_at,
         "data_files_count": len(data_files),
         "project_name": project_name,
+        "preflight_report": preflight_report.to_dict(),
     }
 
 
-async def _run_workflow(task_id: str, problem_text: str, workflow, data_files: list, mode: str = "batch", project_name: Optional[str] = None, knowledge_base_id: Optional[str] = None, template: str = "math_modeling", workflow_type: str = "standard"):
+async def _run_workflow(
+    task_id: str,
+    problem_text: str,
+    workflow,
+    data_files: list,
+    mode: str = "batch",
+    project_name: Optional[str] = None,
+    knowledge_base_id: Optional[str] = None,
+    template: str = "math_modeling",
+    workflow_type: str = "standard",
+    preflight_report: Optional[Dict] = None,
+):
     try:
         orch = get_orchestrator()
         # execute_workflow 内部会保存结果
-        await orch.execute_workflow(task_id, problem_text, workflow, data_files=data_files, mode=mode, project_name=project_name, knowledge_base_id=knowledge_base_id, template=template, workflow_type=workflow_type)
+        # TODO(Phase 3): 把 preflight_report 传入 LangGraph orchestrator 的初始 state
+        await orch.execute_workflow(
+            task_id, problem_text, workflow,
+            data_files=data_files, mode=mode, project_name=project_name,
+            knowledge_base_id=knowledge_base_id, template=template, workflow_type=workflow_type,
+        )
         logger.info(f"Task {task_id} completed and saved")
     except Exception as e:
         logger.error(f"Task {task_id} failed: {e}")
         save_task_metadata(
             task_id=task_id,
             problem_text=problem_text,
-            status="failed",
+            status=TaskStatus.FAILED,
             created_at=task_id.replace("task_", ""),
             completed_at=datetime.now().isoformat(),
             error=str(e),
         )
+
+
+@router.post("/{task_id}/preflight")
+async def run_preflight(task_id: str, req: Optional[TaskCreateRequest] = None):
+    """显式触发或重新触发 preflight 决策。
+
+    如果任务已存在，返回已有的 preflight_report；否则根据请求体重新决策。
+    """
+    meta = load_task_metadata(task_id)
+    if meta and meta.get("preflight_report"):
+        return {"task_id": task_id, "preflight_report": meta["preflight_report"]}
+
+    body = req or TaskCreateRequest(problem_text="")
+    selected_names = body.data_files
+    project_name = body.project_name
+    data_files = get_uploaded_files(selected_names=selected_names, project_name=project_name)
+    preflight_service = get_preflight_service()
+    report = await preflight_service.decide(
+        problem_text=body.problem_text,
+        data_files=data_files,
+        template=(body.options or {}).get("template"),
+        workflow_type=(body.options or {}).get("workflow"),
+        mode=body.mode,
+        project_name=project_name,
+    )
+    return {"task_id": task_id, "preflight_report": report.to_dict()}
+
+
+@router.post("/{task_id}/confirm")
+async def confirm_preflight(task_id: str, req: dict):
+    """用户确认 preflight 推荐后继续执行。"""
+    meta = load_task_metadata(task_id)
+    if not meta:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    # 允许用户覆盖推荐配置
+    overrides = req or {}
+    template = overrides.get("template") or meta.get("template", "math_modeling")
+    workflow_type = overrides.get("workflow_type") or meta.get("workflow_type", "standard")
+    mode = overrides.get("mode") or meta.get("mode", "batch")
+
+    problem_text = meta.get("problem_text", "")
+    project_name = meta.get("project_name")
+    data_files = meta.get("data_files", [])
+    knowledge_base_id = meta.get("knowledge_base_id")
+
+    save_task_metadata(
+        task_id=task_id,
+        problem_text=problem_text,
+        status=TaskStatus.RUNNING,
+        created_at=meta.get("created_at", ""),
+        total_steps=0,
+        progress=0,
+        current_step="等待启动",
+        template=template,
+        workflow_type=workflow_type,
+        mode=mode,
+        data_files=data_files,
+        project_name=project_name,
+        knowledge_base_id=knowledge_base_id,
+        preflight_report=meta.get("preflight_report"),
+        data_schemas=meta.get("data_schemas"),
+        auto_decision_path=meta.get("auto_decision_path"),
+    )
+
+    asyncio.create_task(_run_workflow(
+        task_id, problem_text, None, data_files,
+        mode, project_name, knowledge_base_id,
+        template, workflow_type,
+        meta.get("preflight_report"),
+    ))
+    return {"task_id": task_id, "status": TaskStatus.RUNNING}
 
 
 @router.get("/{task_id}/status")

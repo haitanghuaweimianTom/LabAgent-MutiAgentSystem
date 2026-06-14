@@ -16,6 +16,10 @@ interface TaskStatusBadgeProps {
 
 const STATE_META: Record<TaskStateName, { label: string; color: string; icon: string }> = {
   idle:              { label: '待启动',  color: '#9ca3af', icon: '○' },
+  preflight_running: { label: '预检中', color: '#3b82f6', icon: '🔍' },
+  self_collecting_data: { label: '自动搜数据中', color: '#f59e0b', icon: '🌐' },
+  iterating_solver: { label: '迭代求解中', color: '#8b5cf6', icon: '↻' },
+  cannot_solve:     { label: '无法求解', color: '#dc2626', icon: '⚠' },
   phase1_running:    { label: '分析中',  color: '#3b82f6', icon: '▶' },
   phase1_reviewing:  { label: '待用户确认', color: '#f59e0b', icon: '⏸' },
   phase2_running:    { label: '建模求解中', color: '#3b82f6', icon: '▶' },

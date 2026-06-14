@@ -1062,92 +1062,130 @@ class SolverAgent(BaseAgent):
         except Exception as e:
             logger.warning(f"[{self.name}] Claude CLI 不可用，回退到 HTTP API: {e}")
 
-        # ===== 第二步：回退到 HTTP API（call_llm + 本地执行）=====
-        try:
-            messages = [
-                {"role": "system", "content": CLAUDE_CODER_SYSTEM},
-                {"role": "user", "content": task_description},
-            ]
-            response = await self.call_llm(messages=messages, temperature=0.3)
-            content = response.get("choices", [{}])[0].get("message", {}).get("content", "")
+        # ===== 第二步：HTTP API 回退 + 显式迭代修复循环 =====
+        last_attempt: Optional[Dict[str, Any]] = None
+        attempt_history: List[Dict[str, Any]] = []
 
-            # 提取代码
-            raw_code = _extract_code_from_response(content)
-            if not raw_code:
-                # 尝试从 JSON 中提取
-                try:
-                    start = content.find("{")
-                    end = content.rfind("}") + 1
-                    if start != -1 and end > start:
-                        parsed = json.loads(content[start:end])
-                        raw_code = parsed.get("code", "")
-                except Exception:
-                    pass
+        for attempt in range(max_retries):
+            try:
+                if attempt == 0:
+                    user_content = task_description
+                else:
+                    prev = last_attempt or attempt_history[-1]
+                    classification = self._classify_execution_error(
+                        prev.get("error", ""), prev.get("code", "")
+                    )
+                    fix_hint = "\n".join(classification.get("fixes", []))
+                    user_content = (
+                        f"{task_description}\n\n"
+                        f"## 上一次执行失败（第 {attempt} 次尝试）\n"
+                        f"错误类型: {classification.get('category', 'unknown')}\n"
+                        f"错误信息: {classification.get('raw_error', '')[:800]}\n"
+                        f"修复建议: {fix_hint}\n\n"
+                        "请修正代码后重新输出完整可执行代码。"
+                    )
 
-            if not raw_code:
-                raise RuntimeError("LLM 未返回可执行代码")
+                messages = [
+                    {"role": "system", "content": CLAUDE_CODER_SYSTEM},
+                    {"role": "user", "content": user_content},
+                ]
+                response = await self.call_llm(messages=messages, temperature=0.3)
+                content = response.get("choices", [{}])[0].get("message", {}).get("content", "")
 
-            # 写入文件
-            Path(file_path).write_text(raw_code, encoding="utf-8")
+                raw_code = _extract_code_from_response(content)
+                if not raw_code:
+                    try:
+                        start = content.find("{")
+                        end = content.rfind("}") + 1
+                        if start != -1 and end > start:
+                            parsed = json.loads(content[start:end])
+                            raw_code = parsed.get("code", "")
+                    except Exception:
+                        pass
 
-            # 本地执行
-            proc = subprocess.run(
-                [sys.executable, "-X", "utf8", file_path],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=120,
-            )
+                if not raw_code:
+                    raise RuntimeError("LLM 未返回可执行代码")
 
-            stdout_text = proc.stdout.strip()
-            stderr_text = proc.stderr.strip()
-            exec_ok = proc.returncode == 0
+                Path(file_path).write_text(raw_code, encoding="utf-8")
 
-            # 尝试从 stdout 解析 JSON 结果
-            numerical_results = {}
-            key_findings = []
-            if stdout_text.startswith("{"):
-                try:
-                    numerical_results = json.loads(stdout_text)
-                    if isinstance(numerical_results, dict):
-                        key_findings = numerical_results.get("key_findings", [])
-                        if "numerical_results" in numerical_results:
-                            numerical_results = numerical_results["numerical_results"]
-                except json.JSONDecodeError:
-                    pass
+                proc = subprocess.run(
+                    [sys.executable, "-X", "utf8", file_path],
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=120,
+                )
 
-            return {
-                "success": exec_ok,
-                "code": raw_code,
-                "file_path": file_path,
-                "execution_result": {
+                stdout_text = proc.stdout.strip()
+                stderr_text = proc.stderr.strip()
+                exec_ok = proc.returncode == 0
+
+                numerical_results = {}
+                key_findings = []
+                if stdout_text.startswith("{"):
+                    try:
+                        numerical_results = json.loads(stdout_text)
+                        if isinstance(numerical_results, dict):
+                            key_findings = numerical_results.get("key_findings", [])
+                            if "numerical_results" in numerical_results:
+                                numerical_results = numerical_results["numerical_results"]
+                    except json.JSONDecodeError:
+                        pass
+
+                last_attempt = {
                     "success": exec_ok,
-                    "output": stdout_text[:5000],
-                    "stderr": stderr_text[:2000],
-                    "env": "http_api_fallback",
-                },
-                "attempts": 1,
-                "error": stderr_text if not exec_ok else "",
-                "key_findings": key_findings,
-                "numerical_results": numerical_results,
-            }
+                    "code": raw_code,
+                    "file_path": file_path,
+                    "execution_result": {
+                        "success": exec_ok,
+                        "output": stdout_text[:5000],
+                        "stderr": stderr_text[:2000],
+                        "env": "http_api_fallback",
+                    },
+                    "attempt": attempt + 1,
+                    "error": stderr_text if not exec_ok else "",
+                    "key_findings": key_findings,
+                    "numerical_results": numerical_results,
+                }
+                attempt_history.append(last_attempt)
 
-        except Exception as e:
-            logger.error(f"[{self.name}] HTTP API 回退也失败: {e}")
-            return {
-                "success": False,
-                "code": initial_code,
-                "file_path": file_path,
-                "execution_result": {
+                if exec_ok:
+                    return {
+                        **last_attempt,
+                        "attempts": attempt + 1,
+                    }
+
+            except Exception as e:
+                logger.error(f"[{self.name}] HTTP API 尝试 {attempt + 1} 失败: {e}")
+                last_attempt = {
+                    "success": False,
+                    "code": initial_code,
+                    "file_path": file_path,
+                    "execution_result": {"error": str(e)},
+                    "attempt": attempt + 1,
                     "error": str(e),
-                    "claude_cli_error": coder_result.get("execution_stderr", "") if coder_result else "Claude CLI 未尝试或不可用",
-                },
-                "attempts": 0,
-                "error": str(e),
-                "key_findings": [],
-                "numerical_results": {},
-            }
+                    "key_findings": [],
+                    "numerical_results": {},
+                }
+                attempt_history.append(last_attempt)
+
+        # 所有尝试失败，返回最后一次结果并附带历史
+        logger.error(f"[{self.name}] HTTP API 回退在 {max_retries} 次尝试后仍失败")
+        return {
+            "success": False,
+            "code": last_attempt.get("code", initial_code) if last_attempt else initial_code,
+            "file_path": file_path,
+            "execution_result": {
+                "error": last_attempt.get("error", "") if last_attempt else "所有尝试失败",
+                "attempt_history": attempt_history,
+                "claude_cli_error": coder_result.get("execution_stderr", "") if coder_result else "Claude CLI 未尝试或不可用",
+            },
+            "attempts": len(attempt_history),
+            "error": last_attempt.get("error", "") if last_attempt else "所有尝试失败",
+            "key_findings": last_attempt.get("key_findings", []) if last_attempt else [],
+            "numerical_results": last_attempt.get("numerical_results", {}) if last_attempt else {},
+        }
 
     def get_system_prompt(self) -> str:
         # v3.3：BASE_SYSTEM_PROMPT（领域无关） + FILE_SPLIT_RULES（硬规则）。

@@ -12,6 +12,10 @@ class TaskStatus(str, Enum):
     FAILED = "failed"
     CANCELLED = "cancelled"
     PAUSED = "paused"
+    PREFLIGHT_RUNNING = "preflight_running"
+    SELF_COLLECTING_DATA = "self_collecting_data"
+    ITERATING_SOLVER = "iterating_solver"
+    CANNOT_SOLVE = "cannot_solve"
 
 
 class AgentStatus(str, Enum):
@@ -55,6 +59,8 @@ class TaskCreateRequest(BaseModel):
     options: Optional[Dict[str, Any]] = Field(default_factory=dict)
     data_files: Optional[List[str]] = None  # 前端选中的数据文件名列表（为空则使用全部上传文件）
     knowledge_base_id: Optional[str] = None  # 指定使用的知识库ID，为空则使用所有知识库
+    data_source: Optional[str] = "upload"  # "upload" / "self_collect" / "upload_and_collect"
+    problem_type: Optional[str] = None  # 用户显式选择的问题类型
 
 
 class TaskCancelRequest(BaseModel):

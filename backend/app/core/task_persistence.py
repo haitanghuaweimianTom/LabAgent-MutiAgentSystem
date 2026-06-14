@@ -70,6 +70,7 @@ def save_task_metadata(
         "progress": progress,
         "current_step": current_step,
         "updated_at": datetime.now().isoformat(),
+        "schema_version": extra.pop("schema_version", "2.0"),
         **extra,
     }
 

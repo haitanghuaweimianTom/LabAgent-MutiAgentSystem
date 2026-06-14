@@ -18,6 +18,10 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 
 export type TaskStateName =
   | 'idle'
+  | 'preflight_running'
+  | 'self_collecting_data'
+  | 'iterating_solver'
+  | 'cannot_solve'
   | 'phase1_running'
   | 'phase1_reviewing'
   | 'phase2_running'
@@ -43,15 +47,19 @@ export interface TaskState {
 
 const STATE_RANK: Record<TaskStateName, number> = {
   idle: 0,
-  phase1_running: 1,
-  phase1_reviewing: 2,
-  phase2_running: 3,
-  peer_review: 4,
-  revising: 5,
-  finalizing: 6,
-  completed: 7,
-  failed: 7,
-  paused: 1, // 可恢复
+  preflight_running: 1,
+  self_collecting_data: 2,
+  phase1_running: 3,
+  phase1_reviewing: 4,
+  phase2_running: 5,
+  iterating_solver: 5,
+  peer_review: 6,
+  revising: 7,
+  finalizing: 8,
+  completed: 9,
+  failed: 9,
+  cannot_solve: 9,
+  paused: 1,
 };
 
 export function rankState(s: TaskStateName): number {
@@ -217,9 +225,12 @@ function mapBackendStatusToState(status: string, currentStep: string): TaskState
   if (s === 'completed') return 'completed';
   if (s === 'failed') return 'failed';
   if (s === 'paused' || s === 'interrupted') return 'paused';
+  if (s === 'preflight_running') return 'preflight_running';
+  if (s === 'self_collecting_data') return 'self_collecting_data';
+  if (s === 'cannot_solve') return 'cannot_solve';
   if (s === 'phase1_completed' || s === 'phase1_completed_reviewing') return 'phase1_reviewing';
   if (s === 'phase2_running' || s === 'running') {
-    // 粗略根据 current_step 推断子状态
+    if (currentStep?.includes('iterat')) return 'iterating_solver';
     if (currentStep?.includes('peer_review')) return 'peer_review';
     if (currentStep?.includes('revise')) return 'revising';
     if (currentStep?.includes('final')) return 'finalizing';
@@ -232,6 +243,10 @@ function mapBackendStatusToState(status: string, currentStep: string): TaskState
 function isValidStateName(name: string): name is TaskStateName {
   return [
     'idle',
+    'preflight_running',
+    'self_collecting_data',
+    'iterating_solver',
+    'cannot_solve',
     'phase1_running',
     'phase1_reviewing',
     'phase2_running',

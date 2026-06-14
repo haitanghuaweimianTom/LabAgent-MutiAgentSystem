@@ -12,6 +12,7 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from .base import BaseAgent, AgentFactory
+from ..config import get_settings
 from ..schemas import TaskStatus, TaskStep, TaskStatusResponse
 from ..core.chat_room import ChatRoom, create_chat_room, get_chat_room
 from ..core.paths import get_project_output_dir
@@ -21,6 +22,9 @@ from ..core.memory import get_memory_manager, WorkingMemory
 # 不直接使用，仅保证 Orchestrator 加载时新 Agent 已注册。
 from . import experimentation_agent  # noqa: F401
 from . import peer_review_agent  # noqa: F401
+
+# Phase 3：LangGraph 编排器（按需导入，未安装也不阻断旧流程）
+from .langgraph_orchestrator import LangGraphOrchestrator, LANGGRAPH_AVAILABLE
 
 logger = logging.getLogger(__name__)
 
@@ -50,10 +54,17 @@ class Orchestrator:
         # 工作流类型
         self._task_workflows: Dict[str, str] = {}    # task_id -> workflow_type (standard/quick/deep_research/code_focused)
 
+        # Phase 3：LangGraph 编排器懒加载
+        self._langgraph_orchestrator: Optional[LangGraphOrchestrator] = None
+        self._use_langgraph = get_settings().use_langgraph_orchestrator and LANGGRAPH_AVAILABLE
+
+    def _get_langgraph_orchestrator(self) -> Optional[LangGraphOrchestrator]:
+        if self._langgraph_orchestrator is None and self._use_langgraph:
+            self._langgraph_orchestrator = LangGraphOrchestrator(agents=self.agents)
+        return self._langgraph_orchestrator
+
     def is_paused(self, task_id: str) -> bool:
         return self._task_paused.get(task_id, False)
-
-    def pause_task(self, task_id: str, paused_at: str = "") -> None:
         self._task_paused[task_id] = True
         self._task_paused_at[task_id] = paused_at
 
@@ -932,6 +943,24 @@ class Orchestrator:
               "sequential" 逐个建模/求解，前序结果递进到后序
         """
         logger.info(f"Orchestrator starting full workflow for task {task_id} (mode={mode}, template={template}, workflow={workflow_type})")
+
+        # Phase 3：如果开启 LangGraph，委托给新编排器
+        if self._use_langgraph:
+            lg = self._get_langgraph_orchestrator()
+            if lg:
+                logger.info(f"Task {task_id}: delegating to LangGraphOrchestrator")
+                return await lg.run(
+                    task_id=task_id,
+                    problem_text=problem_text,
+                    workflow=workflow,
+                    data_files=data_files,
+                    mode=mode,
+                    project_name=project_name,
+                    knowledge_base_id=knowledge_base_id,
+                    template=template,
+                    workflow_type=workflow_type,
+                )
+
         room = create_chat_room(task_id, problem_text)
         self.task_history[task_id] = []
         self._task_phase[task_id] = "full"

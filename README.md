@@ -428,6 +428,42 @@ routing:
 
 ---
 
+## 🔮 Phase 7+：LangGraph + ReAct + Harness 数据驱动改造（进行中）
+
+本阶段目标是把系统改造成**数据驱动的全自动 CCF-A 论文产线**：任务提交时先做 Preflight 决策，没有数据时 LLM 主动规划并尝试搜集，搜集不到再提醒用户上传；编排器迁移到 LangGraph StateGraph；Agent 内部支持 ReAct 工具循环；Solver 失败后在 Harness 评判下自动迭代修复。
+
+### 新增/修改的核心文件
+
+| 文件 | 作用 |
+|---|---|
+| `backend/app/services/preflight.py` | Preflight 决策器：数据 schema 分析 + LLM 综合判断 + collection_plan |
+| `backend/app/agents/langgraph_orchestrator.py` | LangGraph StateGraph 编排器（节点 + 条件边） |
+| `backend/app/agents/base.py` | ReAct 工具循环、5 种 provider tools 适配 |
+| `backend/app/agents/solver_agent.py` | 显式重试循环 + 错误分类 + 修复建议注入 |
+| `backend/app/services/contract_validator.py` | Agent 输出 Pydantic schema 校验 |
+| `backend/app/services/fact_checker.py` | main.tex 数字与 solves.json 数值对账 |
+| `backend/app/routers/tasks.py` | submit_task 先跑 preflight，支持 data_mismatch / self_collect / 422 |
+| `frontend/src/app/components/ProblemInput.tsx` | 数据来源、问题类型、提交 data_files |
+| `frontend/src/app/components/PreFlightPanel.tsx` | 预检报告展示与确认 |
+
+### 功能开关（`backend/app/config.py` / `.env`）
+
+```python
+use_langgraph_orchestrator=False   # 默认关闭，开启后走 LangGraph 编排
+use_react_tools=True               # BaseAgent.call_llm 支持 tools
+use_iterative_solver=False         # solver 失败自动迭代（LangGraph 节点内生效）
+```
+
+### 状态枚举扩展
+
+后端 `TaskStatus` 与前端 `TaskStateName` 新增：
+- `preflight_running`
+- `self_collecting_data`
+- `iterating_solver`
+- `cannot_solve`
+
+---
+
 ## 📝 引用
 
 如使用本系统产出学术论文，请引用本仓库：

@@ -84,11 +84,12 @@ export default function Home() {
     mode: string;
     useCritique: boolean;
     knowledgeBaseId: string | null;
+    dataSource: 'upload' | 'self_collect' | 'upload_and_collect';
+    problemType: string;
+    dataFiles: string[];
   }) => {
     setSubmitting(true);
     try {
-      // 如果前端有勾选文件，则只提交勾选的；否则后端会使用全部上传文件
-      const dataFiles = selectedFiles.size > 0 ? Array.from(selectedFiles) : undefined;
       const res = await fetch(apiBase() + '/tasks/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -101,11 +102,17 @@ export default function Home() {
             template: params.template,
             use_critique: params.useCritique,
           },
-          data_files: dataFiles,
+          data_files: params.dataFiles,
           knowledge_base_id: params.knowledgeBaseId || undefined,
+          data_source: params.dataSource,
+          problem_type: params.problemType,
         }),
       });
       const data = await res.json();
+      if (!res.ok) {
+        alert(data.detail?.message || `提交失败: ${res.status}`);
+        return;
+      }
       const newTaskId = data.task_id;
       setTaskId(newTaskId);
       setTaskStatus('running');
@@ -115,7 +122,6 @@ export default function Home() {
       setPaused(false);
       setPhase('idle');
       setTab('generate');
-      // 关联任务到当前项目
       if (activeProjectId && newTaskId) {
         addTaskToProject(activeProjectId, newTaskId);
       }
