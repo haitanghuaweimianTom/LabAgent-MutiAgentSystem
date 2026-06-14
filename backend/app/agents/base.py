@@ -1290,8 +1290,43 @@ class BaseAgent(ABC):
         )
 
     async def _tool_read_paper(self, paper_id: str) -> str:
-        # Phase 2 MVP：读取论文功能待接入 paper_metadata 服务
-        return f"Read paper {paper_id}: not yet implemented in Phase 2."
+        """读取论文元数据（通过 paper_metadata 缓存 + Semantic Scholar）。"""
+        try:
+            from ..services.paper_metadata.cache import get_metadata_cache
+            from ..services.paper_metadata.registry import metadata_registry
+            cache = get_metadata_cache()
+            # 尝试从缓存读取
+            cached = cache.get(paper_id) if cache else None
+            if cached:
+                return self._format_paper_meta(paper_id, cached)
+            # 缓存未命中，尝试 Semantic Scholar provider
+            provider_cls = metadata_registry.get("semantic_scholar")
+            if provider_cls and cache:
+                provider = provider_cls()
+                results = await cache.enrich_with_cache(provider, [paper_id])
+                meta = results.get(paper_id)
+                if meta:
+                    return self._format_paper_meta(paper_id, meta)
+        except Exception as exc:
+            logger.debug(f"_tool_read_paper fallback: {exc}")
+        return f"Paper {paper_id}: metadata not available."
+
+    @staticmethod
+    def _format_paper_meta(paper_id: str, meta: Dict[str, Any]) -> str:
+        parts = [f"Paper: {paper_id}"]
+        if meta.get("title"):
+            parts.append(f"Title: {meta['title']}")
+        if meta.get("abstract"):
+            parts.append(f"Abstract: {meta['abstract'][:500]}")
+        if meta.get("citation_count") is not None:
+            parts.append(f"Citations: {meta['citation_count']}")
+        if meta.get("venue"):
+            parts.append(f"Venue: {meta['venue']}")
+        if meta.get("fields_of_study"):
+            parts.append(f"Fields: {', '.join(meta['fields_of_study'])}")
+        if meta.get("tldr"):
+            parts.append(f"TL;DR: {meta['tldr']}")
+        return "\n".join(parts)
 
     async def _call_claude_backend(
         self,

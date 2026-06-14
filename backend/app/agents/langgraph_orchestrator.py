@@ -180,8 +180,10 @@ class LangGraphOrchestrator:
             {
                 "analyze_only": "analyzer",
                 "standard": "analyzer",
+                "quick": "analyzer",
                 "deep_research": "analyzer",
                 "code_focused": "analyzer",
+                "research_paper": "analyzer",
                 "self_collect": "self_collect",
                 "abort": "cannot_solve",
             },
@@ -410,7 +412,7 @@ class LangGraphOrchestrator:
         )
 
         # Harness 评判
-        harness = self._run_harness(output)
+        harness = await self._run_harness(output)
         output["harness"] = harness
         attempts.append(output)
 
@@ -441,7 +443,7 @@ class LangGraphOrchestrator:
 
         return new_state
 
-    def _run_harness(self, sol_result: Dict[str, Any]) -> Dict[str, Any]:
+    async def _run_harness(self, sol_result: Dict[str, Any]) -> Dict[str, Any]:
         """综合 Harness 评判。"""
         numerical = sol_result.get("numerical_results", {})
         if not isinstance(numerical, dict):
@@ -451,7 +453,7 @@ class LangGraphOrchestrator:
 
         cross = []
         try:
-            cross = get_cross_validator().cross_check(
+            cross = await get_cross_validator().cross_check(
                 "primary", numerical,
                 "secondary_estimate", {k: v * 0.95 for k, v in numerical.items() if isinstance(v, (int, float))},
             )
@@ -618,20 +620,36 @@ class LangGraphOrchestrator:
         return {**state, "current_step": "cannot_solve", "cannot_solve_report": report}
 
     async def _node_self_collect(self, state: TaskState) -> TaskState:
-        # Phase 1/2：自主搜集数据逻辑，实际执行在 tasks.py preflight 阶段已完成
-        return {**state, "current_step": "self_collect_done"}
+        """自主搜集数据：标记已尝试，避免无限循环。"""
+        # 标记已尝试 self_collect，_route_preflight 会检测此标志避免循环
+        return {**state, "current_step": "self_collect_done", "phase": "self_collected"}
 
     # ------------------------------------------------------------------
     # 条件路由
     # ------------------------------------------------------------------
     def _route_preflight(self, state: TaskState) -> str:
         preflight = state.get("preflight") or {}
-        adequacy = preflight.get("data_adequacy", "missing")
+
+        # 已经过 self_collect 阶段 → 直接按 workflow_type 走（避免无限循环）
+        if state.get("phase") == "self_collected":
+            workflow = state.get("workflow_type", "standard")
+            if workflow in ("quick", "code_focused", "deep_research", "research_paper"):
+                return workflow
+            return "standard"
+
+        # 无 preflight 报告时使用 state 中的 workflow_type（兼容旧流程）
+        if not preflight:
+            workflow = state.get("workflow_type", "standard")
+            if workflow in ("quick", "code_focused", "deep_research", "research_paper"):
+                return workflow
+            return "standard"
+
+        adequacy = preflight.get("data_adequacy", "sufficient")
         if adequacy == "missing" and preflight.get("llm_should_collect"):
             return "self_collect"
         if adequacy == "missing":
             return "abort"
-        workflow = preflight.get("recommended_workflow", "standard")
+        workflow = preflight.get("recommended_workflow", state.get("workflow_type", "standard"))
         if workflow in ("quick", "code_focused", "deep_research", "research_paper"):
             return workflow
         return "standard"

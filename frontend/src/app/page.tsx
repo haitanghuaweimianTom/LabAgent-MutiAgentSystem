@@ -17,6 +17,7 @@ import { useAppStore } from './store/useAppStore';
 import { useTaskState } from './hooks/useTaskState';
 import { TaskStatusBadge } from './components/TaskStatusBadge';
 import { CameraReadyPanel } from './components/CameraReadyPanel';
+import { PreFlightPanel, PreflightReport } from './components/PreFlightPanel';
 
 declare global {
   interface Window {
@@ -72,6 +73,9 @@ export default function Home() {
   // Submitting
   const [submitting, setSubmitting] = useState(false);
 
+  // Preflight report
+  const [preflightReport, setPreflightReport] = useState<PreflightReport | null>(null);
+
   const selectedFiles = useAppStore((s) => s.selectedFiles);
   const activeProjectId = useAppStore((s) => s.activeProjectId);
   const addTaskToProject = useAppStore((s) => s.addTaskToProject);
@@ -110,8 +114,18 @@ export default function Home() {
       });
       const data = await res.json();
       if (!res.ok) {
+        // 422: 数据不匹配或缺少数据，展示 preflight 报告供用户参考
+        if (res.status === 422 && data.detail?.preflight_report) {
+          setPreflightReport(data.detail.preflight_report);
+          alert(data.detail?.message || '数据与题目不匹配，请检查后重新提交');
+          return;
+        }
         alert(data.detail?.message || `提交失败: ${res.status}`);
         return;
+      }
+      // 成功提交：如果有 preflight_report 就展示
+      if (data.preflight_report) {
+        setPreflightReport(data.preflight_report);
       }
       const newTaskId = data.task_id;
       setTaskId(newTaskId);
@@ -470,6 +484,14 @@ export default function Home() {
                   </button>
                 </div>
               </div>
+            )}
+
+            {/* Preflight 预检报告 */}
+            {preflightReport && (
+              <PreFlightPanel
+                report={preflightReport}
+                onConfirm={() => setPreflightReport(null)}
+              />
             )}
 
             {/* Phase 6 (A3): 任务状态机可视化 */}

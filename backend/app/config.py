@@ -77,9 +77,9 @@ class Settings(BaseSettings):
     semantic_scholar_api_key: str = ""
 
     # ===== LangGraph + ReAct + 自主迭代求解 功能开关 =====
-    use_langgraph_orchestrator: bool = False
+    use_langgraph_orchestrator: bool = True
     use_react_tools: bool = True
-    use_iterative_solver: bool = False
+    use_iterative_solver: bool = True
 
     class Config:
         env_file = ".env"
