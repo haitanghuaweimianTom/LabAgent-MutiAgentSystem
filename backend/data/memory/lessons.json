@@ -4311,7 +4311,29 @@
       "source_task": "placeholder_springer_lncs",
       "created_at": "2026-06-14T21:06:00.755144",
       "use_count": 0
+    },
+    {
+      "id": "lesson_393_20260615014142",
+      "category": "method_selection",
+      "content": "对于综合问题问题，采用方案：采用综合问题方法，通过1个子问题逐步求解",
+      "problem_type": "综合问题",
+      "method": "采用综合问题方法，通过1个子问题逐步求解",
+      "success": true,
+      "source_task": "mimo_direct_test",
+      "created_at": "2026-06-15T01:41:42.836463",
+      "use_count": 0
+    },
+    {
+      "id": "lesson_394_20260615014142",
+      "category": "modeling",
+      "content": "模型选择：时间序列预测(ARIMA/SARIMA)（prediction）",
+      "problem_type": "",
+      "method": "prediction",
+      "success": true,
+      "source_task": "mimo_direct_test",
+      "created_at": "2026-06-15T01:41:42.836472",
+      "use_count": 0
     }
   ],
-  "count": 392
+  "count": 394
 }

@@ -1,8 +1,8 @@
-# 数学建模论文全自动生成系统 v3.0
+# 多智能体协作论文生产系统 v3.1
 
-> 面向 **CCF-A 顶会 / 数学建模竞赛** 的多智能体论文全自动产线。
-> 内置 6 套论文模板（含 NeurIPS 2024、ACM SIGCONF、IEEE Conference、Springer LNCS、综述、CUMCM），
-> 真实代码执行 + 真实 arXiv 文献检索 + 跨方法交叉验证 + Camera-Ready 自动打包。
+> 面向 **CCF-A 顶会 / 数学建模竞赛** 的多智能体协作论文全自动产线。
+> 内置 8 套论文模板（含 NeurIPS 2024、ACM SIGCONF、IEEE Conference、Springer LNCS、综述、CUMCM），
+> LangGraph 编排 + ReAct 工具循环 + 实时协作讨论 + 自动迭代 + 真实代码执行 + 真实 arXiv 文献检索 + 跨方法交叉验证 + Camera-Ready 自动打包。
 
 ---
 

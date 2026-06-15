@@ -350,8 +350,8 @@ export default function Home() {
   return (
     <main className={styles.main}>
       <header className={styles.header}>
-        <span className={styles.headerTitle}>数学建模论文全自动生成系统 v3.0</span>
-        <p className={styles.subtitle}>Multi-Agent 协作 · 多LLM Provider · MCP工具 · 分阶段交互 · 显式记忆池</p>
+        <span className={styles.headerTitle}>多智能体协作论文生产系统 v3.1</span>
+        <p className={styles.subtitle}>LangGraph 编排 · ReAct 工具循环 · 实时协作讨论 · 自动迭代 · CCF-A 论文全自动生成</p>
       </header>
 
       <nav className={styles.nav}>

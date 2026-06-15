@@ -82,8 +82,32 @@
       "created_at": 1781268770,
       "updated_at": 1781268770,
       "_version": 2
+    },
+    {
+      "id": "mimo",
+      "name": "XiaomiMiMo",
+      "type": "openai",
+      "category": "custom",
+      "meta": {
+        "api_format": "anthropic",
+        "auth_field": "anthropic_auth_token"
+      },
+      "api_key": "tp-ce2nztxc17yabp79kpjp8myb87p3d5bw2gwgs328iorhick4",
+      "api_host": "https://token-plan-cn.xiaomimimo.com/anthropic",
+      "models": [
+        {"name": "mimo-V2-pro", "enabled": true},
+        {"name": "mimo-V2.5-pro", "enabled": true},
+        {"name": "mimo-V2-flash", "enabled": true}
+      ],
+      "enabled": true,
+      "icon": "OpenAI",
+      "icon_color": "#10a37f",
+      "notes": "Xiaomi MiMo via cc-switch",
+      "created_at": 1781343000,
+      "updated_at": 1781343000,
+      "_version": 2
     }
   ],
-  "default_provider": "minimax",
+  "default_provider": "mimo",
   "_version": 2
 }

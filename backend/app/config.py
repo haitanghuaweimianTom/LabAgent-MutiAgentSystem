@@ -1,5 +1,5 @@
 """
-数学建模多Agent系统 - 配置管理
+多智能体协作论文生产系统 - 配置管理
 """
 
 import os
@@ -8,8 +8,8 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    app_name: str = "数学建模多Agent系统"
-    app_version: str = "3.0.0"
+    app_name: str = "多智能体协作论文生产系统"
+    app_version: str = "3.1.0"
     debug: bool = True
 
     api_prefix: str = "/api/v1"
@@ -39,8 +39,8 @@ class Settings(BaseSettings):
     # Ollama
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen2.5:latest"
-    # 默认使用的 Provider: "anthropic" | "openai" | "gemini" | "ollama" | "claude_cli" | "minimax"
-    default_llm_provider: str = "claude_cli"
+    # 默认使用的 Provider: "anthropic" | "openai" | "gemini" | "ollama" | "claude_cli" | "minimax" | "mimo"
+    default_llm_provider: str = "mimo"
 
     # ===== Claude Code 后端配置 =====
     # 各Agent的默认LLM后端: "minimax" | "claude"

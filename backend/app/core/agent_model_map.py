@@ -26,44 +26,21 @@ logger = logging.getLogger(__name__)
 
 
 # 默认模型组合（按 agent 维度）
+# v4.2: 统一使用 mimo-V2-pro（Xiaomi MiMo，cc-switch 路由）
 AGENT_DEFAULT_MODELS: Dict[str, str] = {
-    "analyzer_agent": "sonnet",
-    "data_agent": "sonnet",
-    "modeler_agent": "sonnet",
-    "solver_agent": "sonnet",
-    "research_agent": "haiku",
-    "writer_agent": "opus",
-    "peer_review_agent": "sonnet",
-    "experimentation_agent": "haiku",
+    "analyzer_agent": "mimo-V2-pro",
+    "data_agent": "mimo-V2-pro",
+    "modeler_agent": "mimo-V2-pro",
+    "solver_agent": "mimo-V2-pro",
+    "research_agent": "mimo-V2-pro",
+    "writer_agent": "mimo-V2-pro",
+    "peer_review_agent": "mimo-V2-pro",
+    "experimentation_agent": "mimo-V2-pro",
 }
 
 
-# 按 template_id 覆盖（CCF-A 强制用最好的模型）
-TEMPLATE_OVERRIDES: Dict[str, Dict[str, str]] = {
-    "ieee_conference": {
-        "writer_agent": "opus",
-        "peer_review_agent": "sonnet",
-        "solver_agent": "sonnet",
-    },
-    "neurips_2024": {
-        "writer_agent": "opus",
-        "peer_review_agent": "sonnet",
-        "solver_agent": "sonnet",
-    },
-    "acm_sigconf": {
-        "writer_agent": "opus",
-        "peer_review_agent": "sonnet",
-        "solver_agent": "sonnet",
-    },
-    "springer_lncs": {
-        "writer_agent": "opus",
-        "peer_review_agent": "sonnet",
-        "solver_agent": "sonnet",
-    },
-    "research_survey": {
-        "writer_agent": "sonnet",  # 综述可以便宜点
-    },
-}
+# 按 template_id 覆盖（全部用 mimo-V2-pro）
+TEMPLATE_OVERRIDES: Dict[str, Dict[str, str]] = {}
 
 
 class AgentModelRouter:
