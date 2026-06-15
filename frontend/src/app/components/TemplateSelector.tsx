@@ -26,8 +26,8 @@ export const TEMPLATE_OPTIONS: TemplateOption[] = [
   // 旧 4 套（保留，向后兼容）
   {
     id: 'math_modeling',
-    name: '数学建模竞赛',
-    desc: '12章 CUMCM 标准结构（mcmthesis 排版）',
+    name: '数学建模',
+    desc: '12章 CUMCM 标准结构（mcmthesis 排版），适合数学建模竞赛',
     chapters: 12,
     domain: 'math_modeling',
   },

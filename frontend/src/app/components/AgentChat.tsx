@@ -63,10 +63,10 @@ type StageStatus = 'pending' | 'running' | 'completed' | 'failed';
 
 function deriveStages(status: string, progress: number, currentStep: string) {
   const stages: { id: string; name: string; description: string; status: StageStatus; progress: number }[] = [
-    { id: 'analysis', name: '问题分析', description: '提取子任务、约束、数据需求', status: 'pending', progress: 0 },
-    { id: 'modeling', name: '数学建模', description: '构建模型、公式、假设', status: 'pending', progress: 0 },
-    { id: 'solving', name: '计算求解', description: '生成代码、执行、结果验证', status: 'pending', progress: 0 },
-    { id: 'writing', name: '论文生成', description: '分段撰写、图表、LaTeX排版', status: 'pending', progress: 0 },
+    { id: 'analysis', name: '问题分析', description: '数据预处理、子问题分解、文献搜集', status: 'pending', progress: 0 },
+    { id: 'modeling', name: '建模求解', description: '建模、代码生成、迭代验证', status: 'pending', progress: 0 },
+    { id: 'writing', name: '论文写作', description: '章节生成、自评改进、LaTeX排版', status: 'pending', progress: 0 },
+    { id: 'review', name: '同行评议', description: '4维评分、修订循环、Camera-Ready打包', status: 'pending', progress: 0 },
   ];
 
   if (status === 'idle' || status === 'pending') return stages;
@@ -74,24 +74,24 @@ function deriveStages(status: string, progress: number, currentStep: string) {
   if (status === 'phase1' || status === 'running') {
     stages[0].status = 'running';
     stages[0].progress = Math.min(progress * 2, 100);
-    if (currentStep?.includes('建模') || currentStep?.includes('model')) {
+    if (currentStep?.includes('建模') || currentStep?.includes('求解') || currentStep?.includes('model') || currentStep?.includes('solve')) {
       stages[0].status = 'completed';
       stages[0].progress = 100;
       stages[1].status = 'running';
-      stages[1].progress = Math.min((progress - 20) * 1.5, 100);
-    }
-    if (currentStep?.includes('求解') || currentStep?.includes('solve')) {
-      stages[0].status = 'completed';
-      stages[1].status = 'completed';
-      stages[2].status = 'running';
-      stages[2].progress = Math.min((progress - 40) * 2, 100);
+      stages[1].progress = Math.min((progress - 30) * 2, 100);
     }
     if (currentStep?.includes('论文') || currentStep?.includes('write')) {
       stages[0].status = 'completed';
       stages[1].status = 'completed';
+      stages[2].status = 'running';
+      stages[2].progress = Math.min((progress - 60) * 2.5, 100);
+    }
+    if (currentStep?.includes('评议') || currentStep?.includes('review') || currentStep?.includes('修订')) {
+      stages[0].status = 'completed';
+      stages[1].status = 'completed';
       stages[2].status = 'completed';
       stages[3].status = 'running';
-      stages[3].progress = Math.min((progress - 60) * 2.5, 100);
+      stages[3].progress = Math.min((progress - 80) * 5, 100);
     }
   }
 

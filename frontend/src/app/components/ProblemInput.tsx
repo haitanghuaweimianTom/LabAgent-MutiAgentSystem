@@ -6,10 +6,11 @@ import { useAppStore } from '../store/useAppStore';
 import { TemplateSelector, TEMPLATE_OPTIONS } from './TemplateSelector';
 
 const WORKFLOWS = [
-  { id: 'standard', name: '标准流程', desc: '研究→分析→建模→求解→论文（推荐）' },
-  { id: 'quick', name: '快速生成', desc: '跳过研究阶段，适合已知问题' },
-  { id: 'deep_research', name: '深度研究', desc: '强化资料搜集，适合陌生领域' },
-  { id: 'code_focused', name: '代码优先', desc: '强化求解与调试，适合计算密集型' },
+  { id: 'standard', name: '标准流程', desc: '分析→数据→文献→建模→求解→论文→评议（推荐）' },
+  { id: 'quick', name: '快速生成', desc: '跳过文献搜集，适合已知领域的研究问题' },
+  { id: 'deep_research', name: '深度研究', desc: '多轮文献搜集 + 团队讨论，适合陌生前沿领域' },
+  { id: 'code_focused', name: '代码优先', desc: '跳过文献，强化求解与调试，适合计算密集型问题' },
+  { id: 'research_paper', name: 'CCF-A 论文', desc: '完整科研流程：实验设计→建模→求解→论文→同行评议→修订' },
 ];
 
 // Phase 6: 8 模板统一管理（4 旧 + 4 新 CCF-A 目标）。
@@ -121,7 +122,7 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
   return (
     <div className={styles.container}>
       <div className={styles.section}>
-        <div className={styles.sectionTitle}>📝 赛题输入</div>
+        <div className={styles.sectionTitle}>📝 研究问题输入</div>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.5rem' }}>
           <select
             style={{ flex: 1, padding: '0.5rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: '#e0e0e0', fontSize: '0.9rem' }}
@@ -177,7 +178,7 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
         </div>
         <input
           className={styles.projectInput}
-          placeholder="输入项目名称（如：2025A 板凳龙）"
+          placeholder="输入项目名称（如：多智能体记忆机制研究 / 供应链优化 / CCF-A 论文）"
           value={projectName}
           onChange={e => setProjectName(e.target.value)}
           maxLength={60}
@@ -196,14 +197,14 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
         </div>
         <div className={styles.ocrRow}>
           <label className={styles.ocrBtn}>
-            {ocrLoading ? '识别中...' : '📷 上传题目图片 / PDF'}
+            {ocrLoading ? '识别中...' : '📷 上传问题图片 / PDF（OCR 提取文本）'}
             <input type="file" accept="image/*,.pdf" onChange={handleOcrUpload} style={{ display: 'none' }} disabled={ocrLoading} />
           </label>
           <span className={styles.hint}>支持 JPG / PNG / PDF，自动提取文本</span>
         </div>
         <textarea
           className={styles.textarea}
-          placeholder={'请描述数学建模问题，包括：\n1. 问题背景\n2. 具体要求（预测/优化/评价等）\n3. 约束条件\n4. 如有数据文件，请先到「数据」标签上传'}
+          placeholder={'请描述您的研究问题，包括：\n1. 研究背景与目标\n2. 具体要求（优化/预测/评价/分类/仿真等）\n3. 数据情况（如有数据文件，请先到「数据」标签上传；无数据可选"系统自动搜集"）\n4. 约束条件或特殊要求\n5. 目标投稿会议/期刊（可选，系统会自动推荐模板）'}
           value={problemText}
           onChange={e => setProblemText(e.target.value)}
           rows={10}
@@ -251,10 +252,10 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
       </div>
 
       <div className={styles.section}>
-        <div className={styles.sectionTitle}>⚙️ 工作流配置</div>
+        <div className={styles.sectionTitle}>⚙️ 工作流与模板</div>
 
         <div className={styles.optionGroup}>
-          <div className={styles.optionLabel}>工作流模式</div>
+          <div className={styles.optionLabel}>工作流模式（系统会根据问题自动推荐，您也可以手动选择）</div>
           <div className={styles.optionCards}>
             {WORKFLOWS.map(wf => (
               <div
@@ -284,7 +285,7 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
             <span className={styles.toggleTrack}>
               <span className={styles.toggleThumb} />
             </span>
-            <span className={styles.toggleLabel}>启用 Critique-Improvement 质量循环（推荐，会增加耗时）</span>
+            <span className={styles.toggleLabel}>启用自评质量循环（Writer 自评 + 自动重写，推荐开启）</span>
           </label>
         </div>
       </div>
@@ -300,7 +301,7 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
 
       <div className={styles.btnRow}>
         <button className={styles.submitBtn} onClick={handleSubmit} disabled={submitting || !problemText.trim() || isRunning}>
-          {submitting ? '🚀 启动中...' : isRunning ? `🔄 生成中 ${progress}%` : '🚀 启动全自动生成'}
+          {submitting ? '🚀 启动中...' : isRunning ? `🔄 生成中 ${progress}%` : '🚀 启动多智能体协作生成'}
         </button>
       </div>
     </div>
