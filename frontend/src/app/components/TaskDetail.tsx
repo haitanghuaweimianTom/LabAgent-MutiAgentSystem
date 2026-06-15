@@ -19,6 +19,7 @@ interface Message {
 interface TaskDetailProps {
   taskId: string;
   onDelete: () => void;
+  onRerun?: (newTaskId: string) => void;
 }
 
 const TEAM_COLORS: Record<string, string> = {
@@ -52,7 +53,7 @@ function formatTime(iso: string) {
   try { return new Date(iso).toLocaleString('zh-CN', { hour12: false }); } catch { return iso; }
 }
 
-export default function TaskDetail({ taskId, onDelete }: TaskDetailProps) {
+export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProps) {
   const [activeTab, setActiveTab] = useState<'messages' | 'result' | 'peer_review' | 'info'>('messages');
   const taskState = useTaskState({ taskId });
   const [messages, setMessages] = useState<Message[]>([]);
@@ -62,6 +63,7 @@ export default function TaskDetail({ taskId, onDelete }: TaskDetailProps) {
   const [exporting, setExporting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [cancelled, setCancelled] = useState(false);
+  const [rerunning, setRerunning] = useState(false);
   const [feedback, setFeedback] = useState({ overall: 5, category: 'method_selection', comment: '' });
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
   const [feedbackSent, setFeedbackSent] = useState(false);
@@ -133,6 +135,27 @@ export default function TaskDetail({ taskId, onDelete }: TaskDetailProps) {
     } catch { alert('取消失败'); } finally { setCancelling(false); }
   };
 
+  const canRerun = meta?.status && ['completed', 'failed', 'cancelled', 'interrupted', 'cannot_solve'].includes(meta.status);
+
+  const handleRerun = async () => {
+    if (!confirm('将使用当前系统配置重新执行此任务，是否继续？')) return;
+    setRerunning(true);
+    try {
+      const res = await fetch(apiBase() + '/tasks/' + taskId + '/rerun', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        alert(`✅ 新任务已创建: ${data.task_id}\n使用配置: ${data.template} / ${data.workflow_type}`);
+        if (onRerun) onRerun(data.task_id);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(`重新执行失败: ${err.detail || res.status}`);
+      }
+    } catch { alert('重新执行失败'); } finally { setRerunning(false); }
+  };
+
   const handleSubmitFeedback = async () => {
     setSubmittingFeedback(true);
     try {
@@ -190,6 +213,11 @@ export default function TaskDetail({ taskId, onDelete }: TaskDetailProps) {
           <button className={styles.exportBtn} onClick={handleExport} disabled={exporting}>
             {exporting ? '导出中...' : '💾 导出到桌面'}
           </button>
+          {canRerun && (
+            <button className={styles.exportBtn} onClick={handleRerun} disabled={rerunning}>
+              {rerunning ? '创建中...' : '🔄 重新执行'}
+            </button>
+          )}
           <button className={styles.deleteBtn} onClick={onDelete}>🗑️ 删除</button>
         </div>
       </div>

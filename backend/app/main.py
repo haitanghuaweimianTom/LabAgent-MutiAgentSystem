@@ -66,6 +66,16 @@ async def lifespan(app: FastAPI):
     ensure_dirs()
     # 迁移旧格式 provider 配置
     migrate_legacy_to_new()
+    # 自动检测并同步 ccswitch Provider 配置
+    try:
+        from .core.provider_config import sync_ccswitch_to_local
+        result = sync_ccswitch_to_local()
+        if result["synced"] > 0:
+            logger.info(f"ccswitch 同步完成: {result['added']} 新增, {result['updated']} 更新, 默认={result['default']}")
+        else:
+            logger.info("ccswitch: 未检测到可同步的 Provider")
+    except Exception as e:
+        logger.debug(f"ccswitch 同步跳过: {e}")
     try:
         from .core.task_persistence import list_all_tasks, mark_interrupted_tasks
         tasks = list_all_tasks()
@@ -328,6 +338,23 @@ async def update_runtime_settings(body: SettingsUpdate):
 
 # Provider 管理已移至 backend/app/routers/providers.py
 # 以下为调试和测试端点
+
+
+@app.post("/api/v1/providers/ccswitch-sync")
+async def ccswitch_sync():
+    """手动触发 ccswitch Provider 同步"""
+    from .core.provider_config import sync_ccswitch_to_local, detect_ccswitch_providers
+    detected = detect_ccswitch_providers()
+    if not detected:
+        return {"success": False, "message": "未检测到 ccswitch 或无可用 Provider", "detected": 0}
+    result = sync_ccswitch_to_local()
+    # 同步后重置 orchestrator，让 Agent 使用新 provider
+    reset_orchestrator()
+    return {
+        "success": True,
+        "message": f"同步完成: {result['added']} 新增, {result['updated']} 更新",
+        **result,
+    }
 
 
 @app.get("/api/v1/debug/key")

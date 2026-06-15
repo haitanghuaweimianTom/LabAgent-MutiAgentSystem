@@ -261,7 +261,13 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
               <div
                 key={wf.id}
                 className={`${styles.optionCard} ${workflow === wf.id ? styles.optionCardActive : ''}`}
-                onClick={() => setWorkflow(wf.id)}
+                onClick={() => {
+                  setWorkflow(wf.id);
+                  // 深度研究工作流自动切换为系统搜集数据，无需用户手动配置
+                  if (wf.id === 'deep_research') {
+                    setDataSource('self_collect');
+                  }
+                }}
               >
                 <div className={styles.optionCardName}>{wf.name}</div>
                 <div className={styles.optionCardDesc}>{wf.desc}</div>

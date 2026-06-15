@@ -67,6 +67,13 @@ class TaskCancelRequest(BaseModel):
     reason: Optional[str] = None
 
 
+class RerunRequest(BaseModel):
+    """重新执行请求 — 所有字段可选，不传则沿用历史任务配置"""
+    template: Optional[str] = None
+    workflow_type: Optional[str] = None
+    mode: Optional[str] = None
+
+
 class ChatMessage(BaseModel):
     sender: str
     content: str

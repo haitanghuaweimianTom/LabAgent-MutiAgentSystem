@@ -392,3 +392,122 @@ def parse_cc_switch_json(config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         "meta": {"api_format": api_format},
         "notes": "从 CC Switch JSON 导入",
     }
+
+
+# ===== CC Switch SQLite 自动检测 =====
+
+CCSWITCH_DB = Path.home() / ".cc-switch" / "cc-switch.db"
+
+
+def detect_ccswitch_providers() -> List[Dict[str, Any]]:
+    """从 ccswitch SQLite 数据库读取所有 claude 类型的 Provider 配置。
+
+    返回已解析的 provider 列表（可直接用于 add_custom_provider 或同步）。
+    如果 ccswitch 未安装或数据库不存在，返回空列表。
+    """
+    if not CCSWITCH_DB.exists():
+        return []
+
+    try:
+        import sqlite3
+        conn = sqlite3.connect(str(CCSWITCH_DB))
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT id, name, settings_config, is_current FROM providers WHERE app_type='claude'"
+        ).fetchall()
+        conn.close()
+    except Exception as e:
+        logger.warning(f"读取 ccswitch 数据库失败: {e}")
+        return []
+
+    providers = []
+    for row in rows:
+        try:
+            config = json.loads(row["settings_config"])
+        except (json.JSONDecodeError, TypeError):
+            continue
+
+        parsed = parse_cc_switch_json(config)
+        if not parsed or not parsed.get("api_key") or not parsed.get("api_host"):
+            continue
+
+        # 保留原始 ID 和名称
+        parsed["id"] = row["id"]
+        parsed["name"] = row["name"] or parsed["name"]
+        parsed["_ccswitch_current"] = bool(row["is_current"])
+        providers.append(parsed)
+
+    return providers
+
+
+def sync_ccswitch_to_local() -> Dict[str, Any]:
+    """将 ccswitch 中的 Provider 同步到本地 custom_providers.json。
+
+    策略：
+    - 本地已存在的 provider（按 id 匹配）→ 更新 api_key / api_host / models
+    - 本地不存在的 → 新增
+    - ccswitch 标记为 current 的 → 设为 default_provider
+
+    返回 {"synced": int, "added": int, "updated": int, "default": str}
+    """
+    ccswitch_providers = detect_ccswitch_providers()
+    if not ccswitch_providers:
+        return {"synced": 0, "added": 0, "updated": 0, "default": ""}
+
+    config = _read_config()
+    local_providers = config.get("providers", [])
+    local_by_id = {p["id"]: p for p in local_providers}
+
+    added = 0
+    updated = 0
+    current_id = ""
+
+    for cs_p in ccswitch_providers:
+        pid = cs_p["id"]
+        if cs_p.get("_ccswitch_current"):
+            current_id = pid
+
+        if pid in local_by_id:
+            # 更新已有 provider 的关键字段
+            local = local_by_id[pid]
+            local["api_key"] = cs_p["api_key"]
+            local["api_host"] = cs_p["api_host"]
+            if cs_p.get("models"):
+                local["models"] = cs_p["models"]
+            local["meta"] = cs_p.get("meta", local.get("meta", {}))
+            local["updated_at"] = int(time.time())
+            updated += 1
+        else:
+            # 新增
+            new_p = {
+                "id": pid,
+                "name": cs_p["name"],
+                "type": cs_p.get("type", "anthropic"),
+                "category": "custom",
+                "meta": cs_p.get("meta", {"api_format": "anthropic"}),
+                "api_key": cs_p["api_key"],
+                "api_host": cs_p["api_host"],
+                "models": cs_p.get("models", []),
+                "enabled": True,
+                "icon": "Claude",
+                "icon_color": "#d97706",
+                "notes": "从 ccswitch 自动同步",
+                "created_at": int(time.time()),
+                "updated_at": int(time.time()),
+                "_version": 2,
+            }
+            local_providers.append(new_p)
+            added += 1
+
+    config["providers"] = local_providers
+    if current_id:
+        config["default_provider"] = current_id
+
+    _write_config(config)
+
+    return {
+        "synced": added + updated,
+        "added": added,
+        "updated": updated,
+        "default": current_id,
+    }

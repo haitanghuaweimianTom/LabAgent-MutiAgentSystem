@@ -1095,10 +1095,8 @@ class SolverAgent(BaseAgent):
                 raw_code = _extract_code_from_response(content)
                 if not raw_code:
                     try:
-                        start = content.find("{")
-                        end = content.rfind("}") + 1
-                        if start != -1 and end > start:
-                            parsed = json.loads(content[start:end])
+                        parsed = self.extract_json(content)
+                        if parsed:
                             raw_code = parsed.get("code", "")
                     except Exception:
                         pass
@@ -1283,10 +1281,8 @@ class SolverAgent(BaseAgent):
 
                 # 尝试从JSON中提取code_files
                 try:
-                    start = content.find("{")
-                    end = content.rfind("}") + 1
-                    if start != -1 and end > start:
-                        parsed = json.loads(content[start:end])
+                    parsed = self.extract_json(content)
+                    if parsed:
                         code_files = parsed.get("code_files", [])
                         if code_files and isinstance(code_files, list):
                             raw_code = code_files[0].get("code", "")
@@ -1487,10 +1483,8 @@ class SolverAgent(BaseAgent):
 
             # 尝试JSON解析
             try:
-                start = content.find("{")
-                end = content.rfind("}") + 1
-                if start != -1 and end > start:
-                    parsed = json.loads(content[start:end])
+                parsed = self.extract_json(content)
+                if parsed:
                     code_files = parsed.get("code_files", [])
                     if code_files and isinstance(code_files, list):
                         raw_code = code_files[0].get("code", "")

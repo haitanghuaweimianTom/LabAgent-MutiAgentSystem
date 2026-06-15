@@ -618,10 +618,8 @@ class ResearchAgent(BaseAgent):
         try:
             response = await self.call_llm(messages=messages, context=context)
             content = response.get("choices", [{}])[0].get("message", {}).get("content", "{}")
-            start = content.find("{")
-            end = content.rfind("}") + 1
-            if start != -1 and end > start:
-                result = json.loads(content[start:end])
+            result = self.extract_json(content)
+            if result:
 
                 # 可靠性关键：用已验证文献强制覆盖 LLM 生成的 papers，防止幻觉
                 if verified_papers:

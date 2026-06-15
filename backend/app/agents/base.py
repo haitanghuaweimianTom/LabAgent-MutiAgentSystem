@@ -393,6 +393,44 @@ class BaseAgent(ABC):
     # 子类可以重写这个属性来使用 Claude Code 后端
     default_llm_backend: str = "minimax"
 
+    @staticmethod
+    def extract_json(text: str) -> Optional[Dict[str, Any]]:
+        """从 LLM 输出中健壮提取 JSON 对象。
+
+        处理常见问题：
+        - markdown 代码块包裹 (```json ... ```)
+        - JSON 前有大段 markdown 文本
+        - trailing comma（LLM 高频错误）
+        - 单引号替换成双引号
+        """
+        if not text:
+            return None
+
+        # 优先提取 ```json 代码块
+        code_block = re.search(r"```(?:json)?\s*\n?(.*?)\n?\s*```", text, re.DOTALL)
+        if code_block:
+            json_str = code_block.group(1).strip()
+        else:
+            # 找最外层 { ... }（支持嵌套）
+            start = text.find("{")
+            end = text.rfind("}") + 1
+            if start == -1 or end <= start:
+                return None
+            json_str = text[start:end]
+
+        # 修复 trailing comma: ,} → } , ,] → ]
+        json_str = re.sub(r",\s*([}\]])", r"\1", json_str)
+
+        try:
+            return json.loads(json_str)
+        except json.JSONDecodeError:
+            # 最后尝试：替换单引号（偶尔 LLM 用 Python dict 风格）
+            try:
+                return json.loads(json_str.replace("'", '"'))
+            except json.JSONDecodeError:
+                logger.debug(f"extract_json: 无法解析 JSON，前100字符: {json_str[:100]}")
+                return None
+
     def __init__(
         self,
         model: Optional[str] = None,
@@ -459,6 +497,26 @@ class BaseAgent(ABC):
             logger.info(f"[{self.name}] 使用 Provider: {provider['name']} ({provider['type']}) model={self.model}")
         elif provider:
             logger.warning(f"[{self.name}] Provider {provider.get('name')} 缺少 api_key 或 api_host")
+
+    def _try_next_provider(self, exclude_ids: Optional[set] = None) -> bool:
+        """当前 Provider 失败时，尝试切换到另一个可用 Provider。返回是否成功切换。"""
+        from ..core.provider_config import list_custom_providers
+        exclude = exclude_ids or set()
+        exclude.add(self.provider_id)  # 排除当前失败的
+        for p in list_custom_providers():
+            pid = p.get("id", "")
+            if pid in exclude or not p.get("enabled"):
+                continue
+            if p.get("api_key") and p.get("api_host"):
+                self.api_key = p["api_key"]
+                self.api_base_url = p["api_host"]
+                self.provider_id = pid
+                meta = p.get("meta", {})
+                self._provider_auth_field = meta.get("auth_field", "")
+                logger.info(f"[{self.name}] 自动切换到备用 Provider: {p['name']} ({pid})")
+                return True
+        logger.warning(f"[{self.name}] 所有 Provider 均不可用，进入演示模式")
+        return False
 
     # 子类可以重写此属性以获得更大的token限制
     _max_tokens_override: int = 0
@@ -857,6 +915,26 @@ class BaseAgent(ABC):
         except httpx.HTTPStatusError as e:
             err_text = e.response.content.decode("utf-8", errors="replace")[:300]
             logger.error(f"[{self.name}] Anthropic HTTP {e.response.status_code}: {err_text}")
+            # 401/403 → 尝试自动切换到其他可用 Provider
+            if e.response.status_code in (401, 403) and self._try_next_provider():
+                logger.info(f"[{self.name}] 切换 Provider 后重试请求...")
+                try:
+                    if self._provider_auth_field == "anthropic_auth_token":
+                        headers = {"Authorization": f"Bearer {self.api_key}", "anthropic-version": "2023-06-01", "content-type": "application/json"}
+                    else:
+                        headers = {"x-api-key": self.api_key, "anthropic-version": "2023-06-01", "content-type": "application/json"}
+                    async with httpx.AsyncClient(timeout=timeout) as client:
+                        response = await client.post(
+                            f"{self.api_base_url}/v1/messages",
+                            headers=headers,
+                            content=body_bytes,
+                        )
+                        response.raise_for_status()
+                        text = response.content.decode("utf-8")
+                        data = json.loads(text)
+                        return _normalize(data)
+                except Exception as retry_err:
+                    logger.error(f"[{self.name}] 切换 Provider 后重试仍失败: {retry_err}")
             self._call_context["error"] = f"HTTP {e.response.status_code}"
             return self._mock_response(messages)
         except Exception as e:

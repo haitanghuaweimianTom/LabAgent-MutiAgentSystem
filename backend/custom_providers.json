@@ -1,39 +1,6 @@
 {
   "providers": [
     {
-      "id": "aliyun",
-      "name": "aliyun",
-      "type": "openai",
-      "category": "custom",
-      "meta": {
-        "api_format": "anthropic",
-        "auth_field": "anthropic_auth_token"
-      },
-      "api_key": "sk-sp-djI.oPDSx4O6OMJgv62-ebz4Sl2UPlAFk6JfSjPIYheEW79ckMce5DEOJh7B5P8_kc1g6JjxksaKRJfVm1GB9g-FmhLNTLxV674TJWcImiLN2ekMPRQgJZP7f3cLULeM2lOSod2hoGIDCgC9Fr4rHWe9Zwjs8BNWl1nSwm0sxrn7O0AFMiWwvgGpZCaZCbUoZ0jQxJ6UDkNjWW-WlRtmmeXyguxW9CTR5fhoLaLZ1UV7XJziVEgjMshBKsBRZE3uyIwccYRr_RCRTh1SkW6qapCLj71yfJvPY_Kue51Hb7zKm5_WLTqdJ6YnwYehau2FCm31XwM5B9XCoj2DNPoADV_tPg.MEYCIQDlw3OvwZKuJHJT4hN5g8LmD_GIwnZKitOj_oLZLFlXYwIhAKUHcFeeaeO2MyN9yAJOb_0y0e4WhgB0azvsMM-SFCXZ",
-      "api_host": "https://token-plan.cn-beijing.maas.aliyuncs.com/apps/anthropic",
-      "models": [
-        {
-          "name": "qwen3.6-plus",
-          "enabled": true
-        },
-        {
-          "name": "minimax-2.5",
-          "enabled": true
-        },
-        {
-          "name": "glm-5.1",
-          "enabled": true
-        }
-      ],
-      "enabled": true,
-      "icon": "OpenAI",
-      "icon_color": "#10a37f",
-      "notes": "",
-      "created_at": 1778584106,
-      "updated_at": 1778585766,
-      "_version": 2
-    },
-    {
       "id": "kimi",
       "name": "kimi",
       "type": "openai",
@@ -64,8 +31,7 @@
       "type": "openai",
       "category": "custom",
       "meta": {
-        "api_format": "anthropic",
-        "auth_field": "anthropic_auth_token"
+        "api_format": "anthropic"
       },
       "api_key": "sk-cp-wPOYBPl7QAyll27SO0SGc0XzGL7Z6nsURt1Ssyk_qs09HUqNBKy4fWpjxsaPvLcGQr4mbw_cduJ1Qaaq4ZXkHC-YS5_2xXd4-fsgoG9q-NcSZdhL8q5sKms",
       "api_host": "https://api.minimaxi.com/anthropic",
@@ -80,7 +46,7 @@
       "icon_color": "#10a37f",
       "notes": "MiniMax Anthropic-compatible endpoint",
       "created_at": 1781268770,
-      "updated_at": 1781268770,
+      "updated_at": 1781511370,
       "_version": 2
     },
     {
@@ -95,9 +61,18 @@
       "api_key": "tp-ce2nztxc17yabp79kpjp8myb87p3d5bw2gwgs328iorhick4",
       "api_host": "https://token-plan-cn.xiaomimimo.com/anthropic",
       "models": [
-        {"name": "mimo-V2-pro", "enabled": true},
-        {"name": "mimo-V2.5-pro", "enabled": true},
-        {"name": "mimo-V2-flash", "enabled": true}
+        {
+          "name": "mimo-V2-pro",
+          "enabled": true
+        },
+        {
+          "name": "mimo-V2.5-pro",
+          "enabled": true
+        },
+        {
+          "name": "mimo-V2-flash",
+          "enabled": true
+        }
       ],
       "enabled": true,
       "icon": "OpenAI",
@@ -106,8 +81,56 @@
       "created_at": 1781343000,
       "updated_at": 1781343000,
       "_version": 2
+    },
+    {
+      "id": "d6cf73d0-0e74-4c48-9b48-8a16ed5264d2",
+      "name": "Kimi For Coding",
+      "type": "anthropic",
+      "category": "custom",
+      "meta": {
+        "api_format": "anthropic"
+      },
+      "api_key": "sk-kimi-De72wrqT1WxxN8fMFD1P4hrGgfe7z0cjzpuREELDM40CwE1IM2H8wM6Iju9WHOWP",
+      "api_host": "https://api.kimi.com/coding/",
+      "models": [
+        {
+          "name": "sonnet",
+          "enabled": true
+        }
+      ],
+      "enabled": true,
+      "icon": "Claude",
+      "icon_color": "#d97706",
+      "notes": "从 ccswitch 自动同步",
+      "created_at": 1781505613,
+      "updated_at": 1781511370,
+      "_version": 2
+    },
+    {
+      "id": "1a961b5b-b541-47f3-9a20-6a62c4905a22",
+      "name": "Xiaomi MiMo",
+      "type": "anthropic",
+      "category": "custom",
+      "meta": {
+        "api_format": "anthropic"
+      },
+      "api_key": "tp-ce2nztxc17yabp79kpjp8myb87p3d5bw2gwgs328i0rhick4",
+      "api_host": "https://token-plan-cn.xiaomimimo.com/anthropic",
+      "models": [
+        {
+          "name": "sonnet",
+          "enabled": true
+        }
+      ],
+      "enabled": true,
+      "icon": "Claude",
+      "icon_color": "#d97706",
+      "notes": "从 ccswitch 自动同步",
+      "created_at": 1781505613,
+      "updated_at": 1781511370,
+      "_version": 2
     }
   ],
-  "default_provider": "mimo",
+  "default_provider": "d6cf73d0-0e74-4c48-9b48-8a16ed5264d2",
   "_version": 2
 }

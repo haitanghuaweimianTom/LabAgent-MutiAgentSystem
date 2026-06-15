@@ -215,7 +215,9 @@ class PreflightDecisionService:
             report.recommended_mode = mode
 
         # 数据为空 → 强制 missing + collection_plan
-        if not data_files:
+        # 但 deep_research 工作流本身设计为自主搜索数据，不强制标记 MISSING
+        effective_workflow = workflow_type or report.recommended_workflow
+        if not data_files and effective_workflow != "deep_research":
             report.data_adequacy = DataAdequacy.MISSING
             report.has_data_confidence = 0.0
             if not report.collection_plan:

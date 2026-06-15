@@ -328,10 +328,7 @@ class ModelerAgent(BaseAgent):
             try:
                 response = await self.call_llm(messages=messages, temperature=0.3)
                 content = response.get("choices", [{}])[0].get("message", {}).get("content", "")
-                start = content.find("{")
-                end = content.rfind("}") + 1
-                if start != -1 and end > start:
-                    model_result = json.loads(content[start:end])
+                model_result = self.extract_json(content)
             except Exception as e:
                 logger.warning(f"ModelerAgent 逐个建模LLM失败: {e}，使用模板")
 
@@ -387,10 +384,8 @@ class ModelerAgent(BaseAgent):
         try:
             response = await self.call_llm(messages=messages)
             content = response.get("choices", [{}])[0].get("message", {}).get("content", "")
-            start = content.find("{")
-            end = content.rfind("}") + 1
-            if start != -1 and end > start:
-                result = json.loads(content[start:end])
+            result = self.extract_json(content)
+            if result:
                 result["sub_problem_index"] = sub_idx
                 result["sub_problem_name"] = sub_problem.get("name", f"子问题{sub_idx+1}")
                 logger.info(f"ModelerAgent 完成: {result.get('model_name', 'unknown')}")
@@ -482,10 +477,8 @@ class ModelerAgent(BaseAgent):
         try:
             response = await self.call_llm(messages=messages, temperature=0.3)
             content = response.get("choices", [{}])[0].get("message", {}).get("content", "")
-            start = content.find("{")
-            end = content.rfind("}") + 1
-            if start != -1 and end > start:
-                result = json.loads(content[start:end])
+            result = self.extract_json(content)
+            if result:
                 models = result.get("sub_problem_models", [])
                 logger.info(f"ModelerAgent: LLM返回 {len(models)}/{len(sub_problems)} 个模型")
 

@@ -1769,13 +1769,9 @@ class WriterAgent(BaseAgent):
             content = "\n".join(lines).strip()
 
         # 寻找第一个 { 和最后一个 }
-        start = content.find("{")
-        end = content.rfind("}") + 1
-        if start != -1 and end > start:
-            try:
-                return json.loads(content[start:end])
-            except json.JSONDecodeError:
-                pass
+        result = self.extract_json(content)
+        if result:
+            return result
         return {}
 
 

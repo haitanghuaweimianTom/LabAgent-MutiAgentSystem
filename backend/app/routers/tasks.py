@@ -12,7 +12,7 @@ from fastapi.responses import StreamingResponse
 
 from ..schemas import (
     TaskCreateRequest, TaskStatusResponse, TaskResultResponse,
-    TaskCancelRequest, TaskStatus,
+    TaskCancelRequest, TaskStatus, RerunRequest,
 )
 from ..agents import (
     Orchestrator, ResearchAgent, AnalyzerAgent, ModelerAgent,
@@ -280,7 +280,9 @@ async def submit_task(req: TaskCreateRequest):
                 logger.warning(f"Task {task_id}: 自主搜集数据异常: {e}")
 
     # 6. 仍然缺失数据 → 422 要求上传
-    if preflight_report.data_adequacy == DataAdequacy.MISSING and not data_files:
+    # 但 deep_research 工作流自主搜索数据，不拦截；用户选了 self_collect 也尊重
+    final_workflow_check = workflow_type or preflight_report.recommended_workflow
+    if preflight_report.data_adequacy == DataAdequacy.MISSING and not data_files and final_workflow_check != "deep_research":
         logger.warning(f"Task {task_id}: 无数据且无法自主搜集，要求用户上传")
         save_task_metadata(
             task_id=task_id,
@@ -935,6 +937,83 @@ async def cancel(task_id: str, req: TaskCancelRequest):
         )
 
     return {"task_id": task_id, "status": "cancelled"}
+
+
+@router.post("/{task_id}/rerun")
+async def rerun_task(task_id: str, req: Optional[RerunRequest] = None):
+    """用当前系统配置重新执行一个历史任务。
+
+    从历史任务元数据中读取问题描述、数据文件、项目等信息，
+    使用当前最新的 API 配置（provider / key / model）重新执行。
+    """
+    meta = load_task_metadata(task_id)
+    if not meta:
+        raise HTTPException(status_code=404, detail="任务不存在")
+
+    # 生成新 task_id
+    new_task_id = "task_" + uuid4().hex[:12]
+    created_at = datetime.now().isoformat()
+
+    # 从历史任务提取参数，用户可覆盖
+    problem_text = meta.get("problem_text", "")
+    data_files = meta.get("data_files", [])
+    project_name = meta.get("project_name")
+    knowledge_base_id = meta.get("knowledge_base_id")
+    template = (req.template if req and req.template else None) or meta.get("template", "math_modeling")
+    workflow_type = (req.workflow_type if req and req.workflow_type else None) or meta.get("workflow_type", "standard")
+    mode = (req.mode if req and req.mode else None) or meta.get("mode", "batch")
+
+    logger.info(f"Rerun task {task_id} → new task {new_task_id} (template={template}, workflow={workflow_type})")
+
+    # 关联到同一项目
+    if project_name:
+        from ..core.project_persistence import get_project, create_project, add_task_to_project
+        if not get_project(project_name):
+            create_project(name=project_name)
+        add_task_to_project(project_name, new_task_id)
+
+    # 重置 orchestrator 以使用当前最新的 API 配置
+    reset_orchestrator()
+
+    # 保存新任务初始状态
+    save_task_metadata(
+        task_id=new_task_id,
+        problem_text=problem_text,
+        status=TaskStatus.RUNNING,
+        created_at=created_at,
+        total_steps=0,
+        progress=0,
+        current_step="重新执行中",
+        data_files=data_files,
+        project_name=project_name,
+        knowledge_base_id=knowledge_base_id,
+        template=template,
+        workflow_type=workflow_type,
+        mode=mode,
+        rerun_of=task_id,
+    )
+
+    # 启动异步工作流
+    asyncio.create_task(_run_workflow(
+        task_id=new_task_id,
+        problem_text=problem_text,
+        workflow=None,
+        data_files=data_files,
+        mode=mode,
+        project_name=project_name,
+        knowledge_base_id=knowledge_base_id,
+        template=template,
+        workflow_type=workflow_type,
+    ))
+
+    return {
+        "task_id": new_task_id,
+        "rerun_of": task_id,
+        "status": "running",
+        "message": f"已基于历史任务 {task_id} 重新执行，使用当前系统配置",
+        "template": template,
+        "workflow_type": workflow_type,
+    }
 
 
 @router.delete("/{task_id}")

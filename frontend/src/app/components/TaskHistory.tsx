@@ -175,7 +175,11 @@ export default function TaskHistory() {
 
       <div className={styles.detailPanel}>
         {detailTaskId ? (
-          <TaskDetail taskId={detailTaskId} onDelete={() => handleDeleteOne(detailTaskId)} />
+          <TaskDetail
+            taskId={detailTaskId}
+            onDelete={() => handleDeleteOne(detailTaskId)}
+            onRerun={(newTaskId) => { loadTaskList(); setDetailTaskId(newTaskId); }}
+          />
         ) : (
           <div className={styles.empty}>👈 点击左侧任务查看详情</div>
         )}
