@@ -16,11 +16,6 @@ const WORKFLOWS = [
 // 旧 hardcoded 4 模板已被 TemplateSelector 组件替代。
 const TEMPLATES = TEMPLATE_OPTIONS;
 
-const SOLVE_MODES = [
-  { id: 'sequential', name: '逐个递进', desc: '前序结果递进至后序' },
-  { id: 'batch', name: '批量并行', desc: '各子问题独立求解' },
-];
-
 interface ProblemInputProps {
   onSubmit: (params: {
     problemText: string;
@@ -53,7 +48,6 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
   const [problemText, setProblemText] = useState('');
   const [workflow, setWorkflow] = useState('standard');
   const [template, setTemplate] = useState('math_modeling');
-  const [mode, setMode] = useState('sequential');
   const [dataSource, setDataSource] = useState<'upload' | 'self_collect' | 'upload_and_collect'>('upload');
   const [problemType, setProblemType] = useState('未知');
   const [useCritique, setUseCritique] = useState(true);
@@ -113,7 +107,7 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
       projectName: finalProjectName,
       workflow,
       template,
-      mode,
+      mode: 'sequential',
       useCritique,
       knowledgeBaseId,
       dataSource,
@@ -282,19 +276,6 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
             onChange={(t) => setTemplate(t)}
             disabled={submitting}
           />
-        </div>
-
-        <div className={styles.optionGroup}>
-          <div className={styles.optionLabel}>求解策略</div>
-          <div className={styles.inlineOptions}>
-            {SOLVE_MODES.map(sm => (
-              <label key={sm.id} className={`${styles.inlineOption} ${mode === sm.id ? styles.inlineOptionActive : ''}`}>
-                <input type="radio" name="solveMode" value={sm.id} checked={mode === sm.id} onChange={() => setMode(sm.id)} />
-                <span className={styles.inlineName}>{sm.name}</span>
-                <span className={styles.inlineDesc}>{sm.desc}</span>
-              </label>
-            ))}
-          </div>
         </div>
 
         <div className={styles.optionGroup}>

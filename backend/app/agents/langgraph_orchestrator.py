@@ -375,88 +375,190 @@ class LangGraphOrchestrator:
         return {**state, "results": new_results, "current_step": "research_done"}
 
     async def _node_modeler(self, state: TaskState) -> TaskState:
-        """调用 modeler_agent，传入子问题列表和数据分析结果。"""
+        """逐个子问题建模：每个子问题独立建模，前序结果递进传递给后序。"""
         agent = self.agents.get("modeler_agent")
         if not agent:
             return {**state, "current_step": "modeler_missing"}
 
         task_id = state["task_id"]
-        self._update_progress(task_id, state["problem_text"], 45, "建模中")
+        sub_problems = state.get("sub_problems", [])
+        results = state.get("results", {})
+        all_models = []
 
         agent._knowledge_base_id = state.get("knowledge_base_id")
-        output = await agent.execute(
-            task_input={
-                "action": "model",
-                "problem_text": state["problem_text"],
-                "sub_problems": state.get("sub_problems", []),
-            },
-            context=self._agent_context(state),
-        )
 
-        new_results = {**state.get("results", {}), "modeler_agent": output}
-        self._post_chat(task_id, "modeler_agent", "建模完成")
+        for i, sp in enumerate(sub_problems):
+            sp_id = sp.get("id", i + 1)
+            sp_name = sp.get("name", sp.get("description", f"子问题{sp_id}"))[:80]
+            progress = 45 + int(10 * (i + 1) / max(len(sub_problems), 1))
+            self._update_progress(task_id, state["problem_text"], progress, f"建模中：{sp_name}")
+
+            # 前序模型摘要（递进传递）
+            prev_model_summary = ""
+            for j, pm in enumerate(all_models):
+                prev_name = pm.get("sub_problem_name", f"子问题{j+1}")
+                prev_obj = pm.get("objective_function", "")
+                prev_vars = pm.get("decision_variables", [])
+                prev_model_summary += f"- {prev_name}: {prev_obj[:80]}，变量: {', '.join([v.get('name','') for v in prev_vars[:3]])}\n"
+
+            try:
+                output = await agent.execute(
+                    task_input={"action": "build_model", "sub_problem_id": sp_id},
+                    context={
+                        **self._agent_context(state),
+                        "results": results,
+                        "sub_problems": sub_problems,
+                        "sub_problem_index": i,
+                        "sub_problem": sp,
+                        "previous_models": all_models,
+                        "previous_model_summary": prev_model_summary,
+                    },
+                )
+                all_models.append({**output, "sub_problem_id": sp_id, "sub_problem_name": sp_name})
+                self._post_chat(task_id, "modeler_agent", f"[{i+1}/{len(sub_problems)}] 建模完成：{sp_name}（{output.get('model_name', '')}）")
+            except Exception as exc:
+                logger.error(f"[LangGraph:{task_id}] modeler sp{sp_id} failed: {exc}")
+                all_models.append({"sub_problem_id": sp_id, "sub_problem_name": sp_name, "error": str(exc)})
+
+        modeler_output = {"sub_problem_models": all_models}
+        new_results = {**results, "modeler_agent": modeler_output}
+
+        # 更新黑板
+        wm = self._get_working_memory(task_id)
+        if wm:
+            wm.set_result("modeler_agent", modeler_output)
+            for m in all_models:
+                wm.add_method({"name": m.get("model_name", ""), "type": m.get("model_type", ""), "sub_problem": m.get("sub_problem_name", "")})
+
+        self._post_chat(task_id, "modeler_agent", f"全部 {len(sub_problems)} 个子问题建模完成")
         return {**state, "results": new_results, "current_step": "modeler_done"}
 
     async def _node_iterative_solver(self, state: TaskState) -> TaskState:
-        """自主迭代求解：失败时自动修复，达到上限后多 Agent 投票。"""
+        """逐个子问题求解 + 自主迭代修复。
+
+        对每个子问题：
+        1. 用对应模型结果调 solver_agent
+        2. Harness 评判（ResultValidator + CrossValidator + CodeManifest）
+        3. 失败时注入错误分类和修复建议，重试（最多 max_solver_iterations 次）
+        4. 仍失败则多 Agent 投票决定 retry / collect_data / abort
+        """
         agent = self.agents.get("solver_agent")
         if not agent:
             return {**state, "current_step": "solver_missing"}
 
-        attempts = state.get("solver_attempts", [])
+        task_id = state["task_id"]
+        sub_problems = state.get("sub_problems", [])
+        results = state.get("results", {})
+        modeler_output = results.get("modeler_agent", {})
+        all_models = modeler_output.get("sub_problem_models", [])
+        all_solutions = []
+        all_attempts = list(state.get("solver_attempts", []))
         escalation = state.get("escalation_count", 0)
-        problem_text = state["problem_text"]
 
-        # 构造修复上下文
-        fix_context = ""
-        if attempts:
-            last = attempts[-1]
-            fix_context = (
-                f"\n\n## 上次求解失败信息\n"
-                f"错误：{last.get('error', '')[:500]}\n"
-                f"执行输出：{last.get('execution_result', {}).get('output', '')[:500]}\n"
-                f"请分析原因并修正代码。"
-            )
+        agent._knowledge_base_id = state.get("knowledge_base_id")
 
-        output = await agent.execute(
-            task_input={
-                "action": "solve_all",
-                "problem_text": problem_text + fix_context,
-            },
-            context=self._agent_context(state),
-        )
+        for i, sp in enumerate(sub_problems):
+            sp_id = sp.get("id", i + 1)
+            sp_name = sp.get("name", sp.get("description", f"子问题{sp_id}"))[:80]
+            progress = 55 + int(20 * (i + 1) / max(len(sub_problems), 1))
+            self._update_progress(task_id, state["problem_text"], progress, f"求解中：{sp_name}")
 
-        # Harness 评判
-        harness = await self._run_harness(output)
-        output["harness"] = harness
-        attempts.append(output)
+            # 找到对应的模型
+            model_for_sp = next((m for m in all_models if m.get("sub_problem_id") == sp_id), {})
 
-        new_state = {
-            **state,
-            "results": {**state.get("results", {}), "solver_agent": output},
-            "solver_attempts": attempts,
-            "current_step": "solver_done",
-        }
+            # 前序求解结果摘要（递进传递）
+            prev_solve_summary = ""
+            for j, ps in enumerate(all_solutions):
+                prev_name = ps.get("sub_problem_name", f"子问题{j+1}")
+                prev_findings = ps.get("results", {}).get("key_findings", [])
+                prev_numerical = ps.get("results", {}).get("numerical_results", {})
+                numerical_str = ", ".join([f"{k}={v}" for k, v in prev_numerical.items() if k != "状态"])
+                prev_solve_summary += f"- {prev_name}: {'; '.join(str(f) for f in prev_findings[:2])}, 数值: {numerical_str or '见结果'}\n"
 
-        if output.get("execution_success") and harness.get("passed"):
-            return new_state
+            # 迭代求解（含自动修复）
+            sp_attempts = []
+            sp_success = False
+            fix_context = ""
 
-        if len(attempts) >= self.cfg.max_solver_iterations:
-            vote = await self._multi_agent_vote(state, output, attempts)
-            if vote == "retry" and escalation < self.cfg.max_solver_escalations:
-                new_state["escalation_count"] = escalation + 1
-                new_state["current_step"] = "solver_escalate"
-            elif vote == "collect_data":
-                new_state["current_step"] = "self_collect"
-            else:
-                new_state["current_step"] = "cannot_solve"
-                new_state["cannot_solve_report"] = {
-                    "reason": "多 Agent 投票判定无法继续",
-                    "vote": vote,
-                    "attempts": len(attempts),
-                }
+            for attempt in range(self.cfg.max_solver_iterations):
+                try:
+                    output = await agent.execute(
+                        task_input={"action": "solve", "sub_problem_id": sp_id, "problem_text": state["problem_text"] + fix_context},
+                        context={
+                            **self._agent_context(state),
+                            "results": results,
+                            "sub_problems": sub_problems,
+                            "sub_problem_index": i,
+                            "sub_problem": sp,
+                            "model_result": model_for_sp,
+                            "section_results": all_solutions,
+                            "previous_solutions": all_solutions,
+                            "previous_solution_summary": prev_solve_summary,
+                        },
+                    )
 
-        return new_state
+                    # Harness 评判
+                    harness = await self._run_harness(output)
+                    output["harness"] = harness
+                    sp_attempts.append(output)
+                    all_attempts.append(output)
+
+                    if output.get("execution_success") and harness.get("passed"):
+                        sp_success = True
+                        all_solutions.append({**output, "sub_problem_id": sp_id, "sub_problem_name": sp_name})
+                        self._post_chat(task_id, "solver_agent", f"[{i+1}/{len(sub_problems)}] 求解成功：{sp_name}")
+                        break
+
+                    # 构造修复上下文用于下一次尝试
+                    error_info = output.get("error", "")
+                    exec_output = output.get("execution_result", {}).get("output", "")
+                    classification = output.get("error_classification", {})
+                    fix_hint = "\n".join(classification.get("fixes", []))
+                    fix_context = (
+                        f"\n\n## 上次求解失败（第 {attempt+1} 次）\n"
+                        f"错误类型: {classification.get('category', 'unknown')}\n"
+                        f"错误信息: {error_info[:500]}\n"
+                        f"修复建议: {fix_hint}\n请修正代码后重新求解。"
+                    )
+
+                except Exception as exc:
+                    logger.error(f"[LangGraph:{task_id}] solver sp{sp_id} attempt {attempt+1} failed: {exc}")
+                    sp_attempts.append({"error": str(exc), "execution_success": False})
+
+            if not sp_success:
+                # 达到迭代上限 → 多 Agent 投票
+                if len(all_attempts) >= self.cfg.max_solver_iterations:
+                    vote = await self._multi_agent_vote(state, sp_attempts[-1], all_attempts)
+                    if vote == "retry" and escalation < self.cfg.max_solver_escalations:
+                        escalation += 1
+                        self._post_chat(task_id, "coordinator", f"子问题 {sp_name} 求解失败，Agent 投票决定重试（第 {escalation} 次升级）")
+                    elif vote == "collect_data":
+                        return {**state, "solver_attempts": all_attempts, "escalation_count": escalation, "current_step": "self_collect"}
+                    else:
+                        return {
+                            **state,
+                            "solver_attempts": all_attempts,
+                            "escalation_count": escalation,
+                            "current_step": "cannot_solve",
+                            "cannot_solve_report": {"reason": f"子问题 {sp_name} 求解失败，多 Agent 投票判定无法继续", "vote": vote, "attempts": len(all_attempts)},
+                        }
+                all_solutions.append({"sub_problem_id": sp_id, "sub_problem_name": sp_name, "error": "求解失败", "execution_success": False})
+
+        # 汇总求解结果
+        solver_output = {"sub_problem_solutions": all_solutions, "execution_success": all(s.get("execution_success", False) for s in all_solutions)}
+        new_results = {**results, "solver_agent": solver_output}
+
+        # 更新黑板
+        wm = self._get_working_memory(task_id)
+        if wm:
+            wm.set_result("solver_agent", solver_output)
+            for s in all_solutions:
+                findings = s.get("results", {}).get("key_findings", [])
+                if findings:
+                    wm.set_result("solver_agent", {**wm.results.get("solver_agent", {}), "last_findings": findings})
+
+        self._post_chat(task_id, "solver_agent", f"全部 {len(sub_problems)} 个子问题求解完成")
+        return {**state, "results": new_results, "solver_attempts": all_attempts, "escalation_count": escalation, "current_step": "solver_done"}
 
     async def _run_harness(self, sol_result: Dict[str, Any]) -> Dict[str, Any]:
         """综合 Harness 评判。"""
