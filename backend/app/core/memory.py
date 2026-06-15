@@ -92,8 +92,60 @@ class WorkingMemory:
     def set_result(self, agent_name: str, result: Dict[str, Any]) -> None:
         self.results[agent_name] = result
 
-    def get_context_for_agent(self, agent_name: str) -> Dict[str, Any]:
-        """为特定 Agent 构建上下文（根据角色过滤）"""
+    def get_context_for_agent(self, agent_name: str, max_tokens: Optional[int] = None) -> Dict[str, Any]:
+        """为特定 Agent 构建上下文（根据角色过滤），可选按 token 预算裁剪。"""
+        ctx = self._build_raw_context(agent_name)
+        if max_tokens is None or max_tokens <= 0:
+            return ctx
+
+        # 按优先级排序字段
+        priority = [
+            "problem", "sub_problems", "constraints", "decisions",
+            "methods", "literature", "data_insights", "notes", "agent_results",
+            "previous_models", "previous_solutions",
+        ]
+
+        from ..core.token_budget import get_token_budget_manager
+        budget_mgr = get_token_budget_manager("default")
+
+        # 先全部序列化估算
+        serialized = {}
+        for key in priority:
+            if key in ctx:
+                serialized[key] = json.dumps(ctx[key], ensure_ascii=False)
+
+        total = sum(budget_mgr.estimate_tokens(v) for v in serialized.values())
+        if total <= max_tokens:
+            return ctx
+
+        # 按优先级保留内容，超出预算时裁剪低优先级字段
+        remaining = max_tokens
+        clipped = {}
+        for key in priority:
+            if key not in serialized:
+                continue
+            text = serialized[key]
+            need = budget_mgr.estimate_tokens(text)
+            if need <= remaining:
+                clipped[key] = ctx[key]
+                remaining -= need
+            else:
+                # 对低优先级字段做硬截断
+                allowed_chars = int(remaining / budget_mgr.estimate_tokens(text) * len(text)) if budget_mgr.estimate_tokens(text) > 0 else 0
+                if allowed_chars > 50:
+                    truncated_text = text[:allowed_chars] + '..."}]'
+                    try:
+                        clipped[key] = json.loads(truncated_text)
+                    except Exception:
+                        clipped[key] = f"[已裁剪，原长度 {len(text)} 字符]"
+                remaining = 0
+            if remaining <= 0:
+                break
+
+        return clipped
+
+    def _build_raw_context(self, agent_name: str) -> Dict[str, Any]:
+        """原始未裁剪的 Agent 上下文。"""
         ctx = {
             "problem": self.problem,
             "sub_problems": self.sub_problems,
@@ -112,20 +164,17 @@ class WorkingMemory:
             ctx["methods"] = self.methods
             ctx["constraints"] = self.constraints
             ctx["data_insights"] = self.data_insights
-            # 前序子问题的模型（sequential 模式）
             ctx["previous_models"] = self.results.get("modeler_agent", {}).get("sub_problem_models", [])
         elif agent_name == "solver_agent":
             ctx["methods"] = self.methods
             ctx["constraints"] = self.constraints
             ctx["data_insights"] = self.data_insights
-            # 前序子问题的求解（sequential 模式）
             ctx["previous_solutions"] = self.results.get("solver_agent", {}).get("sub_problem_solutions", [])
         elif agent_name == "writer_agent":
             ctx["literature"] = self.literature
             ctx["methods"] = self.methods
             ctx["decisions"] = self.decisions
 
-        # 所有 Agent 都能看到其他 Agent 的结果
         ctx["agent_results"] = {k: v for k, v in self.results.items() if k != agent_name}
         ctx["notes"] = [n for n in self.notes if n.get("to", "") in ("", agent_name)]
         return ctx

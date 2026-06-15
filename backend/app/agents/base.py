@@ -16,6 +16,10 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, TypedDict
 import httpx
 
+# Token 预算与 Agent 独立记忆
+from ..core.token_budget import get_token_budget_manager
+from ..core.agent_memory import get_agent_profile
+
 
 class ToolDef(TypedDict):
     name: str
@@ -472,6 +476,18 @@ class BaseAgent(ABC):
         self._claude_temperature = settings.claude_temperature
         self._claude_mcp_tools = settings.claude_mcp_tools.split(",") if settings.claude_mcp_tools else []
 
+        # 加载 Agent 独立记忆（可选，失败静默跳过）
+        try:
+            self._agent_profile = get_agent_profile(self.name)
+            if self._agent_profile.preferences.temperature != 0.7:
+                self.temperature = self._agent_profile.preferences.temperature
+            if self._agent_profile.preferences.max_tokens:
+                self.max_tokens = self._agent_profile.preferences.max_tokens
+            logger.debug(f"[{self.name}] 已加载 Agent 独立记忆")
+        except Exception as e:
+            self._agent_profile = None
+            logger.debug(f"[{self.name}] Agent 独立记忆加载跳过: {e}")
+
     def _resolve_provider_config(self) -> None:
         """从当前指定的 Provider（或全局默认）解析 API 配置"""
         from ..core.provider_config import get_custom_provider, get_default_provider
@@ -766,7 +782,7 @@ class BaseAgent(ABC):
             logger.debug(f"[{self.name}] 知识库查询失败: {e}")
         return ""
 
-    def _inject_memory_context(self, context: Dict[str, Any]) -> str:
+    def _inject_memory_context(self, context: Dict[str, Any], max_tokens: Optional[int] = None) -> str:
         """注入记忆系统上下文（黑板状态 + 经验教训）
 
         从 context 中提取 memory 对象，获取：
@@ -778,7 +794,7 @@ class BaseAgent(ABC):
         # 1. 黑板上下文（角色过滤后的）
         working = context.get("working_memory")
         if working:
-            agent_ctx = working.get_context_for_agent(self.name)
+            agent_ctx = working.get_context_for_agent(self.name, max_tokens=max_tokens)
             if agent_ctx.get("agent_results"):
                 result_summary = ", ".join(
                     f"{k}: {str(v)[:80]}" for k, v in agent_ctx["agent_results"].items() if k != self.name
@@ -986,29 +1002,65 @@ class BaseAgent(ABC):
                 logger.warning(f"[{self.name}] Claude CLI 后端暂不支持 ReAct tools，忽略 tools")
             return await self._call_claude_backend(messages, temperature)
 
+        # ===== Token 预算管理 =====
+        budget_mgr = get_token_budget_manager(self.model or "default")
+        user_query_tokens = budget_mgr.estimate_tokens(messages[-1].get("content", ""))
+        system_tokens = sum(budget_mgr.estimate_tokens(m.get("content", "")) for m in messages if m.get("role") == "system")
+        budget_mgr.reserve("user_query", user_query_tokens)
+        budget_mgr.reserve("system_prompt", system_tokens)
+
+        # ===== 注入 Agent 独立记忆 =====
+        agent_profile_context = ""
+        if self._agent_profile:
+            problem_type = context.get("problem_type", "") if context else ""
+            agent_profile_context = self._agent_profile.get_profile_prompt(problem_type, top_k=2)
+            allowed = budget_mgr.remaining("agent_profile")
+            if budget_mgr.estimate_tokens(agent_profile_context) > allowed:
+                agent_profile_context = budget_mgr.clip_text(agent_profile_context, allowed)
+            budget_mgr.reserve("agent_profile", budget_mgr.estimate_tokens(agent_profile_context))
+            if agent_profile_context:
+                # 将 Agent 个人经验作为 system prompt 追加
+                messages.insert(0, {"role": "system", "content": agent_profile_context})
+
         # ===== 注入知识库上下文 =====
         last_content = messages[-1].get("content", "")
         query_text = last_content if isinstance(last_content, str) else ""
         kb_context = self._inject_knowledge_context(query_text)
         if kb_context:
-            for msg in messages:
-                if msg.get("role") == "user":
-                    if isinstance(msg["content"], str):
-                        msg["content"] = msg["content"] + kb_context
-                    elif isinstance(msg["content"], list):
-                        msg["content"].append({"type": "text", "text": kb_context})
-                    break
+            allowed = budget_mgr.remaining("knowledge_context")
+            if budget_mgr.estimate_tokens(kb_context) > allowed:
+                kb_context = budget_mgr.clip_text(kb_context, allowed)
+            budget_mgr.reserve("knowledge_context", budget_mgr.estimate_tokens(kb_context))
+            if kb_context:
+                for msg in messages:
+                    if msg.get("role") == "user":
+                        if isinstance(msg["content"], str):
+                            msg["content"] = msg["content"] + "\n\n【知识库参考】\n" + kb_context
+                        elif isinstance(msg["content"], list):
+                            msg["content"].append({"type": "text", "text": "\n\n【知识库参考】\n" + kb_context})
+                        break
 
         # ===== 注入记忆系统上下文（黑板状态 + 经验教训）=====
-        mem_context = self._inject_memory_context(context) if context else ""
+        mem_allowed = budget_mgr.remaining("memory_context")
+        mem_context = self._inject_memory_context(context, max_tokens=mem_allowed) if context else ""
         if mem_context:
-            for msg in messages:
-                if msg.get("role") == "user":
-                    if isinstance(msg["content"], str):
-                        msg["content"] = msg["content"] + mem_context
-                    elif isinstance(msg["content"], list):
-                        msg["content"].append({"type": "text", "text": mem_context})
-                    break
+            if budget_mgr.estimate_tokens(mem_context) > mem_allowed:
+                mem_context = budget_mgr.clip_text(mem_context, mem_allowed)
+            budget_mgr.reserve("memory_context", budget_mgr.estimate_tokens(mem_context))
+            if mem_context:
+                for msg in messages:
+                    if msg.get("role") == "user":
+                        if isinstance(msg["content"], str):
+                            msg["content"] = msg["content"] + "\n\n【任务记忆】\n" + mem_context
+                        elif isinstance(msg["content"], list):
+                            msg["content"].append({"type": "text", "text": "\n\n【任务记忆】\n" + mem_context})
+                        break
+
+        # 最终检查总预算
+        try:
+            budget_mgr.check_overflow()
+        except Exception as e:
+            logger.warning(f"[{self.name}] {e}")
 
         # ===== 检查 API Key =====
         if not self.api_key:
