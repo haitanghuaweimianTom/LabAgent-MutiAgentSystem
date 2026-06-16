@@ -72,6 +72,7 @@ class RerunRequest(BaseModel):
     template: Optional[str] = None
     workflow_type: Optional[str] = None
     mode: Optional[str] = None
+    problem_text: Optional[str] = None  # 重新执行时可补充问题描述
 
 
 class ChatMessage(BaseModel):

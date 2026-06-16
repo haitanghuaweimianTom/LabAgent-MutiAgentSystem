@@ -834,6 +834,32 @@ class BaseAgent(ABC):
 
         return "\n".join(parts)
 
+    def _build_paper_query_for_agent(self) -> str:
+        """根据 Agent 角色构建查询论文知识库的问题。"""
+        queries = {
+            "research_agent": "这篇论文的研究背景、核心问题和主要贡献是什么？",
+            "analyzer_agent": "这些论文研究的问题类型、使用的方法和关键结论是什么？",
+            "modeler_agent": "论文中提出了哪些数学模型或算法？核心公式、输入输出和步骤是什么？",
+            "solver_agent": "论文实验用了什么数据集、评估指标、超参数和主要结果？",
+            "writer_agent": "与当前章节相关的论文论点、实验结果和引用素材有哪些？",
+        }
+        return queries.get(self.name, "这篇论文的核心方法、实验结果和主要结论是什么？")
+
+    def _inject_paper_reading_context(self, context: Dict[str, Any], query_text: str) -> str:
+        """查询任务级论文知识库，注入按需检索的论文片段。"""
+        task_kb_id = context.get("task_kb_id")
+        if not task_kb_id:
+            return ""
+        try:
+            from ..core.knowledge_manager import get_knowledge_manager
+            km = get_knowledge_manager()
+            ctx = km.query_context(task_kb_id, query_text, top_k=5, max_chars=2500)
+            if ctx and ctx.strip():
+                return f"【基于论文全文的按需检索结果】\n{ctx}\n"
+        except Exception as e:
+            logger.debug(f"[{self.name}] 论文阅读上下文注入失败: {e}")
+        return ""
+
     def _get_api_format(self) -> str:
         """从 provider 元数据或 llm_backend 推断 API 格式"""
         from ..core.provider_config import get_custom_provider, get_default_provider
@@ -1055,6 +1081,24 @@ class BaseAgent(ABC):
                         elif isinstance(msg["content"], list):
                             msg["content"].append({"type": "text", "text": "\n\n【任务记忆】\n" + mem_context})
                         break
+
+        # ===== 注入论文全文阅读上下文 =====
+        if context and context.get("task_kb_id"):
+            paper_query = self._build_paper_query_for_agent()
+            paper_context = self._inject_paper_reading_context(context, paper_query)
+            if paper_context:
+                allowed = budget_mgr.remaining("knowledge_context")
+                if budget_mgr.estimate_tokens(paper_context) > allowed:
+                    paper_context = budget_mgr.clip_text(paper_context, allowed)
+                budget_mgr.reserve("knowledge_context", budget_mgr.estimate_tokens(paper_context))
+                if paper_context:
+                    for msg in messages:
+                        if msg.get("role") == "user":
+                            if isinstance(msg["content"], str):
+                                msg["content"] = msg["content"] + "\n\n【论文全文阅读】\n" + paper_context
+                            elif isinstance(msg["content"], list):
+                                msg["content"].append({"type": "text", "text": "\n\n【论文全文阅读】\n" + paper_context})
+                            break
 
         # 最终检查总预算
         try:

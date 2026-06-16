@@ -475,6 +475,20 @@ def build(
     else:
         skipped.append("no code files available")
 
+    # 4.5 references/（论文全文阅读管线下载的 PDF 参考文献）
+    project_name = getattr(artifact, "project_name", None)
+    if project_name:
+        from ..core.paths import get_project_base_dir
+        project_refs = get_project_base_dir(project_name) / "references"
+        if project_refs.exists():
+            ref_dir = pkg_dir / "references"
+            ref_dir.mkdir(exist_ok=True)
+            for pdf in sorted(project_refs.glob("*.pdf")):
+                try:
+                    shutil.copy2(pdf, ref_dir / pdf.name)
+                except Exception as exc:  # noqa: BLE001
+                    skipped.append(f"reference copy failed: {pdf.name}: {exc}")
+
     # 5. manifest 描述
     if artifact.code_manifest_text:
         (pkg_dir / "code_manifest.md").write_text(artifact.code_manifest_text, encoding="utf-8")

@@ -9,6 +9,7 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 from .base import BaseAgent, AgentFactory
+from ..core.paper_reader import PaperReadingPipeline, PaperReadingConfig
 
 logger = logging.getLogger(__name__)
 
@@ -586,6 +587,26 @@ class ResearchAgent(BaseAgent):
         if action == "deep_search" and verified_papers:
             logger.info(f"Deep extraction for {len(verified_papers)} papers")
             verified_papers = await self._extract_paper_sections(verified_papers, query)
+
+        # 步骤1.7：论文全文阅读管线（下载 PDF → 解析 → 结构化抽取 → 分块索引）
+        if verified_papers and context.get("task_id"):
+            try:
+                pipeline = PaperReadingPipeline(PaperReadingConfig())
+                verified_papers, task_kb = await pipeline.process_papers(
+                    papers=verified_papers,
+                    project_name=context.get("project_name"),
+                    task_id=context["task_id"],
+                    agent=self,
+                )
+                # 统计成功解析数量
+                ok = sum(1 for p in verified_papers if p.get("reading_notes", {}).get("parse_success"))
+                logger.info(f"ResearchAgent: 论文阅读管线完成，{ok}/{len(verified_papers)} 篇解析成功")
+                # 把任务级知识库 id 挂到 context 上，供后续 Agent 查询
+                if task_kb and task_kb.base_id:
+                    context["task_kb_id"] = task_kb.base_id
+                    logger.info(f"ResearchAgent: 任务级论文知识库已创建 {task_kb.base_id}")
+            except Exception as e:
+                logger.warning(f"ResearchAgent: 论文全文阅读管线失败: {e}", exc_info=True)
 
         # 步骤2：构建用户 prompt
         system_prompt = self.get_system_prompt(action)

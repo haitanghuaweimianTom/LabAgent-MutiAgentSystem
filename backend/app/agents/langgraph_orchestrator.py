@@ -921,6 +921,7 @@ class LangGraphOrchestrator:
             "task_id": state["task_id"],
             "data_files": state.get("files", []),
             "knowledge_base_id": state.get("knowledge_base_id"),
+            "task_kb_id": state.get("task_kb_id"),
             "workflow_type": state.get("workflow_type", "standard"),
             "template": state.get("paper_template", "math_modeling"),
             "results": state.get("results", {}),
