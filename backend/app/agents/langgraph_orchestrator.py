@@ -137,6 +137,23 @@ class LangGraphOrchestrator:
             # 持久化结果
             self._save_results(task_id, final_state)
             em.record("coordinator", "task_end", f"LangGraph 任务完成：{final_state.get('current_step', 'done')}")
+
+            # Agent 记忆自进化：从任务结果回写到每个 Agent 的独立记忆
+            try:
+                self._evolve_agent_profiles(task_id, final_state, problem_text)
+            except Exception as e:
+                logger.warning(f"AgentProfile 自进化失败（不影响任务结果）: {e}")
+
+            # 清理任务级知识库
+            task_kb_id = final_state.get("task_kb_id")
+            if task_kb_id:
+                try:
+                    from ..core.knowledge_manager import get_knowledge_manager
+                    get_knowledge_manager().delete_base(task_kb_id)
+                    logger.info(f"任务级知识库已清理: {task_kb_id}")
+                except Exception as e:
+                    logger.debug(f"清理任务级知识库失败: {e}")
+
             return {
                 "task_id": task_id,
                 "status": "completed",
@@ -150,6 +167,117 @@ class LangGraphOrchestrator:
             logger.error(f"LangGraph run failed for {task_id}: {exc}", exc_info=True)
             em.record("coordinator", "task_error", f"LangGraph 任务失败：{exc}")
             raise
+
+    def _evolve_agent_profiles(
+        self,
+        task_id: str,
+        final_state: Dict[str, Any],
+        problem_text: str,
+    ):
+        """任务完成后回写每个 Agent 的独立经验。"""
+        from ..core.agent_memory import get_agent_profile
+
+        results = final_state.get("results", {})
+        sub_problems = final_state.get("sub_problems", [])
+        problem_type = (results.get("analyzer_agent") or {}).get("problem_type", "")
+
+        # 各 Agent 经验收集规则
+        evolution_map = {
+            "analyzer_agent": self._extract_analyzer_case,
+            "modeler_agent": self._extract_modeler_case,
+            "solver_agent": self._extract_solver_case,
+            "writer_agent": self._extract_writer_case,
+            "research_agent": self._extract_research_case,
+        }
+
+        for agent_name, extractor in evolution_map.items():
+            try:
+                profile = get_agent_profile(agent_name)
+                output = results.get(agent_name, {})
+                if not output:
+                    continue
+                case_type, method, outcome, impact, summary = extractor(output, problem_text, problem_type, final_state)
+                if case_type and method:
+                    profile.add_case(
+                        case_type=case_type,
+                        task_id=task_id,
+                        problem_type=problem_type,
+                        method=method,
+                        outcome=outcome,
+                        impact_score=impact,
+                        summary=summary,
+                    )
+                    logger.debug(f"Agent {agent_name} 经验回写: {case_type} (impact={impact:.2f})")
+            except Exception as e:
+                logger.debug(f"Agent {agent_name} 经验回写失败: {e}")
+
+    @staticmethod
+    def _extract_analyzer_case(output: Dict, problem_text: str, problem_type: str, state: Dict):
+        sub_problems = output.get("sub_problems", [])
+        return (
+            "success" if sub_problems else None,
+            f"问题分解: {len(sub_problems)} 个子问题" if sub_problems else "",
+            f"识别问题类型: {problem_type}",
+            0.6,
+            f"题目类型={problem_type}, 子问题数={len(sub_problems)}",
+        )
+
+    @staticmethod
+    def _extract_modeler_case(output: Dict, problem_text: str, problem_type: str, state: Dict):
+        models = output.get("sub_problem_models", [])
+        if not models:
+            return None, "", "", 0.0, ""
+        methods = ", ".join(m.get("model_type", "未知") for m in models[:3])
+        return (
+            "success",
+            f"建模: {methods}",
+            f"为 {len(models)} 个子问题建立模型",
+            0.7,
+            f"模型类型={methods}",
+        )
+
+    @staticmethod
+    def _extract_solver_case(output: Dict, problem_text: str, problem_type: str, state: Dict):
+        solutions = output.get("sub_problem_solutions", [])
+        attempts = state.get("solver_attempts", [])
+        if not solutions:
+            return "failure", "求解失败", "求解全部失败", 0.4, "求解失败案例"
+        success_rate = sum(1 for s in solutions if s.get("results", {}).get("execution_success", True)) / len(solutions)
+        return (
+            "success" if success_rate > 0.7 else "failure",
+            f"求解: 成功率 {success_rate:.0%}",
+            f"{len(solutions)} 个子问题求解（尝试 {len(attempts)} 次）",
+            0.6 + success_rate * 0.3,
+            f"成功率={success_rate:.2f}, 尝试次数={len(attempts)}",
+        )
+
+    @staticmethod
+    def _extract_writer_case(output: Dict, problem_text: str, problem_type: str, state: Dict):
+        chapters = output.get("chapters", []) or []
+        latex = output.get("latex_code", "") or output.get("latex", "")
+        if not latex:
+            return None, "", "", 0.0, ""
+        chapter_count = len(chapters) if chapters else latex.count("\\section")
+        return (
+            "success",
+            f"写作: {chapter_count} 章节",
+            f"生成 {chapter_count} 章节 LaTeX（{len(latex)} 字符）",
+            0.7,
+            f"章节数={chapter_count}, LaTeX长度={len(latex)}",
+        )
+
+    @staticmethod
+    def _extract_research_case(output: Dict, problem_text: str, problem_type: str, state: Dict):
+        papers = output.get("papers", []) or []
+        if not papers:
+            return None, "", "", 0.0, ""
+        return (
+            "success",
+            f"文献检索: {len(papers)} 篇",
+            f"从 arXiv 检索 {len(papers)} 篇论文",
+            min(0.8, 0.4 + len(papers) * 0.05),
+            f"检索到{len(papers)}篇相关论文",
+        )
 
     # ------------------------------------------------------------------
     # Graph 构建

@@ -276,9 +276,9 @@ def mark_interrupted_tasks() -> int:
 
 
 def delete_task(task_id: str) -> bool:
-    """删除任务所有数据"""
+    """删除任务所有数据（包含 checkpoint、任务级知识库、reading artifacts）"""
     deleted = False
-    for suffix in ["", "_messages", "_result"]:
+    for suffix in ["", "_messages", "_result", "_checkpoints"]:
         file = TASK_DATA_DIR / f"{task_id}{suffix}.json"
         if file.exists():
             try:
@@ -286,4 +286,38 @@ def delete_task(task_id: str) -> bool:
                 deleted = True
             except Exception as e:
                 logger.error(f"Failed to delete {file}: {e}")
+
+    # 清理任务级论文知识库（如果还存在）
+    try:
+        from .knowledge_manager import get_knowledge_manager
+        km = get_knowledge_manager()
+        for kb in km.list_custom_providers():  # 兼容：只清理名字匹配的
+            pass
+        # 直接通过存储查找
+        for base_id in list(km._bases.keys()):
+            base = km._bases[base_id]
+            if base.name == f"task_kb_{task_id}":
+                km.delete_base(base_id)
+                logger.info(f"删除任务级知识库: {base_id}")
+                deleted = True
+    except Exception as e:
+        logger.debug(f"清理任务级知识库失败（可能不存在）: {e}")
+
+    # 清理项目目录下的 references/ 和 reading/ 子目录
+    try:
+        from .paths import _PROJECT_ROOT
+        for project_dir in _PROJECT_ROOT.glob("outputs/*"):
+            for sub in ("references", "reading"):
+                target = project_dir / sub
+                if target.exists():
+                    import shutil
+                    for f in target.glob(f"{task_id}_*"):
+                        try:
+                            f.unlink()
+                            deleted = True
+                        except Exception:
+                            pass
+    except Exception as e:
+        logger.debug(f"清理项目 artifacts 失败: {e}")
+
     return deleted
