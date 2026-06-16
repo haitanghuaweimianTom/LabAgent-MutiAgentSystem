@@ -957,6 +957,15 @@ async def rerun_task(task_id: str, req: Optional[RerunRequest] = None):
     # 从历史任务提取参数，用户可覆盖
     problem_text = (req.problem_text if req and req.problem_text else None) or meta.get("problem_text", "")
     if not problem_text or not problem_text.strip():
+        # 422 前写 metadata 保持状态一致
+        save_task_metadata(
+            task_id=task_id,
+            problem_text=meta.get("problem_text", ""),
+            status="cannot_solve",
+            created_at=meta.get("created_at", ""),
+            completed_at=datetime.now().isoformat(),
+            error="rerun: 缺少问题描述",
+        )
         raise HTTPException(
             status_code=422,
             detail="历史任务缺少问题描述，无法重新执行。请新建任务并输入问题。",

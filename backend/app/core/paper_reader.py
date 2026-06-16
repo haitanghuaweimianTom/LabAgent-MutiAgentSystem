@@ -75,22 +75,39 @@ class PaperReader:
         self.pdf_service: PdfProcessingService = get_pdf_service()
 
     def _get_references_dir(self, project_name: Optional[str]) -> Path:
-        """获取项目参考文献目录。"""
-        base = get_project_base_dir(project_name)
-        ref_dir = base / "references"
+        """获取项目参考文献目录。
+
+        使用全局共享目录（不随 project_name 变化），避免同一论文在不同项目下重复下载。
+        """
+        base = get_project_base_dir(None)  # 始终用全局目录
+        ref_dir = base / "global_references"
         ref_dir.mkdir(parents=True, exist_ok=True)
         return ref_dir
 
     def _clean_arxiv_id(self, arxiv_id: str) -> str:
-        """清理 arxiv id，去掉版本后缀等。"""
+        """清理 arxiv id，去掉版本后缀等。防路径遍历。
+
+        arxiv id 格式为 YYMM.NNNNN[vN]，例如 2401.12345 或 2401.12345v2。
+        """
+        if not arxiv_id:
+            return ""
         aid = arxiv_id.strip()
         # 去掉 .pdf 后缀
         if aid.lower().endswith(".pdf"):
             aid = aid[:-4]
         # 去掉 query 参数
         aid = aid.split("?")[0]
-        # 去掉 arxiv.org/abs/ 前缀
+        # 去掉 arxiv.org/abs/ 前缀（取最后一段）
         aid = aid.split("/")[-1]
+        # 仅保留合法字符：字母数字 + . + -
+        import re
+        aid = re.sub(r"[^a-zA-Z0-9.\-]", "", aid)
+        # 防御性：禁止路径遍历
+        if ".." in aid or aid.startswith(".") or aid == "":
+            return ""
+        # 验证 arxiv id 格式：YYMM.NNNNN[vN]
+        if not re.match(r"^\d{4}\.\d{4,5}(v\d+)?$", aid):
+            return ""
         return aid
 
     def _get_pdf_url(self, paper: Dict[str, Any]) -> str:

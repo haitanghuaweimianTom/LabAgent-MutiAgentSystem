@@ -280,6 +280,80 @@ class LangGraphOrchestrator:
         )
 
     # ------------------------------------------------------------------
+    # 数据驱动的 Agent 裁剪配置（按 problem_type 跳过不必要的 Agent）
+    # ------------------------------------------------------------------
+
+    # 不需要 data_agent（纯理论 / 算法类）
+    _PROBLEM_TYPES_NO_DATA = {"网络", "物理", "仿真", "测量", "综合"}
+
+    # 不需要 research_agent（已知领域或纯方法论）
+    _PROBLEM_TYPES_NO_RESEARCH = {"物理", "测量"}
+
+    # 调研/综述类模板：跳过 modeler/solver/peer_review/experiment
+    _TEMPLATES_NO_MODELING = {"research_survey", "research_review"}
+
+    @classmethod
+    def _should_skip_data(cls, problem_type: str, has_data_files: bool) -> bool:
+        """判断是否跳过 data_agent。"""
+        if not has_data_files:
+            return True
+        if problem_type in cls._PROBLEM_TYPES_NO_DATA:
+            return True
+        return False
+
+    @classmethod
+    def _should_skip_research(cls, problem_type: str, workflow_type: str) -> bool:
+        """判断是否跳过 research_agent。"""
+        if workflow_type in ("quick", "code_focused"):
+            return True
+        if problem_type in cls._PROBLEM_TYPES_NO_RESEARCH:
+            return True
+        return False
+
+    @classmethod
+    def _should_skip_modeling(cls, template: str) -> bool:
+        """判断是否跳过 modeler/solver（综述/调研类问题不需要）。"""
+        return template in cls._TEMPLATES_NO_MODELING
+
+    def _route_after_research_or_data(self, state: TaskState) -> str:
+        """research/data 完成后决定下一站。"""
+        template = state.get("paper_template", "math_modeling")
+        if self._should_skip_modeling(template):
+            logger.info(f"[LangGraph] 跳过 modeler/solver（template={template}）→ writer")
+            return "writer"
+        return "modeler"
+
+    def _route_after_analyzer(self, state: TaskState) -> str:
+        """analyzer 之后按 problem_type + 数据情况条件路由到 data / research / modeler。"""
+        problem_type = (state.get("results", {}).get("analyzer_agent", {}) or {}).get("problem_type", "")
+        has_data = bool(state.get("files"))
+
+        skip_data = self._should_skip_data(problem_type, has_data)
+        skip_research = self._should_skip_research(problem_type, state.get("workflow_type", "standard"))
+
+        # 都跳过 → 直接到 modeler
+        if skip_data and skip_research:
+            logger.info(f"[LangGraph] 跳过 data 和 research（problem_type={problem_type}）→ 直接 modeler")
+            return "modeler"
+        # 只跳过 data → research
+        if skip_data:
+            logger.info(f"[LangGraph] 跳过 data → research")
+            return "research"
+        # 只跳过 research → data → modeler
+        if skip_research:
+            logger.info(f"[LangGraph] 跳过 research → data → modeler")
+            return "data"
+        # 正常顺序
+        return "data"
+
+    def _route_after_data(self, state: TaskState) -> str:
+        """data 之后决定是否走 research。"""
+        problem_type = (state.get("results", {}).get("analyzer_agent", {}) or {}).get("problem_type", "")
+        if self._should_skip_research(problem_type, state.get("workflow_type", "standard")):
+            return "modeler"
+        return "research"
+
+    # ------------------------------------------------------------------
     # Graph 构建
     # ------------------------------------------------------------------
     def _build_graph(self) -> StateGraph:
@@ -353,8 +427,25 @@ class LangGraphOrchestrator:
         )
 
         # 普通顺序边
-        builder.add_edge("analyzer", "data")
-        builder.add_edge("data", "research")
+        # analyzer → 按 problem_type 条件分发（跳过 data 或 research）
+        builder.add_conditional_edges(
+            "analyzer",
+            self._route_after_analyzer,
+            {
+                "data": "data",
+                "research": "research",
+                "modeler": "modeler",
+            },
+        )
+        # data → 按 problem_type 决定是否走 research
+        builder.add_conditional_edges(
+            "data",
+            self._route_after_data,
+            {
+                "research": "research",
+                "modeler": "modeler",
+            },
+        )
         builder.add_edge("discuss_approach", "modeler")
         builder.add_edge("modeler", "iterative_solver")
         builder.add_edge("writer", "peer_review")
@@ -1070,12 +1161,30 @@ class LangGraphOrchestrator:
 
         # 标记任务完成状态
         cannot_solve = state.get("cannot_solve_report")
+        # 检测是否有 agent 失败（writer/solver 缺失 → 视为任务失败）
+        writer_ok = "writer_agent" in results
+        solver_ok = "solver_agent" in results
+        critical_missing = (
+            state.get("workflow_type") == "standard"
+            and (not writer_ok or not solver_ok)
+        )
+        error_msg = ""
         if cannot_solve:
+            error_msg = str(cannot_solve.get("reason", "无法求解"))
+        elif critical_missing:
+            missing = []
+            if not writer_ok:
+                missing.append("writer_agent")
+            if not solver_ok:
+                missing.append("solver_agent")
+            error_msg = f"关键 Agent 缺失: {', '.join(missing)}"
+
+        if cannot_solve or critical_missing:
             save_task_metadata(
                 task_id=task_id, problem_text=state.get("problem_text", ""),
                 status="failed", created_at=datetime.now().isoformat(),
                 completed_at=datetime.now().isoformat(),
-                error=str(cannot_solve.get("reason", "无法求解")),
+                error=error_msg,
             )
         else:
             save_task_metadata(

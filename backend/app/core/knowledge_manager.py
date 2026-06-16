@@ -463,8 +463,8 @@ class KnowledgeManager:
                 ctx = self.query_context(base_id, query, top_k=top_k, max_chars=max_chars // max(1, len(self._bases)))
                 if ctx:
                     parts.append(ctx)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"[KnowledgeManager] 知识库 {base_id} 查询失败，已跳过: {e}")
         return "\n---\n".join(parts)
 
     def get_items(self, base_id: str, item_type: Optional[str] = None) -> List[KnowledgeItem]:
