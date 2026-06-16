@@ -647,6 +647,11 @@ class LangGraphOrchestrator:
         task_id = state["task_id"]
         self._update_progress(task_id, state["problem_text"], 70, "论文写作中")
 
+        # 从 writer_agent 历史结果读取修订次数（更可靠）
+        writer_history = state.get("results", {}).get("writer_agent", {})
+        revision_count = (writer_history.get("_revision_count", 0) if isinstance(writer_history, dict) else 0) + 1
+        logger.info(f"[LangGraph:{task_id}] writer node start, revision_count={revision_count}")
+
         agent._knowledge_base_id = state.get("knowledge_base_id")
         output = await agent.execute(
             task_input={
@@ -657,10 +662,11 @@ class LangGraphOrchestrator:
             context=self._agent_context(state),
         )
         output["_contract"] = get_contract_validator().validate("writer_agent", output)
+        output["_revision_count"] = revision_count
 
         new_results = {**state.get("results", {}), "writer_agent": output}
-        revision_count = state.get("revision_count", 0) + 1
         self._post_chat(task_id, "writer_agent", f"论文写作完成（第 {revision_count} 稿）")
+        logger.info(f"[LangGraph:{task_id}] writer node done, posted 第 {revision_count} 稿")
         return {**state, "results": new_results, "current_step": "writer_done", "revision_count": revision_count}
 
     async def _node_peer_review(self, state: TaskState) -> TaskState:
@@ -866,7 +872,11 @@ class LangGraphOrchestrator:
             return "wait_user"
 
         # 用户未发言 → 自动迭代修订（直到高质量或达到上限）
-        revision_count = state.get("revision_count", 0)
+        # 优先从 writer_agent 结果读取修订次数，fallback 到顶层 state
+        writer_result = state.get("results", {}).get("writer_agent", {})
+        revision_count = writer_result.get("_revision_count", 0) if isinstance(writer_result, dict) else 0
+        revision_count = revision_count or state.get("revision_count", 0)
+        logger.info(f"[LangGraph:{state['task_id']}] peer review route: rec={rec}, score={score}, revision_count={revision_count}")
         if revision_count < 3:
             return "revise"
 

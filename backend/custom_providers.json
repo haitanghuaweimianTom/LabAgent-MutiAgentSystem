@@ -46,7 +46,7 @@
       "icon_color": "#10a37f",
       "notes": "MiniMax Anthropic-compatible endpoint",
       "created_at": 1781268770,
-      "updated_at": 1781513387,
+      "updated_at": 1781581983,
       "_version": 2
     },
     {
@@ -62,15 +62,7 @@
       "api_host": "https://token-plan-cn.xiaomimimo.com/anthropic",
       "models": [
         {
-          "name": "mimo-V2-pro",
-          "enabled": true
-        },
-        {
-          "name": "mimo-V2.5-pro",
-          "enabled": true
-        },
-        {
-          "name": "mimo-V2-flash",
+          "name": "mimo-v2.5-pro",
           "enabled": true
         }
       ],
@@ -79,7 +71,7 @@
       "icon_color": "#10a37f",
       "notes": "Xiaomi MiMo via cc-switch",
       "created_at": 1781343000,
-      "updated_at": 1781343000,
+      "updated_at": 1781515598,
       "_version": 2
     },
     {
@@ -103,7 +95,7 @@
       "icon_color": "#d97706",
       "notes": "从 ccswitch 自动同步",
       "created_at": 1781505613,
-      "updated_at": 1781513387,
+      "updated_at": 1781581983,
       "_version": 2
     },
     {
@@ -127,7 +119,7 @@
       "icon_color": "#d97706",
       "notes": "从 ccswitch 自动同步",
       "created_at": 1781505613,
-      "updated_at": 1781513387,
+      "updated_at": 1781581983,
       "_version": 2
     }
   ],
