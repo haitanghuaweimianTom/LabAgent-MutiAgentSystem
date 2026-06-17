@@ -74,6 +74,11 @@ export default function ProviderSettings() {
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState('');
 
+  // CC Switch
+  const [ccswitchStatus, setCcswitchStatus] = useState<any>(null);
+  const [syncingCcswitch, setSyncingCcswitch] = useState(false);
+  const [autoSync, setAutoSync] = useState(true);
+
   // Add form
   const [showAdd, setShowAdd] = useState(false);
   const [addForm, setAddForm] = useState({ name: '', type: 'openai', api_key: '', api_host: '', model: '', api_format: 'openai_chat', auth_field: 'bearer_token' });
@@ -93,6 +98,57 @@ export default function ProviderSettings() {
   const [showJsonImport, setShowJsonImport] = useState(false);
   const [jsonText, setJsonText] = useState('');
   const [importingJson, setImportingJson] = useState(false);
+
+  const loadCcswitchStatus = useCallback(async () => {
+    try {
+      const res = await fetch(apiBase() + '/providers/ccswitch-status');
+      if (res.ok) {
+        const data = await res.json();
+        setCcswitchStatus(data);
+        if (typeof data.auto_sync === 'boolean') {
+          setAutoSync(data.auto_sync);
+        }
+      }
+    } catch {}
+  }, []);
+
+  const handleCcswitchSync = async () => {
+    setSyncingCcswitch(true);
+    try {
+      const res = await fetch(apiBase() + '/providers/ccswitch-sync', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setMsg('✓ cc-switch 同步成功');
+        load();
+      } else {
+        setMsg(data.detail || '同步失败');
+      }
+    } catch {
+      setMsg('同步失败');
+    } finally {
+      setSyncingCcswitch(false);
+    }
+  };
+
+  const handleToggleAutoSync = async () => {
+    const next = !autoSync;
+    try {
+      const res = await fetch(apiBase() + '/providers/ccswitch-toggle-auto', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: next }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setAutoSync(next);
+        setMsg(`自动同步已${next ? '开启' : '关闭'}`);
+      } else {
+        setMsg(data.detail || '设置失败');
+      }
+    } catch {
+      setMsg('设置失败');
+    }
+  };
 
   const handleJsonImport = async () => {
     if (!jsonText.trim()) { setMsg('请输入 JSON 内容'); return; }
@@ -134,7 +190,8 @@ export default function ProviderSettings() {
         setPresetsByCategory(pData.presets_by_category || {});
       }
     } catch {} finally { setLoading(false); }
-  }, []);
+    loadCcswitchStatus();
+  }, [loadCcswitchStatus]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -289,6 +346,69 @@ export default function ProviderSettings() {
               style={{ padding: '0.5rem 1rem', background: 'rgba(46,204,113,0.15)', border: '1px solid rgba(46,204,113,0.3)', borderRadius: 8, color: '#2ecc71', fontSize: '0.85rem', cursor: 'pointer', fontWeight: 600 }}
             >
               + 添加 Provider
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* CC Switch 集成 */}
+      <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 14, padding: '1.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem' }}>
+              <span style={{ fontSize: '1rem', color: '#fff', fontWeight: 600 }}>🔄 CC Switch 自动同步</span>
+              {ccswitchStatus?.installed ? (
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#2ecc71', display: 'inline-block' }} />
+              ) : (
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#888', display: 'inline-block' }} />
+              )}
+            </div>
+            <div style={{ color: '#888', fontSize: '0.8rem', lineHeight: 1.5 }}>
+              {ccswitchStatus?.installed ? (
+                <>
+                  已检测到 cc-switch
+                  {ccswitchStatus.db_path && <> · 数据库: {ccswitchStatus.db_path}</>}
+                  {ccswitchStatus.current_provider && <> · 当前 Provider: {ccswitchStatus.current_provider}</>}
+                  {ccswitchStatus.last_sync && <> · 上次同步: {ccswitchStatus.last_sync}</>}
+                </>
+              ) : (
+                <>未检测到 cc-switch</>
+              )}
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            {/* Auto-sync toggle */}
+            <button
+              onClick={handleToggleAutoSync}
+              style={{
+                padding: '0.4rem 0.8rem',
+                background: autoSync ? 'rgba(46,204,113,0.15)' : 'rgba(0,0,0,0.2)',
+                border: `1px solid ${autoSync ? 'rgba(46,204,113,0.3)' : 'rgba(255,255,255,0.1)'}`,
+                borderRadius: 8,
+                color: autoSync ? '#2ecc71' : '#888',
+                fontSize: '0.8rem',
+                cursor: 'pointer',
+                fontWeight: 600,
+              }}
+            >
+              自动同步: {autoSync ? '开' : '关'}
+            </button>
+            {/* Sync now button */}
+            <button
+              onClick={handleCcswitchSync}
+              disabled={syncingCcswitch || !ccswitchStatus?.installed}
+              style={{
+                padding: '0.4rem 0.9rem',
+                background: syncingCcswitch ? 'rgba(52,152,219,0.1)' : 'rgba(52,152,219,0.15)',
+                border: '1px solid rgba(52,152,219,0.3)',
+                borderRadius: 8,
+                color: syncingCcswitch ? '#3498db88' : '#3498db',
+                fontSize: '0.8rem',
+                cursor: syncingCcswitch || !ccswitchStatus?.installed ? 'not-allowed' : 'pointer',
+                fontWeight: 600,
+              }}
+            >
+              {syncingCcswitch ? '同步中...' : '立即同步'}
             </button>
           </div>
         </div>

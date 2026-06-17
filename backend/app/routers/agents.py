@@ -49,10 +49,12 @@ def _load_agent_configs() -> None:
 def _save_agent_configs() -> None:
     """保存 Agent 配置到磁盘"""
     AGENT_CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
-    AGENT_CONFIG_FILE.write_text(
+    tmp = AGENT_CONFIG_FILE.with_suffix(".tmp")
+    tmp.write_text(
         json.dumps({"agent_model_map": agent_model_map}, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+    tmp.replace(AGENT_CONFIG_FILE)
     logger.info(f"Agent 配置已保存到 {AGENT_CONFIG_FILE}")
 
 

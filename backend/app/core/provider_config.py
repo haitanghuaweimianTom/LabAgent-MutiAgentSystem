@@ -2,6 +2,7 @@
 import json
 import logging
 import os
+import threading
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -445,7 +446,66 @@ def detect_ccswitch_providers() -> List[Dict[str, Any]]:
     return providers
 
 
-def sync_ccswitch_to_local() -> Dict[str, Any]:
+# ===== Polling constants and thread-safe state =====
+
+CCSWITCH_POLL_INTERVAL = 30
+_ccswitch_lock = threading.Lock()
+_ccswitch_watcher_thread: Optional[threading.Thread] = None
+_ccswitch_watcher_running = False
+_last_ccswitch_state: Dict[str, Any] = {}  # caches {id: {is_current, api_host, model_name}} for change detection
+_ccswitch_auto_sync = True  # default on
+_last_sync_time: float = 0.0
+
+
+def detect_ccswitch_change() -> Optional[Dict[str, Any]]:
+    """检测 ccswitch 配置是否发生变化。
+
+    返回变化摘要，若无变化返回 None。
+    """
+    global _last_ccswitch_state
+
+    current_providers = detect_ccswitch_providers()
+    current_summary = {}
+    for p in current_providers:
+        current_summary[p["id"]] = {
+            "is_current": p.get("_ccswitch_current", False),
+            "api_host": p.get("api_host", ""),
+            "model_name": p.get("models", [{}])[0].get("name", "") if p.get("models") else "",
+        }
+
+    with _ccswitch_lock:
+        old_summary = dict(_last_ccswitch_state)
+
+    old_ids = set(old_summary.keys())
+    new_ids = set(current_summary.keys())
+
+    added = [pid for pid in (new_ids - old_ids)]
+    removed = [pid for pid in (old_ids - new_ids)]
+    modified = []
+    current_changed = False
+
+    for pid in (old_ids & new_ids):
+        if old_summary[pid] != current_summary[pid]:
+            modified.append(pid)
+            if old_summary[pid].get("is_current") != current_summary[pid].get("is_current"):
+                current_changed = True
+
+    if not added and not removed and not modified:
+        return None
+
+    with _ccswitch_lock:
+        _last_ccswitch_state = current_summary
+
+    return {
+        "changed": True,
+        "added": added,
+        "removed": removed,
+        "modified": modified,
+        "current_changed": current_changed,
+    }
+
+
+def sync_ccswitch_to_local(force: bool = False) -> Dict[str, Any]:
     """将 ccswitch 中的 Provider 同步到本地 custom_providers.json。
 
     策略：
@@ -453,8 +513,16 @@ def sync_ccswitch_to_local() -> Dict[str, Any]:
     - 本地不存在的 → 新增
     - ccswitch 标记为 current 的 → 设为 default_provider
 
+    参数:
+        force: 为 True 时跳过变更检测，强制同步。
+
     返回 {"synced": int, "added": int, "updated": int, "default": str}
     """
+    if not force:
+        change = detect_ccswitch_change()
+        if change is None:
+            return {"synced": 0, "unchanged": True}
+
     ccswitch_providers = detect_ccswitch_providers()
     if not ccswitch_providers:
         return {"synced": 0, "added": 0, "updated": 0, "default": ""}
@@ -510,9 +578,75 @@ def sync_ccswitch_to_local() -> Dict[str, Any]:
 
     _write_config(config)
 
+    # 更新 _last_ccswitch_state 缓存，使后续 detect_ccswitch_change() 有正确基线
+    with _ccswitch_lock:
+        _last_ccswitch_state = {}
+        for p in ccswitch_providers:
+            _last_ccswitch_state[p["id"]] = {
+                "is_current": p.get("_ccswitch_current", False),
+                "api_host": p.get("api_host", ""),
+                "model_name": p.get("models", [{}])[0].get("name", "") if p.get("models") else "",
+            }
+
     return {
         "synced": added + updated,
         "added": added,
         "updated": updated,
         "default": current_id,
     }
+
+
+def get_ccswitch_status() -> Dict[str, Any]:
+    """获取 ccswitch 连接与同步状态。"""
+    providers = detect_ccswitch_providers()
+    current_provider = next(
+        (p["name"] for p in providers if p.get("_ccswitch_current")),
+        None,
+    )
+    return {
+        "installed": CCSWITCH_DB.exists(),
+        "db_path": str(CCSWITCH_DB),
+        "connected": bool(providers),
+        "providers_count": len(providers),
+        "current_provider": current_provider,
+        "last_sync": _last_sync_time,
+        "auto_sync_enabled": _ccswitch_auto_sync,
+    }
+
+
+def _ccswitch_poll_loop() -> None:
+    """后台轮询 ccswitch 变更并自动同步。"""
+    global _last_sync_time
+
+    while _ccswitch_watcher_running:
+        if _ccswitch_auto_sync and detect_ccswitch_change():
+            result = sync_ccswitch_to_local(force=True)
+            _last_sync_time = time.time()
+            logger.info(
+                f"ccswitch 自动同步完成: synced={result.get('synced', 0)}, "
+                f"added={result.get('added', 0)}, updated={result.get('updated', 0)}, "
+                f"default={result.get('default', '')}"
+            )
+        time.sleep(CCSWITCH_POLL_INTERVAL)
+
+
+def start_ccswitch_watcher() -> None:
+    """启动 ccswitch 后台轮询线程。"""
+    global _ccswitch_watcher_thread, _ccswitch_watcher_running
+
+    if _ccswitch_watcher_thread is not None and _ccswitch_watcher_thread.is_alive():
+        logger.info("ccswitch 轮询线程已在运行")
+        return
+
+    _ccswitch_watcher_running = True
+    _ccswitch_watcher_thread = threading.Thread(target=_ccswitch_poll_loop, daemon=True)
+    _ccswitch_watcher_thread.start()
+    logger.info("ccswitch 轮询已启动")
+
+
+def stop_ccswitch_watcher() -> None:
+    """停止 ccswitch 后台轮询线程。"""
+    global _ccswitch_watcher_running
+
+    _ccswitch_watcher_running = False
+    logger.info("ccswitch 轮询已停止")

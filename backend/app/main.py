@@ -78,6 +78,11 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.debug(f"ccswitch 同步跳过: {e}")
     try:
+        from .core.provider_config import start_ccswitch_watcher
+        start_ccswitch_watcher()
+    except Exception as e:
+        logger.debug(f"ccswitch watcher 启动跳过: {e}")
+    try:
         from .core.task_persistence import list_all_tasks, mark_interrupted_tasks
         tasks = list_all_tasks()
         interrupted = mark_interrupted_tasks()
@@ -85,6 +90,11 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"恢复历史任务失败: {e}")
     yield
+    try:
+        from .core.provider_config import stop_ccswitch_watcher
+        stop_ccswitch_watcher()
+    except Exception as e:
+        logger.debug(f"ccswitch watcher 停止跳过: {e}")
     logger.info("系统关闭...")
 
 
@@ -155,6 +165,13 @@ async def info():
     except Exception:
         kb_count = 0
 
+    # ccswitch 状态
+    try:
+        from .core.provider_config import get_ccswitch_status
+        ccswitch_status = get_ccswitch_status()
+    except Exception:
+        ccswitch_status = {"available": False, "error": "not_loaded"}
+
     # 记忆系统统计
     memory_stats = {}
     try:
@@ -207,6 +224,7 @@ async def info():
         "providers": providers,
         "claude_code_available": claude_code_path is not None,
         "claude_code_path": claude_code_path or "",
+        "ccswitch_status": get_ccswitch_status(),
     }
 
 
@@ -340,23 +358,6 @@ async def update_runtime_settings(body: SettingsUpdate):
 
 # Provider 管理已移至 backend/app/routers/providers.py
 # 以下为调试和测试端点
-
-
-@app.post("/api/v1/providers/ccswitch-sync")
-async def ccswitch_sync():
-    """手动触发 ccswitch Provider 同步"""
-    from .core.provider_config import sync_ccswitch_to_local, detect_ccswitch_providers
-    detected = detect_ccswitch_providers()
-    if not detected:
-        return {"success": False, "message": "未检测到 ccswitch 或无可用 Provider", "detected": 0}
-    result = sync_ccswitch_to_local()
-    # 同步后重置 orchestrator，让 Agent 使用新 provider
-    reset_orchestrator()
-    return {
-        "success": True,
-        "message": f"同步完成: {result['added']} 新增, {result['updated']} 更新",
-        **result,
-    }
 
 
 @app.get("/api/v1/debug/key")

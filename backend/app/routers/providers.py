@@ -12,7 +12,10 @@ from ..core.provider_config import (
     get_default_provider_id, get_provider_models, add_model_to_provider,
     remove_model_from_provider, get_presets, get_presets_by_category,
     import_preset_as_provider, build_test_config, parse_cc_switch_json,
+    get_ccswitch_status, sync_ccswitch_to_local, _ccswitch_auto_sync,
 )
+
+from ..routers.tasks import reset_orchestrator
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/providers", tags=["Provider管理"])
@@ -243,3 +246,29 @@ async def test_provider(provider_id: str, body: Optional[Dict[str, Any]] = None)
         return {"success": False, "error": f"HTTP {e.response.status_code}", "detail": e.response.text[:300]}
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+
+@router.get("/ccswitch-status")
+async def ccswitch_status():
+    """获取 CC Switch 同步状态"""
+    return get_ccswitch_status()
+
+
+@router.post("/ccswitch-sync")
+async def ccswitch_sync():
+    """强制同步 CC Switch 配置到本地，并重置编排器"""
+    result = sync_ccswitch_to_local(force=True)
+    reset_orchestrator()
+    return {"success": True, "message": "CC Switch 同步完成，编排器已重置", **result}
+
+
+class AutoSyncToggle(BaseModel):
+    enabled: bool
+
+
+@router.post("/ccswitch-toggle-auto")
+async def ccswitch_toggle_auto(body: AutoSyncToggle):
+    """开启/关闭 CC Switch 自动同步"""
+    global _ccswitch_auto_sync
+    _ccswitch_auto_sync = body.enabled
+    return {"success": True, "auto_sync_enabled": _ccswitch_auto_sync}

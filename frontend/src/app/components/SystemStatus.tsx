@@ -34,6 +34,11 @@ interface SystemInfo {
   knowledge_base_count: number;
   total_tasks: number;
   active_tasks: number;
+  ccswitch_status?: {
+    installed: boolean;
+    current_provider?: string;
+    auto_sync_enabled?: boolean;
+  };
   providers: ProviderInfo[];
   claude_code_available: boolean;
   claude_code_path: string;
@@ -186,6 +191,19 @@ export default function SystemStatus() {
           <span className={styles.providerName}>Claude Code CLI</span>
           <span className={styles.providerDetail}>
             {info.claude_code_available ? info.claude_code_path : '未安装'}
+          </span>
+        </div>
+      </div>
+
+      <div className={styles.providersTitle}>CC Switch</div>
+      <div className={styles.providers}>
+        <div className={styles.provider}>
+          <span className={`${styles.dot} ${info.ccswitch_status?.installed ? styles.dotOn : styles.dotOff}`} />
+          <span className={styles.providerName}>CC Switch</span>
+          <span className={styles.providerDetail}>
+            {info.ccswitch_status?.installed
+              ? (info.ccswitch_status?.current_provider || '已安装')
+              : '未安装'}
           </span>
         </div>
       </div>
