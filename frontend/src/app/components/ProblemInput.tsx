@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import styles from './ProblemInput.module.css';
 import { useAppStore } from '../store/useAppStore';
 import { TemplateSelector, TEMPLATE_OPTIONS } from './TemplateSelector';
@@ -60,14 +60,28 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
   // Knowledge base selector
   const knowledgeBases = useAppStore((s) => s.knowledgeBases);
   const activeKnowledgeBaseId = useAppStore((s) => s.activeKnowledgeBaseId);
+  const setKnowledgeBases = useAppStore((s) => s.setKnowledgeBases);
   const [knowledgeBaseId, setKnowledgeBaseId] = useState<string | null>(activeKnowledgeBaseId);
 
   const apiBase = () => window.__API_BASE__ || 'http://localhost:8000/api/v1';
 
-  // 加载项目列表
+  // 加载项目列表和知识库列表
   useEffect(() => {
     loadProjects();
+    loadKnowledgeBases();
   }, [loadProjects]);
+
+  const loadKnowledgeBases = useCallback(async () => {
+    try {
+      const res = await fetch(apiBase() + '/knowledge/bases');
+      if (res.ok) {
+        const data = await res.json();
+        setKnowledgeBases(data.bases || []);
+      }
+    } catch {
+      // ignore
+    }
+  }, [setKnowledgeBases]);
 
   useEffect(() => {
     if (activeProject) setProjectName(activeProject.name);

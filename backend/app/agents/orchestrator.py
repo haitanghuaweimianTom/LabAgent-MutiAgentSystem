@@ -1062,6 +1062,18 @@ class Orchestrator:
 
         self._save_workflow_result(task_id, all_results, section_results)
 
+        # 清理任务级知识库
+        try:
+            from ..core.knowledge_manager import get_knowledge_manager
+            km = get_knowledge_manager()
+            task_kb_name = f"task_kb_{task_id}"
+            for base_id, base in list(km._bases.items()):
+                if base.name == task_kb_name:
+                    km.delete_base(base_id)
+                    logger.info(f"经典编排器：已清理任务级知识库 {base_id}")
+        except Exception as e:
+            logger.debug(f"清理任务级知识库失败: {e}")
+
         return {
             "task_id": task_id,
             "status": "completed",

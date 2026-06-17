@@ -426,6 +426,57 @@ export default function KnowledgeBaseManager() {
     loadBases();
   };
 
+  const handleDownloadItem = async (item: KnowledgeItem) => {
+    if (!activeBaseId || item.type !== 'file' || !isFileMeta(item.content)) return;
+    try {
+      const res = await fetch(apiBase() + `/knowledge/bases/${activeBaseId}/items/${item.id}/download`);
+      if (!res.ok) throw new Error('下载失败');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = item.content.name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      showMsg('下载失败', true);
+    }
+  };
+
+  const handleDownloadSelectedItems = async () => {
+    if (!activeBaseId || selectedItemIds.size === 0) return;
+    const selectedFiles = filteredItems.filter(
+      i => selectedItemIds.has(i.id) && i.type === 'file' && isFileMeta(i.content)
+    );
+    if (selectedFiles.length === 0) {
+      showMsg('选中的条目中无文件可下载', true);
+      return;
+    }
+    let successCount = 0;
+    for (const item of selectedFiles) {
+      try {
+        const res = await fetch(apiBase() + `/knowledge/bases/${activeBaseId}/items/${item.id}/download`);
+        if (!res.ok) continue;
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = (item.content as FileMetadata).name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+        successCount++;
+        // 稍微延迟，避免浏览器阻塞连续下载
+        await new Promise(r => setTimeout(r, 150));
+      } catch { /* ignore single failure */ }
+    }
+    showMsg(`已下载 ${successCount} 个文件`);
+    setSelectedItemIds(new Set());
+  };
+
   return (
     <div className={styles.container}>
       {/* Sidebar */}
@@ -558,13 +609,22 @@ export default function KnowledgeBaseManager() {
                   />
                   <span style={{ color: '#888', fontSize: '0.8rem' }}>全选 ({selectedItemIds.size}/{filteredItems.length})</span>
                   {selectedItemIds.size > 0 && (
-                    <button
-                      className={`${styles.actionBtn} ${styles.actionBtnPrimary}`}
-                      onClick={handleDeleteSelectedItems}
-                      style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem' }}
-                    >
-                      🗑️ 批量删除 ({selectedItemIds.size})
-                    </button>
+                    <>
+                      <button
+                        className={`${styles.actionBtn} ${styles.actionBtnPrimary}`}
+                        onClick={handleDownloadSelectedItems}
+                        style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem' }}
+                      >
+                        📥 批量下载 ({selectedItemIds.size})
+                      </button>
+                      <button
+                        className={`${styles.actionBtn} ${styles.actionBtnPrimary}`}
+                        onClick={handleDeleteSelectedItems}
+                        style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem' }}
+                      >
+                        🗑️ 批量删除 ({selectedItemIds.size})
+                      </button>
+                    </>
                   )}
                 </div>
               )}
@@ -595,6 +655,9 @@ export default function KnowledgeBaseManager() {
                     <div className={styles.itemMeta}>
                       {size !== undefined && <span className={styles.itemSize}>{formatBytes(size)}</span>}
                       {item.type === 'file' && <span className={styles.statusIcon} title={item.processingStatus}>{statusIcon(item.processingStatus)}</span>}
+                      {item.type === 'file' && isFileMeta(item.content) && (
+                        <button className={styles.downloadBtn} onClick={() => handleDownloadItem(item)} title="下载">📥</button>
+                      )}
                       <button className={styles.deleteBtn} onClick={() => handleDeleteItem(item.id)}>删除</button>
                     </div>
                   </div>

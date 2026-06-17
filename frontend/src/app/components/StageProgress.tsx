@@ -6,7 +6,7 @@ interface Stage {
   id: string;
   name: string;
   description: string;
-  status: 'pending' | 'running' | 'completed' | 'failed';
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
   progress: number;
   detail?: string;
 }
@@ -58,9 +58,10 @@ export default function StageProgress({ stages, memoryPool, currentStep }: Stage
                 {stage.status === 'running' && <span className={styles.spinner} />}
                 {stage.status === 'completed' && <span className={styles.check}>✓</span>}
                 {stage.status === 'failed' && <span className={styles.cross}>✕</span>}
+                {stage.status === 'skipped' && <span className={styles.skip}>⊘</span>}
               </div>
 
-              {stage.status !== 'pending' && (
+              {stage.status !== 'pending' && stage.status !== 'skipped' && (
                 <div className={styles.detailBox}>
                   <div className={styles.detailText}>{stage.description}</div>
                   {stage.progress > 0 && stage.status !== 'completed' && (

@@ -297,7 +297,20 @@
   transition: opacity 0.15s;
 }
 
-.itemRow:hover .deleteBtn {
+.downloadBtn {
+  padding: 0.2rem 0.4rem;
+  background: rgba(52, 152, 219, 0.1);
+  border: 1px solid rgba(52, 152, 219, 0.2);
+  border-radius: 4px;
+  color: #3498db;
+  font-size: 0.75rem;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.itemRow:hover .deleteBtn,
+.itemRow:hover .downloadBtn {
   opacity: 1;
 }
 

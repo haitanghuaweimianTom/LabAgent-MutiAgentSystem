@@ -70,6 +70,7 @@ export default function Home() {
   const [phase, setPhase] = useState<'idle' | 'phase1' | 'phase2_confirm' | 'phase2'>('idle');
   const [subProblems, setSubProblems] = useState<string[]>([]);
   const [solveMode, setSolveMode] = useState<'batch' | 'sequential'>('batch');
+  const [workflowType, setWorkflowType] = useState<string>('standard');
 
   // Submitting
   const [submitting, setSubmitting] = useState(false);
@@ -136,6 +137,7 @@ export default function Home() {
       setMessages([]);
       setPaused(false);
       setPhase('idle');
+      setWorkflowType(params.workflow);
       setTab('generate');
       if (activeProjectId && newTaskId) {
         addTaskToProject(activeProjectId, newTaskId);
@@ -516,6 +518,7 @@ export default function Home() {
               taskStatus={taskStatus}
               progress={progress}
               currentStep={currentStep}
+              workflowType={workflowType}
               paused={paused}
               onPause={handlePause}
               onResume={handleResume}

@@ -80,6 +80,30 @@
   background: rgba(0,0,0,0.2);
   border-radius: 8px;
   scroll-behavior: smooth;
+  position: relative;
+}
+
+.scrollToBottomBtn {
+  position: sticky;
+  bottom: 0.8rem;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.4rem 0.9rem;
+  background: rgba(52, 152, 219, 0.9);
+  border: none;
+  border-radius: 20px;
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  transition: all 0.2s;
+  z-index: 10;
+}
+
+.scrollToBottomBtn:hover {
+  background: rgba(52, 152, 219, 1);
+  transform: translateX(-50%) translateY(-1px);
 }
 
 .emptyState { text-align: center; padding: 3rem; color: #555; font-size: 0.9rem; }

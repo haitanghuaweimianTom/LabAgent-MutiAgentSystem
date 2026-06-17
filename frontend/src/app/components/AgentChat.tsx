@@ -18,6 +18,7 @@ interface AgentChatProps {
   taskStatus: string;
   progress: number;
   currentStep?: string;
+  workflowType?: string;
   paused: boolean;
   onPause: () => void;
   onResume: () => void;
@@ -59,12 +60,14 @@ function formatTime(iso: string) {
   try { return new Date(iso).toLocaleString('zh-CN', { hour12: false }); } catch { return iso; }
 }
 
-type StageStatus = 'pending' | 'running' | 'completed' | 'failed';
+type StageStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
 
-function deriveStages(status: string, progress: number, currentStep: string) {
+function deriveStages(status: string, progress: number, currentStep: string, workflowType: string = 'standard') {
+  const skipModeling = workflowType === 'deep_research' || workflowType === 'research_survey';
+
   const stages: { id: string; name: string; description: string; status: StageStatus; progress: number }[] = [
     { id: 'analysis', name: '问题分析', description: '数据预处理、子问题分解、文献搜集', status: 'pending', progress: 0 },
-    { id: 'modeling', name: '建模求解', description: '建模、代码生成、迭代验证', status: 'pending', progress: 0 },
+    { id: 'modeling', name: skipModeling ? '跳过建模' : '建模求解', description: skipModeling ? '调研/综述类工作流不经过建模求解' : '建模、代码生成、迭代验证', status: skipModeling ? 'skipped' : 'pending', progress: 0 },
     { id: 'writing', name: '论文写作', description: '章节生成、自评改进、LaTeX排版', status: 'pending', progress: 0 },
     { id: 'review', name: '同行评议', description: '4维评分、修订循环、Camera-Ready打包', status: 'pending', progress: 0 },
   ];
@@ -74,24 +77,45 @@ function deriveStages(status: string, progress: number, currentStep: string) {
   if (status === 'phase1' || status === 'running') {
     stages[0].status = 'running';
     stages[0].progress = Math.min(progress * 2, 100);
-    if (currentStep?.includes('建模') || currentStep?.includes('求解') || currentStep?.includes('model') || currentStep?.includes('solve')) {
-      stages[0].status = 'completed';
-      stages[0].progress = 100;
-      stages[1].status = 'running';
-      stages[1].progress = Math.min((progress - 30) * 2, 100);
-    }
-    if (currentStep?.includes('论文') || currentStep?.includes('write')) {
-      stages[0].status = 'completed';
-      stages[1].status = 'completed';
-      stages[2].status = 'running';
-      stages[2].progress = Math.min((progress - 60) * 2.5, 100);
-    }
-    if (currentStep?.includes('评议') || currentStep?.includes('review') || currentStep?.includes('修订')) {
-      stages[0].status = 'completed';
-      stages[1].status = 'completed';
-      stages[2].status = 'completed';
-      stages[3].status = 'running';
-      stages[3].progress = Math.min((progress - 80) * 5, 100);
+
+    if (!skipModeling) {
+      // 标准流程：分析 → 建模 → 写作 → 评议
+      if (currentStep?.includes('建模') || currentStep?.includes('求解') || currentStep?.includes('model') || currentStep?.includes('solve')) {
+        stages[0].status = 'completed';
+        stages[0].progress = 100;
+        stages[1].status = 'running';
+        stages[1].progress = Math.min((progress - 30) * 2, 100);
+      }
+      if (currentStep?.includes('论文') || currentStep?.includes('write')) {
+        stages[0].status = 'completed';
+        stages[1].status = 'completed';
+        stages[2].status = 'running';
+        stages[2].progress = Math.min((progress - 60) * 2.5, 100);
+      }
+      if (currentStep?.includes('评议') || currentStep?.includes('review') || currentStep?.includes('修订')) {
+        stages[0].status = 'completed';
+        stages[1].status = 'completed';
+        stages[2].status = 'completed';
+        stages[3].status = 'running';
+        stages[3].progress = Math.min((progress - 80) * 5, 100);
+      }
+    } else {
+      // 调研/综述流程：分析 → 写作 → 评议（跳过建模）
+      if (currentStep?.includes('论文') || currentStep?.includes('write')) {
+        stages[0].status = 'completed';
+        stages[1].status = 'skipped';
+        stages[1].progress = 100;
+        stages[2].status = 'running';
+        stages[2].progress = Math.min((progress - 40) * 2.5, 100);
+      }
+      if (currentStep?.includes('评议') || currentStep?.includes('review') || currentStep?.includes('修订')) {
+        stages[0].status = 'completed';
+        stages[1].status = 'skipped';
+        stages[1].progress = 100;
+        stages[2].status = 'completed';
+        stages[3].status = 'running';
+        stages[3].progress = Math.min((progress - 80) * 5, 100);
+      }
     }
   }
 
@@ -106,16 +130,47 @@ function deriveStages(status: string, progress: number, currentStep: string) {
 }
 
 export default function AgentChat({
-  messages, taskStatus, progress, currentStep, paused, onPause, onResume, onCancel, resuming, cancelling,
+  messages, taskStatus, progress, currentStep, workflowType, paused, onPause, onResume, onCancel, resuming, cancelling,
   taskId, onUserSend,
 }: AgentChatProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const [userInput, setUserInput] = useState('');
   const [sending, setSending] = useState(false);
-  const stages = deriveStages(taskStatus, progress, currentStep || '');
+  const [isNearBottom, setIsNearBottom] = useState(true);
+  const [showScrollButton, setShowScrollButton] = useState(false);
+  const stages = deriveStages(taskStatus, progress, currentStep || '', workflowType);
+
+  // 检测滚动位置：距离底部 < 80px 视为“在底部”
+  const checkScrollPosition = () => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    const threshold = 80;
+    const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    const nearBottom = distanceToBottom < threshold;
+    setIsNearBottom(nearBottom);
+    setShowScrollButton(!nearBottom);
+  };
+
+  // 滚动到底部（用户点击按钮或发送消息时）
+  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+    messagesEndRef.current?.scrollIntoView({ behavior });
+    setIsNearBottom(true);
+    setShowScrollButton(false);
+  };
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    el.addEventListener('scroll', checkScrollPosition);
+    return () => el.removeEventListener('scroll', checkScrollPosition);
+  }, []);
+
+  useEffect(() => {
+    // 只有用户当前在底部时才自动跟随新消息
+    if (isNearBottom) {
+      scrollToBottom('smooth');
+    }
   }, [messages]);
 
   const isRunning = taskStatus === 'running' || taskStatus === 'phase1' || taskStatus === 'phase2';
@@ -134,6 +189,8 @@ export default function AgentChat({
       });
       setUserInput('');
       onUserSend?.(content);
+      // 发送后自动回到底部
+      scrollToBottom('smooth');
     } catch (e) {
       console.error('发送消息失败:', e);
     } finally {
@@ -181,7 +238,7 @@ export default function AgentChat({
           </div>
         </div>
 
-        <div className={styles.messages}>
+        <div className={styles.messages} ref={messagesContainerRef}>
           {messages.length === 0 && (
             <div className={styles.emptyState}>提交问题后，各 Agent 将在此展开协作讨论</div>
           )}
@@ -211,6 +268,15 @@ export default function AgentChat({
             </div>
           ))}
           <div ref={messagesEndRef} />
+          {showScrollButton && (
+            <button
+              className={styles.scrollToBottomBtn}
+              onClick={() => scrollToBottom('smooth')}
+              title="回到最新消息"
+            >
+              ↓ 最新消息
+            </button>
+          )}
         </div>
 
         {/* 用户输入区域 */}

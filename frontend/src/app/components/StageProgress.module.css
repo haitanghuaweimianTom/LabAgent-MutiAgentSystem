@@ -89,6 +89,14 @@
   color: #e74c3c;
 }
 
+.badge.skipped {
+  background: rgba(149,165,166,0.12);
+  border-color: rgba(149,165,166,0.4);
+  color: #95a5a6;
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
 .icon { font-size: 0.9rem; }
 .badgeLabel { font-size: 0.8rem; }
 
@@ -103,6 +111,7 @@
 
 .check { color: #2ecc71; font-weight: bold; }
 .cross { color: #e74c3c; font-weight: bold; }
+.skip { color: #95a5a6; font-weight: bold; }
 
 .detailBox {
   width: 100%;

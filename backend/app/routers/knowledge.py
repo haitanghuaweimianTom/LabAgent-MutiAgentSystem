@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, HTTPException, File, UploadFile, Query
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from ..core.knowledge_manager import (
@@ -59,10 +60,13 @@ class QueryContextRequest(BaseModel):
 # ===== 知识库管理端点 =====
 
 @router.get("/bases")
-async def list_bases():
-    """列出所有知识库"""
+async def list_bases(include_task: bool = False):
+    """列出所有知识库。默认排除任务级内部知识库（task_kb_*）。"""
     km = get_knowledge_manager()
-    return {"bases": km.list_bases()}
+    bases = km.list_bases()
+    if not include_task:
+        bases = [b for b in bases if not b.name.startswith("task_kb_")]
+    return {"bases": bases}
 
 
 @router.post("/bases")
@@ -174,6 +178,31 @@ async def remove_item(base_id: str, item_id: str):
     if not km.remove_item(base_id, item_id):
         raise HTTPException(status_code=404, detail="条目不存在")
     return {"success": True, "message": "条目已删除"}
+
+
+@router.get("/bases/{base_id}/items/{item_id}/download")
+async def download_item(base_id: str, item_id: str):
+    """下载知识库中的文件条目"""
+    km = get_knowledge_manager()
+    base = km.get_base(base_id)
+    if not base:
+        raise HTTPException(status_code=404, detail=f"知识库不存在: {base_id}")
+
+    item = next((i for i in base.items if i.id == item_id), None)
+    if not item:
+        raise HTTPException(status_code=404, detail="条目不存在")
+    if item.type != "file" or not isinstance(item.content, FileMetadata):
+        raise HTTPException(status_code=400, detail="只有文件条目支持下载")
+
+    file_path = Path(item.content.path)
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="文件不存在")
+
+    return FileResponse(
+        path=file_path,
+        filename=item.content.name,
+        media_type="application/octet-stream",
+    )
 
 
 # ===== 搜索与查询端点 =====
