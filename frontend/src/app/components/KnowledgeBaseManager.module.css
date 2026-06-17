@@ -309,8 +309,34 @@
   transition: opacity 0.15s;
 }
 
+.editBtn {
+  padding: 0.2rem 0.4rem;
+  background: rgba(243, 156, 18, 0.1);
+  border: 1px solid rgba(243, 156, 18, 0.2);
+  border-radius: 4px;
+  color: #f39c12;
+  font-size: 0.75rem;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.replaceBtn {
+  padding: 0.2rem 0.4rem;
+  background: rgba(155, 89, 182, 0.1);
+  border: 1px solid rgba(155, 89, 182, 0.2);
+  border-radius: 4px;
+  color: #9b59b6;
+  font-size: 0.75rem;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
 .itemRow:hover .deleteBtn,
-.itemRow:hover .downloadBtn {
+.itemRow:hover .downloadBtn,
+.itemRow:hover .editBtn,
+.itemRow:hover .replaceBtn {
   opacity: 1;
 }
 

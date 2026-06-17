@@ -45,6 +45,12 @@ class CreateItemRequest(BaseModel):
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
+class UpdateItemRequest(BaseModel):
+    content: Optional[Any] = None
+    source: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
+
+
 class SearchRequest(BaseModel):
     query: str
     top_k: int = 5
@@ -178,6 +184,116 @@ async def remove_item(base_id: str, item_id: str):
     if not km.remove_item(base_id, item_id):
         raise HTTPException(status_code=404, detail="条目不存在")
     return {"success": True, "message": "条目已删除"}
+
+
+@router.put("/bases/{base_id}/items/{item_id}")
+async def update_item(
+    base_id: str,
+    item_id: str,
+    req: UpdateItemRequest,
+):
+    """更新知识库条目（note/url/sitemap/directory）。
+
+    file 类型请使用 `/bases/{base_id}/items/{item_id}/file` 端点替换文件。
+    """
+    km = get_knowledge_manager()
+    base = km.get_base(base_id)
+    if not base:
+        raise HTTPException(status_code=404, detail=f"知识库不存在: {base_id}")
+
+    item = next((i for i in base.items if i.id == item_id), None)
+    if not item:
+        raise HTTPException(status_code=404, detail="条目不存在")
+
+    if item.type == "file":
+        raise HTTPException(status_code=400, detail="file 类型条目请通过 /items/{item_id}/file 上传文件替换")
+
+    ok = km.update_item(
+        base_id,
+        item_id,
+        content=req.content,
+        source=req.source,
+        metadata=req.metadata,
+    )
+    if not ok:
+        raise HTTPException(status_code=500, detail="更新条目失败")
+
+    return {"success": True, "item_id": item_id}
+
+
+@router.put("/bases/{base_id}/items/{item_id}/file")
+async def replace_file(
+    base_id: str,
+    item_id: str,
+    file: UploadFile = File(...),
+    chunk_size: int = Query(500, description="分块大小(字符数)"),
+    overlap: int = Query(50, description="重叠字符数"),
+):
+    """替换知识库中的文件条目"""
+    km = get_knowledge_manager()
+    base = km.get_base(base_id)
+    if not base:
+        raise HTTPException(status_code=404, detail=f"知识库不存在: {base_id}")
+
+    item = next((i for i in base.items if i.id == item_id), None)
+    if not item:
+        raise HTTPException(status_code=404, detail="条目不存在")
+    if item.type != "file":
+        raise HTTPException(status_code=400, detail="只能向 file 类型条目上传新文件")
+
+    filename = file.filename or "uploaded_file"
+    ext = Path(filename).suffix.lower()
+    if ext not in ALLOWED_UPLOAD_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"不支持 {ext} 格式，仅支持: {', '.join(ALLOWED_UPLOAD_EXTENSIONS)}",
+        )
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="文件为空")
+
+    save_path = km.save_file(filename, content)
+
+    text = ""
+    try:
+        text = content.decode("utf-8", errors="replace")
+    except Exception:
+        text = ""
+    chunks = _chunk_text(text, chunk_size=chunk_size, overlap=overlap)
+
+    fmeta = FileMetadata(
+        name=save_path.name,
+        size=save_path.stat().st_size,
+        ext=ext,
+        path=str(save_path),
+    )
+
+    metadata = {
+        "original_filename": filename,
+        "total_chars": len(text),
+        "chunks": len(chunks),
+        "chunk_size": chunk_size,
+        "extracted_text": text[:50000],
+    }
+
+    ok = km.update_item(
+        base_id,
+        item_id,
+        content=fmeta,
+        source=f"file:{save_path.name}",
+        metadata=metadata,
+    )
+    if not ok:
+        raise HTTPException(status_code=500, detail="更新条目失败")
+
+    return {
+        "success": True,
+        "item_id": item_id,
+        "filename": save_path.name,
+        "total_chars": len(text),
+        "chunks": len(chunks),
+    }
 
 
 @router.get("/bases/{base_id}/items/{item_id}/download")

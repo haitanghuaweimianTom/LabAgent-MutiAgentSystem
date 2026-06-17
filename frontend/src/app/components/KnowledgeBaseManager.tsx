@@ -107,6 +107,11 @@ export default function KnowledgeBaseManager() {
   const [showAddNote, setShowAddNote] = useState(false);
   const [noteContent, setNoteContent] = useState('');
 
+  // Edit note / replace file
+  const [editingItem, setEditingItem] = useState<KnowledgeItem | null>(null);
+  const [replacingItem, setReplacingItem] = useState<KnowledgeItem | null>(null);
+  const replaceFileInputRef = useRef<HTMLInputElement>(null);
+
   // Search
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
@@ -272,25 +277,83 @@ export default function KnowledgeBaseManager() {
   const handleAddNote = async () => {
     const content = noteContent.trim();
     if (!content || !activeBaseId) { showMsg('内容不能为空', true); return; }
+
+    const isEdit = editingItem !== null;
+    const url = isEdit
+      ? apiBase() + `/knowledge/bases/${activeBaseId}/items/${editingItem.id}`
+      : apiBase() + `/knowledge/bases/${activeBaseId}/items`;
+    const method = isEdit ? 'PUT' : 'POST';
+
     try {
-      const res = await fetch(apiBase() + `/knowledge/bases/${activeBaseId}/items`, {
-        method: 'POST',
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'note', content }),
       });
       const data = await res.json();
       if (data.success) {
-        showMsg('笔记已添加');
+        showMsg(isEdit ? '笔记已更新' : '笔记已添加');
         setShowAddNote(false);
         setNoteContent('');
+        setEditingItem(null);
         loadItems(activeBaseId);
         loadBases();
       } else {
-        showMsg(data.detail || '添加失败', true);
+        showMsg(data.detail || (isEdit ? '更新失败' : '添加失败'), true);
       }
     } catch {
-      showMsg('添加失败', true);
+      showMsg(isEdit ? '更新失败' : '添加失败', true);
     }
+  };
+
+  const openEditNote = (item: KnowledgeItem) => {
+    setEditingItem(item);
+    setNoteContent(typeof item.content === 'string' ? item.content : '');
+    setShowAddNote(true);
+  };
+
+  const closeAddNoteModal = () => {
+    setShowAddNote(false);
+    setNoteContent('');
+    setEditingItem(null);
+  };
+
+  const handleReplaceFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!activeBaseId || !replacingItem) return;
+    const files = e.target.files;
+    if (!files?.length) return;
+
+    const file = files[0];
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const res = await fetch(
+        apiBase() + `/knowledge/bases/${activeBaseId}/items/${replacingItem.id}/file`,
+        { method: 'PUT', body: formData }
+      );
+      const data = await res.json();
+      if (data.success) {
+        showMsg(`文件已替换为 ${data.filename || file.name}`);
+        loadItems(activeBaseId);
+        loadBases();
+      } else {
+        showMsg(data.detail || '替换失败', true);
+      }
+    } catch {
+      showMsg('替换失败', true);
+    } finally {
+      setReplacingItem(null);
+      if (replaceFileInputRef.current) replaceFileInputRef.current.value = '';
+    }
+  };
+
+  const triggerReplaceFile = (item: KnowledgeItem) => {
+    setReplacingItem(item);
+    // 短暂延迟确保 state 已写入再触发 click
+    setTimeout(() => {
+      replaceFileInputRef.current?.click();
+    }, 0);
   };
 
   const handleDeleteItem = async (itemId: string) => {
@@ -658,6 +721,12 @@ export default function KnowledgeBaseManager() {
                       {item.type === 'file' && isFileMeta(item.content) && (
                         <button className={styles.downloadBtn} onClick={() => handleDownloadItem(item)} title="下载">📥</button>
                       )}
+                      {item.type === 'file' && isFileMeta(item.content) && (
+                        <button className={styles.replaceBtn} onClick={() => triggerReplaceFile(item)} title="替换文件">🔄</button>
+                      )}
+                      {item.type === 'note' && (
+                        <button className={styles.editBtn} onClick={() => openEditNote(item)} title="编辑">✏️</button>
+                      )}
                       <button className={styles.deleteBtn} onClick={() => handleDeleteItem(item.id)}>删除</button>
                     </div>
                   </div>
@@ -710,11 +779,11 @@ export default function KnowledgeBaseManager() {
         </div>
       )}
 
-      {/* Add Note Modal */}
+      {/* Add / Edit Note Modal */}
       {showAddNote && (
-        <div className={styles.overlay} onClick={() => setShowAddNote(false)}>
+        <div className={styles.overlay} onClick={closeAddNoteModal}>
           <div className={styles.modal} onClick={e => e.stopPropagation()}>
-            <div className={styles.modalTitle}>添加笔记</div>
+            <div className={styles.modalTitle}>{editingItem ? '编辑笔记' : '添加笔记'}</div>
             <textarea
               className={styles.modalTextarea}
               placeholder="输入笔记内容..."
@@ -723,12 +792,23 @@ export default function KnowledgeBaseManager() {
               autoFocus
             />
             <div className={styles.modalActions}>
-              <button className={styles.actionBtn} onClick={() => setShowAddNote(false)}>取消</button>
-              <button className={`${styles.actionBtn} ${styles.actionBtnPrimary}`} onClick={handleAddNote}>添加</button>
+              <button className={styles.actionBtn} onClick={closeAddNoteModal}>取消</button>
+              <button className={`${styles.actionBtn} ${styles.actionBtnPrimary}`} onClick={handleAddNote}>
+                {editingItem ? '保存' : '添加'}
+              </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* Replace File Input */}
+      <input
+        ref={replaceFileInputRef}
+        type="file"
+        accept=".md,.txt,.markdown,.rst,.tex,.json,.csv,.pdf,.docx,.doc"
+        style={{ display: 'none' }}
+        onChange={handleReplaceFile}
+      />
 
       {/* Settings Modal */}
       {showSettings && (

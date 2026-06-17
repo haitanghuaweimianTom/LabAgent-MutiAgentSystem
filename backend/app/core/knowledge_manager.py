@@ -430,6 +430,66 @@ class KnowledgeManager:
         logger.info(f"[KnowledgeManager] 删除条目 {item_id} 从 {base.name}")
         return True
 
+    def update_item(
+        self,
+        base_id: str,
+        item_id: str,
+        content: Optional[Union[str, FileMetadata]] = None,
+        source: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> bool:
+        """更新知识库条目。
+
+        对于 note/url/sitemap/directory 类型，传入新的字符串 content。
+        对于 file 类型，传入新的 FileMetadata 以替换文件引用；旧物理文件会被删除。
+        """
+        base = self._bases.get(base_id)
+        if not base:
+            return False
+
+        item = next((i for i in base.items if i.id == item_id), None)
+        if not item:
+            return False
+
+        now = int(__import__("time").time() * 1000)
+
+        if content is not None:
+            if item.type == "file":
+                if not isinstance(content, FileMetadata):
+                    raise ValueError("file 类型条目必须使用 FileMetadata 更新")
+                # 删除旧物理文件（路径变化时）
+                if isinstance(item.content, FileMetadata):
+                    old_path = _KB_FILES_DIR / item.content.name
+                    if old_path.exists() and old_path.name != content.name:
+                        try:
+                            old_path.unlink()
+                        except Exception as e:
+                            logger.warning(f"[KnowledgeManager] 删除旧文件失败: {e}")
+                item.content = content
+            else:
+                if not isinstance(content, str):
+                    raise ValueError(f"{item.type} 类型条目必须使用字符串更新")
+                item.content = content
+
+        if source is not None:
+            item.source = source
+
+        if metadata is not None:
+            # 浅合并，保留自动生成的字段
+            item.metadata = {**item.metadata, **metadata}
+
+        item.updated_at = now
+        base.updated_at = now
+
+        # 更新向量索引
+        kb = self._get_kb_instance(base_id)
+        self._rebuild_kb_vectors(base, kb)
+
+        self._persist_base(base)
+        self._persist_index()
+        logger.info(f"[KnowledgeManager] 更新条目 {item_id} 在 {base.name}")
+        return True
+
     def search(self, base_id: str, query: str, top_k: int = 5, min_score: float = 0.0) -> List[Dict[str, Any]]:
         """在指定知识库中搜索"""
         kb = self._get_kb_instance(base_id)
