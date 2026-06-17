@@ -90,7 +90,7 @@ CLAUDE_CODER_SYSTEM = """你是一个专业的算法工程师，擅长用 Python
    - 数据处理脚本（data_process.py）：清洗、转换、特征工程
    - 求解脚本（solver_*.py）：核心算法实现
    - 可视化脚本（visualize_*.py）：生成图表并保存
-2. 将代码保存到 E:/cherryClaw/math_modeling_multi_agent/output/code/ 目录
+2. 将代码保存到项目根目录下的 output/code/ 目录（相对路径：output/code/）
 3. 执行每个脚本，验证结果
 4. 返回结构化求解结果
 
@@ -102,8 +102,8 @@ CLAUDE_CODER_SYSTEM = """你是一个专业的算法工程师，擅长用 Python
 【输出格式（必须以JSON格式返回，不要有任何其他文字）】
 {
     "code": "完整Python代码（包含所有import，末尾用json.dumps打印结果）",
-    "file_path": "E:/cherryClaw/math_modeling_multi_agent/output/code/solver_sub{N}.py",
-    "execution_command": "python E:/cherryClaw/math_modeling_multi_agent/output/code/solver_sub{N}.py",
+    "file_path": "output/code/solver_sub{N}.py",
+    "execution_command": "python output/code/solver_sub{N}.py",
     "key_findings": ["关键发现1", "关键发现2"],
     "numerical_results": {"变量名": 数值, ...},
     "interpretation": "结果解释"
@@ -112,7 +112,7 @@ CLAUDE_CODER_SYSTEM = """你是一个专业的算法工程师，擅长用 Python
 【execution_command 格式】
 由于 Windows subprocess 执行限制，请提供以下格式之一：
 1. 单行命令（推荐）：用 python -X utf8 -c "import json; code..."
-2. 或者：python E:/cherryClaw/math_modeling_multi_agent/output/code/solver_sub{N}.py
+2. 或者：python output/code/solver_sub{N}.py
 
 注意：python -X utf8 确保中文结果正确输出
 
@@ -527,6 +527,139 @@ def grey_relational_analysis(data, reference=None, rho=0.5):
     return {"relational_degree": list(relational_degree), "ranking": list(np.argsort(-relational_degree) + 1)}
 ''',
 
+    # ===== 组合优化 / 图算法 =====
+    "algorithm_design": '''
+import sys
+from typing import List, Tuple, Dict, Any, Optional
+
+def solve(input_data: Optional[str] = None) -> Dict[str, Any]:
+    """组合优化/图算法求解模板
+
+    时间复杂度: O(?)  # TODO: 根据具体算法填写
+    空间复杂度: O(?)  # TODO: 根据具体算法填写
+    """
+    # ---------- 1. 输入解析 ----------
+    # 支持从文件、字符串或标准输入读取
+    if input_data is None:
+        # 从标准输入读取（竞赛/评测常见模式）
+        data = sys.stdin.read().strip().split()
+    elif isinstance(input_data, str) and "\n" in input_data:
+        data = input_data.strip().split()
+    else:
+        # 假设 input_data 已经是结构化数据
+        data = input_data
+
+    # ---------- 2. 核心算法函数 ----------
+    # TODO: 替换为具体算法实现
+    def core_algorithm(parsed_input) -> Dict[str, Any]:
+        """核心算法占位符
+
+        实现要点：
+        - 明确算法名称（如 Dijkstra / 最小生成树 / 动态规划 / 贪心等）
+        - 给出关键步骤的伪代码或注释
+        - 标注复杂度
+        """
+        result = {"status": "placeholder", "value": 0}
+        return result
+
+    # ---------- 3. 解析与执行 ----------
+    parsed = data  # TODO: 根据题目格式解析为图/矩阵/序列等结构
+    result = core_algorithm(parsed)
+
+    # ---------- 4. 输出结果 ----------
+    return {
+        "optimal_value": result.get("value"),
+        "solution": result,
+        "algorithm": "TODO: 替换为实际算法名",
+        "complexity": "TODO: 时间/空间复杂度",
+    }
+
+
+# 示例调用（独立运行测试）
+if __name__ == "__main__":
+    sample = """5 3
+1 2 3 4 5"""
+    print(solve(sample))
+''',
+
+    # ===== 金融建模 =====
+    "financial_model": '''
+import numpy as np
+import pandas as pd
+from typing import Dict, Any, List, Optional
+
+def financial_analysis(
+    data_path: Optional[str] = None,
+    prices: Optional[List[float]] = None,
+    initial_capital: float = 1_000_000.0,
+) -> Dict[str, Any]:
+    """金融建模与回测模板
+
+    风险说明：本模板仅供学术研究/算法验证，不构成投资建议。
+    回测结果不代表未来表现，实际交易需考虑滑点、手续费、流动性等。
+    """
+    # ---------- 1. 数据读取占位 ----------
+    # 方式A: 从 CSV 读取（推荐用于真实数据）
+    # df = pd.read_csv(data_path, parse_dates=["date"], index_col="date")
+    # 方式B: 直接传入价格序列（快速测试）
+    if prices is not None:
+        df = pd.DataFrame({"close": prices})
+    elif data_path:
+        df = pd.read_csv(data_path)
+    else:
+        # 生成随机 walk 作为占位数据
+        np.random.seed(42)
+        returns = np.random.normal(0.001, 0.02, 252)
+        prices = 100 * np.exp(np.cumsum(returns))
+        df = pd.DataFrame({"close": prices})
+
+    # ---------- 2. 指标计算 ----------
+    returns = df["close"].pct_change().dropna()
+    cumulative_returns = (1 + returns).cumprod()
+
+    # 年化收益与波动（假设 252 交易日/年）
+    annual_return = returns.mean() * 252
+    annual_volatility = returns.std() * np.sqrt(252)
+    sharpe_ratio = annual_return / (annual_volatility + 1e-10)
+
+    # 最大回撤
+    peak = cumulative_returns.cummax()
+    drawdown = (cumulative_returns - peak) / peak
+    max_drawdown = drawdown.min()
+
+    # ---------- 3. 回测框架占位 ----------
+    # TODO: 替换为具体策略逻辑（如均线交叉、动量、均值回归等）
+    # 示例：简单买入持有
+    final_value = initial_capital * cumulative_returns.iloc[-1]
+    total_return = (final_value - initial_capital) / initial_capital
+
+    # ---------- 4. 风险指标 ----------
+    # VaR (95%)
+    var_95 = np.percentile(returns, 5)
+    # CVaR / Expected Shortfall (95%)
+    cvar_95 = returns[returns <= var_95].mean() if len(returns[returns <= var_95]) > 0 else var_95
+
+    return {
+        "initial_capital": initial_capital,
+        "final_value": float(final_value),
+        "total_return": float(total_return),
+        "annual_return": float(annual_return),
+        "annual_volatility": float(annual_volatility),
+        "sharpe_ratio": float(sharpe_ratio),
+        "max_drawdown": float(max_drawdown),
+        "VaR_95": float(var_95),
+        "CVaR_95": float(cvar_95),
+        "n_observations": int(len(returns)),
+        "risk_note": "回测结果不代表未来表现；实际交易需考虑手续费、滑点、流动性等。",
+    }
+
+
+# 示例调用
+if __name__ == "__main__":
+    result = financial_analysis()
+    print(result)
+''',
+
     # ===== 数据处理 =====
     "data_cleaning": '''
 import numpy as np
@@ -818,6 +951,18 @@ def get_template_for_model(model_info: Dict) -> str:
     alg_name = model_info.get('algorithm', {}).get('name', '').lower() if isinstance(model_info.get('algorithm'), dict) else ''
     description = model_info.get('description', '').lower()
 
+    all_text = f"{model_type} {model_name} {alg_name} {description}"
+
+    # ===== 组合优化 / 图算法 =====
+    algo_keywords = ['algorithm', 'heuristic', 'optimization', 'network', 'graph']
+    if model_type == 'algorithm_design' or any(kw in all_text for kw in algo_keywords):
+        return CODE_TEMPLATES.get('algorithm_design', '')
+
+    # ===== 金融建模 =====
+    finance_keywords = ['finance', 'portfolio', 'option', 'risk', 'backtest']
+    if model_type == 'financial_model' or any(kw in all_text for kw in finance_keywords):
+        return CODE_TEMPLATES.get('financial_model', '')
+
     # 综合评价
     if any(kw in model_name or kw in description for kw in ['topsis', '优劣', '理想']):
         return CODE_TEMPLATES['topsis']
@@ -874,7 +1019,8 @@ def get_template_for_model(model_info: Dict) -> str:
     if any(kw in model_name or kw in model_type for kw in ['方差分析', 'anova', 'f检验']):
         return CODE_TEMPLATES['anova']
 
-    return CODE_TEMPLATES['linear_programming']
+    # ===== 兜底：通用 Python 脚本 =====
+    return CODE_TEMPLATES.get('algorithm_design', '')
 
 
 @AgentFactory.register("solver_agent")
@@ -947,18 +1093,6 @@ class SolverAgent(BaseAgent):
     def _validate_solution_results(self, numerical_results: Dict[str, Any], model: Dict[str, Any]) -> Dict[str, Any]:
         """验证求解结果合理性"""
         return get_result_validator().validate(numerical_results, {"model": model})
-
-    def _find_conda_exe(self) -> bool:
-        """检测conda是否可用（通过 cmd /c conda）"""
-        try:
-            result = subprocess.run(
-                ["cmd", "/c", "conda", "--version"],
-                capture_output=True, text=True,
-                encoding="utf-8", errors="replace", timeout=10,
-            )
-            return result.returncode == 0
-        except Exception:
-            return False
 
     async def _run_code_with_autofix(
         self,
@@ -1106,8 +1240,10 @@ class SolverAgent(BaseAgent):
 
                 Path(file_path).write_text(raw_code, encoding="utf-8")
 
+                from ..core.environment_manager import get_active_python
+                python_exe = get_active_python()
                 proc = subprocess.run(
-                    [sys.executable, "-X", "utf8", file_path],
+                    [python_exe, "-X", "utf8", file_path],
                     capture_output=True,
                     text=True,
                     encoding="utf-8",

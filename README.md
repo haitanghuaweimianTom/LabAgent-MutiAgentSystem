@@ -26,7 +26,7 @@
 ## 🚀 系统能力
 
 ### 论文产线
-- **6 套论文模板**：`NeurIPS 2024` / `ACM SIGCONF` / `IEEE Conference` / `Springer LNCS` / `Research Survey` / `CUMCM`，新模板只需在 `backend/app/core/paper_templates/templates/` 下放 JSON + `.cls/.sty` 即可热加载。
+- **8 套论文模板**：`NeurIPS 2024` / `ACM SIGCONF` / `IEEE Conference` / `Springer LNCS` / `Research Survey` / `Financial Analysis` / `Coursework` / `CUMCM`，新模板只需在 `backend/app/core/paper_templates/templates/` 下放 JSON + `.cls/.sty` 即可热加载。
 - **真实文献检索**：ResearchAgent 通过 arXiv MCP Server 拉真实论文，并经 Semantic Scholar 二次增强（引用、影响因子、PDF 链接）。
 - **真实代码执行**：SolverAgent 调 LLM 写 Python → 沙箱执行 → 结果验证 → 自动 fix retry，最多 3 次，确保数值真实。
 - **跨方法交叉验证**：对每子任务结果用 CrossValidator 比对，差异 > 5% 自动报警（占位 baseline，等 B1 接入真方法）。
@@ -42,6 +42,8 @@
 | data_agent | 数据分析师 | 数据文件解析、洞察抽取 |
 | research_agent | 研究员 | arXiv 检索 + Semantic Scholar 增强 + 可插拔 Reranker |
 | modeler_agent | 建模师 | 数学建模、模型选择、算法推荐 |
+| algorithm_engineer_agent | 算法工程师 | CCF-A / 数学建模双模式：设计创新算法、复杂度与理论保证、实验方案 |
+| financial_analyst_agent | 金融分析师 | 金融数学建模、风险分析、回测设计 |
 | solver_agent | 求解器 | 真实代码执行、CrossValidator 集成 |
 | writer_agent | 写作专家 | 按章节独立 LLM 调用、可用图表自动注入 |
 | peer_review_agent | 同行评议 | 4 维评分 |
@@ -53,10 +55,31 @@
 - CCF-A 4 套模板（neurips_2024 / ieee_conference / acm_sigconf / springer_lncs）强制 writer = opus。
 - 通过 `backend/app/core/agent_model_map.py` 注册表 + 前端 Settings 动态覆盖。
 
+### 模板化建模路由
+LangGraph 编排器根据 `paper_template` + `workflow_type` 自动选择最合适的建模专家：
+- **数学建模 / 课程作业 / quick / code_focused** → `modeler_agent`
+- **金融分析** → `financial_analyst_agent`
+- **CCF-A 模板（IEEE / NeurIPS / ACM / Springer）或 `research_paper` workflow** → `algorithm_engineer_agent`
+- **调研/综述（deep_research / research_survey）** → 跳过建模，直接进入写作
+
+三种 Agent 的输出统一归一化为 `sub_problem_models` 标准格式，保证 `solver_agent` 与 `writer_agent` 无需感知具体建模专家；原始丰富输出保留在 `_raw_output` 中供写作时使用。
+
+### 防编造与结果可审计
+- **系统级禁令**：所有建模 Agent 的 system prompt 中明确禁止编造数据、股价、收益率、baseline 结果、引用、数据集等。
+- **程序化校验**：`_validate_no_fabrication` 检测无来源的价格/收益率、无引用的具体性能数字、异常的作者-年份引用，生成 `_fabrication_flags` 与 `_fabrication_score`。
+- **写作端警示**：`writer_agent` 在构建章节上下文时读取 `_fabrication_flags`，对可疑内容添加“需谨慎处理或删除”的提示。
+- **兜底模板审计**：`modeler_agent` 的 `MODEL_TEMPLATES` 仅作为 LLM 输出无效时的最后占位；使用时自动标记 `_used_fallback_template=True`，并在局限性中声明“必须根据具体问题重新校验或替换”。
+
 ### 持久化记忆
 - `MemoryManager` 三级记忆架构：Working Memory（任务上下文）/ Episodic Memory（事件流）/ Lessons Memory（跨任务经验教训）
 - 每个 Agent 独立记忆池，支持关键词检索 + Prompt 自动注入
 - 跨任务经验提取：完成后自动 `extract_lessons_from_result`，下次任务用 `retrieve_relevant` 检索
+- **LangGraph State 外部化**：`TaskResultStore` 将 Agent 大输出从 `TaskState` 中剥离，state 仅保留引用标记，避免节点间反复深拷贝；结果持久化在 `backend/data/langgraph_results/`。
+
+### 环境管理器
+- 统一封装 `conda` / `venv` 环境生命周期：列出、创建、删除、安装依赖、激活、在指定环境中执行命令。
+- 前端「环境」Tab 可直观管理，API 路径 `/api/v1/environments`。
+- 当前激活环境持久化在 `backend/data/active_environment.json`，SolverAgent 执行代码时优先使用激活环境的 Python 解释器。
 
 ### Provider / MCP / 知识库（CC Switch 风格）
 - 15+ 预设 Provider：OpenAI、Anthropic、阿里百炼、硅基流动、智谱、Kimi、DeepSeek、Ollama、OpenRouter 等
@@ -72,11 +95,11 @@
 - **SSE 实时推送**：ChatRoom 支持消息订阅，前端实时收到每条 Agent 发言（无需轮询）。
 
 ### Web UI（Next.js 14）
-- 首页 / 生成 / 数据 / PDF / 历史 / Agent / 流程 / 记忆 / 设置 9 个 Tab
+- 首页 / 生成 / 数据 / PDF / 历史 / Agent / 流程 / 记忆 / 环境 / 设置 10 个 Tab
 - SSE 实时消息流 + 任务状态机可视化 + Camera-Ready 面板
 - 用户可在 Agent 讨论中实时发言，参与决策
 - 暂停 / 恢复 / 取消 / Edit-and-Continue 完整生命周期
-- 13+ React 组件 + Zustand 状态管理
+- 14+ React 组件 + Zustand 状态管理
 
 ---
 
@@ -213,7 +236,17 @@ python main.py --auto --workspace ./workspace
 | `/agents/{name}/model` | PUT | 修改 Agent 使用的模型 |
 | `/agents/{name}/test-model` | POST | 测试 Agent 模型连通性 |
 
-### MCP 管理
+### 环境管理
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/environments/backends` | GET | 列出可用后端（conda / venv） |
+| `/environments/` | GET | 列出所有环境 |
+| `/environments/` | POST | 创建环境 |
+| `/environments/active` | GET | 获取当前激活环境 |
+| `/environments/activate` | POST | 激活指定环境 |
+| `/environments/install` | POST | 在指定环境安装依赖 |
+| `/environments/run` | POST | 在指定环境执行命令 |
+| `/environments/{backend}/{name}` | DELETE | 删除环境 |
 | 端点 | 方法 | 说明 |
 |------|------|------|
 | `/mcp/servers` | GET / POST | 列出 / 创建 MCP Server |
@@ -420,7 +453,17 @@ routing:
 
 ## 📜 版本历史
 
-### v3.0（2026-06）— 当前
+### v3.1（2026-06）— 当前
+- **模板化建模路由**：`math_modeling`→modeler、`financial_analysis`→financial_analyst、CCF-A/`research_paper`→algorithm_engineer；deep_research/research_survey 跳过建模
+- **算法工程师双模式**：`ALGORITHM_ENGINEER_SYSTEM_CCFA` + `ALGORITHM_ENGINEER_SYSTEM_MATH_MODELING`，按模板自动切换
+- **金融分析师**：金融数学建模、风险分析、回测设计，强化防编造纪律
+- **结果归一化**：三种建模 Agent 输出统一为 `sub_problem_models`，保留 `_raw_output` 供 writer 使用
+- **防编造校验**：`_validate_no_fabrication` 检测无来源价格/收益率、无引用性能数字、异常引用；`_fabrication_flags` 透传给 writer
+- **环境管理器**：`conda` / `venv` 生命周期管理 + `/api/v1/environments` API + 前端「环境」Tab
+- **LangGraph State 外部化**：`TaskResultStore` 避免节点间深拷贝大输出
+- **清理硬编码兜底模板**：移除 SiC/报童等过于具体的 `MODEL_TEMPLATES`，改为通用类别模板，并标记兜底结果
+
+### v3.0（2026-06）
 - **Phase 7** AgentModelRouter + CrossValidator
 - **Phase 6** Camera-Ready + useTaskState hook + TaskStatusBadge
 - **Phase 5** PDF 双轨统一 + PaperMetadata LRU 缓存

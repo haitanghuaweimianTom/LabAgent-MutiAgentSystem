@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from .config import get_settings
 from .routers import tasks_router, agents_router, data_router, workflows_router
 from .routers.mcp import router as mcp_router
+from .routers.environments import router as environments_router
 from .core.runtime_config import (
     get_runtime_api_key, update_runtime_api_key, is_api_key_set,
     get_runtime_kimi_key, get_runtime_kimi_url,
@@ -103,6 +104,7 @@ app.include_router(agents_router, prefix="/api/v1")
 app.include_router(data_router, prefix="/api/v1")
 app.include_router(workflows_router, prefix="/api/v1")
 app.include_router(mcp_router, prefix="/api/v1")
+app.include_router(environments_router, prefix="/api/v1")
 app.include_router(providers_router, prefix="/api/v1")
 app.include_router(knowledge_router, prefix="/api/v1")
 app.include_router(projects_router, prefix="/api/v1")

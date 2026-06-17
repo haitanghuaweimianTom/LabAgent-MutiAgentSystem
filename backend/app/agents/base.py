@@ -64,10 +64,10 @@ def _find_claude_code() -> Optional[str]:
         _CLAUDE_CODE_PATH = found
         return _CLAUDE_CODE_PATH
 
-    # 3. 常见安装路径（Windows）
-    local_app = os.path.expanduser("~\\AppData\\Local\\Programs\\claude-code\\bin\\claude-code.cmd")
-    if os.path.isfile(local_app):
-        _CLAUDE_CODE_PATH = local_app
+    # 3. 环境变量 CLAUDE_CODE_PATH（新增，避免绑定特定安装路径）
+    env_path = os.environ.get("CLAUDE_CODE_PATH", "")
+    if env_path and os.path.isfile(env_path):
+        _CLAUDE_CODE_PATH = env_path
         return _CLAUDE_CODE_PATH
 
     _CLAUDE_CODE_PATH = ""  # 找不到

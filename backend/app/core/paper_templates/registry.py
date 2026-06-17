@@ -219,7 +219,7 @@ class TemplateRegistry:
         return tpl
 
     def has(self, template_id: str) -> bool:
-        self.ensure_loaded()
+        """检查模板是否已注册。不触发自动加载，便于测试和显式控制。"""
         with self._lock:
             return template_id in self._templates
 
@@ -234,12 +234,12 @@ class TemplateRegistry:
             return [self._templates[k] for k in sorted(self._templates.keys())]
 
     def __len__(self) -> int:
-        self.ensure_loaded()
+        """返回当前已注册模板数量。不触发自动加载，便于测试和显式控制。"""
         with self._lock:
             return len(self._templates)
 
     def __contains__(self, template_id: object) -> bool:
-        return isinstance(template_id, str) and self.has(template_id)
+        return isinstance(template_id, str) and template_id in self._templates
 
 
 # ========================= 单例访问 =========================

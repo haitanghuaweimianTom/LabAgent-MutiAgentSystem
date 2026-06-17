@@ -119,6 +119,9 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
 
   const isRunning = taskStatus === 'running' || taskStatus === 'phase1' || taskStatus === 'phase2';
 
+  const currentTemplate = TEMPLATE_OPTIONS.find((t) => t.id === template);
+  const currentWorkflowName = WORKFLOWS.find((w) => w.id === workflow)?.name || workflow;
+
   return (
     <div className={styles.container}>
       <div className={styles.section}>
@@ -255,24 +258,22 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
         <div className={styles.sectionTitle}>⚙️ 工作流与模板</div>
 
         <div className={styles.optionGroup}>
-          <div className={styles.optionLabel}>工作流模式（系统会根据问题自动推荐，您也可以手动选择）</div>
-          <div className={styles.optionCards}>
-            {WORKFLOWS.map(wf => (
-              <div
-                key={wf.id}
-                className={`${styles.optionCard} ${workflow === wf.id ? styles.optionCardActive : ''}`}
-                onClick={() => {
-                  setWorkflow(wf.id);
-                  // 深度研究工作流自动切换为系统搜集数据，无需用户手动配置
-                  if (wf.id === 'deep_research') {
-                    setDataSource('self_collect');
-                  }
-                }}
-              >
-                <div className={styles.optionCardName}>{wf.name}</div>
-                <div className={styles.optionCardDesc}>{wf.desc}</div>
-              </div>
-            ))}
+          <div className={styles.optionLabel}>
+            工作流模式（已由所选模板自动绑定：{currentWorkflowName}）
+          </div>
+          <div
+            style={{
+              padding: '0.75rem',
+              background: 'rgba(37,99,235,0.1)',
+              border: '1px solid rgba(37,99,235,0.3)',
+              borderRadius: 8,
+              color: '#93c5fd',
+              fontSize: '0.85rem',
+            }}
+          >
+            {currentTemplate
+              ? `「${currentTemplate.name}」模板采用「${currentWorkflowName}」工作流：${WORKFLOWS.find((w) => w.id === workflow)?.desc}`
+              : `当前工作流：${currentWorkflowName}`}
           </div>
         </div>
 
@@ -280,7 +281,16 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
           <div className={styles.optionLabel}>论文模板（{TEMPLATES.length} 选 1）</div>
           <TemplateSelector
             value={template}
-            onChange={(t) => setTemplate(t)}
+            onChange={(t) => {
+              setTemplate(t);
+              const tpl = TEMPLATE_OPTIONS.find((x) => x.id === t);
+              if (tpl) {
+                setWorkflow(tpl.defaultWorkflow);
+                if (tpl.defaultWorkflow === 'deep_research') {
+                  setDataSource('self_collect');
+                }
+              }
+            }}
             disabled={submitting}
           />
         </div>

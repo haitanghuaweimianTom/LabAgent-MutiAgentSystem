@@ -13,6 +13,7 @@ import AgentManager from './components/AgentManager';
 import SettingsPage from './components/SettingsPage';
 import PdfManager from './components/PdfManager';
 import MemoryManager from './components/MemoryManager';
+import EnvironmentManager from './components/EnvironmentManager';
 import { useAppStore } from './store/useAppStore';
 import { useTaskState } from './hooks/useTaskState';
 import { TaskStatusBadge } from './components/TaskStatusBadge';
@@ -37,7 +38,7 @@ interface Message {
 }
 
 export default function Home() {
-  const [tab, setTab] = useState<'dashboard' | 'generate' | 'files' | 'pdf' | 'history' | 'agents' | 'workflows' | 'memory' | 'settings'>('dashboard');
+  const [tab, setTab] = useState<'dashboard' | 'generate' | 'files' | 'pdf' | 'history' | 'agents' | 'workflows' | 'memory' | 'environment' | 'settings'>('dashboard');
 
   // Task state
   const [taskId, setTaskId] = useState<string | null>(null);
@@ -344,6 +345,7 @@ export default function Home() {
     { id: 'agents', label: '🤖 Agent', desc: '团队管理' },
     { id: 'workflows', label: '🔄 流程', desc: '工作流' },
     { id: 'memory', label: '🧠 记忆', desc: '经验教训/任务记忆' },
+    { id: 'environment', label: '🐍 环境', desc: 'Conda/Venv 管理' },
     { id: 'settings', label: '⚙️ 设置', desc: 'Provider/MCP/知识库/系统' },
   ] as const;
 
@@ -563,6 +565,11 @@ export default function Home() {
         {/* ===== 记忆 ===== */}
         {tab === 'memory' && (
           <MemoryManager />
+        )}
+
+        {/* ===== 环境管理 ===== */}
+        {tab === 'environment' && (
+          <EnvironmentManager />
         )}
 
         {/* ===== 设置（包含 Provider/MCP/知识库/系统 子标签） ===== */}

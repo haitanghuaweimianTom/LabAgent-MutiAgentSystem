@@ -16,6 +16,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/pdf", tags=["PDF 解析"])
 
 
+from ..core.paths import _PROJECT_ROOT
+
+
 @router.post("/upload", response_model=PdfUploadResponse)
 async def upload_pdf(
     file: UploadFile = File(...),
@@ -31,12 +34,20 @@ async def upload_pdf(
 
     try:
         info = await get_pdf_service().upload_pdf(file_bytes, file.filename, project_name)
+        file_path = get_pdf_service().get_file_path(info.file_id, project_name)
+        if file_path:
+            try:
+                rel_path = str(file_path.relative_to(_PROJECT_ROOT))
+            except ValueError:
+                rel_path = str(file_path)
+        else:
+            rel_path = ""
         return PdfUploadResponse(
             success=True,
             file_id=info.file_id,
             filename=info.filename,
             size=info.size,
-            path=str(get_pdf_service().get_file_path(info.file_id, project_name) or ""),
+            path=rel_path,
         )
     except Exception as e:
         logger.error(f"PDF 上传失败: {e}")
@@ -122,4 +133,8 @@ async def get_pdf_download_url(file_id: str, project_name: str = Query(None)):
     path = get_pdf_service().get_file_path(file_id, project_name)
     if not path or not path.exists():
         raise HTTPException(status_code=404, detail="文件不存在")
-    return {"file_id": file_id, "path": str(path), "size": path.stat().st_size}
+    try:
+        rel_path = str(path.relative_to(_PROJECT_ROOT))
+    except ValueError:
+        rel_path = str(path)
+    return {"file_id": file_id, "path": rel_path, "size": path.stat().st_size}

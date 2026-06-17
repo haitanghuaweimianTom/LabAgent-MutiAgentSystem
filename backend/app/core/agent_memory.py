@@ -17,6 +17,7 @@ MAX_FAILURE_CASES = 100
 CASE_TTL_DAYS = 90
 CASE_TTL_EXTENDED_DAYS = 180
 SUMMARY_INTERVAL = 5  # 每 5 个新案例触发一次 LLM 摘要
+CASE_COMPACT_INTERVAL = 10  # 每追加 10 个案例后 compact 一次
 
 
 @dataclass
@@ -75,7 +76,15 @@ class AgentCase:
 
 
 class AgentProfileMemory:
-    """单个 Agent 的独立记忆。"""
+    """单个 Agent 的独立记忆。
+
+    存储拆分：
+    - ``{agent_name}.json``：metadata（work_style / preferences / skills / collaboration_notes）
+    - ``{agent_name}_cases.jsonl``：success/failure 案例，按行追加
+
+    案例采用追加写（append-only），避免每次 add_case 都全量写盘。
+    仅 metadata 变更时才会重写 ``.json``；案例数量达到阈值时触发 compact。
+    """
 
     def __init__(self, agent_name: str):
         self.agent_name = agent_name
@@ -86,30 +95,65 @@ class AgentProfileMemory:
         self.skill_inventory: List[AgentSkill] = []
         self.collaboration_notes: List[str] = []
         self._path = AGENT_MEMORY_DIR / f"{agent_name}.json"
+        self._cases_path = AGENT_MEMORY_DIR / f"{agent_name}_cases.jsonl"
         self._load()
 
     def _load(self):
-        if not self._path.exists():
-            return
-        try:
-            data = json.loads(self._path.read_text("utf-8"))
-            self.work_style = data.get("work_style", "")
-            self.success_cases = [AgentCase.from_dict(c) for c in data.get("success_cases", [])]
-            self.failure_cases = [AgentCase.from_dict(c) for c in data.get("failure_cases", [])]
-            self.preferences = AgentPreferences.from_dict(data.get("preferences", {}))
-            self.skill_inventory = [AgentSkill.from_dict(s) for s in data.get("skill_inventory", [])]
-            self.collaboration_notes = data.get("collaboration_notes", [])
-        except Exception as e:
-            logger.warning(f"加载 Agent 记忆失败 {self.agent_name}: {e}")
+        """加载 metadata 与案例；自动迁移旧格式（cases 内嵌在 .json 中）。"""
+        # 1) 加载 metadata
+        if self._path.exists():
+            try:
+                data = json.loads(self._path.read_text("utf-8"))
+                self.work_style = data.get("work_style", "")
+                self.preferences = AgentPreferences.from_dict(data.get("preferences", {}))
+                self.skill_inventory = [AgentSkill.from_dict(s) for s in data.get("skill_inventory", [])]
+                self.collaboration_notes = data.get("collaboration_notes", [])
+            except Exception as e:
+                logger.warning(f"加载 Agent metadata 失败 {self.agent_name}: {e}")
+
+        # 2) 迁移：旧格式把 cases 存在 .json 里，且没有 .jsonl
+        if self._path.exists() and not self._cases_path.exists():
+            try:
+                data = json.loads(self._path.read_text("utf-8"))
+                legacy_success = data.get("success_cases", [])
+                legacy_failure = data.get("failure_cases", [])
+                if legacy_success or legacy_failure:
+                    self._cases_path.write_text("", encoding="utf-8")
+                    for c in legacy_success:
+                        self._append_case_line(c, "success")
+                    for c in legacy_failure:
+                        self._append_case_line(c, "failure")
+                    logger.info(f"已迁移 {self.agent_name} 的旧案例到 jsonl")
+                    # 重写 metadata 去掉旧 cases 字段
+                    self.save()
+            except Exception as e:
+                logger.warning(f"迁移 Agent 案例失败 {self.agent_name}: {e}")
+
+        # 3) 加载 jsonl 案例
+        if self._cases_path.exists():
+            try:
+                for line in self._cases_path.read_text("utf-8").splitlines():
+                    if not line.strip():
+                        continue
+                    record = json.loads(line)
+                    case_type = record.pop("_case_type", "success")
+                    case = AgentCase.from_dict(record)
+                    if case_type == "success":
+                        self.success_cases.append(case)
+                    else:
+                        self.failure_cases.append(case)
+                self._enforce_limit(self.success_cases, MAX_SUCCESS_CASES)
+                self._enforce_limit(self.failure_cases, MAX_FAILURE_CASES)
+            except Exception as e:
+                logger.warning(f"加载 Agent 案例失败 {self.agent_name}: {e}")
 
     def save(self):
+        """保存 metadata（不含 cases）；cases 通过 ``_append_case_line`` 增量追加。"""
         try:
             data = {
                 "agent_name": self.agent_name,
                 "work_style": self.work_style,
                 "preferences": self.preferences.to_dict(),
-                "success_cases": [c.to_dict() for c in self.success_cases],
-                "failure_cases": [c.to_dict() for c in self.failure_cases],
                 "skill_inventory": [s.to_dict() for s in self.skill_inventory],
                 "collaboration_notes": self.collaboration_notes,
                 "updated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
@@ -118,7 +162,38 @@ class AgentProfileMemory:
             tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), "utf-8")
             tmp.replace(self._path)
         except Exception as e:
-            logger.warning(f"保存 Agent 记忆失败 {self.agent_name}: {e}")
+            logger.warning(f"保存 Agent metadata 失败 {self.agent_name}: {e}")
+
+    def _append_case_line(self, case_dict: Dict[str, Any], case_type: str):
+        """向 jsonl 追加一条案例；失败不抛异常。"""
+        try:
+            record = dict(case_dict)
+            record["_case_type"] = case_type
+            line = json.dumps(record, ensure_ascii=False, default=str) + "\n"
+            with self._cases_path.open("a", encoding="utf-8") as f:
+                f.write(line)
+        except Exception as e:
+            logger.warning(f"追加 Agent 案例失败 {self.agent_name}: {e}")
+
+    def _compact_cases(self):
+        """按上限淘汰低分案例后重写 jsonl；控制文件无限增长。"""
+        try:
+            self._enforce_limit(self.success_cases, MAX_SUCCESS_CASES)
+            self._enforce_limit(self.failure_cases, MAX_FAILURE_CASES)
+            lines: List[str] = []
+            for c in self.success_cases:
+                record = c.to_dict()
+                record["_case_type"] = "success"
+                lines.append(json.dumps(record, ensure_ascii=False, default=str))
+            for c in self.failure_cases:
+                record = c.to_dict()
+                record["_case_type"] = "failure"
+                lines.append(json.dumps(record, ensure_ascii=False, default=str))
+            tmp = self._cases_path.with_suffix(".tmp")
+            tmp.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            tmp.replace(self._cases_path)
+        except Exception as e:
+            logger.warning(f"Compact Agent 案例失败 {self.agent_name}: {e}")
 
     def add_case(
         self,
@@ -130,7 +205,7 @@ class AgentProfileMemory:
         impact_score: float = 0.5,
         summary: str = "",
     ):
-        """添加成功/失败案例。"""
+        """添加成功/失败案例；案例写入采用 append-only。"""
         now = time.strftime("%Y-%m-%dT%H:%M:%S")
         case = AgentCase(
             case_id=f"{self.agent_name}_{int(time.time() * 1000)}",
@@ -149,7 +224,14 @@ class AgentProfileMemory:
         else:
             self.failure_cases.append(case)
             self._enforce_limit(self.failure_cases, MAX_FAILURE_CASES)
-        self.save()
+
+        # 追加写案例，metadata 不变则不重写
+        self._append_case_line(case.to_dict(), case_type)
+
+        # 定期 compact，避免 jsonl 无限增长
+        total_cases = len(self.success_cases) + len(self.failure_cases)
+        if total_cases % CASE_COMPACT_INTERVAL == 0:
+            self._compact_cases()
 
     def _enforce_limit(self, cases: List[AgentCase], limit: int):
         """超出上限时按 effective_score 淘汰最低分案例。"""
@@ -248,7 +330,13 @@ class AgentProfileMemoryStore:
         return self._profiles[agent_name]
 
     def list_agents(self) -> List[str]:
-        return sorted([p.stem for p in AGENT_MEMORY_DIR.glob("*.json")])
+        """返回所有有记忆文件的 Agent（兼容旧 .json 与新 .jsonl）。"""
+        names: set = set()
+        for p in AGENT_MEMORY_DIR.glob("*.json"):
+            names.add(p.stem)
+        for p in AGENT_MEMORY_DIR.glob("*_cases.jsonl"):
+            names.add(p.stem.replace("_cases", ""))
+        return sorted(names)
 
 
 # 全局单例

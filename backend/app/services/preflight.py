@@ -308,11 +308,17 @@ class PreflightDecisionService:
 }}
 
 注意：
+- 模板与工作流已由系统绑定，请按以下映射推荐工作流：
+  - math_modeling / financial_analysis → standard
+  - coursework → quick
+  - research_survey → deep_research
+  - ieee_conference / neurips_2024 / acm_sigconf / springer_lncs → research_paper
 - 如果题目偏向机器学习/深度学习理论研究，优先推荐 neurips_2024 或 ieee_conference。
 - 如果题目偏向系统/多智能体/软件工程，优先推荐 acm_sigconf。
 - 如果题目是中文数学建模赛题或明确要求建立数学模型，优先推荐 math_modeling。
 - 如果题目只需要综述而无实验数据，可推荐 research_survey。
 - has_data_confidence 要诚实反映数据是否足够支撑题目。
+- 工作流为 deep_research 时，系统会自主搜集数据，不要强制标记 data_adequacy 为 MISSING。
 """
 
     @staticmethod

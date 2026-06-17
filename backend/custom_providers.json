@@ -1,31 +1,6 @@
 {
   "providers": [
     {
-      "id": "kimi",
-      "name": "kimi",
-      "type": "openai",
-      "category": "custom",
-      "meta": {
-        "api_format": "anthropic",
-        "auth_field": "anthropic_auth_token"
-      },
-      "api_key": "sk-kimi-NaXQFjsH1rOyETCMkf44MG18GaBlWTdGbhCqvhXgLQK5iBapU4wrpGORKHzbVX1y",
-      "api_host": "https://api.kimi.com/coding",
-      "models": [
-        {
-          "name": "kimi-k2.6",
-          "enabled": true
-        }
-      ],
-      "enabled": true,
-      "icon": "OpenAI",
-      "icon_color": "#10a37f",
-      "notes": "",
-      "created_at": 1778585746,
-      "updated_at": 1778585746,
-      "_version": 2
-    },
-    {
       "id": "minimax",
       "name": "minimax",
       "type": "openai",
@@ -33,11 +8,11 @@
       "meta": {
         "api_format": "anthropic"
       },
-      "api_key": "sk-cp-wPOYBPl7QAyll27SO0SGc0XzGL7Z6nsURt1Ssyk_qs09HUqNBKy4fWpjxsaPvLcGQr4mbw_cduJ1Qaaq4ZXkHC-YS5_2xXd4-fsgoG9q-NcSZdhL8q5sKms",
-      "api_host": "https://api.minimaxi.com/anthropic",
+      "api_key": "sk-kimi-De72wrqT1WxxN8fMFD1P4hrGgfe7z0cjzpuREELDM40CwE1IM2H8wM6Iju9WHOWP",
+      "api_host": "https://api.kimi.com/coding/",
       "models": [
         {
-          "name": "MiniMax-M3",
+          "name": "sonnet",
           "enabled": true
         }
       ],
@@ -46,32 +21,7 @@
       "icon_color": "#10a37f",
       "notes": "MiniMax Anthropic-compatible endpoint",
       "created_at": 1781268770,
-      "updated_at": 1781596119,
-      "_version": 2
-    },
-    {
-      "id": "mimo",
-      "name": "XiaomiMiMo",
-      "type": "openai",
-      "category": "custom",
-      "meta": {
-        "api_format": "anthropic",
-        "auth_field": "anthropic_auth_token"
-      },
-      "api_key": "tp-ce2nztxc17yabp79kpjp8myb87p3d5bw2gwgs328iorhick4",
-      "api_host": "https://token-plan-cn.xiaomimimo.com/anthropic",
-      "models": [
-        {
-          "name": "mimo-v2.5-pro",
-          "enabled": true
-        }
-      ],
-      "enabled": true,
-      "icon": "OpenAI",
-      "icon_color": "#10a37f",
-      "notes": "Xiaomi MiMo via cc-switch",
-      "created_at": 1781343000,
-      "updated_at": 1781515598,
+      "updated_at": 1781674078,
       "_version": 2
     },
     {
@@ -95,7 +45,7 @@
       "icon_color": "#d97706",
       "notes": "从 ccswitch 自动同步",
       "created_at": 1781505613,
-      "updated_at": 1781596119,
+      "updated_at": 1781674078,
       "_version": 2
     },
     {
@@ -110,7 +60,7 @@
       "api_host": "https://token-plan-cn.xiaomimimo.com/anthropic",
       "models": [
         {
-          "name": "sonnet",
+          "name": "opus",
           "enabled": true
         }
       ],
@@ -118,11 +68,11 @@
       "icon": "Claude",
       "icon_color": "#d97706",
       "notes": "从 ccswitch 自动同步",
-      "created_at": 1781505613,
-      "updated_at": 1781596119,
+      "created_at": 1781618185,
+      "updated_at": 1781674078,
       "_version": 2
     }
   ],
-  "default_provider": "minimax",
+  "default_provider": "d6cf73d0-0e74-4c48-9b48-8a16ed5264d2",
   "_version": 2
 }

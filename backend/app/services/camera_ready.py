@@ -73,11 +73,26 @@ class CameraReadyResult:
     skipped_reasons: List[str] = field(default_factory=list)
     artifact_summary: Dict[str, int] = field(default_factory=dict)
     verification: Dict[str, Any] = field(default_factory=dict)
+    base_dir: Optional[Path] = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self, base_dir: Optional[Path] = None) -> Dict[str, Any]:
+        """序列化为字典；``base_dir`` 为参考目录时返回相对路径。"""
+        base = base_dir or self.base_dir
+        out_rel = str(self.output_dir)
+        zip_rel = str(self.zip_path) if self.zip_path else None
+        if base:
+            try:
+                out_rel = str(self.output_dir.relative_to(base))
+            except ValueError:
+                pass
+            if self.zip_path:
+                try:
+                    zip_rel = str(self.zip_path.relative_to(base))
+                except ValueError:
+                    pass
         return {
-            "output_dir": str(self.output_dir),
-            "zip_path": str(self.zip_path) if self.zip_path else None,
+            "output_dir": out_rel,
+            "zip_path": zip_rel,
             "skipped_reasons": self.skipped_reasons,
             "artifact_summary": self.artifact_summary,
             "verification": self.verification,
@@ -388,12 +403,16 @@ def _verify_compilation(pkg_dir: Path, template_id: str) -> Dict[str, Any]:
             )
             pdf_path = pkg_dir / "main.pdf"
             success = pdf_path.exists()
+            try:
+                pdf_rel = str(pdf_path.relative_to(pkg_dir.parent)) if success else None
+            except ValueError:
+                pdf_rel = str(pdf_path) if success else None
             return {
                 "success": success,
                 "engine": eng,
                 "returncode": proc.returncode,
                 "message": "ok" if success else f"{eng} failed (rc={proc.returncode})",
-                "pdf_path": str(pdf_path) if success else None,
+                "pdf_path": pdf_rel,
                 "stderr_snippet": proc.stderr[:2000] if not success or proc.returncode != 0 else "",
             }
         except subprocess.TimeoutExpired:
@@ -555,4 +574,5 @@ def build(
         skipped_reasons=skipped,
         artifact_summary=artifact.summary(),
         verification=verification,
+        base_dir=output_dir,
     )

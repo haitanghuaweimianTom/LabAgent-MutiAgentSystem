@@ -8,6 +8,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from app.services.paper_metadata import SemanticScholarProvider, get_metadata_enricher
+from app.services.paper_metadata.semantic_scholar import RateLimitedError
 from app.services.rate_limiter import AsyncTokenBucket
 
 
@@ -18,7 +19,10 @@ async def test_semantic_scholar_enrich_papers_returns_metadata():
     # 使用几篇知名论文的 arXiv ID
     arxiv_ids = ["1706.03762", "2203.08975"]
 
-    results = await provider.enrich_papers(arxiv_ids)
+    try:
+        results = await provider.enrich_papers(arxiv_ids)
+    except RateLimitedError as e:
+        pytest.skip(f"Semantic Scholar 限流，跳过真实 API 测试: {e}")
 
     assert isinstance(results, dict)
     assert len(results) > 0, "至少应返回一篇论文的元数据"
@@ -53,7 +57,11 @@ async def test_semantic_scholar_batch_splitting():
     base_id = "1706.03762"
     ids = [base_id] * 150
 
-    results = await provider.enrich_papers(ids)
+    try:
+        results = await provider.enrich_papers(ids)
+    except RateLimitedError as e:
+        pytest.skip(f"Semantic Scholar 限流，跳过真实 API 测试: {e}")
+
     # 去重后应只剩一个
     assert base_id in results
     assert len(results) == 1

@@ -6,6 +6,8 @@ from .analyzer_agent import AnalyzerAgent
 from .modeler_agent import ModelerAgent
 from .solver_agent import SolverAgent
 from .writer_agent import WriterAgent
+from .algorithm_engineer_agent import AlgorithmEngineerAgent
+from .financial_analyst_agent import FinancialAnalystAgent
 
 try:
     from .data_agent import DataAgent
@@ -16,4 +18,5 @@ __all__ = [
     "BaseAgent", "AgentFactory", "Orchestrator",
     "ResearchAgent", "AnalyzerAgent", "ModelerAgent",
     "SolverAgent", "WriterAgent", "DataAgent",
+    "AlgorithmEngineerAgent", "FinancialAnalystAgent",
 ]

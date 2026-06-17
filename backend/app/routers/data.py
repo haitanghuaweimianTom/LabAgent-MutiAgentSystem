@@ -48,7 +48,13 @@ async def upload_file(
         shutil.copyfileobj(file.file, buffer)
 
     size = save_path.stat().st_size
-    result = {"success": True, "file_id": file_id, "name": save_name, "size": size, "path": str(save_path)}
+    # 返回相对路径，避免绑定本机绝对路径
+    from ..core.paths import _PROJECT_ROOT
+    try:
+        rel_path = str(save_path.relative_to(_PROJECT_ROOT))
+    except ValueError:
+        rel_path = str(save_path)
+    result = {"success": True, "file_id": file_id, "name": save_name, "size": size, "path": rel_path}
 
     # 如果是数据文件，做初步分析
     if ext in {".csv", ".xlsx", ".xls", ".json"}:

@@ -52,10 +52,15 @@ def _scan_outputs_dirs() -> List[Dict[str, Any]]:
                 # 获取目录的创建时间
                 stat = d.stat()
                 created_at = stat.st_mtime
+                # 持久化相对路径，避免绑定本机绝对路径
+                try:
+                    rel_path = str(d.relative_to(_PROJECT_ROOT))
+                except ValueError:
+                    rel_path = str(d)
                 projects.append({
                     "id": d.name,
                     "name": d.name,
-                    "path": str(d),
+                    "path": rel_path,
                     "created_at": created_at,
                     "updated_at": stat.st_mtime,
                     "task_ids": [],
@@ -111,9 +116,14 @@ def list_projects() -> List[Dict[str, Any]]:
 
 def get_project(project_id: str) -> Optional[Dict[str, Any]]:
     """获取单个项目信息"""
+    from .paths import _PROJECT_ROOT
     projects = list_projects()
     for p in projects:
         if p["id"] == project_id:
+            # 兼容旧数据：若 path 是相对路径，则还原为绝对路径供内部使用
+            stored_path = p.get("path", "")
+            if stored_path and not Path(stored_path).is_absolute():
+                p["path"] = str(_PROJECT_ROOT / stored_path)
             return p
     return None
 
@@ -139,12 +149,18 @@ def create_project(name: str, description: str = "") -> Dict[str, Any]:
     (project_dir / "data").mkdir(exist_ok=True)
     (project_dir / "output").mkdir(exist_ok=True)
 
+    from .paths import _PROJECT_ROOT
     now = datetime.now().timestamp()
+    # 持久化相对路径，避免绑定本机绝对路径
+    try:
+        rel_path = str(project_dir.relative_to(_PROJECT_ROOT))
+    except ValueError:
+        rel_path = str(project_dir)
     project = {
         "id": safe_name,
         "name": name,
         "description": description,
-        "path": str(project_dir),
+        "path": rel_path,
         "created_at": now,
         "updated_at": now,
         "task_ids": [],

@@ -18,8 +18,10 @@ export interface TemplateOption {
   desc: string;
   chapters: number;
   domain: 'math_modeling' | 'coursework' | 'financial_analysis' | 'research_survey' | 'research_paper';
-  ccfA?: boolean;  // 是否 CCF-A 目标模板
+  ccfA?: boolean;
   recommended?: boolean;
+  /** 模板绑定的默认工作流，用户选择模板后自动切换，无需手动选择 */
+  defaultWorkflow: 'standard' | 'quick' | 'deep_research' | 'code_focused' | 'research_paper';
 }
 
 export const TEMPLATE_OPTIONS: TemplateOption[] = [
@@ -30,6 +32,7 @@ export const TEMPLATE_OPTIONS: TemplateOption[] = [
     desc: '12章 CUMCM 标准结构（mcmthesis 排版），适合数学建模竞赛',
     chapters: 12,
     domain: 'math_modeling',
+    defaultWorkflow: 'standard',
   },
   {
     id: 'coursework',
@@ -37,6 +40,7 @@ export const TEMPLATE_OPTIONS: TemplateOption[] = [
     desc: '8章简化结构，适合课程报告 / 学术作业',
     chapters: 8,
     domain: 'coursework',
+    defaultWorkflow: 'quick',
   },
   {
     id: 'financial_analysis',
@@ -44,6 +48,7 @@ export const TEMPLATE_OPTIONS: TemplateOption[] = [
     desc: '10章投资分析 / 风险评估 / 量化策略',
     chapters: 10,
     domain: 'financial_analysis',
+    defaultWorkflow: 'standard',
   },
   {
     id: 'research_survey',
@@ -51,6 +56,7 @@ export const TEMPLATE_OPTIONS: TemplateOption[] = [
     desc: '10章文献综述 / 研究现状 / 未来方向',
     chapters: 10,
     domain: 'research_survey',
+    defaultWorkflow: 'deep_research',
   },
   // 新 4 套 CCF-A 目标
   {
@@ -61,6 +67,7 @@ export const TEMPLATE_OPTIONS: TemplateOption[] = [
     domain: 'research_paper',
     ccfA: true,
     recommended: true,
+    defaultWorkflow: 'research_paper',
   },
   {
     id: 'neurips_2024',
@@ -69,6 +76,7 @@ export const TEMPLATE_OPTIONS: TemplateOption[] = [
     chapters: 10,
     domain: 'research_paper',
     ccfA: true,
+    defaultWorkflow: 'research_paper',
   },
   {
     id: 'acm_sigconf',
@@ -77,6 +85,7 @@ export const TEMPLATE_OPTIONS: TemplateOption[] = [
     chapters: 10,
     domain: 'research_paper',
     ccfA: true,
+    defaultWorkflow: 'research_paper',
   },
   {
     id: 'springer_lncs',
@@ -85,6 +94,7 @@ export const TEMPLATE_OPTIONS: TemplateOption[] = [
     chapters: 8,
     domain: 'research_paper',
     ccfA: true,
+    defaultWorkflow: 'research_paper',
   },
 ];
 

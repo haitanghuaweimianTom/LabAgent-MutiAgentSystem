@@ -175,8 +175,8 @@ class FactChecker:
 
         report = {
             "task_id": task_id,
-            "latex_file": str(latex_file),
-            "solves_file": str(solves_file),
+            "latex_file": str(latex_file.relative_to(output_dir)) if latex_file.exists() else None,
+            "solves_file": str(solves_file.relative_to(output_dir)) if solves_file.exists() else None,
             "latex_number_count": len(latex_numbers),
             "solve_number_count": len(solve_numbers),
             "issue_count": len(issues),

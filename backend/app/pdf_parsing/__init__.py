@@ -14,6 +14,9 @@ Phase 5 统一后，本目录作为兼容 shim，所有解析任务统一走
 from .base import PDFParser, ParseResult, ParseStatus
 from .registry import parser_registry  # noqa: F401 兼容旧 import
 
+# 自动导入并注册 parsers 目录下的解析器实现
+from . import parsers  # noqa: F401
+
 # Phase 5 兼容：暴露与新服务一致的 ParseResult 别名
 ParseOutcome = ParseResult  # 别名
 

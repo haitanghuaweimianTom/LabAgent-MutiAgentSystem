@@ -1,6 +1,7 @@
 """自定义 Provider 配置管理 — CC Switch 风格统一 Schema"""
 import json
 import logging
+import os
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -395,8 +396,12 @@ def parse_cc_switch_json(config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
 
 # ===== CC Switch SQLite 自动检测 =====
-
-CCSWITCH_DB = Path.home() / ".cc-switch" / "cc-switch.db"
+# 优先从环境变量获取，避免绑定特定用户主目录；未设置时回退到默认路径
+_CCSWITCH_DB_PATH = os.environ.get("CCSWITCH_DB_PATH", "")
+if _CCSWITCH_DB_PATH:
+    CCSWITCH_DB = Path(_CCSWITCH_DB_PATH)
+else:
+    CCSWITCH_DB = Path.home() / ".cc-switch" / "cc-switch.db"
 
 
 def detect_ccswitch_providers() -> List[Dict[str, Any]]:

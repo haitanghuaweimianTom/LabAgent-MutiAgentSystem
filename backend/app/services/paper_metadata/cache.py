@@ -159,10 +159,17 @@ class MetadataCache:
     # ----------------- 统计 -----------------
 
     def stats(self) -> Dict[str, Any]:
+        from ...core.paths import _PROJECT_ROOT
         with self._lock:
             total = len(self._entries)
             hits, misses = self._hits, self._misses
             ratio = (hits / (hits + misses)) if (hits + misses) > 0 else 0.0
+            cache_path_rel = None
+            if self._cache_path:
+                try:
+                    cache_path_rel = str(self._cache_path.relative_to(_PROJECT_ROOT))
+                except ValueError:
+                    cache_path_rel = str(self._cache_path)
             return {
                 "entries": total,
                 "hits": hits,
@@ -170,7 +177,7 @@ class MetadataCache:
                 "hit_ratio": round(ratio, 3),
                 "ttl_seconds": self._ttl,
                 "max_entries": self._max,
-                "cache_path": str(self._cache_path) if self._cache_path else None,
+                "cache_path": cache_path_rel,
             }
 
     # ----------------- 内部 -----------------

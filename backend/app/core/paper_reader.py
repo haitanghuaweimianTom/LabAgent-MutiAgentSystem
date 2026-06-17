@@ -400,12 +400,20 @@ class PaperReadingPipeline:
         reading_notes_map = {}
         for r in results:
             if isinstance(r, PaperReadingResult):
+                # 持久化相对路径，避免绑定本机绝对路径
+                def _rel(p: Optional[Path], base: Path) -> Optional[str]:
+                    if not p:
+                        return None
+                    try:
+                        return str(p.relative_to(base))
+                    except ValueError:
+                        return str(p)
                 reading_notes_map[r.arxiv_id] = {
                     "parse_success": r.parse_success,
                     "extraction_success": r.extraction_success,
                     "structured": r.structured,
-                    "pdf_path": str(r.pdf_path) if r.pdf_path else None,
-                    "markdown_path": str(r.markdown_path) if r.markdown_path else None,
+                    "pdf_path": _rel(r.pdf_path, reading_dir),
+                    "markdown_path": _rel(r.markdown_path, reading_dir),
                     "error": r.error,
                 }
             elif isinstance(r, Exception):

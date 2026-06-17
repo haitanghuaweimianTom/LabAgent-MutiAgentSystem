@@ -19,7 +19,12 @@ from pydantic import BaseModel
 from ..config import get_settings
 from .schemas import McpServerType, InstallSource, McpServerApp, detect_server_type
 
+import shutil
+
 logger = logging.getLogger(__name__)
+
+# 尝试定位 uvx；若不在 PATH 中则回退到命令名，由调用方/系统 PATH 解析
+_UVX_CMD = shutil.which("uvx") or "uvx"
 
 
 class MCPServerConfig(BaseModel):
@@ -93,7 +98,7 @@ class MCPManager:
         ),
         "arxiv_server": MCPServerConfig(
             name="arxiv_server",
-            command="/home/tomgame/.local/bin/uvx",
+            command=_UVX_CMD,
             args=["--from", "arxiv-mcp-server", "arxiv-mcp-server"],
             description="arXiv 论文检索 (搜索/下载/摘要/引用图谱)",
             tags=["search", "academic", "paper", "arxiv"],

@@ -82,7 +82,7 @@ main.pdf
 
 # Third-party cloned repositories
 src/knowledge/figures4papers/
-/home/tomgame/projects/MathModel-MutiAgentSystem/rules/github-config-rule.md
+/rules/github-config-rule.md
 # Project-level paper reading artifacts
 outputs/*/references/
 outputs/*/reading/

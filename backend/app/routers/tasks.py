@@ -16,7 +16,8 @@ from ..schemas import (
 )
 from ..agents import (
     Orchestrator, ResearchAgent, AnalyzerAgent, ModelerAgent,
-    SolverAgent, WriterAgent, DataAgent,
+    SolverAgent, WriterAgent, DataAgent, AlgorithmEngineerAgent,
+    FinancialAnalystAgent,
 )
 from ..config import get_settings
 from ..core.chat_room import get_chat_room
@@ -43,14 +44,35 @@ router = APIRouter(prefix="/tasks", tags=["任务管理"])
 _orchestrator = None
 DATA_DIR: Path = get_data_dir()  # 使用统一的路径管理
 
-# 项目根目录（E:/cherryClaw/math_modeling_multi_agent/）
-PROJECT_ROOT: Path = DATA_DIR.parent.parent.parent  # backend/data/uploads → backend/data → backend → 项目根
+# 项目根目录（backend/data/uploads → backend/data → backend → 项目根）
+PROJECT_ROOT: Path = DATA_DIR.parent.parent.parent
 
 
 def reset_orchestrator() -> None:
-    """重置Orchestrator，下次调用时会用最新的API密钥重新初始化"""
+    """重置 Orchestrator 及其依赖的运行时缓存，下次调用时使用最新配置重新初始化。
+
+    清理内容：
+    - 全局 _orchestrator 单例
+    - Agent model/provider 映射（重新从磁盘加载 agent_configs.json）
+    - 触发垃圾回收，确保旧 Agent 实例释放
+    """
     global _orchestrator
     _orchestrator = None
+
+    # 重新加载 Agent 配置，避免 rerun 时仍使用内存中的旧 provider/model 映射
+    try:
+        from .agents import _load_agent_configs
+        _load_agent_configs()
+    except Exception as e:
+        logger.warning(f"reset_orchestrator: 重新加载 Agent 配置失败: {e}")
+
+    # 强制释放旧的 Agent / LangGraph 编排器实例
+    try:
+        import gc
+        gc.collect()
+    except Exception:
+        pass
+
     logger.info("Orchestrator 已重置，将在下次任务时用最新配置初始化")
 
 
@@ -107,6 +129,10 @@ def get_orchestrator() -> Orchestrator:
                 mcp_tools=get_agent_mcp_tools("analyzer_agent")),
             "modeler_agent": make_agent(ModelerAgent, "modeler_agent",
                 mcp_tools=get_agent_mcp_tools("modeler_agent")),
+            "algorithm_engineer_agent": make_agent(AlgorithmEngineerAgent, "algorithm_engineer_agent",
+                mcp_tools=get_agent_mcp_tools("algorithm_engineer_agent")),
+            "financial_analyst_agent": make_agent(FinancialAnalystAgent, "financial_analyst_agent",
+                mcp_tools=get_agent_mcp_tools("financial_analyst_agent")),
             "solver_agent": make_agent(SolverAgent, "solver_agent",
                 mcp_tools=get_agent_mcp_tools("solver_agent")),
             "writer_agent": make_agent(WriterAgent, "writer_agent"),
@@ -903,10 +929,12 @@ async def get_camera_ready_status(task_id: str):
 
     pkg = task_output_dir / f"camera_ready_{task_id}"
     zip_path = task_output_dir / f"camera_ready_{task_id}.zip"
+    pkg_rel = str(pkg.relative_to(PROJECT_ROOT)) if pkg.exists() else None
+    zip_rel = str(zip_path.relative_to(PROJECT_ROOT)) if zip_path.exists() else None
     return {
         "task_id": task_id,
-        "package_dir": str(pkg) if pkg.exists() else None,
-        "zip_path": str(zip_path) if zip_path.exists() else None,
+        "package_dir": pkg_rel,
+        "zip_path": zip_rel,
         "exists": pkg.exists() or zip_path.exists(),
     }
 
@@ -1089,9 +1117,9 @@ async def export_task_output(req: dict):
     if not folder_name:
         folder_name = f"赛题_{task_id}"
 
-    # 桌面路径
-    desktop = Path.home() / "Desktop"
-    output_dir = desktop / folder_name
+    # 使用项目输出目录替代桌面路径，避免绑定用户主目录
+    export_root = get_project_output_dir(project_name or task_id) / "exports"
+    output_dir = export_root / folder_name
     output_dir.mkdir(parents=True, exist_ok=True)
 
     output_files = []
@@ -1149,7 +1177,7 @@ async def export_task_output(req: dict):
 
     return {
         "success": True,
-        "output_dir": str(output_dir),
+        "output_dir": str(output_dir.relative_to(PROJECT_ROOT)),
         "files": output_files,
         "file_count": len(output_files),
     }

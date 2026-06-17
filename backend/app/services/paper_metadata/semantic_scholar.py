@@ -14,6 +14,11 @@ from .registry import metadata_registry
 logger = logging.getLogger(__name__)
 
 
+class RateLimitedError(Exception):
+    """Semantic Scholar API 请求被限流，且重试后仍失败。"""
+    pass
+
+
 @metadata_registry.register("semantic_scholar")
 class SemanticScholarProvider(PaperMetadataProvider):
     """Semantic Scholar 元数据增强 Provider。
@@ -113,6 +118,8 @@ class SemanticScholarProvider(PaperMetadataProvider):
                     wait = 2 ** attempt * (5 if not self.api_key else 1)
                     logger.warning(f"Semantic Scholar rate limited, retry in {wait}s")
                     await asyncio.sleep(wait)
+                    if attempt == 2:
+                        raise RateLimitedError("Semantic Scholar API rate limited after retries")
                     continue
 
                 resp.raise_for_status()
