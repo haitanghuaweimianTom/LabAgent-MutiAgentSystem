@@ -20,6 +20,8 @@ TEAM: Dict[str, Dict[str, str]] = {
     "data_agent": {"name": "data_agent", "label": "数据分析师", "description": "数据分析与预处理", "model": ""},
     "analyzer_agent": {"name": "analyzer_agent", "label": "分析师", "description": "问题分析与任务分解", "model": ""},
     "modeler_agent": {"name": "modeler_agent", "label": "建模师", "description": "建立数学模型", "model": ""},
+    "algorithm_engineer_agent": {"name": "algorithm_engineer_agent", "label": "算法工程师", "description": "设计创新算法与方法（CCF-A / 数学建模）", "model": ""},
+    "financial_analyst_agent": {"name": "financial_analyst_agent", "label": "金融分析师", "description": "建立金融数学与量化模型", "model": ""},
     "solver_agent": {"name": "solver_agent", "label": "求解器", "description": "编程求解与验证", "model": ""},
     "writer_agent": {"name": "writer_agent", "label": "写作专家", "description": "生成完整LaTeX论文", "model": ""},
 }

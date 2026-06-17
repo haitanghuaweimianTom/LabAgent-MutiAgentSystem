@@ -14,43 +14,18 @@ from .base import BaseAgent, AgentFactory
 
 logger = logging.getLogger(__name__)
 
-# 模型模板库（包含物理类模型用于 SiC 厚度测量问题）
+# 模型模板库（仅作为 LLM 输出无效时的兜底占位，不应被直接当作最终模型）
+# 设计上要求 LLM 根据具体问题生成专属模型；本库只在解析失败或网络异常时提供可运行的占位结构。
 MODEL_TEMPLATES = {
     "physics": {
-        "interference_thickness": {
-            "name": "双光束干涉厚度模型",
-            "description": "基于红外薄膜干涉原理，通过反射光谱干涉条纹确定外延层厚度",
-            "formula": r"2 \cdot d \cdot \sqrt{n(\nu)^2 - \sin^2\theta_0} = \frac{m}{\nu}",
-            "constraints_note": "干涉条件 + 斯涅尔定律 + 半波损失",
-            "algorithm": "FFT频域分析 + 非线性最小二乘拟合",
-            "variables": [
-                "d: 外延层厚度(μm), 待求量",
-                "n(ν): 外延层折射率(波数函数)",
-                "m: 干涉级次(整数)",
-            ],
-            "code_hints": "peak_detection_fft",
-        },
-        "multi_beam_interference": {
-            "name": "多光束干涉模型(Airy公式)",
-            "description": "考虑多次反射透射的高阶干涉效应，使用Airy公式描述多光束干涉",
-            "formula": r"R = \frac{R_1 + R_2 - 2\sqrt{R_1 R_2}\cos\delta}{1 + R_1 R_2 - 2\sqrt{R_1 R_2}\cos\delta}, \delta = \frac{4\pi n d \cos\theta}{\lambda}",
-            "constraints_note": "高反射率界面条件 + 多束相位叠加",
-            "algorithm": "Airy公式拟合 + 全局优化算法",
-            "variables": [
-                "d: 外延层厚度(μm), 待求量",
-                "n: 外延层等效折射率",
-                "R1,R2: 界面反射率",
-            ],
-            "code_hints": "airy_formula_fit",
-        },
-        "sensitivity_analysis": {
-            "name": "灵敏度分析与稳健性评估",
-            "description": "分析入射角、折射率等参数扰动对厚度计算的影响",
-            "formula": r"S_i = \frac{\Delta d / d}{\Delta p_i / p_i}",
-            "constraints_note": "参数扰动范围 + 物理约束",
-            "algorithm": "One-at-a-Time + Sobol全局敏感性分析",
-            "variables": ["Δd: 厚度变化", "p_i: 输入参数(入射角/折射率等)"],
-            "code_hints": "sensitivity_oat",
+        "generic_physics": {
+            "name": "物理建模",
+            "description": "基于物理定律和实验数据的通用定量模型",
+            "formula": "由守恒律/几何关系/波动方程/经验公式根据具体问题建立",
+            "constraints_note": "物理定律 + 边界条件 + 测量不确定性",
+            "algorithm": "数值求解 / 曲线拟合 / 蒙特卡洛模拟",
+            "variables": ["q: 待求物理量", "p: 模型参数", "x: 自变量/输入条件"],
+            "code_hints": "physics_modeling",
         },
     },
     "optimization": {
@@ -73,13 +48,13 @@ MODEL_TEMPLATES = {
             "code_hints": "integer_programming",
         },
         "stochastic_optimization": {
-            "name": "随机规划/库存优化（报童模型）",
-            "description": "考虑需求不确定性的随机优化模型",
-            "formula": "max E[利润] = sum(p_i·q_i - c_i·q_i - k_i·E[缺货量])",
-            "constraints_note": "需求量约束 + 库存容量约束 + 保质期约束",
-            "algorithm": "蒙特卡洛模拟 / 随机规划求解器",
-            "variables": ["q_i: 第i种蔬菜的订货量", "d_i ~ N(μ_i, σ_i): 随机需求量", "s_i: 缺货成本系数"],
-            "code_hints": "newsvendor_monte_carlo",
+            "name": "随机规划",
+            "description": "考虑不确定性因素的优化模型",
+            "formula": "min E[f(x, ξ)]  s.t.  g(x, ξ) ≤ 0",
+            "constraints_note": "不确定性描述 + 机会约束/期望约束",
+            "algorithm": "样本平均近似(SAA) / 随机规划求解器 / 蒙特卡洛模拟",
+            "variables": ["x: 决策变量", "ξ: 随机变量/不确定性参数"],
+            "code_hints": "stochastic_optimization",
         },
         "nonlinear_programming": {
             "name": "非线性规划",
@@ -93,17 +68,17 @@ MODEL_TEMPLATES = {
     },
     "prediction": {
         "time_series": {
-            "name": "时间序列预测(ARIMA/SARIMA)",
+            "name": "时间序列预测",
             "description": "基于历史数据的时间序列预测模型",
-            "formula": "ARIMA(p,d,q): φ(B)(1-B)^d Y_t = θ(B)ε_t",
-            "constraints_note": "平稳性假设 + 正态分布误差",
-            "algorithm": "statsmodels.tsa.arima.ARIMA / pmdarima.auto_arima",
-            "variables": ["Y_t: t时刻的值", "ε_t: 白噪声"],
-            "code_hints": "arima_forecast",
+            "formula": "Y_t = f(Y_{t-1}, ..., ε_t)",
+            "constraints_note": "平稳性假设 + 误差结构假设",
+            "algorithm": "ARIMA / SARIMA / ETS / 状态空间模型",
+            "variables": ["Y_t: t时刻的值", "ε_t: 白噪声/扰动项"],
+            "code_hints": "time_series_forecast",
         },
         "prophet": {
             "name": "Prophet时间序列预测",
-            "description": "Facebook开源的时间序列预测模型",
+            "description": "趋势+季节性+节假日分解的时间序列预测",
             "formula": "Y(t) = g(t) + s(t) + h(t) + ε_t",
             "constraints_note": "趋势+季节性+节假日效应分解",
             "algorithm": "Prophet / statsmodels",
@@ -111,22 +86,22 @@ MODEL_TEMPLATES = {
             "code_hints": "prophet_forecast",
         },
         "neural_network": {
-            "name": "LSTM神经网络预测",
-            "description": "长短期记忆网络，适合捕捉复杂时间依赖关系",
-            "formula": "h_t = LSTM(x_t, h_{t-1})",
-            "constraints_note": "数据标准化 + 时序数据划分",
-            "algorithm": "PyTorch / Keras LSTM / sklearn.MLPRegressor",
-            "variables": ["x_t: t时刻输入特征", "h_t: t时刻隐藏状态", "y_hat: 预测值"],
-            "code_hints": "lstm_forecast",
+            "name": "神经网络预测",
+            "description": "基于神经网络的非线性预测模型",
+            "formula": "y_hat = NN(x; θ)",
+            "constraints_note": "数据标准化 + 训练/验证/测试划分",
+            "algorithm": "PyTorch / Keras / sklearn.MLPRegressor",
+            "variables": ["x: 输入特征", "θ: 网络参数", "y_hat: 预测值"],
+            "code_hints": "neural_network_forecast",
         },
         "regression": {
-            "name": "多元回归分析",
+            "name": "回归分析",
             "description": "建立因变量与自变量之间的回归关系",
             "formula": "Y = β_0 + β_1*X_1 + ... + β_p*X_p + ε",
-            "constraints_note": "线性假设 + 独立性假设",
-            "algorithm": "最小二乘法 / sklearn.linear_model",
+            "constraints_note": "线性/可线性化假设 + 独立性假设",
+            "algorithm": "最小二乘法 / 极大似然 / sklearn.linear_model",
             "variables": ["Y: 因变量", "X_j: 第j个自变量", "β_j: 回归系数"],
-            "code_hints": "linear_regression",
+            "code_hints": "regression_analysis",
         },
     },
     "evaluation": {
@@ -161,12 +136,12 @@ MODEL_TEMPLATES = {
     "sensitivity": {
         "sensitivity_analysis": {
             "name": "灵敏度分析与稳健性评估",
-            "description": "分析参数变化对最优解的影响程度",
-            "formula": "S_i = ΔZ/Δp_i (变化率之比)",
+            "description": "分析参数变化对最优解或预测结果的影响程度",
+            "formula": "S_i = ΔY/Δp_i (变化率之比)",
             "constraints_note": "参数扰动实验设计",
             "algorithm": "One-at-a-Time / Sobol指数 / Monte Carlo",
-            "variables": ["Δp_i: 参数i的扰动量", "ΔZ: 目标函数变化量"],
-            "code_hints": "sensitivity_oat",
+            "variables": ["Δp_i: 参数i的扰动量", "ΔY: 输出结果变化量"],
+            "code_hints": "sensitivity_analysis",
         },
     },
     "classification": {
@@ -184,43 +159,39 @@ MODEL_TEMPLATES = {
 
 
 def _smart_template_select(suggested_method: str, problem_type: str, sub_problem_desc: str) -> tuple:
-    """根据推荐方法和问题类型智能选择模型模板"""
+    """根据推荐方法和问题类型智能选择通用模型模板（兜底占位用）"""
     text = (suggested_method + problem_type + sub_problem_desc).lower()
 
-    # ===== 物理/光学领域优先 =====
+    # 物理/光学/工程领域 → 通用物理模型
     if any(kw in text for kw in [
-        "干涉", "外延", "厚度", "折射率", "光程差", "波数",
-        "双光束", "多光束", "干涉仪", "反射率", "相位差", "菲涅尔",
-        "碳化硅", "硅晶圆", "SiC", "红外", "opd", "反射光谱",
-        "薄膜", "光波", "入射角", "干涉条纹", "膜厚"
+        "物理", "光学", "干涉", "外延", "厚度", "折射率", "光程差", "波数",
+        "双光束", "多光束", "反射率", "相位差", "菲涅尔", "碳化硅", "硅晶圆",
+        "sic", "红外", "opd", "反射光谱", "薄膜", "光波", "入射角", "干涉条纹",
+        "膜厚", "力学", "热传导", "电磁", "流体力学"
     ]):
-        if any(kw in text for kw in ["多光束", "多次反射", "airy", "多束", "硅晶圆", "消除影响"]):
-            return "multi_beam_interference", "physics"
-        if any(kw in text for kw in ["灵敏度", "稳健性", "鲁棒", "参数扰动", "sensitivity", "可靠性", "误差分析"]):
-            return "sensitivity_analysis", "physics"
-        return "interference_thickness", "physics"
+        return "generic_physics", "physics"
 
-    if any(kw in text for kw in ["灵敏度", "稳健性", "鲁棒性", "sensitivity", "参数扰动"]):
+    if any(kw in text for kw in ["灵敏度", "稳健性", "鲁棒性", "sensitivity", "参数扰动", "稳定性"]):
         return "sensitivity_analysis", "sensitivity"
-    if any(kw in text for kw in ["sarima", "arima", "arma", "ma", "指数平滑", "holt-winter", "prophet", "时序预测", "预测"]):
+    if any(kw in text for kw in ["sarima", "arima", "arma", "ma", "指数平滑", "holt-winter", "prophet", "时序预测", "预测", "forecast"]):
         if "prophet" in text:
             return "prophet", "prediction"
-        if any(kw in text for kw in ["lstm", "gru", "rnn", "深度学习", "神经网络预测"]):
+        if any(kw in text for kw in ["lstm", "gru", "rnn", "深度学习", "神经网络预测", "neural"]):
             return "neural_network", "prediction"
         return "time_series", "prediction"
-    if any(kw in text for kw in ["回归", "多元", "线性拟合"]):
+    if any(kw in text for kw in ["回归", "多元", "线性拟合", "regression"]):
         return "regression", "prediction"
-    if any(kw in text for kw in ["库存", "报童", "随机规划", "订货量", "采购", "newsvendor"]):
+    if any(kw in text for kw in ["库存", "报童", "随机规划", "订货量", "采购", "newsvendor", "stochastic", "不确定性"]):
         return "stochastic_optimization", "optimization"
-    if any(kw in text for kw in ["ahp", "层次分析", "层次分析法"]):
+    if any(kw in text for kw in ["ahp", "层次分析", "层次分析法", "analytic hierarchy"]):
         return "ahp", "evaluation"
-    if any(kw in text for kw in ["熵权", "熵"]):
+    if any(kw in text for kw in ["熵权", "熵", "entropy"]):
         return "entropy_weight", "evaluation"
-    if any(kw in text for kw in ["topsis", "逼近理想", "综合评价", "评价"]):
+    if any(kw in text for kw in ["topsis", "逼近理想", "综合评价", "评价", "multi-criteria"]):
         return "topsis", "evaluation"
-    if any(kw in text for kw in ["整数", "指派", "调度", "分配问题"]):
+    if any(kw in text for kw in ["整数", "指派", "调度", "分配问题", "integer"]):
         return "integer_programming", "optimization"
-    if any(kw in text for kw in ["svm", "支持向量", "分类", "聚类"]):
+    if any(kw in text for kw in ["svm", "支持向量", "分类", "聚类", "classification", "clustering"]):
         return "svm", "classification"
     return "linear_programming", "optimization"
 
@@ -236,10 +207,15 @@ class ModelerAgent(BaseAgent):
 
     def get_system_prompt(self) -> str:
         return """你是一个专业的数学建模专家。你需要：
-1. 根据问题描述和前期分析，建立精确的数学模型
+1. 根据问题描述和前期分析，建立面向当前具体问题的数学模型
 2. 定义清晰的决策变量、目标函数和约束条件
 3. 选择合适的求解算法
-4. 给出模型的假设和优缺点
+4. 给出模型的假设、优缺点和适用边界
+
+核心纪律：
+- **problem-specific**：禁止直接套用通用模板或预设模型。每个字段必须基于当前问题的实际背景、数据和目标推导。
+- **no fabrication**：禁止编造不存在的参数值、数据来源、实验结果或引用。无数据时说明"待估计/待补充"，不得假设虚假数值。
+- **traceable**：所有假设、参数、约束必须能在问题描述或已提供数据中找到依据。
 
 重要：你必须以JSON格式输出，不要有任何其他文字！
 
@@ -257,7 +233,7 @@ class ModelerAgent(BaseAgent):
     "model_limitations": ["局限性1", "局限性2"]
 }
 
-请建立完整、准确的数学模型。"""
+请建立完整、准确、可求解的数学模型。"""
 
     async def execute(self, task_input: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
         action = task_input.get("action", "build_model")
@@ -542,7 +518,13 @@ class ModelerAgent(BaseAgent):
                 "algorithm": {"name": tmpl["algorithm"], "description": tmpl["description"]},
                 "model_assumptions": assumptions,
                 "model_advantages": [f"模型结构清晰，基于{tmpl['name']}方法", "求解方法成熟"],
-                "model_limitations": ["假设可能过于理想化", "需要根据具体数据调整参数"],
+                "model_limitations": [
+                    f"【兜底模板】本模型由系统根据关键词 '{template_key}' 自动填充，仅作占位参考，必须根据具体问题重新校验或替换",
+                    "假设可能过于理想化",
+                    "需要根据具体数据调整参数",
+                ],
+                "_used_fallback_template": True,
+                "_fallback_template_key": template_key,
             })
         return {"sub_problem_models": models}
 
@@ -617,7 +599,7 @@ class ModelerAgent(BaseAgent):
 ## 输出格式（必须为 JSON，不要有任何其他文字）
 {{
     "code": "完整 Python 代码（包含所有 import，末尾用 json.dumps 打印结果）",
-    "file_path": "E:/cherryClaw/math_modeling_multi_agent/output/code/model_validation_sp{sp_id}.py",
+    "file_path": "output/code/model_validation_sp{sp_id}.py",
     "key_steps": ["步骤1", "步骤2"],
     "expected_output": "输出描述"
 }}"""
@@ -646,6 +628,11 @@ class ModelerAgent(BaseAgent):
         template_key, category = _smart_template_select(suggested_method, problem_type, sub_desc)
         templates = MODEL_TEMPLATES.get(category, MODEL_TEMPLATES["optimization"])
         tmpl = templates.get(template_key, list(templates.values())[0])
+
+        logger.warning(
+            f"ModelerAgent 对子问题 '{sub_desc[:40]}' 使用兜底模板 '{template_key}'，"
+            f"该结果仅为占位，需人工复核或重新生成问题专属模型。"
+        )
 
         variables = []
         for v_str in tmpl.get("variables", []):
@@ -681,5 +668,12 @@ class ModelerAgent(BaseAgent):
             "algorithm": {"name": tmpl["algorithm"], "description": tmpl["description"]},
             "model_assumptions": assumptions,
             "model_advantages": ["模型结构清晰，便于理解和解释", "求解方法成熟，计算效率高", f"基于{tmpl['name']}方法，结果具有较好的可解释性"],
-            "model_limitations": [f"假设可能过于理想化，未完全反映实际情况", "对数据质量和样本量有一定要求", f"需要根据{tmpl['algorithm']}进行参数调优"],
+            "model_limitations": [
+                f"【兜底模板】本模型由系统根据关键词 '{template_key}' 自动填充，仅作占位参考，必须根据具体问题重新校验或替换",
+                "假设可能过于理想化，未完全反映实际情况",
+                "对数据质量和样本量有一定要求",
+                f"需要根据{tmpl['algorithm']}进行参数调优",
+            ],
+            "_used_fallback_template": True,
+            "_fallback_template_key": template_key,
         }

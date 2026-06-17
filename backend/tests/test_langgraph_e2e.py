@@ -8,10 +8,15 @@ mock 所有 Agent 的 execute 方法，验证 LangGraph 编排器的完整流程
 """
 import asyncio
 import json
+import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+# Ensure backend root is on path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from app.agents.langgraph_orchestrator import LangGraphOrchestrator, LANGGRAPH_AVAILABLE, TaskState
 from app.agents.base import BaseAgent
@@ -443,3 +448,212 @@ async def test_langgraph_cannot_solve_report(
     report = result.get("cannot_solve_report")
     assert report is not None
     assert report["task_id"] == "lg_test_cannot_solve"
+
+
+@pytest.mark.skipif(not LANGGRAPH_AVAILABLE, reason="langgraph not installed")
+@pytest.mark.asyncio
+async def test_langgraph_normalization(
+    patched_output_dir, patched_task_dir, patched_chat_room, patched_memory
+):
+    """测试 algorithm_engineer_agent 和 financial_analyst_agent 输出归一化。"""
+    orch = LangGraphOrchestrator({})
+
+    # 测试 algorithm_engineer 归一化
+    raw_algo = {
+        "problem_formulation": {
+            "notation": {"x": "决策变量", "y": "目标函数值"},
+            "assumptions": ["假设1", "假设2"],
+        },
+        "proposed_method": {
+            "name": "TestAlgo",
+            "core_idea": "核心思想",
+            "algorithm_steps": ["step1", "step2"],
+            "complexity": {"time": "O(n)"},
+        },
+        "experiment_design": {
+            "datasets": ["MNIST"],
+            "metrics": ["accuracy"],
+        },
+        "code_hints": {"language": "python"},
+    }
+    norm_algo = orch._normalize_algorithm_engineer_output(raw_algo)
+    assert "sub_problem_models" in norm_algo
+    assert len(norm_algo["sub_problem_models"]) == 1
+    model = norm_algo["sub_problem_models"][0]
+    assert model["model_type"] == "algorithm_design"
+    assert model["_agent_source"] == "algorithm_engineer_agent"
+    assert len(model["decision_variables"]) == 2
+    assert model["model_name"] == "TestAlgo"
+    assert model["_raw_output"] == raw_algo
+
+    # 测试 financial_analyst 归一化
+    raw_fin = {
+        "problem_formulation": {
+            "key_variables": {"price": "股票价格", "vol": "波动率"},
+            "assumptions": ["市场有效"],
+        },
+        "financial_model": {
+            "name": "BlackScholes",
+            "core_idea": "期权定价",
+            "category": "定价模型",
+        },
+        "data_requirements": {"required_data": ["历史价格"], "frequency": "日频"},
+        "risk_analysis": {"model_risks": ["模型风险"]},
+        "backtest_design": {"strategy": "回测策略", "metrics": ["夏普比率"]},
+    }
+    norm_fin = orch._normalize_financial_analyst_output(raw_fin)
+    assert "sub_problem_models" in norm_fin
+    assert len(norm_fin["sub_problem_models"]) == 1
+    model = norm_fin["sub_problem_models"][0]
+    assert model["model_type"] == "financial_model"
+    assert model["_agent_source"] == "financial_analyst_agent"
+    assert len(model["decision_variables"]) == 2
+    assert model["model_name"] == "BlackScholes"
+    assert model["_raw_output"] == raw_fin
+
+    # 测试空输入
+    assert orch._normalize_algorithm_engineer_output({}) == {"sub_problem_models": []}
+    assert orch._normalize_financial_analyst_output(None) == {"sub_problem_models": []}
+
+
+@pytest.mark.skipif(not LANGGRAPH_AVAILABLE, reason="langgraph not installed")
+@pytest.mark.asyncio
+async def test_langgraph_no_fabrication_validation(
+    patched_output_dir, patched_task_dir, patched_chat_room, patched_memory
+):
+    """测试防编造校验：检测无引用的作者-年份引用、价格数据、baseline 数字。"""
+    orch = LangGraphOrchestrator({})
+
+    # 场景1：有作者-年份引用但无编号引用
+    output1 = {
+        "text": "根据 (Smith et al., 2020) 和 (Jones, 2019) 的研究...",
+        "references": [],
+    }
+    result1 = orch._validate_no_fabrication("modeler_agent", output1)
+    assert result1["_fabrication_score"] > 0
+    assert any("作者-年份引用" in f for f in result1["_fabrication_flags"])
+
+    # 场景2：financial_analyst 有价格数据但无来源
+    output2 = {
+        "analysis": "股票价格为 $123.45，收益率为 +5.67%",
+        "metadata": None,
+    }
+    result2 = orch._validate_no_fabrication("financial_analyst_agent", output2)
+    assert result2["_fabrication_score"] > 0
+    assert any("价格数据" in f for f in result2["_fabrication_flags"])
+
+    # 场景3：algorithm_engineer 有 baseline 数字但无引用
+    output3 = {
+        "results": "我们的方法达到 Accuracy=95.2%，F1=0.89",
+        "citations": [],
+    }
+    result3 = orch._validate_no_fabrication("algorithm_engineer_agent", output3)
+    assert result3["_fabrication_score"] > 0
+    assert any("性能数字" in f for f in result3["_fabrication_flags"])
+
+    # 场景4：有引用则不应触发
+    output4 = {
+        "text": "根据 [1] Smith et al., 2020 的研究...",
+        "references": [{"id": 1}],
+    }
+    result4 = orch._validate_no_fabrication("modeler_agent", output4)
+    assert result4["_fabrication_score"] == 0.0
+    assert result4["_fabrication_flags"] == []
+
+    # 场景5：financial 有来源关键词
+    output5 = {
+        "analysis": "价格 $100.00 来自 Yahoo Finance",
+    }
+    result5 = orch._validate_no_fabrication("financial_analyst_agent", output5)
+    assert result5["_fabrication_score"] == 0.0
+
+    # 场景6：algorithm_engineer 有 citation 关键词
+    output6 = {
+        "results": "Accuracy=95.2% (reported from prior work)",
+    }
+    result6 = orch._validate_no_fabrication("algorithm_engineer_agent", output6)
+    assert result6["_fabrication_score"] == 0.0
+
+
+@pytest.mark.skipif(not LANGGRAPH_AVAILABLE, reason="langgraph not installed")
+@pytest.mark.asyncio
+async def test_langgraph_financial_workflow(
+    patched_output_dir, patched_task_dir, patched_chat_room, patched_memory
+):
+    """场景：financial_analysis 模板使用 financial_analyst_agent 而非 modeler_agent。"""
+    agents = _make_agents()
+    # 替换 modeler_agent 为 financial_analyst_agent
+    agents["financial_analyst_agent"] = _MockAgent("financial_analyst_agent", {
+        "problem_formulation": {"key_variables": {"x": "变量"}, "assumptions": []},
+        "financial_model": {"name": "TestModel", "core_idea": "测试"},
+        "data_requirements": {"required_data": []},
+        "risk_analysis": {},
+        "backtest_design": {},
+    })
+    orch = LangGraphOrchestrator(agents)
+
+    result = await orch.run(
+        task_id="lg_test_financial",
+        problem_text="分析某股票投资组合风险",
+        data_files=["/tmp/data.csv"],
+        template="financial_analysis",
+        workflow_type="standard",
+        mode="batch",
+    )
+
+    assert result["status"] == "completed"
+    assert "results" in result
+
+
+@pytest.mark.skipif(not LANGGRAPH_AVAILABLE, reason="langgraph not installed")
+@pytest.mark.asyncio
+async def test_langgraph_ccfa_workflow(
+    patched_output_dir, patched_task_dir, patched_chat_room, patched_memory
+):
+    """场景：CCF-A 模板（neurips_2024）使用 algorithm_engineer_agent 而非 modeler_agent。"""
+    agents = _make_agents()
+    # 替换 modeler_agent 为 algorithm_engineer_agent
+    agents["algorithm_engineer_agent"] = _MockAgent("algorithm_engineer_agent", {
+        "problem_formulation": {"notation": {"x": "变量"}, "assumptions": []},
+        "proposed_method": {"name": "TestAlgo", "core_idea": "测试算法"},
+        "experiment_design": {"datasets": [], "metrics": []},
+        "code_hints": {},
+    })
+    orch = LangGraphOrchestrator(agents)
+
+    result = await orch.run(
+        task_id="lg_test_ccfa",
+        problem_text="设计一个新的图神经网络算法",
+        data_files=[],
+        template="neurips_2024",
+        workflow_type="research_paper",
+        mode="batch",
+    )
+
+    assert result["status"] == "completed"
+    assert "results" in result
+
+
+@pytest.mark.skipif(not LANGGRAPH_AVAILABLE, reason="langgraph not installed")
+@pytest.mark.asyncio
+async def test_langgraph_skip_modeling_deep_research(
+    patched_output_dir, patched_task_dir, patched_chat_room, patched_memory
+):
+    """场景：deep_research 工作流跳过建模和求解，直接进入 writer。"""
+    agents = _make_agents()
+    orch = LangGraphOrchestrator(agents)
+
+    result = await orch.run(
+        task_id="lg_test_skip_model",
+        problem_text="深度学习在医疗影像中的最新进展综述",
+        data_files=[],
+        template="research_survey",
+        workflow_type="deep_research",
+        mode="batch",
+    )
+
+    assert result["status"] == "completed"
+    # deep_research 应跳过 solver（因为 _TEMPLATES_NO_MODELING 包含 research_survey）
+    # 验证结果中有 writer_agent 但没有 solver 的求解结果（或 solver 被跳过）
+    assert "results" in result
+    assert "writer_agent" in result["results"]

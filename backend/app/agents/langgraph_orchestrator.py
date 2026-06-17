@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any, Dict, List, Optional, TypedDict
 
 try:
@@ -30,6 +32,7 @@ from ..services.code_manifest import parse_manifest_from_dict, validate_manifest
 from ..services.contract_validator import get_contract_validator
 from ..services.fact_checker import get_fact_checker
 from ..core.paths import get_project_output_dir
+from ..core.state_store import get_task_result_store, _ref_key
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +76,15 @@ class LangGraphConfig:
 class LangGraphOrchestrator:
     """基于 LangGraph StateGraph 的任务编排器。"""
 
+    # CCF-A 顶会模板集合
+    _CCF_A_TEMPLATES = {"ieee_conference", "neurips_2024", "acm_sigconf", "springer_lncs"}
+
+    # 不需要建模的模板（调研/综述类）
+    _TEMPLATES_NO_MODELING = {"research_survey", "research_review", "literature_review"}
+
+    # 不需要建模的工作流类型
+    _WORKFLOWS_NO_MODELING = {"deep_research", "survey"}
+
     def __init__(
         self,
         agents: Dict[str, Any],
@@ -80,7 +92,251 @@ class LangGraphOrchestrator:
     ):
         self.agents = agents
         self.cfg = LangGraphConfig(**(config or {}))
+        self._result_store = get_task_result_store()
         self._graph = self._build_graph() if LANGGRAPH_AVAILABLE else None
+
+    def _resolve_results(self, state: TaskState) -> Dict[str, Any]:
+        """把 state 中的 result 引用还原为实际 Agent 输出。"""
+        refs = state.get("results", {})
+        task_id = state["task_id"]
+        resolved: Dict[str, Any] = {}
+        for agent_name, value in refs.items():
+            if isinstance(value, str) and value.startswith("__ref__"):
+                resolved[agent_name] = self._result_store.get(task_id, agent_name, {})
+            else:
+                resolved[agent_name] = value
+        return resolved
+
+    def _set_result(self, state: TaskState, agent_name: str, output: Any) -> Dict[str, Any]:
+        """把 Agent 输出写入外部 store，并返回用于 state 的引用 dict。"""
+        task_id = state["task_id"]
+        self._result_store.set(task_id, agent_name, output)
+        return {agent_name: _ref_key(agent_name)}
+
+    # ------------------------------------------------------------------
+    # 建模 Agent 选择
+    # ------------------------------------------------------------------
+    @classmethod
+    def _select_modeling_agent(cls, template: str, workflow_type: str) -> str:
+        """根据模板和工作流类型选择合适的建模 Agent。
+
+        Returns:
+            空字符串表示跳过建模；否则返回对应 Agent 名称。
+        """
+        if template in cls._TEMPLATES_NO_MODELING or workflow_type in cls._WORKFLOWS_NO_MODELING:
+            return ""
+        if template == "financial_analysis":
+            return "financial_analyst_agent"
+        if template in cls._CCF_A_TEMPLATES or workflow_type == "research_paper":
+            return "algorithm_engineer_agent"
+        return "modeler_agent"
+
+    # ------------------------------------------------------------------
+    # 归一化方法
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _normalize_algorithm_engineer_output(raw: dict) -> dict:
+        """将 algorithm_engineer_agent 的原始输出归一化为标准 modeler_agent 格式。
+
+        把 problem_formulation / proposed_method / experiment_design / code_hints 等
+        映射到兼容 solver/writer 的 sub_problem_models 结构。
+        """
+        if not raw or not isinstance(raw, dict):
+            return {"sub_problem_models": []}
+
+        formulation = raw.get("problem_formulation", {})
+        method = raw.get("proposed_method", {})
+
+        # 提取变量：优先使用 hyperparameters，回退到 notation
+        variables = []
+        for hp in method.get("hyperparameters", []):
+            if isinstance(hp, dict):
+                variables.append(
+                    {
+                        "name": str(hp.get("name", "")),
+                        "description": str(hp.get("description", "")),
+                        "type": "连续",
+                        "range": f"default={hp.get('default', '')}",
+                    }
+                )
+        if not variables:
+            for k, v in formulation.get("notation", {}).items():
+                variables.append({"name": str(k), "description": str(v), "type": "连续", "range": "待确定"})
+
+        # 提取约束
+        constraints = []
+        for c in formulation.get("constraints", []):
+            if isinstance(c, dict):
+                constraints.append(
+                    {
+                        "name": c.get("name", "约束"),
+                        "expression": c.get("expression", str(c)),
+                        "type": c.get("type", "不等式"),
+                    }
+                )
+            elif isinstance(c, str):
+                constraints.append({"name": "约束", "expression": c, "type": "不等式"})
+
+        normalized_model = {
+            "sub_problem_index": 0,
+            "sub_problem_name": "整体问题",
+            "model_type": "algorithm_design",
+            "model_name": method.get("name", "") or method.get("name_cn", "Proposed Method"),
+            "decision_variables": variables,
+            "parameters": [],
+            "objective_function": formulation.get("objective", ""),
+            "constraints": constraints,
+            "algorithm": {
+                "name": method.get("name", ""),
+                "description": method.get("core_idea", ""),
+            },
+            "model_assumptions": formulation.get("assumptions", []),
+            "model_advantages": method.get("key_innovation", []),
+            "model_limitations": method.get("limitations", []),
+            "_agent_source": "algorithm_engineer_agent",
+            "_raw_output": raw,
+        }
+
+        return {"sub_problem_models": [normalized_model]}
+
+    @staticmethod
+    def _normalize_financial_analyst_output(raw: dict) -> dict:
+        """将 financial_analyst_agent 的原始输出归一化为标准 modeler_agent 格式。
+
+        从 financial_model / data_requirements / risk_analysis / backtest_design 提取字段。
+        """
+        if not raw or not isinstance(raw, dict):
+            return {"sub_problem_models": []}
+
+        formulation = raw.get("problem_formulation", {})
+        financial_model = raw.get("financial_model", {})
+        risk = raw.get("risk_analysis", {})
+
+        # 提取变量：优先使用 parameters，回退到 key_variables
+        variables = []
+        for p in financial_model.get("parameters", []):
+            if isinstance(p, dict):
+                variables.append(
+                    {
+                        "name": str(p.get("name", "")),
+                        "description": str(p.get("meaning", "")),
+                        "type": "连续",
+                        "range": f"estimation={p.get('estimation', '')}",
+                    }
+                )
+        if not variables:
+            for k, v in formulation.get("key_variables", {}).items():
+                variables.append({"name": str(k), "description": str(v), "type": "连续", "range": "待确定"})
+
+        # 提取约束：从风险/局限中转换
+        constraints = []
+        for lim in risk.get("limitations", []):
+            if isinstance(lim, str):
+                constraints.append({"name": "风险/局限", "expression": lim, "type": "不等式"})
+
+        normalized_model = {
+            "sub_problem_index": 0,
+            "sub_problem_name": "整体问题",
+            "model_type": "financial_model",
+            "model_name": financial_model.get("name", "") or financial_model.get("name_cn", "Financial Model"),
+            "decision_variables": variables,
+            "parameters": [],
+            "objective_function": financial_model.get("model_specification", ""),
+            "constraints": constraints,
+            "algorithm": {
+                "name": financial_model.get("name", ""),
+                "description": financial_model.get("core_idea", ""),
+            },
+            "model_assumptions": formulation.get("assumptions", []),
+            "model_advantages": [f"Domain: {formulation.get('domain', '')}"] if formulation.get("domain") else [],
+            "model_limitations": risk.get("limitations", []),
+            "_agent_source": "financial_analyst_agent",
+            "_raw_output": raw,
+        }
+
+        return {"sub_problem_models": [normalized_model]}
+
+    # ------------------------------------------------------------------
+    # 防编造校验
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _validate_no_fabrication(agent_name: str, output: dict) -> dict:
+        """检测 Agent 输出中可能的编造内容。
+
+        Args:
+            agent_name: Agent 名称，用于选择特定校验规则。
+            output: Agent 原始输出字典。
+
+        Returns:
+            包含 _fabrication_flags、_fabrication_score、_validated_at 的字典。
+        """
+        flags: List[str] = []
+        score = 0.0
+
+        # 通用规则：检测无参考文献标记的作者-年份引用
+        text = json.dumps(output, ensure_ascii=False)
+
+        # 匹配 (Author et al., YYYY) 或 (Author, YYYY) 模式
+        author_year_pattern = re.compile(r'\([A-Z][a-z]+(?:\s+et\s+al\.?)?,\s*\d{4}[a-z]?\)')
+        author_year_matches = author_year_pattern.findall(text)
+
+        # 检测是否有对应的 [N] 编号引用
+        ref_pattern = re.compile(r'\[\d+\]')
+        ref_matches = ref_pattern.findall(text)
+
+        if author_year_matches and len(ref_matches) < len(author_year_matches) * 0.5:
+            flags.append(
+                f"检测到 {len(author_year_matches)} 处作者-年份引用，"
+                f"但只有 {len(ref_matches)} 处编号引用，可能存在编造引用"
+            )
+            score += min(0.3, len(author_year_matches) * 0.05)
+
+        # 特定 Agent 规则
+        if agent_name == "financial_analyst_agent":
+            # 检测无来源说明的具体价格/收益率
+            price_pattern = re.compile(r'\$\d+\.\d{2}')
+            yield_pattern = re.compile(r'[+-]?\d+\.\d+%')
+            price_matches = price_pattern.findall(text)
+            yield_matches = yield_pattern.findall(text)
+
+            # 检查是否有数据来源关键词
+            source_keywords = ["Yahoo Finance", "Bloomberg", "Wind", "CSMAR", "国泰安",
+                             "来源", "source", "data from", "historical"]
+            has_source = any(kw.lower() in text.lower() for kw in source_keywords)
+
+            if (price_matches or yield_matches) and not has_source:
+                flags.append(
+                    f"检测到 {len(price_matches)} 处价格数据和 {len(yield_matches)} 处收益率数据，"
+                    f"但未找到数据来源说明"
+                )
+                score += min(0.4, (len(price_matches) + len(yield_matches)) * 0.03)
+
+        elif agent_name == "algorithm_engineer_agent":
+            # 检测无引用的具体 baseline 数字（如 95.2%、F1=0.89）
+            baseline_pattern = re.compile(r'\b(?:\d{2,3}\.\d%|F1\s*=\s*0\.\d+|Acc\s*=\s*\d+\.\d%|'
+                                          r'Accuracy\s*=\s*\d+\.\d%|Precision\s*=\s*\d+\.\d%|'
+                                          r'Recall\s*=\s*\d+\.\d%)')
+            baseline_matches = baseline_pattern.findall(text)
+
+            # 检查是否有引用或来源说明
+            citation_keywords = ["cite", "reported", "from", "according to", "文献",
+                                 "论文", "待确认", "待实验验证", "需查阅原文"]
+            has_citation = any(kw.lower() in text.lower() for kw in citation_keywords)
+
+            if baseline_matches and not has_citation:
+                flags.append(
+                    f"检测到 {len(baseline_matches)} 处具体性能数字，"
+                    f"但未找到引用或来源说明"
+                )
+                score += min(0.4, len(baseline_matches) * 0.08)
+
+        score = min(1.0, score)
+
+        return {
+            "_fabrication_flags": flags,
+            "_fabrication_score": round(score, 3),
+            "_validated_at": datetime.now().isoformat(),
+        }
 
     # ------------------------------------------------------------------
     # 公共入口
@@ -157,7 +413,7 @@ class LangGraphOrchestrator:
             return {
                 "task_id": task_id,
                 "status": "completed",
-                "results": final_state.get("results", {}),
+                "results": self._resolve_results(final_state),
                 "sub_problems": final_state.get("sub_problems", []),
                 "solver_attempts": len(final_state.get("solver_attempts", [])),
                 "current_step": final_state.get("current_step", ""),
@@ -177,7 +433,7 @@ class LangGraphOrchestrator:
         """任务完成后回写每个 Agent 的独立经验。"""
         from ..core.agent_memory import get_agent_profile
 
-        results = final_state.get("results", {})
+        results = self._resolve_results(final_state)
         sub_problems = final_state.get("sub_problems", [])
         problem_type = (results.get("analyzer_agent") or {}).get("problem_type", "")
 
@@ -188,6 +444,8 @@ class LangGraphOrchestrator:
             "solver_agent": self._extract_solver_case,
             "writer_agent": self._extract_writer_case,
             "research_agent": self._extract_research_case,
+            "algorithm_engineer_agent": self._extract_modeler_case,
+            "financial_analyst_agent": self._extract_modeler_case,
         }
 
         for agent_name, extractor in evolution_map.items():
@@ -289,9 +547,6 @@ class LangGraphOrchestrator:
     # 不需要 research_agent（已知领域或纯方法论）
     _PROBLEM_TYPES_NO_RESEARCH = {"物理", "测量"}
 
-    # 调研/综述类模板：跳过 modeler/solver/peer_review/experiment
-    _TEMPLATES_NO_MODELING = {"research_survey", "research_review"}
-
     @classmethod
     def _should_skip_data(cls, problem_type: str, has_data_files: bool) -> bool:
         """判断是否跳过 data_agent。"""
@@ -310,48 +565,113 @@ class LangGraphOrchestrator:
             return True
         return False
 
-    @classmethod
-    def _should_skip_modeling(cls, template: str) -> bool:
-        """判断是否跳过 modeler/solver（综述/调研类问题不需要）。"""
-        return template in cls._TEMPLATES_NO_MODELING
-
+    # ------------------------------------------------------------------
+    # 条件路由（改造后）
+    # ------------------------------------------------------------------
     def _route_after_research_or_data(self, state: TaskState) -> str:
         """research/data 完成后决定下一站。"""
         template = state.get("paper_template", "math_modeling")
-        if self._should_skip_modeling(template):
-            logger.info(f"[LangGraph] 跳过 modeler/solver（template={template}）→ writer")
+        workflow_type = state.get("workflow_type", "standard")
+        modeling_agent = self._select_modeling_agent(template, workflow_type)
+        if not modeling_agent:
+            logger.info(f"[LangGraph] 跳过 modeler/solver（template={template}, workflow={workflow_type}）→ writer")
             return "writer"
-        return "modeler"
+        # 映射到 graph 节点名称
+        if modeling_agent == "modeler_agent":
+            return "modeler"
+        if modeling_agent == "algorithm_engineer_agent":
+            return "algorithm_engineer"
+        if modeling_agent == "financial_analyst_agent":
+            return "financial_analyst"
+        return "writer"
 
     def _route_after_analyzer(self, state: TaskState) -> str:
-        """analyzer 之后按 problem_type + 数据情况条件路由到 data / research / modeler。"""
-        problem_type = (state.get("results", {}).get("analyzer_agent", {}) or {}).get("problem_type", "")
+        """analyzer 之后按 problem_type + 数据情况条件路由到 data / research / 建模。"""
+        problem_type = (self._resolve_results(state).get("analyzer_agent", {}) or {}).get("problem_type", "")
         has_data = bool(state.get("files"))
 
         skip_data = self._should_skip_data(problem_type, has_data)
         skip_research = self._should_skip_research(problem_type, state.get("workflow_type", "standard"))
 
-        # 都跳过 → 直接到 modeler
+        # 都跳过 → 直接到建模 Agent
         if skip_data and skip_research:
-            logger.info(f"[LangGraph] 跳过 data 和 research（problem_type={problem_type}）→ 直接 modeler")
-            return "modeler"
+            template = state.get("paper_template", "math_modeling")
+            workflow_type = state.get("workflow_type", "standard")
+            modeling_agent = self._select_modeling_agent(template, workflow_type)
+            if not modeling_agent:
+                logger.info(f"[LangGraph] 跳过 data、research 和建模（template={template}）→ writer")
+                return "writer"
+            if modeling_agent == "modeler_agent":
+                return "modeler"
+            if modeling_agent == "algorithm_engineer_agent":
+                return "algorithm_engineer"
+            if modeling_agent == "financial_analyst_agent":
+                return "financial_analyst"
+            return "writer"
+
         # 只跳过 data → research
         if skip_data:
-            logger.info(f"[LangGraph] 跳过 data → research")
+            logger.info("[LangGraph] 跳过 data → research")
             return "research"
-        # 只跳过 research → data → modeler
+        # 只跳过 research → data → 建模
         if skip_research:
-            logger.info(f"[LangGraph] 跳过 research → data → modeler")
+            logger.info("[LangGraph] 跳过 research → data")
             return "data"
         # 正常顺序
         return "data"
 
     def _route_after_data(self, state: TaskState) -> str:
         """data 之后决定是否走 research。"""
-        problem_type = (state.get("results", {}).get("analyzer_agent", {}) or {}).get("problem_type", "")
+        problem_type = (self._resolve_results(state).get("analyzer_agent", {}) or {}).get("problem_type", "")
         if self._should_skip_research(problem_type, state.get("workflow_type", "standard")):
-            return "modeler"
+            template = state.get("paper_template", "math_modeling")
+            workflow_type = state.get("workflow_type", "standard")
+            modeling_agent = self._select_modeling_agent(template, workflow_type)
+            if not modeling_agent:
+                return "writer"
+            if modeling_agent == "modeler_agent":
+                return "modeler"
+            if modeling_agent == "algorithm_engineer_agent":
+                return "algorithm_engineer"
+            if modeling_agent == "financial_analyst_agent":
+                return "financial_analyst"
+            return "writer"
         return "research"
+
+    def _route_after_research(self, state: TaskState) -> str:
+        """research 后决定是否进入讨论。"""
+        workflow = state.get("workflow_type", "standard")
+        # deep_research 和 research_paper 模式进入讨论
+        if workflow in ("deep_research", "research_paper"):
+            return "discuss"
+        # 其他模式直接选择建模 Agent
+        template = state.get("paper_template", "math_modeling")
+        modeling_agent = self._select_modeling_agent(template, workflow)
+        if not modeling_agent:
+            return "writer"
+        if modeling_agent == "modeler_agent":
+            return "modeler"
+        if modeling_agent == "algorithm_engineer_agent":
+            return "algorithm_engineer"
+        if modeling_agent == "financial_analyst_agent":
+            return "financial_analyst"
+        return "writer"
+
+    def _route_after_discuss_approach(self, state: TaskState) -> str:
+        """团队讨论后决定下一步：建模求解 or 直接写作（调研/综述类跳过建模）。"""
+        template = state.get("paper_template", "math_modeling")
+        workflow_type = state.get("workflow_type", "standard")
+        modeling_agent = self._select_modeling_agent(template, workflow_type)
+        if not modeling_agent:
+            logger.info(f"[LangGraph] 讨论后跳过建模（template={template}, workflow={workflow_type}）→ writer")
+            return "writer"
+        if modeling_agent == "modeler_agent":
+            return "modeler"
+        if modeling_agent == "algorithm_engineer_agent":
+            return "algorithm_engineer"
+        if modeling_agent == "financial_analyst_agent":
+            return "financial_analyst"
+        return "writer"
 
     # ------------------------------------------------------------------
     # Graph 构建
@@ -366,6 +686,8 @@ class LangGraphOrchestrator:
         builder.add_node("research", self._node_research)
         builder.add_node("discuss_approach", self._node_discuss_approach)
         builder.add_node("modeler", self._node_modeler)
+        builder.add_node("algorithm_engineer", self._node_algorithm_engineer)
+        builder.add_node("financial_analyst", self._node_financial_analyst)
         builder.add_node("iterative_solver", self._node_iterative_solver)
         builder.add_node("writer", self._node_writer)
         builder.add_node("peer_review", self._node_peer_review)
@@ -416,18 +738,20 @@ class LangGraphOrchestrator:
             },
         )
 
-        # 条件边：research 后决定是否讨论
+        # 条件边：research 后决定
         builder.add_conditional_edges(
             "research",
             self._route_after_research,
             {
                 "discuss": "discuss_approach",
-                "proceed": "modeler",
+                "modeler": "modeler",
+                "algorithm_engineer": "algorithm_engineer",
+                "financial_analyst": "financial_analyst",
+                "writer": "writer",
             },
         )
 
-        # 普通顺序边
-        # analyzer → 按 problem_type 条件分发（跳过 data 或 research）
+        # 条件边：analyzer → 按 problem_type 条件分发
         builder.add_conditional_edges(
             "analyzer",
             self._route_after_analyzer,
@@ -435,19 +759,42 @@ class LangGraphOrchestrator:
                 "data": "data",
                 "research": "research",
                 "modeler": "modeler",
+                "algorithm_engineer": "algorithm_engineer",
+                "financial_analyst": "financial_analyst",
+                "writer": "writer",
             },
         )
-        # data → 按 problem_type 决定是否走 research
+
+        # 条件边：data → 按 problem_type 决定
         builder.add_conditional_edges(
             "data",
             self._route_after_data,
             {
                 "research": "research",
                 "modeler": "modeler",
+                "algorithm_engineer": "algorithm_engineer",
+                "financial_analyst": "financial_analyst",
+                "writer": "writer",
             },
         )
-        builder.add_edge("discuss_approach", "modeler")
+
+        # 条件边：discuss_approach
+        builder.add_conditional_edges(
+            "discuss_approach",
+            self._route_after_discuss_approach,
+            {
+                "modeler": "modeler",
+                "algorithm_engineer": "algorithm_engineer",
+                "financial_analyst": "financial_analyst",
+                "writer": "writer",
+            },
+        )
+
+        # 建模节点 → solver
         builder.add_edge("modeler", "iterative_solver")
+        builder.add_edge("algorithm_engineer", "iterative_solver")
+        builder.add_edge("financial_analyst", "iterative_solver")
+
         builder.add_edge("writer", "peer_review")
         builder.add_edge("fact_check", END)
         builder.add_edge("cannot_solve", END)
@@ -465,7 +812,6 @@ class LangGraphOrchestrator:
         task_id = state["task_id"]
         from ..core.task_persistence import save_task_metadata
         try:
-            from datetime import datetime
             save_task_metadata(
                 task_id=task_id,
                 problem_text=state["problem_text"],
@@ -501,7 +847,7 @@ class LangGraphOrchestrator:
         )
         output["_contract"] = get_contract_validator().validate("analyzer_agent", output)
 
-        new_results = {**state.get("results", {}), "analyzer_agent": output}
+        ref_update = self._set_result(state, "analyzer_agent", output)
         sub_problems = output.get("sub_problems", [])
 
         # 更新黑板记忆
@@ -514,7 +860,7 @@ class LangGraphOrchestrator:
 
         self._post_chat(task_id, "analyzer_agent", f"问题分析完成，识别 {len(sub_problems)} 个子问题")
         logger.info(f"[LangGraph:{task_id}] analyzer: {len(sub_problems)} sub_problems")
-        return {**state, "results": new_results, "sub_problems": sub_problems, "current_step": "analyzer_done"}
+        return {**state, "results": {**state.get("results", {}), **ref_update}, "sub_problems": sub_problems, "current_step": "analyzer_done"}
 
     async def _node_data(self, state: TaskState) -> TaskState:
         """调用 data_agent 分析数据文件。"""
@@ -532,7 +878,7 @@ class LangGraphOrchestrator:
             context=self._agent_context(state),
         )
 
-        new_results = {**state.get("results", {}), "data_agent": output}
+        ref_update = self._set_result(state, "data_agent", output)
 
         # 更新黑板记忆
         wm = self._get_working_memory(task_id)
@@ -541,7 +887,7 @@ class LangGraphOrchestrator:
             wm.data_insights = output.get("insights", [])
 
         self._post_chat(task_id, "data_agent", "数据分析完成")
-        return {**state, "results": new_results, "current_step": "data_done"}
+        return {**state, "results": {**state.get("results", {}), **ref_update}, "current_step": "data_done"}
 
     async def _node_research(self, state: TaskState) -> TaskState:
         """调用 research_agent 搜集文献，根据 workflow_type 调整搜索策略。"""
@@ -581,7 +927,7 @@ class LangGraphOrchestrator:
                 logger.warning(f"[LangGraph:{task_id}] research.{action} failed: {exc}")
 
         result = {"papers": all_papers, "methods": all_methods}
-        new_results = {**state.get("results", {}), "research_agent": result}
+        ref_update = self._set_result(state, "research_agent", result)
 
         # 更新黑板记忆
         wm = self._get_working_memory(task_id)
@@ -591,7 +937,7 @@ class LangGraphOrchestrator:
                 wm.add_method(m)
 
         self._post_chat(task_id, "research_agent", f"文献搜集完成，{len(all_papers)} 篇文献，{len(all_methods)} 个方法")
-        return {**state, "results": new_results, "current_step": "research_done"}
+        return {**state, "results": {**state.get("results", {}), **ref_update}, "current_step": "research_done"}
 
     async def _node_modeler(self, state: TaskState) -> TaskState:
         """逐个子问题建模：每个子问题独立建模，前序结果递进传递给后序。"""
@@ -601,7 +947,7 @@ class LangGraphOrchestrator:
 
         task_id = state["task_id"]
         sub_problems = state.get("sub_problems", [])
-        results = state.get("results", {})
+        results = self._resolve_results(state)
         all_models = []
 
         agent._knowledge_base_id = state.get("knowledge_base_id")
@@ -633,6 +979,11 @@ class LangGraphOrchestrator:
                         "previous_model_summary": prev_model_summary,
                     },
                 )
+                # 注入来源和防编造标记
+                output["_agent_source"] = "modeler_agent"
+                fabrication_check = self._validate_no_fabrication("modeler_agent", output)
+                output.update(fabrication_check)
+
                 all_models.append({**output, "sub_problem_id": sp_id, "sub_problem_name": sp_name})
                 self._post_chat(task_id, "modeler_agent", f"[{i+1}/{len(sub_problems)}] 建模完成：{sp_name}（{output.get('model_name', '')}）")
             except Exception as exc:
@@ -640,7 +991,7 @@ class LangGraphOrchestrator:
                 all_models.append({"sub_problem_id": sp_id, "sub_problem_name": sp_name, "error": str(exc)})
 
         modeler_output = {"sub_problem_models": all_models}
-        new_results = {**results, "modeler_agent": modeler_output}
+        ref_update = self._set_result(state, "modeler_agent", modeler_output)
 
         # 更新黑板
         wm = self._get_working_memory(task_id)
@@ -650,7 +1001,101 @@ class LangGraphOrchestrator:
                 wm.add_method({"name": m.get("model_name", ""), "type": m.get("model_type", ""), "sub_problem": m.get("sub_problem_name", "")})
 
         self._post_chat(task_id, "modeler_agent", f"全部 {len(sub_problems)} 个子问题建模完成")
-        return {**state, "results": new_results, "current_step": "modeler_done"}
+        return {**state, "results": {**state.get("results", {}), **ref_update}, "current_step": "modeler_done"}
+
+    async def _node_algorithm_engineer(self, state: TaskState) -> TaskState:
+        """调用 algorithm_engineer_agent 设计算法/方法。
+
+        保存原始丰富输出到 results["algorithm_engineer_agent"]；
+        调用归一化方法得到标准 sub_problem_models，保存到 results["modeler_agent"]（兼容 solver/writer）。
+        """
+        agent = self.agents.get("algorithm_engineer_agent")
+        if not agent:
+            return {**state, "current_step": "algorithm_engineer_missing"}
+
+        task_id = state["task_id"]
+        self._update_progress(task_id, state["problem_text"], 45, "算法设计中")
+
+        agent._knowledge_base_id = state.get("knowledge_base_id")
+        try:
+            output = await agent.execute(
+                task_input={"action": "design_algorithm", "problem_text": state["problem_text"]},
+                context=self._agent_context(state),
+            )
+        except Exception as exc:
+            logger.error(f"[LangGraph:{task_id}] algorithm_engineer failed: {exc}")
+            return {**state, "current_step": "algorithm_engineer_failed"}
+
+        # 防编造校验
+        fabrication_check = self._validate_no_fabrication("algorithm_engineer_agent", output)
+        output.update(fabrication_check)
+
+        # 保存原始输出
+        ref_raw = self._set_result(state, "algorithm_engineer_agent", output)
+
+        # 归一化到标准 modeler_agent 格式
+        normalized = self._normalize_algorithm_engineer_output(output)
+        ref_norm = self._set_result(state, "modeler_agent", normalized)
+
+        # 更新黑板
+        wm = self._get_working_memory(task_id)
+        if wm:
+            wm.set_result("algorithm_engineer_agent", output)
+            wm.set_result("modeler_agent", normalized)
+
+        self._post_chat(task_id, "algorithm_engineer_agent", "算法设计完成")
+        return {
+            **state,
+            "results": {**state.get("results", {}), **ref_raw, **ref_norm},
+            "current_step": "algorithm_engineer_done",
+        }
+
+    async def _node_financial_analyst(self, state: TaskState) -> TaskState:
+        """调用 financial_analyst_agent 建立金融模型。
+
+        保存原始丰富输出到 results["financial_analyst_agent"]；
+        调用归一化方法得到标准 sub_problem_models，保存到 results["modeler_agent"]（兼容 solver/writer）。
+        """
+        agent = self.agents.get("financial_analyst_agent")
+        if not agent:
+            return {**state, "current_step": "financial_analyst_missing"}
+
+        task_id = state["task_id"]
+        self._update_progress(task_id, state["problem_text"], 45, "金融模型建立中")
+
+        agent._knowledge_base_id = state.get("knowledge_base_id")
+        try:
+            output = await agent.execute(
+                task_input={"action": "build_financial_model", "problem_text": state["problem_text"]},
+                context=self._agent_context(state),
+            )
+        except Exception as exc:
+            logger.error(f"[LangGraph:{task_id}] financial_analyst failed: {exc}")
+            return {**state, "current_step": "financial_analyst_failed"}
+
+        # 防编造校验
+        fabrication_check = self._validate_no_fabrication("financial_analyst_agent", output)
+        output.update(fabrication_check)
+
+        # 保存原始输出
+        ref_raw = self._set_result(state, "financial_analyst_agent", output)
+
+        # 归一化到标准 modeler_agent 格式
+        normalized = self._normalize_financial_analyst_output(output)
+        ref_norm = self._set_result(state, "modeler_agent", normalized)
+
+        # 更新黑板
+        wm = self._get_working_memory(task_id)
+        if wm:
+            wm.set_result("financial_analyst_agent", output)
+            wm.set_result("modeler_agent", normalized)
+
+        self._post_chat(task_id, "financial_analyst_agent", "金融模型建立完成")
+        return {
+            **state,
+            "results": {**state.get("results", {}), **ref_raw, **ref_norm},
+            "current_step": "financial_analyst_done",
+        }
 
     async def _node_iterative_solver(self, state: TaskState) -> TaskState:
         """逐个子问题求解 + 自主迭代修复。
@@ -667,7 +1112,7 @@ class LangGraphOrchestrator:
 
         task_id = state["task_id"]
         sub_problems = state.get("sub_problems", [])
-        results = state.get("results", {})
+        results = self._resolve_results(state)
         modeler_output = results.get("modeler_agent", {})
         all_models = modeler_output.get("sub_problem_models", [])
         all_solutions = []
@@ -765,7 +1210,7 @@ class LangGraphOrchestrator:
 
         # 汇总求解结果
         solver_output = {"sub_problem_solutions": all_solutions, "execution_success": all(s.get("execution_success", False) for s in all_solutions)}
-        new_results = {**results, "solver_agent": solver_output}
+        ref_update = self._set_result(state, "solver_agent", solver_output)
 
         # 更新黑板
         wm = self._get_working_memory(task_id)
@@ -777,7 +1222,7 @@ class LangGraphOrchestrator:
                     wm.set_result("solver_agent", {**wm.results.get("solver_agent", {}), "last_findings": findings})
 
         self._post_chat(task_id, "solver_agent", f"全部 {len(sub_problems)} 个子问题求解完成")
-        return {**state, "results": new_results, "solver_attempts": all_attempts, "escalation_count": escalation, "current_step": "solver_done"}
+        return {**state, "results": {**state.get("results", {}), **ref_update}, "solver_attempts": all_attempts, "escalation_count": escalation, "current_step": "solver_done"}
 
     async def _run_harness(self, sol_result: Dict[str, Any]) -> Dict[str, Any]:
         """综合 Harness 评判。"""
@@ -867,7 +1312,7 @@ class LangGraphOrchestrator:
         self._update_progress(task_id, state["problem_text"], 70, "论文写作中")
 
         # 从 writer_agent 历史结果读取修订次数（更可靠）
-        writer_history = state.get("results", {}).get("writer_agent", {})
+        writer_history = self._resolve_results(state).get("writer_agent", {})
         revision_count = (writer_history.get("_revision_count", 0) if isinstance(writer_history, dict) else 0) + 1
         logger.info(f"[LangGraph:{task_id}] writer node start, revision_count={revision_count}")
 
@@ -883,10 +1328,10 @@ class LangGraphOrchestrator:
         output["_contract"] = get_contract_validator().validate("writer_agent", output)
         output["_revision_count"] = revision_count
 
-        new_results = {**state.get("results", {}), "writer_agent": output}
+        ref_update = self._set_result(state, "writer_agent", output)
         self._post_chat(task_id, "writer_agent", f"论文写作完成（第 {revision_count} 稿）")
         logger.info(f"[LangGraph:{task_id}] writer node done, posted 第 {revision_count} 稿")
-        return {**state, "results": new_results, "current_step": "writer_done", "revision_count": revision_count}
+        return {**state, "results": {**state.get("results", {}), **ref_update}, "current_step": "writer_done", "revision_count": revision_count}
 
     async def _node_peer_review(self, state: TaskState) -> TaskState:
         """调用 peer_review_agent 进行同行评议。"""
@@ -902,11 +1347,11 @@ class LangGraphOrchestrator:
             context=self._agent_context(state),
         )
 
-        new_results = {**state.get("results", {}), "peer_review_agent": output}
+        ref_update = self._set_result(state, "peer_review_agent", output)
         rec = (output.get("recommendation") or "").lower()
         score = output.get("overall_score", 0)
         self._post_chat(task_id, "peer_review_agent", f"同行评议完成：{rec}，得分 {score}")
-        return {**state, "results": new_results, "current_step": "peer_review_done"}
+        return {**state, "results": {**state.get("results", {}), **ref_update}, "current_step": "peer_review_done"}
 
     async def _node_experiment(self, state: TaskState) -> TaskState:
         """调用 experimentation_agent 设计实验方案（CCF-A 模板才启用）。"""
@@ -924,9 +1369,9 @@ class LangGraphOrchestrator:
             context=self._agent_context(state),
         )
 
-        new_results = {**state.get("results", {}), "experimentation_agent": output}
+        ref_update = self._set_result(state, "experimentation_agent", output)
         self._post_chat(task_id, "experimentation_agent", "实验设计完成")
-        return {**state, "results": new_results, "current_step": "experiment_done"}
+        return {**state, "results": {**state.get("results", {}), **ref_update}, "current_step": "experiment_done"}
 
     async def _node_fact_check(self, state: TaskState) -> TaskState:
         """事实核查：对比 main.tex 与 solves.json 数字。"""
@@ -945,11 +1390,11 @@ class LangGraphOrchestrator:
                 task_id=state["task_id"],
                 output_dir=output_dir,
             )
-            state["results"]["fact_checker"] = report
+            self._set_result(state, "fact_checker", report)
             logger.info(f"Task {state['task_id']}: fact_check passed={report['passed']} issues={report['issue_count']}")
         else:
             report["error"] = "无法确定输出目录"
-            state["results"]["fact_checker"] = report
+            self._set_result(state, "fact_checker", report)
 
         return {**state, "current_step": "fact_check_done"}
 
@@ -967,18 +1412,31 @@ class LangGraphOrchestrator:
         return {**state, "current_step": "self_collect_done", "phase": "self_collected"}
 
     async def _node_discuss_approach(self, state: TaskState) -> TaskState:
-        """多 Agent 讨论：分析师、建模师、研究员讨论研究方案。
+        """多 Agent 讨论：分析师、研究员、建模专家讨论研究方案。
 
         每个 Agent 看到其他 Agent 的分析结果后给出自己的意见，
         形成讨论记录，最终由协调者综合决策。
         """
         task_id = state["task_id"]
         problem_text = state["problem_text"]
-        results = state.get("results", {})
+        results = self._resolve_results(state)
         room = get_chat_room(task_id)
 
-        # 参与讨论的 Agent
-        participants = ["analyzer_agent", "modeler_agent", "research_agent"]
+        # 基础参与者
+        participants = ["analyzer_agent", "research_agent"]
+
+        # 动态选择建模专家
+        template = state.get("paper_template", "math_modeling")
+        workflow_type = state.get("workflow_type", "standard")
+        modeling_agent = self._select_modeling_agent(template, workflow_type)
+        if modeling_agent == "modeler_agent":
+            participants.append("modeler_agent")
+        elif modeling_agent == "algorithm_engineer_agent":
+            participants.append("algorithm_engineer_agent")
+        elif modeling_agent == "financial_analyst_agent":
+            participants.append("financial_analyst_agent")
+        # 空字符串则不追加建模专家
+
         discussion_points = []
 
         # 构造讨论上下文
@@ -1024,10 +1482,11 @@ class LangGraphOrchestrator:
             room.post("coordinator", f"📋 讨论总结：\n{opinions}\n\n综合各方意见，继续推进研究。", "discussion")
 
         self._post_chat(task_id, "coordinator", f"团队讨论完成，{len(discussion_points)} 位 Agent 参与")
+        ref_update = self._set_result(state, "discussion", discussion_points)
         return {
             **state,
             "current_step": "discuss_done",
-            "results": {**results, "discussion": discussion_points},
+            "results": {**state.get("results", {}), **ref_update},
         }
 
     async def _node_wait_user(self, state: TaskState) -> TaskState:
@@ -1076,7 +1535,7 @@ class LangGraphOrchestrator:
         return "standard"
 
     def _route_peer_review(self, state: TaskState) -> str:
-        review = state.get("results", {}).get("peer_review_agent", {})
+        review = self._resolve_results(state).get("peer_review_agent", {})
         rec = (review.get("recommendation") or "").lower()
         score = review.get("overall_score", 0)
 
@@ -1092,7 +1551,7 @@ class LangGraphOrchestrator:
 
         # 用户未发言 → 自动迭代修订（直到高质量或达到上限）
         # 优先从 writer_agent 结果读取修订次数，fallback 到顶层 state
-        writer_result = state.get("results", {}).get("writer_agent", {})
+        writer_result = self._resolve_results(state).get("writer_agent", {})
         revision_count = writer_result.get("_revision_count", 0) if isinstance(writer_result, dict) else 0
         revision_count = revision_count or state.get("revision_count", 0)
         logger.info(f"[LangGraph:{state['task_id']}] peer review route: rec={rec}, score={score}, revision_count={revision_count}")
@@ -1120,20 +1579,36 @@ class LangGraphOrchestrator:
 
         return "retry"
 
-    def _route_after_research(self, state: TaskState) -> str:
-        """research 后决定是否进入讨论。"""
-        workflow = state.get("workflow_type", "standard")
-        # deep_research 和 research_paper 模式进入讨论
-        if workflow in ("deep_research", "research_paper"):
-            return "discuss"
-        return "proceed"
-
     # ------------------------------------------------------------------
     # 工具方法
     # ------------------------------------------------------------------
     def _agent_context(self, state: TaskState) -> Dict[str, Any]:
         """构造传给 Agent.execute 的 context。"""
         room = get_chat_room(state["task_id"])
+        results = self._resolve_results(state)
+
+        # 合并 model + solve 的 section_results（writer_agent 期望 list[dict]）
+        modeler_output = results.get("modeler_agent", {})
+        solver_output = results.get("solver_agent", {})
+        models = modeler_output.get("sub_problem_models", [])
+        solutions = solver_output.get("sub_problem_solutions", [])
+        sub_problems = state.get("sub_problems", [])
+
+        section_results = []
+        for i, sp in enumerate(sub_problems):
+            sp_id = sp.get("id", i + 1)
+            model = next((m for m in models if m.get("sub_problem_id") == sp_id), {})
+            solve = next((s for s in solutions if s.get("sub_problem_id") == sp_id), {})
+            section_results.append(
+                {
+                    "sub_problem_id": sp_id,
+                    "sub_problem_name": sp.get("name", ""),
+                    "sub_problem_desc": sp.get("description", ""),
+                    "model": model,
+                    "solve": solve,
+                }
+            )
+
         return {
             "problem_text": state["problem_text"],
             "chat_room": room,
@@ -1143,14 +1618,15 @@ class LangGraphOrchestrator:
             "task_kb_id": state.get("task_kb_id"),
             "workflow_type": state.get("workflow_type", "standard"),
             "template": state.get("paper_template", "math_modeling"),
-            "results": state.get("results", {}),
+            "results": results,
+            "section_results": section_results,
+            "sub_problems": sub_problems,
         }
 
     def _save_results(self, task_id: str, state: TaskState) -> None:
         """持久化结果到 task_result.json 和 checkpoints。"""
         from ..core.task_persistence import save_task_result, save_task_checkpoint, save_task_metadata
-        from datetime import datetime
-        results = state.get("results", {})
+        results = self._resolve_results(state)
         if results:
             save_task_result(task_id, {"task_id": task_id, "output": results})
             for agent_name, output in results.items():
@@ -1161,9 +1637,17 @@ class LangGraphOrchestrator:
 
         # 标记任务完成状态
         cannot_solve = state.get("cannot_solve_report")
-        # 检测是否有 agent 失败（writer/solver 缺失 → 视为任务失败）
+        # 检测是否有 agent 失败（writer 缺失 → 视为任务失败）
         writer_ok = "writer_agent" in results
-        solver_ok = "solver_agent" in results
+
+        # 当跳过建模时，不再强制要求 solver_agent 结果
+        template = state.get("paper_template", "math_modeling")
+        workflow_type = state.get("workflow_type", "standard")
+        modeling_agent = self._select_modeling_agent(template, workflow_type)
+        skip_modeling = not modeling_agent
+
+        solver_ok = "solver_agent" in results or skip_modeling
+
         critical_missing = (
             state.get("workflow_type") == "standard"
             and (not writer_ok or not solver_ok)
@@ -1200,7 +1684,6 @@ class LangGraphOrchestrator:
     def _update_progress(self, task_id: str, problem_text: str, progress: int, step: str) -> None:
         """更新任务进度到持久化。"""
         from ..core.task_persistence import save_task_metadata
-        from datetime import datetime
         try:
             save_task_metadata(
                 task_id=task_id, problem_text=problem_text,

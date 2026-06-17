@@ -1732,7 +1732,38 @@ class WriterAgent(BaseAgent):
 - 目标函数：{model.get('objective_function', '')}
 - 约束条件：{constraints}
 - 算法：{alg_name} - {alg_desc}
+"""
+            # 按 agent_source 追加领域特定上下文（从 _raw_output 读取原始丰富输出）
+            agent_source = getattr(model, '_agent_source', None) or model.get('_agent_source')
+            raw_output = getattr(model, '_raw_output', None) or model.get('_raw_output', {}) or {}
+            if agent_source == 'algorithm_engineer_agent':
+                proposed = raw_output.get('proposed_method', {}) if isinstance(raw_output, dict) else {}
+                experiment = raw_output.get('experiment_design', {}) if isinstance(raw_output, dict) else {}
+                complexity = proposed.get('complexity', {}) if isinstance(proposed, dict) else {}
+                complexity_str = f"time={complexity.get('time', '未提供')}, space={complexity.get('space', '未提供')}"
+                sections_context += (
+                    f"- 复杂度分析：{complexity_str}\n"
+                    f"- 理论保证：{proposed.get('theoretical_guarantee', '未提供')}\n"
+                    f"- 实验设计：{json.dumps(experiment, ensure_ascii=False, indent=2)[:500]}\n"
+                )
+            elif agent_source == 'financial_analyst_agent':
+                data_req = raw_output.get('data_requirements', {}) if isinstance(raw_output, dict) else {}
+                risk = raw_output.get('risk_analysis', {}) if isinstance(raw_output, dict) else {}
+                backtest = raw_output.get('backtest_design', {}) if isinstance(raw_output, dict) else {}
+                sections_context += (
+                    f"- 数据需求：{json.dumps(data_req, ensure_ascii=False, indent=2)[:300]}\n"
+                    f"- 风险分析：{json.dumps(risk, ensure_ascii=False, indent=2)[:300]}\n"
+                    f"- 回测设计：{json.dumps(backtest, ensure_ascii=False, indent=2)[:300]}\n"
+                )
 
+            #  fabrication 标记警告
+            fab_flags = getattr(model, '_fabrication_flags', None) or model.get('_fabrication_flags')
+            if fab_flags:
+                sections_context += (
+                    f"fabrication_warning: 以下建模结果包含可疑标记，写作时需谨慎处理或删除：{fab_flags}\n"
+                )
+
+            sections_context += f"""
 求解结果：
 - 关键发现：{key_findings_str}
 - 数值结果：{numerical_str}
