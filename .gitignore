@@ -41,6 +41,7 @@ setup_kimi.py
 # Output
 output/
 outputs/
+workspace/
 data/
 *.log
 backend/data/memory/lessons.json

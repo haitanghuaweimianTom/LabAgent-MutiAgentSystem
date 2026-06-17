@@ -477,7 +477,7 @@ def build(
                 # 尽量保留原始相对路径；若无法解析则平铺
                 rel = src.name
                 code_src_root = src
-                # 向上寻找可能的 code 根目录（output/code 或 final）
+                # 向上寻找可能的 code 根目录（code/ 或 final/）
                 for parent in src.parents:
                     if parent.name in ("code", "final") or parent == output_dir:
                         code_src_root = parent

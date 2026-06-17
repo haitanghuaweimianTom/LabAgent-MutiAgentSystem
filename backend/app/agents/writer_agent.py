@@ -1005,19 +1005,20 @@ class WriterAgent(BaseAgent):
     def _discover_available_figures(self, project_name: Optional[str]) -> List[str]:
         """扫描项目输出目录，发现可用图表文件。
 
-        v4.2: SolverAgent 实际将图表保存到 output/code/，因此优先扫描该路径；
-        同时保留对 final/figures/ 和旧 outputs/{project_name}/ 的回退扫描。
+        优先扫描项目输出目录下的 code/ 与 figures/；同时保留对旧 outputs/{project_name}/
+        的回退扫描，避免历史项目图表丢失。
         """
         figures: List[str] = []
         if not project_name:
             return figures
 
-        project_root = Path(__file__).parent.parent.parent
+        from ..core.paths import get_project_output_dir, get_project_base_dir, _PROJECT_ROOT
+
+        output_dir = get_project_output_dir(project_name)
         search_roots: List[Path] = [
-            project_root / "output" / "code",
-            project_root / "output" / project_name / "code",
-            project_root / "output" / project_name / "figures",
-            project_root / "outputs" / project_name,
+            output_dir / "code",
+            output_dir / "figures",
+            get_project_base_dir(project_name),
         ]
 
         for base_dir in search_roots:
@@ -1026,7 +1027,7 @@ class WriterAgent(BaseAgent):
             for ext in ("*.png", "*.jpg", "*.jpeg", "*.pdf", "*.eps"):
                 for path in base_dir.rglob(ext):
                     try:
-                        rel = path.relative_to(project_root)
+                        rel = path.relative_to(_PROJECT_ROOT)
                         figures.append(str(rel))
                     except ValueError:
                         figures.append(str(path))

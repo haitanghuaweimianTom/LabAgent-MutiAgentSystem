@@ -32,9 +32,10 @@ COPY . .
 # 创建数据目录（支持 Docker Volume 挂载）
 RUN mkdir -p /app/backend/data/uploads \
              /app/backend/data/tasks \
-             /app/output/papers \
-             /app/output/code \
-             /app/output/figures
+             /app/outputs/_global/output \
+             /app/outputs/_global/papers \
+             /app/outputs/_global/code \
+             /app/outputs/_global/figures
 
 # 暴露端口
 EXPOSE 8000

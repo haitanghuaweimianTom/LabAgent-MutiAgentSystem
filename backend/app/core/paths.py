@@ -25,8 +25,9 @@ DATA_DIR: Path = _BACKEND_ROOT / "data" / "uploads"
 # 任务持久化目录
 TASK_DATA_DIR: Path = _BACKEND_ROOT / "data" / "tasks"
 
-# 输出目录（项目根下的 output/）
-OUTPUT_DIR: Path = _PROJECT_ROOT / "output"
+# 全局输出目录（统一收拢到 outputs/_global，避免根目录同时存在 output/ 与 outputs/）
+GLOBAL_PROJECT_NAME: str = "_global"
+OUTPUT_DIR: Path = _PROJECT_ROOT / "outputs" / GLOBAL_PROJECT_NAME
 
 # LaTeX模板目录（项目根下的 config/）
 LATEX_TEMPLATE_DIR: Path = _PROJECT_ROOT / "config" / "latex_templates"
@@ -67,7 +68,7 @@ def get_project_data_dir(project_name: Optional[str]) -> Path:
 
 
 def get_project_output_dir(project_name: Optional[str]) -> Path:
-    """获取项目输出目录。无项目时回退到全局 output/。"""
+    """获取项目输出目录。无项目时回退到全局 outputs/_global/。"""
     if project_name:
         d = _PROJECT_ROOT / "outputs" / project_name / "output"
     else:

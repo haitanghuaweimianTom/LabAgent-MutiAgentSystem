@@ -42,13 +42,13 @@ def _save_index(index: Dict[str, Any]) -> None:
 
 
 def _scan_outputs_dirs() -> List[Dict[str, Any]]:
-    """扫描 outputs/ 目录下的所有文件夹作为项目"""
-    from .paths import _PROJECT_ROOT
+    """扫描 outputs/ 目录下的所有文件夹作为项目（跳过系统目录如 _global）。"""
+    from .paths import _PROJECT_ROOT, GLOBAL_PROJECT_NAME
     outputs_dir = _PROJECT_ROOT / "outputs"
     projects = []
     if outputs_dir.exists():
         for d in outputs_dir.iterdir():
-            if d.is_dir() and not d.name.startswith("."):
+            if d.is_dir() and not d.name.startswith(".") and d.name != GLOBAL_PROJECT_NAME:
                 # 获取目录的创建时间
                 stat = d.stat()
                 created_at = stat.st_mtime

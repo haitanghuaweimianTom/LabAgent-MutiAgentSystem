@@ -839,7 +839,7 @@ async def build_camera_ready(task_id: str, req: Optional[dict] = None):
         ``max_zip_mb``: zip 大小上限（默认 50MB）
 
     返回:
-        ``output_dir``: 产物目录（``output/camera_ready_<task_id>/``）
+        ``output_dir``: 产物目录（``<项目输出目录>/camera_ready_<task_id>/``）
         ``zip_path``: zip 文件路径（如 make_zip=True）
         ``skipped_reasons``: 缺失的产物记录
         ``artifact_summary``: 收集到的产物数量

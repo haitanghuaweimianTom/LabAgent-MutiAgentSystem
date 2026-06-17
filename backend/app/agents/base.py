@@ -562,7 +562,7 @@ class BaseAgent(ABC):
         参数：
             task_description: 完整编程任务描述
             system_instruction: Claude Code 行为指令（CLAUDE_CODER_SYSTEM）
-            workspace_dir: 工作目录（默认为 output/）
+            workspace_dir: 工作目录（默认为 outputs/_global/）
             timeout: 超时秒数
 
         返回：

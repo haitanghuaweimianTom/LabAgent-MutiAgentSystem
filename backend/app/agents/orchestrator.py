@@ -828,10 +828,10 @@ class Orchestrator:
         project_name: Optional[str] = None,
     ) -> Dict[str, List[str]]:
         """
-        将求解器生成的代码和论文写入 output 目录（支持项目隔离）。
-        - output/code/        → 各子问题的求解代码
-        - output/papers/     → LaTeX 论文
-        - output/models.json → 所有子问题的模型描述 JSON
+        将求解器生成的代码和论文写入项目输出目录（支持项目隔离）。
+        - <项目输出目录>/code/        → 各子问题的求解代码
+        - <项目输出目录>/papers/     → LaTeX 论文
+        - <项目输出目录>/models.json → 所有子问题的模型描述 JSON
         返回写入的文件路径列表。
         """
         import json

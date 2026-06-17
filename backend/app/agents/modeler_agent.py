@@ -599,7 +599,7 @@ class ModelerAgent(BaseAgent):
 ## 输出格式（必须为 JSON，不要有任何其他文字）
 {{
     "code": "完整 Python 代码（包含所有 import，末尾用 json.dumps 打印结果）",
-    "file_path": "output/code/model_validation_sp{sp_id}.py",
+    "file_path": "code/model_validation_sp{sp_id}.py",
     "key_steps": ["步骤1", "步骤2"],
     "expected_output": "输出描述"
 }}"""

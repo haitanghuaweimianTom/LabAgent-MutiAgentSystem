@@ -90,7 +90,7 @@ CLAUDE_CODER_SYSTEM = """你是一个专业的算法工程师，擅长用 Python
    - 数据处理脚本（data_process.py）：清洗、转换、特征工程
    - 求解脚本（solver_*.py）：核心算法实现
    - 可视化脚本（visualize_*.py）：生成图表并保存
-2. 将代码保存到项目根目录下的 output/code/ 目录（相对路径：output/code/）
+2. 将代码保存到项目输出目录的 code/ 子目录（相对路径：<项目输出目录>/code/）
 3. 执行每个脚本，验证结果
 4. 返回结构化求解结果
 
@@ -102,8 +102,8 @@ CLAUDE_CODER_SYSTEM = """你是一个专业的算法工程师，擅长用 Python
 【输出格式（必须以JSON格式返回，不要有任何其他文字）】
 {
     "code": "完整Python代码（包含所有import，末尾用json.dumps打印结果）",
-    "file_path": "output/code/solver_sub{N}.py",
-    "execution_command": "python output/code/solver_sub{N}.py",
+    "file_path": "code/solver_sub{N}.py",
+    "execution_command": "python code/solver_sub{N}.py",
     "key_findings": ["关键发现1", "关键发现2"],
     "numerical_results": {"变量名": 数值, ...},
     "interpretation": "结果解释"
@@ -112,7 +112,7 @@ CLAUDE_CODER_SYSTEM = """你是一个专业的算法工程师，擅长用 Python
 【execution_command 格式】
 由于 Windows subprocess 执行限制，请提供以下格式之一：
 1. 单行命令（推荐）：用 python -X utf8 -c "import json; code..."
-2. 或者：python output/code/solver_sub{N}.py
+2. 或者：python code/solver_sub{N}.py
 
 注意：python -X utf8 确保中文结果正确输出
 
@@ -724,7 +724,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 
-def create_basic_plots(data_dict, output_dir='output/code'):
+def create_basic_plots(data_dict, output_dir='code'):
     """创建基础可视化图表"""
     os.makedirs(output_dir, exist_ok=True)
     plots = []
@@ -756,7 +756,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 
-def create_correlation_heatmap(correlation_matrix, labels=None, output_dir='output/code'):
+def create_correlation_heatmap(correlation_matrix, labels=None, output_dir='code'):
     """相关性热力图"""
     os.makedirs(output_dir, exist_ok=True)
     fig, ax = plt.subplots(figsize=(10, 8))
@@ -785,7 +785,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 
-def create_comparison_bar(categories, values, title='对比图', output_dir='output/code'):
+def create_comparison_bar(categories, values, title='对比图', output_dir='code'):
     """对比柱状图"""
     os.makedirs(output_dir, exist_ok=True)
     fig, ax = plt.subplots(figsize=(10, 6))
@@ -810,7 +810,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 
-def create_radar_chart(labels, values, title='雷达图', output_dir='output/code'):
+def create_radar_chart(labels, values, title='雷达图', output_dir='code'):
     """雷达图"""
     os.makedirs(output_dir, exist_ok=True)
     n = len(labels)
