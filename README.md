@@ -399,29 +399,10 @@ ANTHROPIC_AUTH_TOKEN=sk-kimi-...
 
 # 可选
 DEFAULT_MODEL=sonnet
-OUTPUT_DIR=./output
 DATABASE_URL=sqlite:///./data/agents.db
 ```
 
-### `config.yaml`
-```yaml
-app:
-  host: 0.0.0.0
-  port: 8000
-  debug: false
-
-memory:
-  working_memory_max_size: 50
-  episodic_retention_days: 30
-  lessons_relevance_threshold: 0.6
-
-routing:
-  default_provider: kimi
-  cc_switch:
-    - openai
-    - anthropic
-    - bailian
-```
+> 注：运行时产物统一输出到 `outputs/<project>/`（无项目时写入 `outputs/_global/`），无需通过环境变量配置输出根目录。
 
 ---
 
