@@ -1331,6 +1331,8 @@ class SolverAgent(BaseAgent):
             return await self._solve_all(task_input, context)
         if action == "solve_sequential":
             return await self._solve_sequential(task_input, context)
+        if action == "experiment":
+            return await self._experiment(task_input, context)
         return await self._solve_single(task_input, context)
 
     async def _solve_sequential(self, task_input: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
@@ -1828,6 +1830,202 @@ class SolverAgent(BaseAgent):
 
         logger.info(f"SolverAgent: 批量执行完成，{len(all_solutions)}个子问题")
         return {"sub_problem_solutions": all_solutions}
+
+    # ====================================================================
+    # Experiment 模式：为实验执行生成 train/eval/baseline/ablation 代码
+    # ====================================================================
+
+    EXPERIMENT_SYSTEM_PROMPT = """你是一个专业的机器学习实验工程师。
+你的任务是根据实验计划生成完整、可运行的 Python 实验代码。
+
+【输出要求】
+1. 必须生成多文件代码（main.py + baseline_*.py + ablation_*.py）
+2. 每个文件必须完整可运行，包含所有 import
+3. 代码末尾用 json.dumps() 打印最终指标
+4. 支持命令行参数：--epochs, --batch_size, --lr, --output_dir, --data_dir
+5. 数据集路径从命令行参数传入，不要硬编码
+
+【返回格式（严格 JSON）】
+{
+    "code_files": [
+        {"path": "main.py", "role": "main", "code": "..."},
+        {"path": "baseline_b1.py", "role": "baseline", "code": "..."},
+        {"path": "ablation_a1.py", "role": "ablation", "code": "..."}
+    ],
+    "requirements": ["torch", "torchvision", "scikit-learn", ...],
+    "key_findings": ["代码设计说明1", ...]
+}"""
+
+    async def _experiment(
+        self,
+        task_input: Dict[str, Any],
+        context: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """生成实验代码（train / eval / baseline / ablation）。
+
+        Args:
+            task_input: 包含 experiment_plan, dataset_paths, project_name, task_id
+            context: 上下文
+
+        Returns:
+            {
+                "code_files": [...],
+                "requirements": [...],
+                "execution_success": bool,
+                "experiment_scripts": {"main": ..., "baselines": [...], "ablations": [...]},
+            }
+        """
+        experiment_plan = task_input.get("experiment_plan", {})
+        dataset_paths = task_input.get("dataset_paths", {})
+        modeling_result = task_input.get("modeling_result", {})
+        project_name = task_input.get("project_name") or context.get("project_name")
+        task_id = task_input.get("task_id") or context.get("task_id")
+
+        # 构建 prompt
+        baselines = experiment_plan.get("baselines", []) or []
+        ablation_plan = experiment_plan.get("ablation_plan", []) or []
+        datasets = experiment_plan.get("datasets", []) or []
+        metrics = experiment_plan.get("metrics", []) or []
+
+        prompt = f"""【实验任务】
+请为以下实验计划生成完整的 Python 实验代码。
+
+【数据集路径】
+{json.dumps(dataset_paths, ensure_ascii=False, indent=2)}
+
+【实验计划】
+- 主方法：基于建模结果实现的核心方法
+- Baselines：{json.dumps([b.get("name", b) for b in baselines], ensure_ascii=False)}
+- Ablation Plan：{json.dumps([a.get("component", a) for a in ablation_plan], ensure_ascii=False)}
+- Datasets：{json.dumps([d.get("name", d) for d in datasets], ensure_ascii=False)}
+- Metrics：{json.dumps([m.get("name", m) for m in metrics], ensure_ascii=False)}
+
+【建模结果摘要】
+{json.dumps(modeling_result, ensure_ascii=False, indent=2)[:1000]}
+
+请生成：
+1. main.py — 主实验方法（完整训练+评估）
+2. 每个 baseline 一个 baseline_*.py
+3. 每个 ablation 一个 ablation_*.py
+
+所有脚本必须：
+- 接受 --data_dir 参数指向数据集目录
+- 接受 --output_dir 参数保存结果
+- 最终打印 JSON 格式指标
+"""
+
+        messages = [
+            {"role": "system", "content": self.EXPERIMENT_SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+        ]
+
+        code_files: List[Dict[str, Any]] = []
+        requirements: List[str] = []
+
+        try:
+            response = await self.call_llm(messages=messages, temperature=0.2)
+            content = response.get("choices", [{}])[0].get("message", {}).get("content", "{}")
+
+            # 解析 JSON
+            parsed = self.extract_json(content)
+            if parsed:
+                code_files = parsed.get("code_files", []) or []
+                requirements = parsed.get("requirements", []) or []
+                key_findings = parsed.get("key_findings", [])
+            else:
+                # 尝试直接提取代码块
+                code_files = self._extract_code_files_from_text(content)
+                key_findings = []
+
+        except Exception as e:
+            logger.warning(f"SolverAgent experiment LLM 失败: {e}")
+            return {
+                "code_files": [],
+                "requirements": [],
+                "execution_success": False,
+                "error": str(e),
+                "experiment_scripts": {},
+            }
+
+        if not code_files:
+            return {
+                "code_files": [],
+                "requirements": [],
+                "execution_success": False,
+                "error": "LLM 未返回实验代码",
+                "experiment_scripts": {},
+            }
+
+        # 保存代码到项目目录
+        from ..core.paths import get_project_output_dir
+        output_dir = get_project_output_dir(project_name)
+        code_dir = output_dir / "experiments" / (task_id or "default") / "code"
+        code_dir.mkdir(parents=True, exist_ok=True)
+
+        saved_files = []
+        for cf in code_files:
+            path = cf.get("path", "script.py")
+            code = cf.get("code", "")
+            role = cf.get("role", "unknown")
+            file_path = code_dir / path
+            file_path.write_text(code, encoding="utf-8")
+            saved_files.append({
+                "path": str(file_path),
+                "role": role,
+                "filename": path,
+            })
+
+        # 写入 requirements.txt
+        if requirements:
+            req_path = code_dir / "requirements.txt"
+            req_path.write_text("\n".join(requirements), encoding="utf-8")
+
+        # 按 role 分类
+        main_script = None
+        baseline_scripts = []
+        ablation_scripts = []
+
+        for sf in saved_files:
+            if sf["role"] == "main":
+                main_script = sf
+            elif sf["role"] == "baseline":
+                baseline_scripts.append(sf)
+            elif sf["role"] == "ablation":
+                ablation_scripts.append(sf)
+
+        # 如果没有 main，把第一个文件当作 main
+        if not main_script and saved_files:
+            main_script = saved_files[0]
+            main_script["role"] = "main"
+
+        return {
+            "code_files": code_files,
+            "requirements": requirements,
+            "execution_success": True,
+            "key_findings": key_findings,
+            "code_dir": str(code_dir),
+            "experiment_scripts": {
+                "main": main_script,
+                "baselines": baseline_scripts,
+                "ablations": ablation_scripts,
+            },
+        }
+
+    def _extract_code_files_from_text(self, text: str) -> List[Dict[str, Any]]:
+        """从非结构化文本中提取代码文件（容错）。"""
+        files = []
+        # 匹配 ```python ... ``` 或 ``` ... ``` 块
+        import re
+        pattern = r"```(?:python)?\s*\n(.*?)\n```"
+        matches = re.findall(pattern, text, re.DOTALL)
+        for i, code in enumerate(matches):
+            if len(code.strip()) > 50:
+                files.append({
+                    "path": f"script_{i+1}.py",
+                    "role": "main" if i == 0 else "unknown",
+                    "code": code.strip(),
+                })
+        return files
 
     def _template_fallback(self, model_result: Dict, sub_idx: int, sub_problem: Dict) -> Dict[str, Any]:
         """模板兜底 — 智能选择"""

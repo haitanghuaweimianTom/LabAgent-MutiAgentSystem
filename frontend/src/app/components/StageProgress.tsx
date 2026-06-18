@@ -27,6 +27,7 @@ const STAGE_ICONS: Record<string, string> = {
   analysis: '🔍',
   modeling: '📐',
   solving: '⚙️',
+  experiment: '🔬',
   writing: '📝',
 };
 
@@ -36,7 +37,7 @@ export default function StageProgress({ stages, memoryPool, currentStep }: Stage
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <span className={styles.title}>📊 四阶段流水线</span>
+        <span className={styles.title}>📊 五阶段流水线</span>
         <span className={styles.summary}>
           {completedCount}/{stages.length} 阶段完成
           {currentStep && ` · 当前: ${currentStep}`}

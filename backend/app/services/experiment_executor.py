@@ -116,13 +116,15 @@ class ExperimentExecutor:
                 "splits": [self.dataset_manager.get_splits(d) for d in processed_datasets],
             }
 
-            # 3. 生成实验代码（调用 solver_agent 的 experiment 模式）
+            # 3. 生成实验代码（调用 solver_agent 的 experiment 模式，失败降级到模板）
             generated = self._generate_experiment_code(
                 plan=plan,
                 datasets=processed_datasets,
                 modeling_result=modeling_result,
                 solver_result=solver_result,
                 code_dir=code_dir,
+                project_name=project_name,
+                task_id=task_id,
             )
             if not generated:
                 result.errors.append("实验代码生成失败")
@@ -192,7 +194,7 @@ class ExperimentExecutor:
             raise
 
     # ------------------------------------------------------------------
-    # 代码生成
+    # 代码生成（优先 LLM，降级到模板）
     # ------------------------------------------------------------------
 
     def _generate_experiment_code(
@@ -202,14 +204,117 @@ class ExperimentExecutor:
         modeling_result: Optional[Dict[str, Any]],
         solver_result: Optional[Dict[str, Any]],
         code_dir: Path,
+        project_name: Optional[str] = None,
+        task_id: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         """生成实验代码。
 
-        这里先实现一个简化版：直接写死一个通用的 train/eval 模板，
-        后续再接入 solver_agent 的 experiment 模式做 LLM 生成。
+        优先调用 solver_agent 的 experiment 模式做 LLM 生成；
+        失败时降级到硬编码模板。
         """
-        # TODO: 接入 solver_agent action="experiment" 做真正 LLM 生成
-        # 当前先用最小可用模板保证端到端跑通
+        # 1. 尝试 LLM 生成
+        llm_generated = self._try_llm_generate(
+            plan=plan,
+            datasets=datasets,
+            modeling_result=modeling_result,
+            solver_result=solver_result,
+            code_dir=code_dir,
+            project_name=project_name,
+            task_id=task_id,
+        )
+        if llm_generated:
+            return llm_generated
+
+        # 2. 降级到硬编码模板
+        logger.warning("[ExperimentExecutor] LLM 生成失败，降级到硬编码模板")
+        return self._generate_template_code(plan, datasets, code_dir)
+
+    def _try_llm_generate(
+        self,
+        plan: Dict[str, Any],
+        datasets: List[ProcessedDataset],
+        modeling_result: Optional[Dict[str, Any]],
+        solver_result: Optional[Dict[str, Any]],
+        code_dir: Path,
+        project_name: Optional[str] = None,
+        task_id: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """调用 solver_agent 生成实验代码。"""
+        try:
+            import asyncio
+            from ..agents.base import AgentFactory
+
+            solver = AgentFactory.create("solver_agent")
+            if solver is None:
+                return None
+
+            # 构建数据集路径信息
+            dataset_paths = {}
+            for ds in datasets:
+                splits = self.dataset_manager.get_splits(ds)
+                dataset_paths[ds.name] = {
+                    "train": splits.get("train"),
+                    "val": splits.get("val"),
+                    "test": splits.get("test"),
+                    "metadata": ds.metadata,
+                }
+
+            task_input = {
+                "action": "experiment",
+                "experiment_plan": plan,
+                "dataset_paths": dataset_paths,
+                "modeling_result": modeling_result or {},
+                "solver_result": solver_result or {},
+                "project_name": project_name,
+                "task_id": task_id,
+            }
+
+            # 运行异步方法
+            loop = asyncio.get_event_loop()
+            result = loop.run_until_complete(solver.execute(task_input, {}))
+
+            if not result.get("execution_success"):
+                logger.warning(f"[ExperimentExecutor] solver_agent experiment 返回失败: {result.get('error')}")
+                return None
+
+            # 将 solver_agent 返回的 code_files 转换为 ExperimentScript
+            experiment_scripts = result.get("experiment_scripts", {})
+            main = experiment_scripts.get("main")
+            baselines = experiment_scripts.get("baselines", [])
+            ablations = experiment_scripts.get("ablations", [])
+
+            if not main:
+                return None
+
+            def _to_script(item: Dict[str, Any], role: str) -> ExperimentScript:
+                path = Path(item.get("path", item.get("filename", "script.py")))
+                return ExperimentScript(
+                    name=path.stem,
+                    path=path,
+                    role=role,
+                    args={"epochs": 2, "batch_size": 32},
+                )
+
+            return {
+                "main": _to_script(main, "main"),
+                "baselines": [_to_script(b, "baseline") for b in baselines],
+                "ablations": [_to_script(a, "ablation") for a in ablations],
+                "code_dir": result.get("code_dir", str(code_dir)),
+                "requirements": result.get("requirements", []),
+                "source": "llm",
+            }
+
+        except Exception as e:
+            logger.warning(f"[ExperimentExecutor] LLM 生成实验代码失败: {e}")
+            return None
+
+    def _generate_template_code(
+        self,
+        plan: Dict[str, Any],
+        datasets: List[ProcessedDataset],
+        code_dir: Path,
+    ) -> Optional[Dict[str, Any]]:
+        """硬编码模板代码生成（降级方案）。"""
         dataset = datasets[0]
         splits = self.dataset_manager.get_splits(dataset)
         train_path = splits.get("train", "")
@@ -229,6 +334,7 @@ class ExperimentExecutor:
             ),
             "baselines": [],
             "ablations": [],
+            "source": "template",
         }
 
         # baselines
