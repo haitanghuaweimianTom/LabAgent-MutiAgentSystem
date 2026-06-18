@@ -81,6 +81,16 @@ class Settings(BaseSettings):
     use_react_tools: bool = True
     use_iterative_solver: bool = True
 
+    # ===== 自动化实验执行配置 =====
+    experiment_sandbox_enabled: bool = True
+    experiment_max_runtime_seconds: int = 3600
+    experiment_max_memory_mb: int = 8192
+    experiment_gpu_required: bool = False
+    experiment_auto_download_datasets: bool = True
+    experiment_enable_ablation: bool = True
+    experiment_enable_baseline: bool = True
+    experiment_allow_network: bool = True
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

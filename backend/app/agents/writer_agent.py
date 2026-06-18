@@ -938,6 +938,10 @@ class WriterAgent(BaseAgent):
         project_name = context.get("project_name")
         peer_review_feedback = task_input.get("review_feedback") or context.get("peer_review_feedback")
 
+        # 提取实验执行结果（如果存在）
+        experimentation_output = all_results.get("experimentation_agent", {}) or {}
+        experiment_result = experimentation_output.get("experiment_result") if isinstance(experimentation_output, dict) else None
+
         logger.info(f"WriterAgent chapter-by-chapter generation (template={template}) with {len(section_results)} sections")
 
         # 1. 发现可用图表
@@ -967,6 +971,7 @@ class WriterAgent(BaseAgent):
                 available_figures=available_figures,
                 template=template,
                 peer_review_feedback=peer_review_feedback,
+                experiment_result=experiment_result,
             )
             chapters.append(chapter)
 
@@ -1085,6 +1090,7 @@ class WriterAgent(BaseAgent):
         available_figures: List[str],
         template: str,
         peer_review_feedback: Optional[Dict[str, Any]] = None,
+        experiment_result: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """生成单个章节， critique 未通过则重写"""
         chapter_latex = ""
@@ -1111,6 +1117,7 @@ class WriterAgent(BaseAgent):
                 template=template,
                 previous_issues=previous_issues,
                 peer_review_feedback=peer_review_feedback if attempt == 1 else None,
+                experiment_result=experiment_result,
             )
 
             critique = await self._critique_chapter(
@@ -1154,6 +1161,7 @@ class WriterAgent(BaseAgent):
         template: str,
         previous_issues: List[str],
         peer_review_feedback: Optional[Dict[str, Any]] = None,
+        experiment_result: Optional[Dict[str, Any]] = None,
     ) -> Tuple[str, str]:
         """调用 LLM 生成单个章节"""
         # 前2章摘要
@@ -1166,7 +1174,8 @@ class WriterAgent(BaseAgent):
 
         # 子问题详情
         sections_context = self._build_sections_context(
-            problem_text, section_results, sub_problems, analyzer_result, data_result
+            problem_text, section_results, sub_problems, analyzer_result, data_result,
+            experiment_result=experiment_result,
         )
 
         # 数据上下文
@@ -1215,6 +1224,13 @@ class WriterAgent(BaseAgent):
                 "## 摘要输出要求\n"
                 "除了 chapter_latex，还请在 JSON 中额外返回 title、abstract、keywords 字段，"
                 "title 不超过20字，abstract 300-500字，keywords 3-5个。"
+            )
+        elif plan["id"] in ("experiment", "results_discussion") and experiment_result:
+            exp_summary = experiment_result.get("summary_text", "")
+            md_table = experiment_result.get("markdown_table", "")
+            prompt_parts.append(
+                "## 真实实验执行结果（必须在本章节中使用，禁止编造数字）\n"
+                f"{exp_summary}\n\n{md_table}\n"
             )
 
         prompt_parts.append(
@@ -1696,10 +1712,23 @@ class WriterAgent(BaseAgent):
         section_results: List,
         sub_problems: List,
         analyzer_result: Dict,
-        data_result: Dict
+        data_result: Dict,
+        experiment_result: Optional[Dict[str, Any]] = None,
     ) -> str:
         """构建各子问题的详细上下文"""
         sections_context = ""
+
+        # 如果有真实实验结果，先在开头给出摘要
+        if experiment_result:
+            summary = experiment_result.get("summary_text", "")
+            md_table = experiment_result.get("markdown_table", "")
+            if summary or md_table:
+                sections_context += "## 实验执行结果（真实数据，非编造）\n"
+                if summary:
+                    sections_context += f"{summary}\n\n"
+                if md_table:
+                    sections_context += f"{md_table}\n\n"
+
         for sp in section_results:
             sp_name = sp.get("sub_problem_name", "")
             sp_desc = sp.get("sub_problem_desc", "")

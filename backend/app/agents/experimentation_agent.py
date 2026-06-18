@@ -92,11 +92,11 @@ class ExperimentationAgent(BaseAgent):
         task_input: Dict[str, Any],
         context: Dict[str, Any],
     ) -> Dict[str, Any]:
-        """执行实验设计。
+        """执行实验设计或实验执行。
 
         Args:
             task_input: 至少包含 ``problem_text``；可选 ``action``（``design``/``execute``）、
-                ``sub_problems``、``modeling_result``。
+                ``sub_problems``、``modeling_result``、``solver_result``、``project_name``、``task_id``。
             context: 上下文（result 等）。
 
         Returns:
@@ -105,7 +105,8 @@ class ExperimentationAgent(BaseAgent):
                 "action": "design" | "execute",
                 "plan": {baselines, datasets, metrics, hardware_budget, ablation_plan, splits, risks},
                 "raw_text": "LLM 原始 JSON 字符串",
-                "executed": False,
+                "executed": bool,
+                "experiment_result": {...} | None,
                 "error": None | str,
             }
         """
@@ -113,6 +114,9 @@ class ExperimentationAgent(BaseAgent):
         problem_text = task_input.get("problem_text", context.get("problem_text", ""))
         sub_problems = task_input.get("sub_problems", [])
         modeling_result = task_input.get("modeling_result", {})
+        solver_result = task_input.get("solver_result", {})
+        project_name = task_input.get("project_name") or context.get("project_name")
+        task_id = task_input.get("task_id") or context.get("task_id")
 
         if not problem_text:
             return {
@@ -120,6 +124,7 @@ class ExperimentationAgent(BaseAgent):
                 "plan": self._empty_plan(),
                 "raw_text": "",
                 "executed": False,
+                "experiment_result": None,
                 "error": "missing problem_text",
             }
 
@@ -130,13 +135,15 @@ class ExperimentationAgent(BaseAgent):
             raw_text = await self._call_llm_for_plan(user_prompt)
             plan = self._parse_plan(raw_text)
             executed = False
+            experiment_result = None
             if action == "execute":
-                executed = self._try_smoke_execute(plan)
+                executed, experiment_result = await self._try_execute(plan, modeling_result, solver_result, project_name, task_id)
             return {
                 "action": action,
                 "plan": plan,
                 "raw_text": raw_text,
                 "executed": executed,
+                "experiment_result": experiment_result.to_dict() if experiment_result else None,
                 "error": None,
             }
         except Exception as exc:  # noqa: BLE001
@@ -146,6 +153,7 @@ class ExperimentationAgent(BaseAgent):
                 "plan": self._empty_plan(),
                 "raw_text": "",
                 "executed": False,
+                "experiment_result": None,
                 "error": str(exc),
             }
 
@@ -216,16 +224,41 @@ class ExperimentationAgent(BaseAgent):
             "risks": data.get("risks", []) or [],
         }
 
-    def _try_smoke_execute(self, plan: Dict[str, Any]) -> bool:
-        """尝试冒烟执行实验。仅在 hardware_budget.feasible=True 时尝试。
+    async def _try_execute(
+        self,
+        plan: Dict[str, Any],
+        modeling_result: Dict[str, Any],
+        solver_result: Dict[str, Any],
+        project_name: Optional[str],
+        task_id: Optional[str],
+    ) -> tuple:
+        """真正执行实验计划。
 
-        返回 True 表示执行成功，False 表示跳过/失败（不会抛异常）。
+        返回 (executed: bool, experiment_result: ExperimentExecutorResult | None)。
         """
         budget = plan.get("hardware_budget") or {}
-        if not budget.get("feasible", False):
-            return False
-        # 此处不实际跑实验（避免引入重依赖）；后续 Phase 3 由 CodeManifest + Solver
-        # 在 paper_templates=research_paper 时按 plan 真实执行。
+        # 默认允许执行；若 LLM 明确标记不可行，则跳过
+        if budget.get("feasible") is False:
+            logger.info("[ExperimentationAgent] hardware_budget.feasible=False，跳过实验执行")
+            return False, None
+
+        try:
+            from ..services.experiment_executor import get_experiment_executor
+            executor = get_experiment_executor()
+            result = executor.execute_experiment_plan(
+                plan=plan,
+                modeling_result=modeling_result,
+                solver_result=solver_result,
+                project_name=project_name,
+                task_id=task_id,
+            )
+            return result.executed, result
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"[ExperimentationAgent] 实验执行失败: {exc}")
+            return False, None
+
+    def _try_smoke_execute(self, plan: Dict[str, Any]) -> bool:
+        """已废弃：原有冒烟执行 stub，保留以兼容旧调用。"""
         return False
 
     @staticmethod

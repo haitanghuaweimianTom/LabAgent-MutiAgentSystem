@@ -673,6 +673,15 @@ class LangGraphOrchestrator:
             return "financial_analyst"
         return "writer"
 
+    def _route_to_experiment_or_solver(self, state: TaskState) -> str:
+        """CCF-A 模板且开启实验设计时，先走 experiment 节点。"""
+        template = state.get("paper_template", "math_modeling")
+        ccf_a = {"ieee_conference", "neurips_2024", "acm_sigconf", "springer_lncs", "research_paper"}
+        if self.cfg.enable_experiment_design and template in ccf_a:
+            logger.info(f"[LangGraph] template={template} 启用实验执行 → experiment")
+            return "experiment"
+        return "iterative_solver"
+
     # ------------------------------------------------------------------
     # Graph 构建
     # ------------------------------------------------------------------
@@ -790,10 +799,24 @@ class LangGraphOrchestrator:
             },
         )
 
-        # 建模节点 → solver
-        builder.add_edge("modeler", "iterative_solver")
-        builder.add_edge("algorithm_engineer", "iterative_solver")
-        builder.add_edge("financial_analyst", "iterative_solver")
+        # 建模节点 → solver（非 CCF-A）或 experiment（CCF-A）
+        builder.add_conditional_edges(
+            "modeler",
+            self._route_to_experiment_or_solver,
+            {"experiment": "experiment", "iterative_solver": "iterative_solver"},
+        )
+        builder.add_conditional_edges(
+            "algorithm_engineer",
+            self._route_to_experiment_or_solver,
+            {"experiment": "experiment", "iterative_solver": "iterative_solver"},
+        )
+        builder.add_conditional_edges(
+            "financial_analyst",
+            self._route_to_experiment_or_solver,
+            {"experiment": "experiment", "iterative_solver": "iterative_solver"},
+        )
+
+        builder.add_edge("experiment", "iterative_solver")
 
         builder.add_edge("writer", "peer_review")
         builder.add_edge("fact_check", END)
@@ -1354,7 +1377,7 @@ class LangGraphOrchestrator:
         return {**state, "results": {**state.get("results", {}), **ref_update}, "current_step": "peer_review_done"}
 
     async def _node_experiment(self, state: TaskState) -> TaskState:
-        """调用 experimentation_agent 设计实验方案（CCF-A 模板才启用）。"""
+        """调用 experimentation_agent 设计并执行实验（CCF-A 模板才启用）。"""
         agent = self.agents.get("experimentation_agent")
         template = state.get("paper_template", "math_modeling")
         ccf_a = {"ieee_conference", "neurips_2024", "acm_sigconf", "springer_lncs", "research_paper"}
@@ -1362,15 +1385,31 @@ class LangGraphOrchestrator:
             return {**state, "current_step": "experiment_skipped"}
 
         task_id = state["task_id"]
-        self._update_progress(task_id, state["problem_text"], 55, "实验设计中")
+        self._update_progress(task_id, state["problem_text"], 55, "实验执行中")
+
+        results = state.get("results", {})
+        modeling_agent = self._select_modeling_agent(template, state.get("workflow_type", "standard"))
+        modeling_result = results.get(modeling_agent, {}) if modeling_agent else {}
 
         output = await agent.execute(
-            task_input={"action": "design", "problem_text": state["problem_text"]},
+            task_input={
+                "action": "execute",
+                "problem_text": state["problem_text"],
+                "modeling_result": modeling_result,
+                "solver_result": results.get("solver_agent", {}),
+                "project_name": state.get("project_name"),
+                "task_id": task_id,
+            },
             context=self._agent_context(state),
         )
 
         ref_update = self._set_result(state, "experimentation_agent", output)
-        self._post_chat(task_id, "experimentation_agent", "实验设计完成")
+        executed = output.get("executed", False)
+        self._post_chat(
+            task_id,
+            "experimentation_agent",
+            f"实验{'执行完成' if executed else '设计完成（未执行）'}",
+        )
         return {**state, "results": {**state.get("results", {}), **ref_update}, "current_step": "experiment_done"}
 
     async def _node_fact_check(self, state: TaskState) -> TaskState:
