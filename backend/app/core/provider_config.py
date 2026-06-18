@@ -578,6 +578,10 @@ def sync_ccswitch_to_local(force: bool = False) -> Dict[str, Any]:
 
     _write_config(config)
 
+    # 更新同步时间戳（手动/自动同步都需要）
+    global _last_sync_time
+    _last_sync_time = time.time()
+
     # 更新 _last_ccswitch_state 缓存，使后续 detect_ccswitch_change() 有正确基线
     with _ccswitch_lock:
         _last_ccswitch_state = {}

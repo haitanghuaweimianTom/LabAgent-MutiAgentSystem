@@ -83,13 +83,15 @@ async def list_agents() -> List[Dict[str, Any]]:
             # 未配置过，回退到全局默认 provider 和默认模型
             item["provider_id"] = default_provider_id
             item["provider_model"] = info.get("model", "")
-        # 添加 provider 名称
+        # 添加 provider 名称并标记是否失效
         pid = item["provider_id"]
         if pid:
             p = get_custom_provider(pid)
             item["provider_name"] = p.get("name", pid) if p else pid
+            item["provider_stale"] = p is None
         else:
             item["provider_name"] = ""
+            item["provider_stale"] = False
         result.append(item)
     return JSONResponse(content=result, headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache", "Expires": "0"})
 
