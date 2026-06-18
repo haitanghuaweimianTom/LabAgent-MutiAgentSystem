@@ -77,13 +77,15 @@ def test_manifest_report_well_formed_multi_file(solver):
 
 def test_router_tasks_camera_ready_endpoints():
     """tasks router 必须有 /camera-ready 的 POST 和 GET 端点。"""
-    src = Path("app/routers/tasks.py").read_text(encoding="utf-8")
+    src = Path(__file__).parent.parent / "app" / "routers" / "tasks.py"
+    src = src.read_text(encoding="utf-8")
     assert '@router.post("/{task_id}/camera-ready")' in src
     assert '@router.get("/{task_id}/camera-ready")' in src
 
 
 def test_router_tasks_post_camera_ready_signature():
-    src = Path("app/routers/tasks.py").read_text(encoding="utf-8")
+    src = Path(__file__).parent.parent / "app" / "routers" / "tasks.py"
+    src = src.read_text(encoding="utf-8")
     # 解析 AST 找 build_camera_ready
     tree = ast.parse(src)
     found = False
@@ -99,7 +101,8 @@ def test_router_tasks_post_camera_ready_signature():
 
 
 def test_router_tasks_get_camera_ready_signature():
-    src = Path("app/routers/tasks.py").read_text(encoding="utf-8")
+    src = Path(__file__).parent.parent / "app" / "routers" / "tasks.py"
+    src = src.read_text(encoding="utf-8")
     tree = ast.parse(src)
     found = False
     for node in ast.walk(tree):
@@ -115,7 +118,8 @@ def test_router_tasks_get_camera_ready_signature():
 
 def test_router_camera_ready_uses_service():
     """router 必须调用 collect_artifacts + build 而非手写。"""
-    src = Path("app/routers/tasks.py").read_text(encoding="utf-8")
+    src = Path(__file__).parent.parent / "app" / "routers" / "tasks.py"
+    src = src.read_text(encoding="utf-8")
     # 找到 build_camera_ready 函数体
     tree = ast.parse(src)
     for node in ast.walk(tree):

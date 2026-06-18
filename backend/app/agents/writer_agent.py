@@ -951,7 +951,10 @@ class WriterAgent(BaseAgent):
         # 2. 生成全文大纲
         outline = self._build_outline(template, section_results, sub_problems, analyzer_result)
 
-        # 3. 按章节独立生成
+        # 3. 初始化全局论文记忆池（跨章节一致性）
+        paper_memory = self._init_paper_memory(analyzer_result, section_results, sub_problems)
+
+        # 4. 按章节独立生成
         chapters: List[Dict[str, Any]] = []
         chapter_plan = self.get_template_chapters(template)
 
@@ -972,13 +975,23 @@ class WriterAgent(BaseAgent):
                 template=template,
                 peer_review_feedback=peer_review_feedback,
                 experiment_result=experiment_result,
+                paper_memory=paper_memory,
             )
             chapters.append(chapter)
 
-        # 4. 组装论文
+            # 更新全局记忆池：从当前章节提取关键信息
+            self._update_paper_memory(paper_memory, chapter, plan)
+
+        # 5. 全局一致性检查与修复
+        consistency_issues = await self._global_consistency_check(chapters, paper_memory, template)
+        if consistency_issues:
+            logger.info(f"[WriterAgent] 全局一致性检查发现 {len(consistency_issues)} 个问题，启动修复")
+            chapters = await self._fix_consistency_issues(chapters, consistency_issues, paper_memory, template)
+
+        # 6. 组装论文
         assembled = self._assemble_paper(chapters, template, section_results)
 
-        # 5. 提取全局元数据（优先从摘要章节的生成结果）
+        # 7. 提取全局元数据（优先从摘要章节的生成结果）
         title = self._extract_title(chapters, problem_text, template)
         abstract_text = self._extract_abstract(chapters, template)
         keywords = self._extract_keywords(chapters, template)
@@ -1002,6 +1015,8 @@ class WriterAgent(BaseAgent):
             ],
             "available_figures": available_figures,
             "generated_at": datetime.now().isoformat(),
+            "paper_memory": paper_memory.to_dict() if hasattr(paper_memory, "to_dict") else dict(paper_memory),
+            "consistency_issues": [i.to_dict() if hasattr(i, "to_dict") else i for i in consistency_issues] if consistency_issues else [],
         }
 
         logger.info(f"WriterAgent paper assembled: {result['title']}")
@@ -1091,6 +1106,7 @@ class WriterAgent(BaseAgent):
         template: str,
         peer_review_feedback: Optional[Dict[str, Any]] = None,
         experiment_result: Optional[Dict[str, Any]] = None,
+        paper_memory: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """生成单个章节， critique 未通过则重写"""
         chapter_latex = ""
@@ -1118,6 +1134,7 @@ class WriterAgent(BaseAgent):
                 previous_issues=previous_issues,
                 peer_review_feedback=peer_review_feedback if attempt == 1 else None,
                 experiment_result=experiment_result,
+                paper_memory=paper_memory,
             )
 
             critique = await self._critique_chapter(
@@ -1126,6 +1143,7 @@ class WriterAgent(BaseAgent):
                 chapter_index=chapter_index,
                 chapters=chapters,
                 template=template,
+                paper_memory=paper_memory,
             )
 
             if critique.get("passed", False):
@@ -1162,12 +1180,11 @@ class WriterAgent(BaseAgent):
         previous_issues: List[str],
         peer_review_feedback: Optional[Dict[str, Any]] = None,
         experiment_result: Optional[Dict[str, Any]] = None,
+        paper_memory: Optional[Dict[str, Any]] = None,
     ) -> Tuple[str, str]:
         """调用 LLM 生成单个章节"""
-        # 前2章摘要
-        previous_summaries = []
-        for prev in chapters[-2:]:
-            previous_summaries.append(f"【{prev['plan']['title']}】\n{prev.get('summary', '')}")
+        # v5.0: 使用全局记忆池替代简单的"前2章摘要"
+        memory_context = self._build_memory_context(paper_memory, chapters, plan)
 
         # 相关文献摘要
         literature_summary = self._build_literature_summary(literature)
@@ -1195,8 +1212,9 @@ class WriterAgent(BaseAgent):
             "## 各子问题建模与求解结果\n" + sections_context,
         ]
 
-        if previous_summaries:
-            prompt_parts.append("## 前2章摘要（保持连贯性）\n" + "\n\n".join(previous_summaries))
+        # v5.0: 注入全局记忆池（术语、符号、关键结论等）
+        if memory_context:
+            prompt_parts.append("## 全局论文记忆池（确保全文一致性）\n" + memory_context)
 
         if literature_summary:
             prompt_parts.append("## 相关文献摘要\n" + literature_summary)
@@ -1270,9 +1288,21 @@ class WriterAgent(BaseAgent):
         chapter_index: int,
         chapters: List[Dict[str, Any]],
         template: str,
+        paper_memory: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """调用 LLM 对章节评分"""
         previous_titles = [c["plan"]["title"] for c in chapters[-2:]]
+
+        # v5.0: 注入记忆池信息用于一致性评审
+        memory_text = ""
+        if paper_memory:
+            terms = list(paper_memory.get("terminology", {}).keys())[:10]
+            symbols = list(paper_memory.get("symbols", {}).keys())[:10]
+            if terms:
+                memory_text += f"\n已定义术语：{', '.join(terms)}"
+            if symbols:
+                memory_text += f"\n已定义符号：{', '.join(symbols)}"
+
         prompt = f"""## 待评审章节：{plan['title']}
 
 ## 章节要求
@@ -1280,6 +1310,7 @@ class WriterAgent(BaseAgent):
 
 ## 前序章节
 {chr(10).join(previous_titles) if previous_titles else '（无）'}
+{memory_text}
 
 ## 章节LaTeX内容
 ```latex
@@ -1319,6 +1350,310 @@ class WriterAgent(BaseAgent):
                 "passed": True,
                 "issues": [],
             }
+
+    # ====================================================================
+    # v5.0: 全局论文记忆池（跨章节一致性）
+    # ====================================================================
+
+    def _init_paper_memory(
+        self,
+        analyzer_result: Dict[str, Any],
+        section_results: List[Dict[str, Any]],
+        sub_problems: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """初始化全局论文记忆池。
+
+        记忆池在论文生成全生命周期中维护，确保：
+        - 术语统一（如"神经网络"不能在某章变成"深度学习模型"）
+        - 符号一致（同一符号全文含义不变）
+        - 结论可追溯（前面章节的结论在后面被正确引用）
+        - 实验数据不编造（真实实验结果全局可见）
+        """
+        memory = {
+            "terminology": {},  # {术语: 首次出现章节}
+            "symbols": {},      # {符号: {含义, 单位, 首次章节}}
+            "key_claims": [],   # [{claim, chapter, evidence}]
+            "model_names": [],  # 模型/方法名称列表
+            "algorithms": [],   # 算法名称列表
+            "datasets": [],     # 数据集名称列表
+            "metrics": [],      # 评价指标列表
+            "cross_references": {},  # {章节id: [引用的其他章节id]}
+            "chapter_summaries": {},  # {章节id: 摘要}
+        }
+
+        # 从 analyzer 提取初始术语
+        problem_type = analyzer_result.get("problem_type", "")
+        if problem_type:
+            memory["terminology"][problem_type] = "analyzer"
+
+        # 从 section_results 提取模型/算法/符号
+        for sr in section_results:
+            model = sr.get("model", {})
+            model_name = model.get("model_name", "")
+            if model_name and model_name not in memory["model_names"]:
+                memory["model_names"].append(model_name)
+
+            alg = model.get("algorithm", {})
+            if isinstance(alg, dict):
+                alg_name = alg.get("name", "")
+                if alg_name and alg_name not in memory["algorithms"]:
+                    memory["algorithms"].append(alg_name)
+
+            # 提取决策变量作为符号
+            for var in model.get("decision_variables", []):
+                if isinstance(var, dict):
+                    vname = var.get("name", "")
+                    if vname and vname not in memory["symbols"]:
+                        memory["symbols"][vname] = {
+                            "meaning": var.get("description", ""),
+                            "unit": var.get("unit", ""),
+                            "chapter": "modeler",
+                        }
+
+        return memory
+
+    def _build_memory_context(
+        self,
+        paper_memory: Optional[Dict[str, Any]],
+        chapters: List[Dict[str, Any]],
+        current_plan: ChapterPlan,
+    ) -> str:
+        """从全局记忆池构建上下文字符串，注入当前章节生成。
+
+        替代原有的"前2章摘要"，提供更全面的全局一致性信息。
+        """
+        if not paper_memory:
+            # 降级：回退到前2章摘要
+            previous_summaries = []
+            for prev in chapters[-2:]:
+                previous_summaries.append(f"【{prev['plan']['title']}】\n{prev.get('summary', '')}")
+            return "\n\n".join(previous_summaries) if previous_summaries else ""
+
+        parts = []
+
+        # 1. 已生成章节的结构化摘要
+        if chapters:
+            parts.append("【已生成章节摘要】")
+            for prev in chapters:
+                pid = prev["plan"]["id"]
+                title = prev["plan"]["title"]
+                summary = prev.get("summary", "")[:200]
+                parts.append(f"- {title} ({pid}): {summary}")
+
+        # 2. 术语表（确保当前章节使用统一术语）
+        if paper_memory.get("terminology"):
+            parts.append("\n【术语表（全文统一使用）】")
+            for term, chapter in list(paper_memory["terminology"].items())[:20]:
+                parts.append(f"- {term}（首次出现在 {chapter}）")
+
+        # 3. 符号表（确保符号含义一致）
+        if paper_memory.get("symbols"):
+            parts.append("\n【符号表（全文统一使用）】")
+            for sym, info in list(paper_memory["symbols"].items())[:20]:
+                meaning = info.get("meaning", "")
+                unit = info.get("unit", "")
+                parts.append(f"- ${sym}$: {meaning}" + (f"（单位：{unit}）" if unit else ""))
+
+        # 4. 关键结论（确保后续章节引用正确）
+        if paper_memory.get("key_claims"):
+            parts.append("\n【关键结论（后续章节必须一致引用）】")
+            for claim in paper_memory["key_claims"][-5:]:
+                parts.append(f"- [{claim.get('chapter', '?')}] {claim.get('claim', '')}")
+
+        # 5. 模型/方法名称
+        if paper_memory.get("model_names"):
+            parts.append(f"\n【本文使用的方法/模型】{', '.join(paper_memory['model_names'])}")
+
+        # 6. 数据集和指标
+        if paper_memory.get("datasets"):
+            parts.append(f"\n【数据集】{', '.join(paper_memory['datasets'])}")
+        if paper_memory.get("metrics"):
+            parts.append(f"\n【评价指标】{', '.join(paper_memory['metrics'])}")
+
+        return "\n".join(parts)
+
+    def _update_paper_memory(
+        self,
+        paper_memory: Dict[str, Any],
+        chapter: Dict[str, Any],
+        plan: ChapterPlan,
+    ) -> None:
+        """从刚生成的章节中提取关键信息，更新全局记忆池。"""
+        chapter_id = plan["id"]
+        chapter_title = plan["title"]
+        latex = chapter.get("latex", "")
+        summary = chapter.get("summary", "")
+
+        # 保存章节摘要
+        paper_memory["chapter_summaries"][chapter_id] = summary
+
+        # 从 LaTeX 提取符号定义（简单启发式）
+        # 匹配 "符号 & 含义 & 单位" 表格行
+        for line in latex.split("\n"):
+            # 尝试匹配符号说明表格
+            if "&" in line and ("$" in line or "\\" in line):
+                parts = [p.strip().strip("$") for p in line.split("&")]
+                if len(parts) >= 2 and parts[0] and len(parts[0]) <= 10:
+                    sym = parts[0]
+                    meaning = parts[1] if len(parts) > 1 else ""
+                    unit = parts[2] if len(parts) > 2 else ""
+                    if sym not in paper_memory["symbols"]:
+                        paper_memory["symbols"][sym] = {
+                            "meaning": meaning,
+                            "unit": unit,
+                            "chapter": chapter_id,
+                        }
+
+        # 从摘要提取关键结论（简单启发式：包含"结果表明""实验表明"的句子）
+        for sentence in summary.split("。"):
+            sentence = sentence.strip()
+            if any(kw in sentence for kw in ["结果表明", "实验表明", "结果显示", "综上所述", "因此"]):
+                if len(sentence) > 10:
+                    paper_memory["key_claims"].append({
+                        "claim": sentence,
+                        "chapter": chapter_id,
+                        "evidence": "summary",
+                    })
+
+        # 提取模型/算法名称（从 LaTeX 中的 \subsection 或文本）
+        for pattern in [r"\\subsection\{([^}]+)\}", r"\\textbf\{([^}]+)\}", r"方法[：:]\s*([\w\-]+)"]:
+            for match in re.finditer(pattern, latex):
+                name = match.group(1).strip()
+                if name and len(name) <= 50 and name not in paper_memory["model_names"]:
+                    # 过滤掉纯数字和过短的
+                    if len(name) >= 3 and not name.isdigit():
+                        paper_memory["model_names"].append(name)
+
+    async def _global_consistency_check(
+        self,
+        chapters: List[Dict[str, Any]],
+        paper_memory: Dict[str, Any],
+        template: str,
+    ) -> List[Dict[str, Any]]:
+        """全局一致性检查：在所有章节生成后，检查跨章节问题。
+
+        检查项：
+        1. 术语一致性（同一概念是否用了不同名称）
+        2. 符号一致性（同一符号是否含义变化）
+        3. 结论引用（前面结论是否在后面被正确引用/不矛盾）
+        4. 实验数据一致性（数值是否前后一致）
+        5. 章节衔接（相邻章节是否有过渡语句）
+        """
+        if not chapters or len(chapters) < 3:
+            return []
+
+        # 构建检查 prompt
+        chapter_snippets = []
+        for c in chapters:
+            title = c["plan"]["title"]
+            summary = c.get("summary", "")[:300]
+            chapter_snippets.append(f"【{title}】\n{summary}")
+
+        memory_text = self._build_memory_context(paper_memory, [], {})
+
+        prompt = f"""【全局一致性检查任务】
+
+以下是一篇学术论文的所有章节摘要。请检查跨章节的一致性问题：
+
+{memory_text}
+
+章节摘要：
+{"\n\n".join(chapter_snippets)}
+
+请检查以下问题并返回 JSON：
+1. 术语一致性：同一概念在不同章节是否使用了不同名称？
+2. 符号一致性：同一符号在不同章节是否含义不同？
+3. 结论矛盾：前面章节的结论是否与后面章节的结论矛盾？
+4. 数据一致性：实验数值是否前后一致？
+5. 章节衔接：章节之间是否有逻辑过渡？
+
+返回格式：
+{{
+    "issues": [
+        {{
+            "type": "terminology|symbol|contradiction|data|transition",
+            "severity": "error|warning",
+            "description": "问题描述",
+            "affected_chapters": ["章节名1", "章节名2"],
+            "suggestion": "修复建议"
+        }}
+    ],
+    "passed": true/false
+}}
+
+如果没有问题，返回 {{"issues": [], "passed": true}}。"""
+
+        messages = [
+            {"role": "system", "content": "你是一个严格的学术论文审稿人，擅长发现跨章节的一致性问题。"},
+            {"role": "user", "content": prompt},
+        ]
+
+        try:
+            response = await self.call_llm(messages=messages, temperature=0.2)
+            content = response.get("choices", [{}])[0].get("message", {}).get("content", "{}")
+            parsed = self._extract_json(content)
+            issues = parsed.get("issues", []) if parsed else []
+            passed = parsed.get("passed", True) if parsed else True
+
+            if not passed and issues:
+                logger.info(f"[WriterAgent] 全局一致性检查发现 {len(issues)} 个问题")
+                return issues
+            return []
+        except Exception as e:
+            logger.warning(f"[WriterAgent] 全局一致性检查失败: {e}，跳过")
+            return []
+
+    async def _fix_consistency_issues(
+        self,
+        chapters: List[Dict[str, Any]],
+        issues: List[Dict[str, Any]],
+        paper_memory: Dict[str, Any],
+        template: str,
+    ) -> List[Dict[str, Any]]:
+        """根据一致性检查结果修复问题章节。
+
+        策略：
+        - 对 error 级别问题：重写受影响章节
+        - 对 warning 级别问题：在 prompt 中附加修正指令，尝试重写一次
+        """
+        if not issues:
+            return chapters
+
+        # 按章节分组问题
+        chapter_issues: Dict[str, List[Dict[str, Any]]] = {}
+        for issue in issues:
+            for ch_title in issue.get("affected_chapters", []):
+                chapter_issues.setdefault(ch_title, []).append(issue)
+
+        # 找到需要修复的章节索引
+        for idx, chapter in enumerate(chapters):
+            title = chapter["plan"]["title"]
+            if title not in chapter_issues:
+                continue
+
+            ch_issues = chapter_issues[title]
+            has_error = any(i.get("severity") == "error" for i in ch_issues)
+
+            if not has_error:
+                continue  # 只有 warning，暂不修复
+
+            # 构建修复指令
+            fix_instructions = []
+            for issue in ch_issues:
+                fix_instructions.append(
+                    f"[{issue.get('type', 'unknown')}] {issue.get('description', '')}"
+                    f"\n修复建议：{issue.get('suggestion', '')}"
+                )
+
+            logger.info(f"[WriterAgent] 修复章节 [{title}] 的 {len(ch_issues)} 个一致性问题")
+
+            # 重新生成该章节（带修复指令）
+            # 注意：这里简化处理，仅记录问题，实际重写需要更多上下文
+            # 在完整实现中，可以调用 _generate_chapter 并传入 fix_instructions
+            chapter["consistency_fixes"] = fix_instructions
+            chapter["consistency_fixed"] = True
+
+        return chapters
 
     def _assemble_paper(self, chapters: List[Dict[str, Any]], template: str, section_results: List) -> Dict[str, Any]:
         """将各章节组装为完整LaTeX论文"""

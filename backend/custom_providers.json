@@ -21,7 +21,7 @@
       "icon_color": "#10a37f",
       "notes": "MiniMax Anthropic-compatible endpoint",
       "created_at": 1781268770,
-      "updated_at": 1781687072,
+      "updated_at": 1781768208,
       "_version": 2
     },
     {
@@ -45,7 +45,7 @@
       "icon_color": "#d97706",
       "notes": "从 ccswitch 自动同步",
       "created_at": 1781505613,
-      "updated_at": 1781687072,
+      "updated_at": 1781768208,
       "_version": 2
     },
     {
@@ -69,7 +69,7 @@
       "icon_color": "#d97706",
       "notes": "从 ccswitch 自动同步",
       "created_at": 1781676443,
-      "updated_at": 1781687072,
+      "updated_at": 1781768208,
       "_version": 2
     }
   ],
