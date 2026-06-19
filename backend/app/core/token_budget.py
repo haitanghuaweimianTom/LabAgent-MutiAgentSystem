@@ -20,8 +20,6 @@ MODEL_CONTEXT_WINDOWS = {
     "gpt-4o": 128_000,
     "gpt-4o-mini": 128_000,
     "kimi": 128_000,
-    "minimax": 128_000,
-    "mimo": 128_000,
     "default": 128_000,
 }
 

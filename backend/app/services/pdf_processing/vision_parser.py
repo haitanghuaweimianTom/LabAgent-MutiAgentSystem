@@ -166,7 +166,7 @@ class VisionPdfParser(PdfParser):
         agent = BaseAgent(
             model=model,
             provider_id=provider_id or "",
-            llm_backend="minimax",
+            llm_backend="",
             temperature=0.1,
             max_tokens=4096,
         )

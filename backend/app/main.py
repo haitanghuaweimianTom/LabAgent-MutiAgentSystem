@@ -33,7 +33,8 @@ _app_start_time: float = 0.0
 
 
 class SettingsUpdate(BaseModel):
-    minimax_api_key: str | None = None
+    api_key: str | None = None  # 通用 API 密钥（新增）
+    minimax_api_key: str | None = None  # 兼容旧字段
     kimi_api_key: str | None = None
     kimi_base_url: str | None = None
     default_model: str | None = None
@@ -232,7 +233,7 @@ async def info():
 async def get_runtime_settings():
     s = get_settings()
     return {
-        "minimax_api_key_set": is_api_key_set(),
+        "api_key_set": is_api_key_set(),
         "kimi_api_key_set": is_kimi_key_set(),
         "kimi_base_url": get_runtime_kimi_url(),
         "default_model": s.default_model,
@@ -272,7 +273,11 @@ async def update_runtime_settings(body: SettingsUpdate):
     changed = False
     if body.minimax_api_key is not None:
         update_runtime_api_key(body.minimax_api_key.strip())
-        logger.info("MiniMax API密钥已更新")
+        logger.info("API密钥已更新（兼容旧字段 minimax_api_key）")
+        changed = True
+    if body.api_key is not None:
+        update_runtime_api_key(body.api_key.strip())
+        logger.info("API密钥已更新")
         changed = True
     if body.kimi_api_key is not None:
         update_runtime_kimi_key(body.kimi_api_key.strip())

@@ -33,60 +33,85 @@ def update_env_key(key: str, value: str) -> None:
 
 
 def get_runtime_api_key() -> str:
-    """获取运行时API密钥（优先读.env文件）"""
+    """获取运行时API密钥（优先读.env文件，兼容 MINIMAX_API_KEY 遗留命名）"""
     env = _read_env()
+    # 优先检查通用命名
+    for key in ["API_KEY", "LLM_API_KEY", "OPENAI_API_KEY"]:
+        val = env.get(key, "")
+        if val:
+            return val
+    # 回退到遗留命名（兼容旧配置）
     key = env.get("MINIMAX_API_KEY", "")
     if key:
         return key
     # 回退到环境变量
-    return os.environ.get("MINIMAX_API_KEY", "")
+    for key in ["API_KEY", "LLM_API_KEY", "OPENAI_API_KEY", "MINIMAX_API_KEY"]:
+        val = os.environ.get(key, "")
+        if val:
+            return val
+    return ""
 
 
 def update_runtime_api_key(key: str) -> None:
-    """更新 .env 文件中的 API 密钥（永久保存）"""
-    update_env_key("MINIMAX_API_KEY", key)
+    """更新 .env 文件中的 API 密钥（永久保存，使用通用命名）"""
+    update_env_key("API_KEY", key)
 
 
 def is_api_key_set() -> bool:
     """检查 .env 中是否有 API 密钥"""
     env = _read_env()
-    return bool(env.get("MINIMAX_API_KEY", "").strip())
+    for k in ["API_KEY", "LLM_API_KEY", "OPENAI_API_KEY", "MINIMAX_API_KEY"]:
+        if env.get(k, "").strip():
+            return True
+    return False
 
 
-# ===== Kimi API 密钥管理 =====
+# ===== Provider 通用 API 密钥管理（兼容旧 Kimi 字段）=====
 
-def get_runtime_kimi_key() -> str:
-    """获取 Kimi API 密钥"""
+def get_runtime_provider_key(provider_name: str) -> str:
+    """获取指定 Provider 的 API 密钥"""
     env = _read_env()
-    key = env.get("KIMI_API_KEY", "")
+    key_var = f"{provider_name.upper()}_API_KEY"
+    key = env.get(key_var, "")
     if key:
         return key
-    return os.environ.get("KIMI_API_KEY", "")
+    return os.environ.get(key_var, "")
+
+
+def get_runtime_provider_url(provider_name: str, default_url: str = "") -> str:
+    """获取指定 Provider 的基础 URL"""
+    env = _read_env()
+    url_var = f"{provider_name.upper()}_BASE_URL"
+    url = env.get(url_var, "")
+    if url:
+        return url
+    return os.environ.get(url_var, default_url)
+
+
+# 遗留兼容函数（Kimi）
+def get_runtime_kimi_key() -> str:
+    """获取 Kimi API 密钥（兼容旧接口）"""
+    return get_runtime_provider_key("kimi")
 
 
 def get_runtime_kimi_url() -> str:
-    """获取 Kimi API 基础 URL"""
-    env = _read_env()
-    url = env.get("KIMI_BASE_URL", "")
-    if url:
-        return url
-    return os.environ.get("KIMI_BASE_URL", "https://api.kimi.com/coding")
+    """获取 Kimi API 基础 URL（兼容旧接口）"""
+    return get_runtime_provider_url("kimi", "")
 
 
 def update_runtime_kimi_key(key: str) -> None:
-    """更新 Kimi API 密钥"""
+    """更新 Kimi API 密钥（兼容旧接口）"""
     update_env_key("KIMI_API_KEY", key)
 
 
 def update_runtime_kimi_url(url: str) -> None:
-    """更新 Kimi API 基础 URL"""
+    """更新 Kimi API 基础 URL（兼容旧接口）"""
     update_env_key("KIMI_BASE_URL", url)
 
 
 def is_kimi_key_set() -> bool:
-    """检查 .env 中是否有 Kimi API 密钥"""
-    env = _read_env()
-    return bool(env.get("KIMI_API_KEY", "").strip())
+    """检查 .env 中是否有 Kimi API 密钥（兼容旧接口）"""
+    return bool(get_runtime_provider_key("kimi"))
 
 
 # ===== Multi-provider .env 持久化 =====

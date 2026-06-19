@@ -60,6 +60,7 @@ class TaskState(TypedDict, total=False):
     results: Dict[str, Any]
     sub_problems: List[Dict[str, Any]]
     should_pause: bool
+    use_critique: bool  # 是否启用 Writer 自评质量循环
 
 
 @dataclass
@@ -353,6 +354,7 @@ class LangGraphOrchestrator:
         template: str = "math_modeling",
         workflow_type: str = "standard",
         preflight_report: Optional[Dict[str, Any]] = None,
+        use_critique: bool = True,
     ) -> Dict[str, Any]:
         """运行完整工作流。"""
         if not LANGGRAPH_AVAILABLE or self._graph is None:
@@ -386,6 +388,7 @@ class LangGraphOrchestrator:
             "sub_problems": [],
             "should_pause": False,
             "revision_count": 0,
+            "use_critique": use_critique,
         }
 
         try:
@@ -818,7 +821,6 @@ class LangGraphOrchestrator:
         )
 
         builder.add_edge("experiment", "iterative_solver")
-        builder.add_edge("iterative_solver", "figure")
         builder.add_edge("figure", "writer")
         builder.add_edge("writer", "peer_review")
         builder.add_edge("fact_check", END)
@@ -1347,6 +1349,7 @@ class LangGraphOrchestrator:
                 "action": "write",
                 "problem_text": state["problem_text"],
                 "sub_problems": state.get("sub_problems", []),
+                "use_critique": state.get("use_critique", True),
             },
             context=self._agent_context(state),
         )

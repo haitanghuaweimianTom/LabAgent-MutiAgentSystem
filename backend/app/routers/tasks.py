@@ -335,6 +335,7 @@ async def submit_task(req: TaskCreateRequest):
     final_template = template or preflight_report.recommended_template
     final_workflow = workflow_type or preflight_report.recommended_workflow
     final_mode = mode or preflight_report.recommended_mode
+    use_critique = (req.options or {}).get("use_critique", True)
 
     # 8. 保存最终决策到任务元数据
     save_task_metadata(
@@ -351,6 +352,7 @@ async def submit_task(req: TaskCreateRequest):
         template=final_template,
         workflow_type=final_workflow,
         mode=final_mode,
+        use_critique=use_critique,
         problem_type=preflight_report.problem_type,
         preflight_report=preflight_report.to_dict(),
         data_schemas=preflight_report.data_schemas,
@@ -363,6 +365,7 @@ async def submit_task(req: TaskCreateRequest):
         final_mode, project_name, req.knowledge_base_id,
         final_template, final_workflow,
         preflight_report.to_dict(),
+        use_critique,
     ))
 
     return {
@@ -387,6 +390,7 @@ async def _run_workflow(
     template: str = "math_modeling",
     workflow_type: str = "standard",
     preflight_report: Optional[Dict] = None,
+    use_critique: bool = True,
 ):
     try:
         orch = get_orchestrator()
@@ -396,6 +400,7 @@ async def _run_workflow(
             task_id, problem_text, workflow,
             data_files=data_files, mode=mode, project_name=project_name,
             knowledge_base_id=knowledge_base_id, template=template, workflow_type=workflow_type,
+            use_critique=use_critique,
         )
         logger.info(f"Task {task_id} completed and saved")
     except Exception as e:
@@ -939,6 +944,39 @@ async def get_camera_ready_status(task_id: str):
     }
 
 
+@router.get("/{task_id}/camera-ready/download")
+async def download_camera_ready(task_id: str, path: str):
+    """下载 camera-ready zip 文件。"""
+    from fastapi.responses import FileResponse
+    from ..core.task_persistence import load_task_metadata
+
+    meta = load_task_metadata(task_id)
+    if not meta:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    # 安全检查：只允许下载 camera_ready_{task_id}.zip
+    file_path = Path(path)
+    if not file_path.name.startswith(f"camera_ready_{task_id}") or not file_path.suffix == ".zip":
+        raise HTTPException(status_code=400, detail="Invalid file path")
+
+    # 解析绝对路径
+    project_name = meta.get("project_name") or task_id
+    try:
+        task_output_dir = get_project_output_dir(project_name)
+    except Exception:
+        task_output_dir = Path("./output") / f"work_{project_name}"
+
+    full_path = task_output_dir / file_path.name
+    if not full_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    return FileResponse(
+        path=str(full_path),
+        filename=file_path.name,
+        media_type="application/zip",
+    )
+
+
 @router.post("/{task_id}/cancel")
 async def cancel(task_id: str, req: TaskCancelRequest):
     orch = get_orchestrator()
@@ -983,12 +1021,14 @@ async def rerun_task(task_id: str, req: Optional[RerunRequest] = None):
     created_at = datetime.now().isoformat()
 
     # 从历史任务提取参数，用户可覆盖
-    problem_text = (req.problem_text if req and req.problem_text else None) or meta.get("problem_text", "")
+    # 兼容旧字段：旧版本可能用 "problem" 而不是 "problem_text"
+    historical_problem = meta.get("problem_text") or meta.get("problem", "")
+    problem_text = (req.problem_text if req and req.problem_text else None) or historical_problem
     if not problem_text or not problem_text.strip():
         # 422 前写 metadata 保持状态一致
         save_task_metadata(
             task_id=task_id,
-            problem_text=meta.get("problem_text", ""),
+            problem_text=historical_problem,
             status="cannot_solve",
             created_at=meta.get("created_at", ""),
             completed_at=datetime.now().isoformat(),

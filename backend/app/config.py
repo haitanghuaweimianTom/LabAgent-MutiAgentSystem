@@ -44,10 +44,10 @@ class Settings(BaseSettings):
     default_llm_provider: str = ""
 
     # ===== Claude Code 后端配置 =====
-    # 各Agent的默认LLM后端: "minimax" | "claude"
+    # 各Agent的默认LLM后端: 留空则自动检测（优先使用已配置的 Provider）
     # analyzer / modeler / solver 默认使用 claude
-    # research  / writer   默认使用 minimax
-    default_llm_backend: str = "minimax"
+    # research / writer 默认使用已配置 Provider
+    default_llm_backend: str = ""
 
     # Claude Code CLI 路径（留空则自动搜索PATH）
     claude_code_path: str = ""

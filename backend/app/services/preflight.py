@@ -105,7 +105,7 @@ class _PreflightLLMClient(BaseAgent):
     """仅用于 Preflight 的轻量 LLM 调用客户端"""
 
     name = "preflight_llm_client"
-    default_llm_backend = "minimax"
+    default_llm_backend = ""
 
     def get_system_prompt(self) -> str:
         return (

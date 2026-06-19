@@ -395,7 +395,7 @@ class BaseAgent(ABC):
     default_model: str = ""
 
     # 子类可以重写这个属性来使用 Claude Code 后端
-    default_llm_backend: str = "minimax"
+    default_llm_backend: str = ""
 
     @staticmethod
     def extract_json(text: str) -> Optional[Dict[str, Any]]:
@@ -456,7 +456,7 @@ class BaseAgent(ABC):
         self.provider_id = provider_id or ""
         self._knowledge_base_id: Optional[str] = None
 
-        # LLM 后端: "minimax" (默认) | "claude" | provider_id
+        # LLM 后端: provider_id 或自动检测
         from ..config import get_settings
         settings = get_settings()
         if llm_backend:
@@ -1996,7 +1996,7 @@ class BaseAgent(ABC):
             "choices": [{
                 "message": {
                     "role": "assistant",
-                    "content": f"[演示模式] Agent {self.name} 已接收任务。\n\n请求: {last_content[:300]}...\n\n[配置 MINIMAX_API_KEY 后将启用真实AI生成]",
+                    "content": f"[演示模式] Agent {self.name} 已接收任务。\n\n请求: {last_content[:300]}...\n\n[配置 API 密钥后将启用真实AI生成]",
                 }
             }]
         }

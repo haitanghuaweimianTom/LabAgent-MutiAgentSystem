@@ -691,6 +691,8 @@ class Orchestrator:
             task_input = {"action": "write_paper", "problem_text": problem_text}
             if peer_review_feedback:
                 task_input["review_feedback"] = peer_review_feedback
+            # 传递 use_critique 参数（默认启用）
+            task_input["use_critique"] = context_base.get("use_critique", True)
             paper_output = await agent.execute(
                 task_input=task_input,
                 context={
@@ -935,12 +937,13 @@ class Orchestrator:
         knowledge_base_id: Optional[str] = None,
         template: str = "math_modeling",
         workflow_type: str = "standard",
+        use_critique: bool = True,
     ) -> Dict[str, Any]:
         """执行完整工作流（阶段1完成后直接继续，不等待用户确认）
         mode: "batch" 一次性建模/求解所有子问题
               "sequential" 逐个建模/求解，前序结果递进到后序
         """
-        logger.info(f"Orchestrator starting full workflow for task {task_id} (mode={mode}, template={template}, workflow={workflow_type})")
+        logger.info(f"Orchestrator starting full workflow for task {task_id} (mode={mode}, template={template}, workflow={workflow_type}, use_critique={use_critique})")
 
         # Phase 3：如果开启 LangGraph，委托给新编排器
         if self._use_langgraph:
@@ -957,6 +960,7 @@ class Orchestrator:
                     knowledge_base_id=knowledge_base_id,
                     template=template,
                     workflow_type=workflow_type,
+                    use_critique=use_critique,
                 )
 
         room = create_chat_room(task_id, problem_text)
@@ -982,6 +986,7 @@ class Orchestrator:
             "workflow_type": workflow_type,
             "template": template,
             "working_memory": wm,
+            "use_critique": use_critique,
         }
         all_results: Dict[str, Any] = {}
 

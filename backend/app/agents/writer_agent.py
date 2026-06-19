@@ -958,25 +958,57 @@ class WriterAgent(BaseAgent):
         chapters: List[Dict[str, Any]] = []
         chapter_plan = self.get_template_chapters(template)
 
+        # 是否启用自评质量循环（默认启用）
+        use_critique = task_input.get("use_critique", True)
+        logger.info(f"WriterAgent use_critique={use_critique}")
+
         for idx, plan in enumerate(chapter_plan):
-            chapter = await self._generate_chapter_with_critique(
-                plan=plan,
-                chapter_index=idx,
-                chapters=chapters,
-                chapter_plan=chapter_plan,
-                problem_text=problem_text,
-                outline=outline,
-                section_results=section_results,
-                sub_problems=sub_problems,
-                analyzer_result=analyzer_result,
-                data_result=data_result,
-                literature=literature,
-                available_figures=available_figures,
-                template=template,
-                peer_review_feedback=peer_review_feedback,
-                experiment_result=experiment_result,
-                paper_memory=paper_memory,
-            )
+            if use_critique:
+                chapter = await self._generate_chapter_with_critique(
+                    plan=plan,
+                    chapter_index=idx,
+                    chapters=chapters,
+                    chapter_plan=chapter_plan,
+                    problem_text=problem_text,
+                    outline=outline,
+                    section_results=section_results,
+                    sub_problems=sub_problems,
+                    analyzer_result=analyzer_result,
+                    data_result=data_result,
+                    literature=literature,
+                    available_figures=available_figures,
+                    template=template,
+                    peer_review_feedback=peer_review_feedback,
+                    experiment_result=experiment_result,
+                    paper_memory=paper_memory,
+                )
+            else:
+                chapter_latex, summary = await self._generate_chapter(
+                    plan=plan,
+                    chapter_index=idx,
+                    chapters=chapters,
+                    chapter_plan=chapter_plan,
+                    problem_text=problem_text,
+                    outline=outline,
+                    section_results=section_results,
+                    sub_problems=sub_problems,
+                    analyzer_result=analyzer_result,
+                    data_result=data_result,
+                    literature=literature,
+                    available_figures=available_figures,
+                    template=template,
+                    previous_issues=[],
+                    peer_review_feedback=peer_review_feedback,
+                    experiment_result=experiment_result,
+                    paper_memory=paper_memory,
+                )
+                chapter = {
+                    "plan": plan,
+                    "latex": chapter_latex,
+                    "summary": summary,
+                    "critique": {"total_score": 0, "passed": True, "issues": [], "disabled": True},
+                    "attempts": 1,
+                }
             chapters.append(chapter)
 
             # 更新全局记忆池：从当前章节提取关键信息

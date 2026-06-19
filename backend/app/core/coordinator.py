@@ -132,8 +132,12 @@ class Coordinator:
                 # 执行Agent任务
                 if hasattr(agent, "execute"):
                     agent._knowledge_base_id = step_context.get("knowledge_base_id")
+                    # 传递 use_critique 参数给 writer_agent
+                    task_input = {"action": action, "problem_text": problem_text}
+                    if agent_name == "writer_agent":
+                        task_input["use_critique"] = context.get("use_critique", True)
                     output = await agent.execute(
-                        task_input={"action": action, "problem_text": problem_text},
+                        task_input=task_input,
                         context=step_context,
                     )
                 else:

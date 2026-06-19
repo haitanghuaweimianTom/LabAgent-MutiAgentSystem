@@ -1,4 +1,27 @@
 {
-  "lessons": [],
-  "count": 0
+  "lessons": [
+    {
+      "id": "lesson_1_20260619200121",
+      "category": "writing",
+      "content": "写作章节评分低于模板 math_modeling 门槛 75，需关注：1 引言, 10 参考文献",
+      "problem_type": "网络图论问题",
+      "method": "chapter_writing",
+      "success": false,
+      "source_task": "task_40e48fbc5840",
+      "created_at": "2026-06-19T20:01:21.170461",
+      "use_count": 0
+    },
+    {
+      "id": "lesson_2_20260619200121",
+      "category": "method_selection",
+      "content": "用户评分：5/5",
+      "problem_type": "网络图论问题",
+      "method": "",
+      "success": true,
+      "source_task": "task_40e48fbc5840",
+      "created_at": "2026-06-19T20:01:21.170481",
+      "use_count": 0
+    }
+  ],
+  "count": 2
 }

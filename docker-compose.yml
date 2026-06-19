@@ -18,9 +18,10 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - MINIMAX_API_KEY=${MINIMAX_API_KEY:-}
-      - API_BASE_URL=${API_BASE_URL:-https://api.minimax.chat/v1}
-      - DEFAULT_MODEL=${DEFAULT_MODEL:-minimax-m2.7}
+      - API_KEY=${API_KEY:-}
+      - API_BASE_URL=${API_BASE_URL:-https://api.openai.com/v1}
+      - DEFAULT_MODEL=${DEFAULT_MODEL:-gpt-4o}
+      - FALLBACK_MODEL=${FALLBACK_MODEL:-gpt-4o-mini}
       - DEBUG=${DEBUG:-false}
       - PROJECT_ROOT=/app
     volumes:
