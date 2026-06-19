@@ -53,7 +53,7 @@ else
     print_error "未找到 Python。请安装 Python 3.9+"
     echo "  macOS:   brew install python3"
     echo "  Ubuntu:  sudo apt install python3 python3-venv"
-    echo "  Windows: https://www.python.org/downloads/"
+    echo "  其他系统: https://www.python.org/downloads/"
     exit 1
 fi
 
@@ -72,7 +72,7 @@ if ! command -v node >/dev/null 2>&1; then
     print_error "未找到 Node.js。请安装 Node.js 18+"
     echo "  macOS:   brew install node"
     echo "  Ubuntu:  sudo apt install nodejs npm"
-    echo "  或访问:  https://nodejs.org/"
+    echo "  其他系统: https://nodejs.org/"
     exit 1
 fi
 
@@ -90,7 +90,27 @@ if ! command -v npm >/dev/null 2>&1; then
 fi
 print_ok "npm $(npm --version)"
 
-# ===== 4. 创建虚拟环境 =====
+# ===== 4. 检查端口占用 =====
+print_info "检查端口占用..."
+BACKEND_PORT=8000
+FRONTEND_PORT=3000
+
+# 自动寻找可用端口
+while lsof -Pi :$BACKEND_PORT -sTCP:LISTEN -t >/dev/null 2>&1; do
+    BACKEND_PORT=$((BACKEND_PORT + 1))
+done
+while lsof -Pi :$FRONTEND_PORT -sTCP:LISTEN -t >/dev/null 2>&1; do
+    FRONTEND_PORT=$((FRONTEND_PORT + 1))
+done
+
+if [ "$BACKEND_PORT" -ne 8000 ]; then
+    print_warn "端口 8000 被占用，后端将使用端口 $BACKEND_PORT"
+fi
+if [ "$FRONTEND_PORT" -ne 3000 ]; then
+    print_warn "端口 3000 被占用，前端将使用端口 $FRONTEND_PORT"
+fi
+
+# ===== 5. 创建虚拟环境 =====
 if [ ! -d ".venv" ]; then
     print_info "创建 Python 虚拟环境 .venv..."
     $PYTHON_CMD -m venv .venv
@@ -99,7 +119,7 @@ else
     print_ok "虚拟环境已存在"
 fi
 
-# ===== 5. 安装后端依赖 =====
+# ===== 6. 安装后端依赖 =====
 print_info "[1/5] 检查并安装后端依赖..."
 source .venv/bin/activate
 python -m pip install -q --upgrade pip 2>/dev/null || true
@@ -128,7 +148,7 @@ else
     print_ok "后端依赖已是最新"
 fi
 
-# ===== 6. 安装前端依赖 =====
+# ===== 7. 安装前端依赖 =====
 print_info "[2/5] 检查并安装前端依赖..."
 cd frontend
 if [ ! -f "package.json" ]; then
@@ -158,26 +178,16 @@ else
 fi
 cd "$PROJECT_ROOT"
 
-# ===== 7. 创建必要目录 =====
+# ===== 8. 创建必要目录 =====
 print_info "[3/5] 创建必要目录..."
 mkdir -p data/uploads data/tasks data/knowledge_files data/memory data/venvs data/checkpoints data/langgraph_results
 print_ok "目录结构已就绪"
 
-# ===== 8. 检查 .env 配置 =====
+# ===== 9. 检查环境配置 =====
 print_info "[4/5] 检查环境配置..."
-ENV_CONFIGURED=false
-if [ -f ".env" ]; then
-    # 检查是否已配置 API Key
-    if grep -q "your_api_key_here\|YOUR_API_KEY\|placeholder\|changeme" .env 2>/dev/null; then
-        print_warn ".env 中存在未修改的占位符 API Key"
-    else
-        # 检查至少有一个 API Key 被配置
-        if grep -qE "API_KEY|AUTH_TOKEN|api_key" .env 2>/dev/null; then
-            ENV_CONFIGURED=true
-            print_ok ".env 已配置 API Key"
-        fi
-    fi
-else
+
+# 创建 .env（如果不存在）
+if [ ! -f ".env" ]; then
     if [ -f ".env.example" ]; then
         cp ".env.example" ".env"
         print_warn ".env 已自动创建（从 .env.example 复制）"
@@ -186,7 +196,30 @@ else
     fi
 fi
 
-# 检查 CC-Switch 配置
+# 创建 backend/.env（如果不存在）
+if [ ! -f "backend/.env" ]; then
+    if [ -f "backend/.env.example" ]; then
+        cp "backend/.env.example" "backend/.env"
+        print_ok "backend/.env 已自动创建"
+    elif [ -f ".env" ]; then
+        cp ".env" "backend/.env"
+        print_ok "backend/.env 已自动创建（从 .env 复制）"
+    fi
+fi
+
+# 检查 API Key 配置
+ENV_CONFIGURED=false
+if [ -f ".env" ]; then
+    # 检查是否已配置真实 API Key（排除占位符）
+    if grep -qE "API_KEY=sk-|API_KEY=AK-|OPENAI_API_KEY=sk-|ANTHROPIC_API_KEY=sk-" .env 2>/dev/null; then
+        ENV_CONFIGURED=true
+        print_ok "已检测到 API Key 配置"
+    elif grep -qE "your_api_key_here|YOUR_API_KEY|placeholder|changeme" .env 2>/dev/null; then
+        print_warn ".env 中存在未修改的占位符 API Key"
+    fi
+fi
+
+# 检查 CC-Switch / custom_providers.json 配置
 if [ -f "backend/custom_providers.json" ]; then
     PROVIDER_COUNT=$(python -c "import json; data=json.load(open('backend/custom_providers.json')); print(len(data.get('providers', [])))" 2>/dev/null || echo "0")
     if [ "$PROVIDER_COUNT" -gt 0 ]; then
@@ -201,38 +234,35 @@ if [ "$ENV_CONFIGURED" = false ]; then
     echo
     echo "  系统需要至少一个 LLM Provider 才能运行。请按以下步骤配置："
     echo
-    echo "  方法 1（推荐）: 使用 CC-Switch 自动配置"
-    echo "    1. 安装 CC-Switch: https://github.com/your-org/cc-switch"
-    echo "    2. 运行: cc-switch add --provider openai --api-key sk-..."
-    echo "    3. 系统会自动检测并同步"
+    echo "  方法 1（推荐）: 通过前端设置界面"
+    echo "    1. 启动后访问 http://localhost:$FRONTEND_PORT"
+    echo "    2. 点击「设置」Tab → 添加 Provider"
+    echo "    3. 选择你的 Provider（OpenAI / Anthropic / 阿里百炼 / 硅基流动 / DeepSeek 等）"
+    echo "    4. 填写 API Key 和模型名称"
     echo
     echo "  方法 2: 手动编辑 .env"
     echo "    编辑 .env 文件，填写你的 API Key:"
-    echo "      MINIMAX_API_KEY=sk-..."
+    echo "      API_KEY=sk-..."
     echo "      或 OPENAI_API_KEY=sk-..."
     echo "      或 ANTHROPIC_API_KEY=sk-..."
     echo
-    echo "  方法 3: 通过前端设置"
-    echo "    1. 启动后访问 http://localhost:3000"
-    echo "    2. 点击「设置」Tab → 添加 Provider"
-    echo
-    echo "  支持的 Provider: OpenAI, Anthropic, MiniMax, 阿里百炼, 硅基流动, 智谱, Kimi, DeepSeek, Ollama, OpenRouter..."
+    echo "  支持的 Provider: OpenAI, Anthropic, 阿里百炼, 硅基流动, 智谱, DeepSeek, Ollama, OpenRouter..."
     echo
     read -p "按 Enter 继续启动（系统将使用默认配置，可能无法调用 LLM）..." </dev/tty
 fi
 
-# ===== 9. 启动服务 =====
+# ===== 10. 启动服务 =====
 print_info "[5/5] 启动服务..."
 echo
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "${GREEN}  服务启动完成！访问地址：${NC}"
-echo -e "${GREEN}  • 前端界面: http://localhost:3000${NC}"
-echo -e "${GREEN}  • 后端 API: http://localhost:8000/api/v1${NC}"
-echo -e "${GREEN}  • API 文档: http://localhost:8000/docs${NC}"
+echo -e "${GREEN}  • 前端界面: http://localhost:$FRONTEND_PORT${NC}"
+echo -e "${GREEN}  • 后端 API: http://localhost:$BACKEND_PORT/api/v1${NC}"
+echo -e "${GREEN}  • API 文档: http://localhost:$BACKEND_PORT/docs${NC}"
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo
 echo "使用说明："
-echo "  1. 打开 http://localhost:3000"
+echo "  1. 打开 http://localhost:$FRONTEND_PORT"
 echo "  2. 选择论文模板（NeurIPS / ACM / IEEE / Springer / CUMCM）"
 echo "  3. 输入研究题目或问题描述"
 echo "  4. 点击提交，系统自动完成：分析→建模→求解→实验→论文→评议"
@@ -241,21 +271,38 @@ echo
 echo "按 Ctrl+C 停止服务"
 echo
 
+# 保存端口配置到临时文件，供前端读取
+echo "{" > .ports.json
+echo "  \"backend_port\": $BACKEND_PORT," >> .ports.json
+echo "  \"frontend_port\": $FRONTEND_PORT" >> .ports.json
+echo "}" >> .ports.json
+
+# 清理函数
 cleanup() {
     echo
     print_info "正在停止服务..."
-    jobs -p | xargs -r kill 2>/dev/null || true
+    # 优雅地停止后台进程
+    if [ -n "${BACKEND_PID:-}" ] && kill -0 "$BACKEND_PID" 2>/dev/null; then
+        kill "$BACKEND_PID" 2>/dev/null || true
+        wait "$BACKEND_PID" 2>/dev/null || true
+    fi
+    if [ -n "${FRONTEND_PID:-}" ] && kill -0 "$FRONTEND_PID" 2>/dev/null; then
+        kill "$FRONTEND_PID" 2>/dev/null || true
+        wait "$FRONTEND_PID" 2>/dev/null || true
+    fi
+    rm -f .ports.json
+    print_ok "服务已停止"
     exit 0
 }
 trap cleanup INT TERM EXIT
 
 source .venv/bin/activate
 cd backend
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload &
+python -m uvicorn app.main:app --host 0.0.0.0 --port $BACKEND_PORT --reload &
 BACKEND_PID=$!
 
 cd "$PROJECT_ROOT/frontend"
-npm run dev &
+npm run dev -- --port $FRONTEND_PORT &
 FRONTEND_PID=$!
 
 wait $BACKEND_PID $FRONTEND_PID
