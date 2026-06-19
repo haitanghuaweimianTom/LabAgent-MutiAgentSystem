@@ -1,30 +1,6 @@
 {
   "providers": [
     {
-      "id": "minimax",
-      "name": "minimax",
-      "type": "openai",
-      "category": "custom",
-      "meta": {
-        "api_format": "anthropic"
-      },
-      "api_key": "sk-kimi-De72wrqT1WxxN8fMFD1P4hrGgfe7z0cjzpuREELDM40CwE1IM2H8wM6Iju9WHOWP",
-      "api_host": "https://api.kimi.com/coding/",
-      "models": [
-        {
-          "name": "kimi-for-coding",
-          "enabled": true
-        }
-      ],
-      "enabled": true,
-      "icon": "OpenAI",
-      "icon_color": "#10a37f",
-      "notes": "MiniMax Anthropic-compatible endpoint",
-      "created_at": 1781268770,
-      "updated_at": 1781853104,
-      "_version": 2
-    },
-    {
       "id": "d6cf73d0-0e74-4c48-9b48-8a16ed5264d2",
       "name": "Kimi For Coding",
       "type": "anthropic",
@@ -45,22 +21,22 @@
       "icon_color": "#d97706",
       "notes": "从 ccswitch 自动同步",
       "created_at": 1781505613,
-      "updated_at": 1781853104,
+      "updated_at": 1781857240,
       "_version": 2
     },
     {
-      "id": "1a961b5b-b541-47f3-9a20-6a62c4905a22",
-      "name": "Xiaomi MiMo",
+      "id": "e62df5b4-647b-40c7-a096-1584bc633524",
+      "name": "MiniMax",
       "type": "anthropic",
       "category": "custom",
       "meta": {
         "api_format": "anthropic"
       },
-      "api_key": "tp-ce2nztxc17yabp79kpjp8myb87p3d5bw2gwgs328i0rhick4",
-      "api_host": "https://token-plan-cn.xiaomimimo.com/anthropic",
+      "api_key": "sk-cp-wPOYBPl7QAyll27SO0SGc0XzGL7Z6nsURt1Ssyk_qs09HUqNBKy4fWpjxsaPvLcGQr4mbw_cduJ1Qaaq4ZXkHC-YS5_2xXd4-fsgoG9q-NcSZdhL8q5sKms",
+      "api_host": "https://api.minimaxi.com/anthropic",
       "models": [
         {
-          "name": "mimo-v2.5-pro",
+          "name": "MiniMax-M3",
           "enabled": true
         }
       ],
@@ -68,8 +44,8 @@
       "icon": "Claude",
       "icon_color": "#d97706",
       "notes": "从 ccswitch 自动同步",
-      "created_at": 1781852785,
-      "updated_at": 1781853104,
+      "created_at": 1781853658,
+      "updated_at": 1781857240,
       "_version": 2
     }
   ],

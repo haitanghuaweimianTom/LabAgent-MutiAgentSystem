@@ -40,8 +40,13 @@ const AGENT_COLORS: Record<string, string> = {
   data_agent: '#9b59b6',
   analyzer_agent: '#f39c12',
   modeler_agent: '#27ae60',
+  algorithm_engineer_agent: '#16a085',
+  financial_analyst_agent: '#d4ac0d',
   solver_agent: '#e67e22',
   writer_agent: '#1abc9c',
+  peer_review_agent: '#8e44ad',
+  experimentation_agent: '#2c3e50',
+  figure_agent: '#e84393',
 };
 
 const AGENT_ICONS: Record<string, string> = {
@@ -50,8 +55,13 @@ const AGENT_ICONS: Record<string, string> = {
   data_agent: '📊',
   analyzer_agent: '🧠',
   modeler_agent: '📐',
+  algorithm_engineer_agent: '⚙️',
+  financial_analyst_agent: '💹',
   solver_agent: '💻',
   writer_agent: '📝',
+  peer_review_agent: '👁️',
+  experimentation_agent: '🔬',
+  figure_agent: '📈',
 };
 
 export default function AgentManager() {

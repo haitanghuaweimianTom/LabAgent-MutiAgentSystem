@@ -69,9 +69,13 @@ class ChatRoom:
             "data_agent": {"label": "数据分析师", "color": "#9b59b6", "role": "数据分析与预处理"},
             "analyzer_agent": {"label": "分析师", "color": "#f39c12", "role": "问题分析与任务分解"},
             "modeler_agent": {"label": "建模师", "color": "#27ae60", "role": "建立数学模型"},
+            "algorithm_engineer_agent": {"label": "算法工程师", "color": "#16a085", "role": "设计创新算法与方法"},
+            "financial_analyst_agent": {"label": "金融分析师", "color": "#d4ac0d", "role": "建立金融数学与量化模型"},
             "solver_agent": {"label": "求解器", "color": "#e67e22", "role": "编程求解与验证"},
             "writer_agent": {"label": "写作专家", "color": "#1abc9c", "role": "生成完整LaTeX论文"},
             "peer_review_agent": {"label": "审稿人", "color": "#8e44ad", "role": "同行评议与质量把关"},
+            "experimentation_agent": {"label": "实验设计专家", "color": "#2c3e50", "role": "设计严谨可复现的实验方案"},
+            "figure_agent": {"label": "科研绘图师", "color": "#e84393", "role": "生成发表级质量图表"},
             "user": {"label": "用户", "color": "#3498db", "role": "人类专家，参与讨论与决策"},
         }
 

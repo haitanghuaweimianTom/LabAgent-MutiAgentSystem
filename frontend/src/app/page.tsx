@@ -591,8 +591,13 @@ function getTeamLabel(sender: string): string {
     data_agent: '数据分析师',
     analyzer_agent: '分析师',
     modeler_agent: '建模师',
+    algorithm_engineer_agent: '算法工程师',
+    financial_analyst_agent: '金融分析师',
     solver_agent: '求解器',
     writer_agent: '写作专家',
+    peer_review_agent: '审稿人',
+    experimentation_agent: '实验设计专家',
+    figure_agent: '科研绘图师',
     system: '系统',
     user: '你',
   };

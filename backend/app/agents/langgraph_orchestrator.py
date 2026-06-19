@@ -701,6 +701,7 @@ class LangGraphOrchestrator:
         builder.add_node("writer", self._node_writer)
         builder.add_node("peer_review", self._node_peer_review)
         builder.add_node("experiment", self._node_experiment)
+        builder.add_node("figure", self._node_figure)
         builder.add_node("fact_check", self._node_fact_check)
         builder.add_node("cannot_solve", self._node_cannot_solve)
         builder.add_node("self_collect", self._node_self_collect)
@@ -740,7 +741,7 @@ class LangGraphOrchestrator:
             "iterative_solver",
             self._route_solver,
             {
-                "success": "writer",
+                "success": "figure",
                 "retry": "iterative_solver",
                 "escalate": "cannot_solve",
                 "abort": "cannot_solve",
@@ -817,7 +818,8 @@ class LangGraphOrchestrator:
         )
 
         builder.add_edge("experiment", "iterative_solver")
-
+        builder.add_edge("iterative_solver", "figure")
+        builder.add_edge("figure", "writer")
         builder.add_edge("writer", "peer_review")
         builder.add_edge("fact_check", END)
         builder.add_edge("cannot_solve", END)
@@ -1411,6 +1413,55 @@ class LangGraphOrchestrator:
             f"实验{'执行完成' if executed else '设计完成（未执行）'}",
         )
         return {**state, "results": {**state.get("results", {}), **ref_update}, "current_step": "experiment_done"}
+
+    async def _node_figure(self, state: TaskState) -> TaskState:
+        """调用 figure_agent 生成科研图表。"""
+        agent = self.agents.get("figure_agent")
+        if not agent:
+            return {**state, "current_step": "figure_skipped"}
+
+        task_id = state["task_id"]
+        self._update_progress(task_id, state["problem_text"], 65, "科研图表生成中")
+
+        results = state.get("results", {})
+        solver_result = results.get("solver_agent", {})
+
+        # 第一步：规划图表
+        plan_output = await agent.execute(
+            task_input={
+                "action": "plan",
+                "problem_text": state["problem_text"],
+                "data": solver_result,
+            },
+            context=self._agent_context(state),
+        )
+
+        figures_plan = plan_output.get("figures", [])
+        if not figures_plan:
+            logger.info(f"[LangGraph:{task_id}] figure planning returned empty, skipping")
+            return {**state, "current_step": "figure_skipped"}
+
+        # 第二步：批量生成图表
+        gen_output = await agent.execute(
+            task_input={
+                "action": "generate_all",
+                "figure_plan": plan_output,
+                "data": solver_result,
+                "project_name": state.get("project_name"),
+            },
+            context=self._agent_context(state),
+        )
+
+        generated = gen_output.get("generated", 0)
+        self._post_chat(
+            task_id,
+            "figure_agent",
+            f"图表生成完成：规划 {len(figures_plan)} 个，成功生成 {generated} 个",
+        )
+        logger.info(f"[LangGraph:{task_id}] figure node done: {generated}/{len(figures_plan)} figures generated")
+
+        ref_update = self._set_result(state, "figure_agent", gen_output)
+        return {**state, "results": {**state.get("results", {}), **ref_update}, "current_step": "figure_done"}
 
     async def _node_fact_check(self, state: TaskState) -> TaskState:
         """事实核查：对比 main.tex 与 solves.json 数字。"""

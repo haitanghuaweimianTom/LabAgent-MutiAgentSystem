@@ -32,8 +32,13 @@ class Coordinator:
         "data_agent": "数据分析 - 上传、清洗、分析数据",
         "analyzer_agent": "问题分析 - 理解问题、分解任务、制定策略",
         "modeler_agent": "数学建模 - 建立模型、选择算法",
+        "algorithm_engineer_agent": "算法设计 - 提出创新算法与方法",
+        "financial_analyst_agent": "金融分析 - 建立金融数学与量化模型",
         "solver_agent": "算法求解 - 编程实现、结果验证",
         "writer_agent": "论文写作 - 生成完整LaTeX论文",
+        "peer_review_agent": "同行评议 - 四维度质量评审",
+        "experimentation_agent": "实验设计 - 设计严谨可复现的实验方案",
+        "figure_agent": "科研绘图 - 生成发表级质量图表",
     }
 
     # 标准工作流

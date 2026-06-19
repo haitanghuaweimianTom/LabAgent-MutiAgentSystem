@@ -16,12 +16,18 @@ interface Workflow {
 }
 
 const AGENTS = [
+  { id: 'coordinator', label: '协调者' },
   { id: 'research_agent', label: '研究员' },
+  { id: 'data_agent', label: '数据分析师' },
   { id: 'analyzer_agent', label: '分析师' },
   { id: 'modeler_agent', label: '建模师' },
+  { id: 'algorithm_engineer_agent', label: '算法工程师' },
+  { id: 'financial_analyst_agent', label: '金融分析师' },
   { id: 'solver_agent', label: '求解器' },
   { id: 'writer_agent', label: '写作专家' },
   { id: 'peer_review_agent', label: '同行评议' },
+  { id: 'experimentation_agent', label: '实验设计专家' },
+  { id: 'figure_agent', label: '科研绘图师' },
 ];
 
 const apiBase = () => window.__API_BASE__ || 'http://localhost:8000/api/v1';

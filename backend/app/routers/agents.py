@@ -24,6 +24,9 @@ TEAM: Dict[str, Dict[str, str]] = {
     "financial_analyst_agent": {"name": "financial_analyst_agent", "label": "金融分析师", "description": "建立金融数学与量化模型", "model": ""},
     "solver_agent": {"name": "solver_agent", "label": "求解器", "description": "编程求解与验证", "model": ""},
     "writer_agent": {"name": "writer_agent", "label": "写作专家", "description": "生成完整LaTeX论文", "model": ""},
+    "peer_review_agent": {"name": "peer_review_agent", "label": "审稿人", "description": "四维度同行评议与质量把关", "model": ""},
+    "experimentation_agent": {"name": "experimentation_agent", "label": "实验设计专家", "description": "设计严谨可复现的实验方案", "model": ""},
+    "figure_agent": {"name": "figure_agent", "label": "科研绘图师", "description": "生成发表级质量图表（Nature/IEEE/ACM 风格）", "model": ""},
 }
 
 # Agent -> (provider_id, model_name) 映射，持久保存
