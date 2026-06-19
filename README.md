@@ -29,8 +29,10 @@
 - **8 套论文模板**：`NeurIPS 2024` / `ACM SIGCONF` / `IEEE Conference` / `Springer LNCS` / `Research Survey` / `Financial Analysis` / `Coursework` / `CUMCM`，新模板只需在 `backend/app/core/paper_templates/templates/` 下放 JSON + `.cls/.sty` 即可热加载。
 - **真实文献检索**：ResearchAgent 通过 arXiv MCP Server 拉真实论文，并经 Semantic Scholar 二次增强（引用、影响因子、PDF 链接）。
 - **真实代码执行**：SolverAgent 调 LLM 写 Python → 沙箱执行 → 结果验证 → 自动 fix retry，最多 3 次，确保数值真实。
-- **跨方法交叉验证**：对每子任务结果用 CrossValidator 比对，差异 > 5% 自动报警（占位 baseline，等 B1 接入真方法）。
+- **真实实验执行**：ExperimentationAgent 自动搜索/下载数据集 → SolverAgent 生成实验代码 → 独立 venv 环境执行 → baseline 对比 + ablation 消融 → 结果聚合生成表格，WriterAgent 直接注入真实数字（禁止编造）。
+- **跨方法交叉验证**：对每子任务结果用 CrossValidator 比对，差异 > 5% 自动报警。
 - **同行评议 + 修订**：PeerReviewAgent 4 维评分（格式/内容/引用/图表），自动打回重写。
+- **全局论文记忆池**：WriterAgent v5.0 维护跨章节的术语表、符号表、关键结论，确保长论文全文一致性，避免术语冲突和结论矛盾。
 - **Camera-Ready 一键打包**：调 `/tasks/{id}/camera-ready` 自动收集 main.tex / figures / code / bib，打包为可投稿 zip。
 - **9 阶段任务状态机**：前端 `useTaskState` hook + 后端 SSE 实时推送，毫秒级进度刷新。
 
@@ -281,8 +283,12 @@ FastAPI Backend
   ├─ Orchestrator (两阶段工作流)
   │    ├─ Phase 1: analyzer → data → research → [暂停]
   │    └─ Phase 2: modeler + solver → writer → peer_review → finalizing
+  ├─ LangGraph Orchestrator (StateGraph 编排，实验自动执行)
+  │    ├─ analyzer → modeler → experimentation → solver → writer → peer_review
+  │    └─ 条件边：CCF-A 模板自动走 experiment 节点
   ├─ AgentModelRouter (按 (agent, template) 路由 LLM)
   ├─ MemoryManager (三级记忆: working / episodic / lessons)
+  ├─ PaperMemoryPool (全局论文记忆池：术语/符号/结论跨章节一致性)
   ├─ PaperTemplateRegistry (JSON-driven 模板注册)
   └─ LLM Provider Layer (15+ Provider, 5 种 API 格式)
         ↓ HTTPS
@@ -290,15 +296,159 @@ FastAPI Backend
 ```
 
 ### 关键模块
-- `backend/app/agents/orchestrator.py` — 两阶段主编排器
+- `backend/app/agents/orchestrator.py` — 两阶段主编排器（Classic）
+- `backend/app/agents/langgraph_orchestrator.py` — LangGraph StateGraph 编排器（推荐）
 - `backend/app/agents/{base,analyzer,data,research,modeler,solver,writer,peer_review,experimentation}_agent.py` — Agent 实现
-- `backend/app/agents/base.py` — BaseAgent + AgentFactory + AgentModelRouter
+- `backend/app/agents/base.py` — BaseAgent + AgentFactory + AgentModelRouter + ReAct 工具循环
 - `backend/app/agents/demo_code_templates.py` — 15+ 数学建模算法模板
 - `backend/app/core/agent_model_map.py` — AgentModelRouter 注册表
 - `backend/app/core/paper_templates/` — 论文模板注册表
 - `backend/app/core/memory.py` — 三级记忆系统
 - `backend/app/services/result_validator.py` — ResultValidator + CrossValidator
 - `backend/app/services/camera_ready.py` — Camera-Ready 打包
+- `backend/app/services/experiment_executor.py` — 实验全生命周期编排（数据集→代码生成→环境→执行→聚合）
+- `backend/app/services/code_sandbox.py` — 代码沙箱（静态扫描+路径白名单+超时+内存限制）
+
+---
+
+## 🧠 Agent 通信与记忆机制
+
+### 1. Agent 间通信架构
+
+本系统采用**黑板模式 + 消息总线**的混合通信架构：
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    TaskState (共享状态)                       │
+│  ├─ problem_text, template, workflow                         │
+│  ├─ sub_problems[]                                          │
+│  ├─ section_results[] (各阶段产出)                           │
+│  ├─ results: {analyzer_agent, modeler_agent, ...}            │
+│  ├─ peer_review_feedback                                     │
+│  └─ paper_memory (全局论文记忆池)                             │
+└─────────────────────────────────────────────────────────────┘
+         ↑↓ 读写                          ↑↓ 事件订阅
+    ┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐
+    │Analyzer │ →  │Modeler  │ →  │Solver   │ →  │Writer   │
+    │Agent    │    │Agent    │    │Agent    │    │Agent    │
+    └─────────┘    └─────────┘    └─────────┘    └─────────┘
+         ↑              ↑              ↑              ↑
+         └──────────────┴──────────────┴──────────────┘
+                    ChatRoom (SSE 消息总线)
+                    ├─ Agent 讨论消息
+                    ├─ 用户实时发言
+                    └─ 系统状态事件
+```
+
+**通信方式**：
+- **同步状态共享**：Orchestrator/LangGraph 通过 `TaskState` 传递上下文，Agent 从 state 读取输入、写入输出
+- **异步消息总线**：`ChatRoom` 支持 SSE 实时推送，Agent 讨论时互相发送消息，用户可实时介入
+- **记忆检索**：Agent 通过 `MemoryManager` 检索历史经验，独立决策是否复用
+
+### 2. 上下文长度管理
+
+LLM 上下文窗口有限（通常 8K-128K），长论文生成时容易超出。本系统采用**多层压缩策略**：
+
+| 层级 | 策略 | 实现 |
+|------|------|------|
+| **输入压缩** | 只传递必要上下文 | Agent 从 `TaskState` 按需提取，不传递全量历史 |
+| **摘要传递** | 前序结果→摘要→后续 | 每章生成 `chapter_summary`（100-200字），后续章节只接收摘要 |
+| **全局记忆池** | 术语/符号/结论集中维护 | `paper_memory` 维护全文一致性信息，避免重复描述 |
+| **State 外部化** | 大输出不存 State | `TaskResultStore` 将 Agent 输出持久化到磁盘，State 只存引用标记 |
+| **分段生成** | 章节独立调用 | WriterAgent 每章独立调 LLM，而非一次性生成整篇论文 |
+
+**关键代码**：
+- `backend/app/agents/writer_agent.py:_build_memory_context()` — 从记忆池构建上下文
+- `backend/app/core/task_persistence.py` — TaskResultStore 外部化实现
+- `backend/app/agents/langgraph_orchestrator.py` — LangGraph State 精简设计
+
+### 3. 记忆机制（三级架构）
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Lessons Memory (跨任务)                     │
+│  • 经验提取：任务完成后自动 extract_lessons_from_result      │
+│  • 经验检索：新任务启动时 retrieve_relevant 注入 prompt      │
+│  • 反馈闭环：用户反馈更新 use_count，优质经验优先复用          │
+│  存储：backend/data/memory/lessons.json                       │
+└─────────────────────────────────────────────────────────────┘
+                              ↑↓ 经验沉淀/复用
+┌─────────────────────────────────────────────────────────────┐
+│                   Episodic Memory (任务级)                     │
+│  • 事件流：Agent 执行日志、讨论记录、用户干预                 │
+│  • 时间线：按时间顺序记录完整决策过程                         │
+│  • 可追溯：debug-history API 可回放任意任务                   │
+│  存储：backend/data/memory/tasks/{task_id}.json               │
+└─────────────────────────────────────────────────────────────┘
+                              ↑↓ 事件记录
+┌─────────────────────────────────────────────────────────────┐
+│                   Working Memory (任务上下文)                  │
+│  • 当前任务状态：problem_text, sub_problems, section_results  │
+│  • Agent 私有记忆：每个 Agent 独立的记忆池（关键词检索）        │
+│  • 全局论文记忆池：writer_agent 维护的术语/符号/结论表          │
+│  存储：内存 + TaskState + paper_memory                       │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**记忆注入方式**：
+- **Prompt 自动注入**：BaseAgent 在 `call_llm` 前自动将相关记忆追加到 system prompt
+- **显式检索**：Agent 通过 `memory.retrieve_relevant(query, k=3)` 主动检索
+- **全局记忆池**：WriterAgent v5.0 新增的 `paper_memory`，每章生成后更新，后续章节读取
+
+### 4. 全局论文记忆池（v5.0）
+
+解决长论文生成中的**术语不一致、符号冲突、结论矛盾**问题：
+
+```python
+paper_memory = {
+    "terminology": {      # 术语表：确保全文使用统一术语
+        "神经网络": "modeling",  # {术语: 首次出现章节}
+        "LSTM": "modeling",
+    },
+    "symbols": {          # 符号表：确保符号含义一致
+        "W": {"meaning": "权重矩阵", "unit": "", "chapter": "modeling"},
+        "b": {"meaning": "偏置向量", "unit": "", "chapter": "modeling"},
+    },
+    "key_claims": [       # 关键结论：确保后续章节引用正确
+        {"claim": "LSTM 在时序预测上优于 ARIMA", "chapter": "results", "evidence": "summary"},
+    ],
+    "model_names": ["LSTM", "ARIMA", "Random Forest"],  # 方法名称
+    "algorithms": ["Adam", "SGD"],                        # 算法名称
+    "datasets": ["IMDB", "CIFAR-10"],                      # 数据集
+    "metrics": ["Accuracy", "F1", "BLEU-4"],               # 指标
+    "cross_references": {},  # 章节引用关系
+    "chapter_summaries": {}, # 各章摘要
+}
+```
+
+**工作流程**：
+1. `_init_paper_memory()` — 从 analyzer_result + section_results 初始化
+2. `_build_memory_context()` — 生成章节时注入完整记忆池（替代前2章摘要）
+3. `_update_paper_memory()` — 每章生成后提取术语、符号、结论更新记忆池
+4. `_global_consistency_check()` — 所有章节生成后检查跨章节一致性
+5. `_fix_consistency_issues()` — 发现问题后重写受影响章节
+
+### 5. 实验执行记忆
+
+ExperimentationAgent 执行真实实验后，结果通过 `experiment_result` 注入 WriterAgent：
+
+```python
+experiment_result = {
+    "success": True,
+    "executed": True,
+    "aggregated": {
+        "markdown_table": "| Method | Accuracy |\n|--------|----------|\n| Our Method | 0.95 |",
+        "latex_table": "\\begin{table}...",
+        "summary_text": "相比最强 baseline 提升 5.3%",
+        "best_baseline": "Baseline B",
+    },
+    "raw_batch": {...},  # 原始实验结果
+    "dataset_info": {"names": ["CIFAR-10"], "splits": [...]},
+    "code_dir": ".../experiments/code",
+}
+```
+
+WriterAgent 在 `experiment` 和 `results_discussion` 章节自动注入真实实验结果，**禁止编造数字**。
 
 ---
 
@@ -333,26 +483,37 @@ MathModel-MutiAgentSystem/
 ├── backend/                       # FastAPI 后端
 │   ├── app/
 │   │   ├── agents/                # 所有 Agent 实现
-│   │   │   ├── base.py            # BaseAgent + AgentFactory + AgentModelRouter
-│   │   │   ├── orchestrator.py    # 两阶段主编排器
+│   │   │   ├── base.py            # BaseAgent + AgentFactory + AgentModelRouter + ReAct
+│   │   │   ├── orchestrator.py    # 两阶段主编排器（Classic）
+│   │   │   ├── langgraph_orchestrator.py # LangGraph StateGraph 编排器（推荐）
 │   │   │   ├── analyzer_agent.py
 │   │   │   ├── data_agent.py
 │   │   │   ├── research_agent.py
 │   │   │   ├── modeler_agent.py
-│   │   │   ├── solver_agent.py    # 含 CrossValidator 跨方法验证
-│   │   │   ├── writer_agent.py
+│   │   │   ├── algorithm_engineer_agent.py
+│   │   │   ├── financial_analyst_agent.py
+│   │   │   ├── solver_agent.py    # 含 CrossValidator + experiment 模式
+│   │   │   ├── writer_agent.py      # 含全局论文记忆池 v5.0
 │   │   │   ├── peer_review_agent.py
 │   │   │   └── experimentation_agent.py
 │   │   ├── core/                  # 核心模块
 │   │   │   ├── memory.py          # 三级记忆系统
 │   │   │   ├── agent_model_map.py # AgentModelRouter
 │   │   │   ├── paper_templates/   # 论文模板注册表
+│   │   │   ├── dataset_manager.py # 数据集自动下载与预处理
+│   │   │   ├── environment_manager.py # conda/venv 生命周期管理
+│   │   │   ├── gpu_executor.py    # GPU 训练/推理执行器
 │   │   │   ├── chat_room.py
 │   │   │   ├── paths.py
 │   │   │   └── task_persistence.py
 │   │   ├── services/              # 服务层
 │   │   │   ├── result_validator.py  # ResultValidator + CrossValidator
 │   │   │   ├── camera_ready.py      # Camera-Ready 打包
+│   │   │   ├── experiment_executor.py # 实验全生命周期编排
+│   │   │   ├── experiment_runner.py   # 实验批量执行
+│   │   │   ├── experiment_result_aggregator.py # 结果聚合与表格生成
+│   │   │   ├── code_sandbox.py      # 代码沙箱（安全执行）
+│   │   │   ├── code_manifest.py     # 代码文件清单校验
 │   │   │   ├── knowledge.py
 │   │   │   └── code_manifest.py
 │   │   ├── mcp/                   # MCP 客户端
@@ -434,7 +595,17 @@ DATABASE_URL=sqlite:///./data/agents.db
 
 ## 📜 版本历史
 
-### v3.1（2026-06）— 当前
+### v3.2（2026-06）— 当前
+- **自动化实验执行**：ExperimentationAgent 真正执行实验（非仅设计方案），端到端流程：数据集搜索/下载 → solver_agent LLM 生成实验代码 → 独立 venv 环境 → 沙箱执行 → 结果聚合（baseline 对比 + ablation 消融）
+- **SolverAgent experiment 模式**：新增 `action="experiment"`，LLM 生成 main.py + baseline_*.py + ablation_*.py，替代硬编码模板
+- **代码沙箱**：CodeSandbox 静态扫描 + 路径白名单 + 超时 + 内存限制（POSIX setrlimit），拦截危险调用
+- **全局论文记忆池 v5.0**：WriterAgent 维护跨章节的术语表、符号表、关键结论，解决长论文不一致问题
+- **全局一致性检查**：所有章节生成后检查术语/符号/结论/数据一致性，发现问题自动修复
+- **一键启动增强**：start.sh 彩色输出、自动检测、依赖增量更新、API Key 配置引导
+- **五阶段流水线**：StageProgress 增加 experiment 阶段（分析→建模→求解→实验→写作）
+- **CC-Switch 自动检测**：系统每 30s 轮询 `~/.cc-switch/cc-switch.db`，自动同步 Provider 配置
+
+### v3.1（2026-06）
 - **模板化建模路由**：`math_modeling`→modeler、`financial_analysis`→financial_analyst、CCF-A/`research_paper`→algorithm_engineer；deep_research/research_survey 跳过建模
 - **算法工程师双模式**：`ALGORITHM_ENGINEER_SYSTEM_CCFA` + `ALGORITHM_ENGINEER_SYSTEM_MATH_MODELING`，按模板自动切换
 - **金融分析师**：金融数学建模、风险分析、回测设计，强化防编造纪律

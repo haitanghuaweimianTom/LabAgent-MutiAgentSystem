@@ -108,8 +108,14 @@ export default function ProviderSettings() {
         if (typeof data.auto_sync === 'boolean') {
           setAutoSync(data.auto_sync);
         }
+      } else {
+        // API 返回错误，记录状态以便调试
+        setCcswitchStatus({ installed: false, error: `HTTP ${res.status}` });
       }
-    } catch {}
+    } catch (err) {
+      // 网络错误或后端未启动
+      setCcswitchStatus({ installed: false, error: '后端连接失败' });
+    }
   }, []);
 
   const handleCcswitchSync = async () => {
@@ -380,6 +386,7 @@ export default function ProviderSettings() {
             {/* Auto-sync toggle */}
             <button
               onClick={handleToggleAutoSync}
+              disabled={!ccswitchStatus?.installed}
               style={{
                 padding: '0.4rem 0.8rem',
                 background: autoSync ? 'rgba(46,204,113,0.15)' : 'rgba(0,0,0,0.2)',
@@ -387,8 +394,9 @@ export default function ProviderSettings() {
                 borderRadius: 8,
                 color: autoSync ? '#2ecc71' : '#888',
                 fontSize: '0.8rem',
-                cursor: 'pointer',
+                cursor: ccswitchStatus?.installed ? 'pointer' : 'not-allowed',
                 fontWeight: 600,
+                opacity: ccswitchStatus?.installed ? 1 : 0.5,
               }}
             >
               自动同步: {autoSync ? '开' : '关'}
@@ -399,19 +407,30 @@ export default function ProviderSettings() {
               disabled={syncingCcswitch || !ccswitchStatus?.installed}
               style={{
                 padding: '0.4rem 0.9rem',
-                background: syncingCcswitch ? 'rgba(52,152,219,0.1)' : 'rgba(52,152,219,0.15)',
+                background: !ccswitchStatus?.installed ? 'rgba(0,0,0,0.2)' : (syncingCcswitch ? 'rgba(52,152,219,0.1)' : 'rgba(52,152,219,0.15)'),
                 border: '1px solid rgba(52,152,219,0.3)',
                 borderRadius: 8,
-                color: syncingCcswitch ? '#3498db88' : '#3498db',
+                color: !ccswitchStatus?.installed ? '#666' : (syncingCcswitch ? '#3498db88' : '#3498db'),
                 fontSize: '0.8rem',
                 cursor: syncingCcswitch || !ccswitchStatus?.installed ? 'not-allowed' : 'pointer',
                 fontWeight: 600,
               }}
+              title={!ccswitchStatus?.installed ? '请先安装 cc-switch' : '立即同步 Provider 配置'}
             >
-              {syncingCcswitch ? '同步中...' : '立即同步'}
+              {syncingCcswitch ? '同步中...' : (!ccswitchStatus?.installed ? '未安装' : '立即同步')}
             </button>
           </div>
         </div>
+        {!ccswitchStatus?.installed && (
+          <div style={{ marginTop: '1rem', padding: '0.75rem', background: 'rgba(0,0,0,0.2)', borderRadius: 8, fontSize: '0.8rem', color: '#888', lineHeight: 1.6 }}>
+            <strong style={{ color: '#aaa' }}>安装 cc-switch：</strong><br />
+            cc-switch 是一个跨平台 CLI 工具，用于统一管理多个 LLM Provider 配置。<br />
+            安装后系统会自动检测并同步您的 Provider 设置，无需手动配置。<br />
+            <code style={{ background: 'rgba(0,0,0,0.3)', padding: '0.2rem 0.4rem', borderRadius: 4, color: '#e0e0e0' }}>
+              npm install -g cc-switch
+            </code>
+          </div>
+        )}
       </div>
 
       {/* JSON import modal */}

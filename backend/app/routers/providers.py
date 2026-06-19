@@ -121,6 +121,34 @@ async def list_all_models():
     return {"models": all_models}
 
 
+# ===== CC Switch 集成（必须放在 /{provider_id} 之前，避免路径参数冲突） =====
+
+@router.get("/ccswitch-status")
+async def ccswitch_status():
+    """获取 CC Switch 同步状态"""
+    return get_ccswitch_status()
+
+
+@router.post("/ccswitch-sync")
+async def ccswitch_sync():
+    """强制同步 CC Switch 配置到本地，并重置编排器"""
+    result = sync_ccswitch_to_local(force=True)
+    reset_orchestrator()
+    return {"success": True, "message": "CC Switch 同步完成，编排器已重置", **result}
+
+
+class AutoSyncToggle(BaseModel):
+    enabled: bool
+
+
+@router.post("/ccswitch-toggle-auto")
+async def ccswitch_toggle_auto(body: AutoSyncToggle):
+    """开启/关闭 CC Switch 自动同步"""
+    global _ccswitch_auto_sync
+    _ccswitch_auto_sync = body.enabled
+    return {"success": True, "auto_sync_enabled": _ccswitch_auto_sync}
+
+
 @router.get("/{provider_id}")
 async def get_provider(provider_id: str):
     """获取单个 Provider"""
@@ -246,29 +274,3 @@ async def test_provider(provider_id: str, body: Optional[Dict[str, Any]] = None)
         return {"success": False, "error": f"HTTP {e.response.status_code}", "detail": e.response.text[:300]}
     except Exception as e:
         return {"success": False, "error": str(e)}
-
-
-@router.get("/ccswitch-status")
-async def ccswitch_status():
-    """获取 CC Switch 同步状态"""
-    return get_ccswitch_status()
-
-
-@router.post("/ccswitch-sync")
-async def ccswitch_sync():
-    """强制同步 CC Switch 配置到本地，并重置编排器"""
-    result = sync_ccswitch_to_local(force=True)
-    reset_orchestrator()
-    return {"success": True, "message": "CC Switch 同步完成，编排器已重置", **result}
-
-
-class AutoSyncToggle(BaseModel):
-    enabled: bool
-
-
-@router.post("/ccswitch-toggle-auto")
-async def ccswitch_toggle_auto(body: AutoSyncToggle):
-    """开启/关闭 CC Switch 自动同步"""
-    global _ccswitch_auto_sync
-    _ccswitch_auto_sync = body.enabled
-    return {"success": True, "auto_sync_enabled": _ccswitch_auto_sync}
