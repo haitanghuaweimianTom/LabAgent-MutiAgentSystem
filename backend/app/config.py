@@ -40,7 +40,8 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen2.5:latest"
     # 默认使用的 Provider: "anthropic" | "openai" | "gemini" | "ollama" | "claude_cli" | "minimax" | "mimo"
-    default_llm_provider: str = "mimo"
+    # 留空则自动检测（优先使用 cc-switch 同步的 Provider）
+    default_llm_provider: str = ""
 
     # ===== Claude Code 后端配置 =====
     # 各Agent的默认LLM后端: "minimax" | "claude"

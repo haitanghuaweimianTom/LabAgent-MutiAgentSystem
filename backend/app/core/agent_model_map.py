@@ -1,21 +1,21 @@
 """Agent × 模板 模型路由（Phase 7）。
 
 不同任务阶段用不同模型以平衡质量 / 成本 / 速度：
-- analyzer / modeler：sonnet（逻辑强）
-- solver：sonnet（代码准）
-- research：haiku（量大、容错）
-- writer：opus（成文质量是天花板，CCF-A 必须 opus）
-- peer_review：sonnet（4 维评分）
-- experimentation：haiku（产出方案即可）
+- analyzer / modeler：逻辑强的模型
+- solver：代码准的模型
+- research：量大、容错的模型
+- writer：成文质量高的模型（CCF-A 必须高质量）
+- peer_review：4 维评分
+- experimentation：产出方案即可
 
 按 ``template_id`` 进一步覆盖：
-- 旧 4 套模板（CUMCM / 课程 / 金融 / 综述）：用最低成本模型组合（默认 sonnet）
-- CCF-A 4 套模板：强制 writer 用 opus、peer_review 用 sonnet、solver 用 sonnet
+- 旧 4 套模板（CUMCM / 课程 / 金融 / 综述）：用最低成本模型组合
+- CCF-A 4 套模板：强制 writer 用高质量模型、peer_review 用强模型、solver 用强模型
 
 路由结果通过 :class:`AgentModelRouter` 提供统一接口，
 :func:`get_agent_model_router` 是全局单例。
 
-零破窗：若未配置（默认），所有 Agent 走 Settings.default_model（向后兼容）。
+零破窗：若未配置（默认），所有 Agent 走当前默认 Provider 的第一个可用模型（向后兼容）。
 """
 from __future__ import annotations
 import logging
@@ -26,20 +26,20 @@ logger = logging.getLogger(__name__)
 
 
 # 默认模型组合（按 agent 维度）
-# v4.2: 统一使用 mimo-V2-pro（Xiaomi MiMo，cc-switch 路由）
+# v5.0: 不再硬编码任何模型名称，默认空字符串表示"从 Provider 动态获取"
 AGENT_DEFAULT_MODELS: Dict[str, str] = {
-    "analyzer_agent": "mimo-V2-pro",
-    "data_agent": "mimo-V2-pro",
-    "modeler_agent": "mimo-V2-pro",
-    "solver_agent": "mimo-V2-pro",
-    "research_agent": "mimo-V2-pro",
-    "writer_agent": "mimo-V2-pro",
-    "peer_review_agent": "mimo-V2-pro",
-    "experimentation_agent": "mimo-V2-pro",
+    "analyzer_agent": "",
+    "data_agent": "",
+    "modeler_agent": "",
+    "solver_agent": "",
+    "research_agent": "",
+    "writer_agent": "",
+    "peer_review_agent": "",
+    "experimentation_agent": "",
 }
 
 
-# 按 template_id 覆盖（全部用 mimo-V2-pro）
+# 按 template_id 覆盖（默认空，用户可动态配置）
 TEMPLATE_OVERRIDES: Dict[str, Dict[str, str]] = {}
 
 
@@ -65,19 +65,39 @@ class AgentModelRouter:
     ) -> str:
         """解析 ``(agent, template) -> model``。
 
-        优先级：template override > base_map > default > ''。
+        优先级：template override > agent 独立配置 > 默认 Provider 的第一个可用模型 > default > ''。
         """
         with self._lock:
+            # 1. template override
             override = self._overrides.get(template_id) or {}
-            if agent_name in override:
+            if agent_name in override and override[agent_name]:
                 model = override[agent_name]
-            elif agent_name in self._base:
+            # 2. agent 独立配置（从 agent_configs.json 加载的）
+            elif agent_name in self._base and self._base[agent_name]:
                 model = self._base[agent_name]
+            # 3. 动态获取默认 Provider 的第一个可用模型
             else:
-                model = default
+                model = self._get_default_provider_model() or default
+
         with self._lock:
-            self._usage[model] = self._usage.get(model, 0) + 1
+            if model:
+                self._usage[model] = self._usage.get(model, 0) + 1
         return model
+
+    def _get_default_provider_model(self) -> str:
+        """从当前默认 Provider 获取第一个可用模型名称。"""
+        try:
+            from ..core.provider_config import get_default_provider
+            dp = get_default_provider()
+            if dp and dp.get("models"):
+                for m in dp["models"]:
+                    if m.get("enabled") and m.get("name"):
+                        return m["name"]
+                # 没有 enabled 的，返回第一个
+                return dp["models"][0].get("name", "")
+        except Exception:
+            pass
+        return ""
 
     def register_override(
         self, template_id: str, agent_name: str, model: str

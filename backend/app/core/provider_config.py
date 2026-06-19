@@ -342,16 +342,32 @@ def parse_cc_switch_json(config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         or ""
     )
 
-    # 提取模型名称
-    model_name = (
-        config.get("model")
-        or env.get("ANTHROPIC_MODEL")
-        or env.get("ANTHROPIC_DEFAULT_SONNET_MODEL")
-        or env.get("ANTHROPIC_DEFAULT_OPUS_MODEL")
-        or env.get("ANTHROPIC_DEFAULT_HAIKU_MODEL")
-        or env.get("DEFAULT_MODEL")
-        or ""
-    )
+    # 提取模型名称（优先从 env 中的真实模型名，其次用顶层的简化 model）
+    # cc-switch 的 model 字段是简化的（sonnet/opus/haiku），真实模型名在 env 中
+    # 优先级：env 中的具体模型名 > config.model
+    _raw_model = config.get("model", "")
+    _sonnet_model = env.get("ANTHROPIC_DEFAULT_SONNET_MODEL", "")
+    _opus_model = env.get("ANTHROPIC_DEFAULT_OPUS_MODEL", "")
+    _haiku_model = env.get("ANTHROPIC_DEFAULT_HAIKU_MODEL", "")
+    _default_model = env.get("ANTHROPIC_MODEL", "") or env.get("DEFAULT_MODEL", "")
+
+    # 根据 config.model 的值选择对应的真实模型名
+    if _raw_model == "sonnet" and _sonnet_model:
+        model_name = _sonnet_model
+    elif _raw_model == "opus" and _opus_model:
+        model_name = _opus_model
+    elif _raw_model == "haiku" and _haiku_model:
+        model_name = _haiku_model
+    elif _default_model:
+        model_name = _default_model
+    elif _sonnet_model:
+        model_name = _sonnet_model
+    elif _opus_model:
+        model_name = _opus_model
+    elif _haiku_model:
+        model_name = _haiku_model
+    else:
+        model_name = _raw_model or _default_model
 
     # 自动推断 API 格式
     api_format = "openai_chat"  # 默认

@@ -31,17 +31,39 @@ agent_model_map: Dict[str, Dict[str, str]] = {}
 
 
 def _load_agent_configs() -> None:
-    """从磁盘加载 Agent 配置"""
+    """从磁盘加载 Agent 配置，自动清理无效（Provider 已删除或模型不存在）的配置。"""
     global agent_model_map
     if AGENT_CONFIG_FILE.exists():
         try:
             data = json.loads(AGENT_CONFIG_FILE.read_text("utf-8"))
-            agent_model_map = data.get("agent_model_map", {})
-            # 同步到 TEAM dict 的 model 字段
+            loaded_map = data.get("agent_model_map", {})
+
+            # 验证每个配置是否仍然有效（Provider 存在且模型可用）
+            from ..core.provider_config import get_custom_provider
+            valid_map = {}
+            for agent_name, mapping in loaded_map.items():
+                pid = mapping.get("provider_id", "")
+                model = mapping.get("model", "")
+                if not pid or not model:
+                    continue
+                provider = get_custom_provider(pid)
+                if not provider:
+                    logger.info(f"Agent {agent_name} 的 Provider {pid} 已不存在，跳过加载")
+                    continue
+                # 检查模型是否仍在 Provider 的模型列表中
+                models = provider.get("models", [])
+                model_exists = any(m.get("name") == model for m in models)
+                if not model_exists:
+                    logger.info(f"Agent {agent_name} 的模型 {model} 不在 Provider {pid} 中，跳过加载")
+                    continue
+                valid_map[agent_name] = mapping
+
+            agent_model_map = valid_map
+            # 同步到 TEAM dict 的 model 字段（仅用于兼容旧代码）
             for agent_name, mapping in agent_model_map.items():
                 if agent_name in TEAM and "model" in mapping:
                     TEAM[agent_name]["model"] = mapping["model"]
-            logger.info(f"从磁盘加载 {len(agent_model_map)} 个 Agent 配置")
+            logger.info(f"从磁盘加载 {len(agent_model_map)} 个 Agent 配置（已过滤无效配置）")
         except Exception as e:
             logger.warning(f"加载 Agent 配置失败: {e}")
 
@@ -65,9 +87,19 @@ _load_agent_configs()
 @router.get("")
 async def list_agents() -> List[Dict[str, Any]]:
     """列出所有 Agent 及其当前模型配置"""
-    from ..core.provider_config import get_custom_provider, get_default_provider_id
+    from ..core.provider_config import get_custom_provider, get_default_provider_id, get_default_provider
 
     default_provider_id = get_default_provider_id() or ""
+    default_provider = get_default_provider()
+    # 动态获取默认 Provider 的第一个可用模型
+    default_provider_model = ""
+    if default_provider and default_provider.get("models"):
+        for m in default_provider["models"]:
+            if m.get("enabled") and m.get("name"):
+                default_provider_model = m["name"]
+                break
+        if not default_provider_model:
+            default_provider_model = default_provider["models"][0].get("name", "")
 
     result: List[Dict[str, Any]] = []
     for name, info in TEAM.items():
@@ -75,14 +107,14 @@ async def list_agents() -> List[Dict[str, Any]]:
         item.update(info)
         # 添加 provider/model 映射信息
         mapping = agent_model_map.get(name, {})
-        if name in agent_model_map:
-            # 该 Agent 已有独立配置（可能 provider_id 为空表示未指定）
+        if name in agent_model_map and mapping.get("model"):
+            # 该 Agent 已有独立配置（用户显式设置过）
             item["provider_id"] = mapping.get("provider_id", "")
-            item["provider_model"] = mapping.get("model", info.get("model", ""))
+            item["provider_model"] = mapping["model"]
         else:
             # 未配置过，回退到全局默认 provider 和默认模型
             item["provider_id"] = default_provider_id
-            item["provider_model"] = info.get("model", "")
+            item["provider_model"] = default_provider_model
         # 添加 provider 名称并标记是否失效
         pid = item["provider_id"]
         if pid:
@@ -100,12 +132,24 @@ async def list_agents() -> List[Dict[str, Any]]:
 async def get_agent(agent_name: str) -> Dict[str, Any]:
     if agent_name not in TEAM:
         raise HTTPException(status_code=404, detail=f"Agent {agent_name} not found")
-    from ..core.provider_config import get_default_provider_id
+    from ..core.provider_config import get_default_provider_id, get_default_provider
+
+    # 动态获取默认 Provider 的第一个可用模型
+    default_provider = get_default_provider()
+    default_provider_model = ""
+    if default_provider and default_provider.get("models"):
+        for m in default_provider["models"]:
+            if m.get("enabled") and m.get("name"):
+                default_provider_model = m["name"]
+                break
+        if not default_provider_model:
+            default_provider_model = default_provider["models"][0].get("name", "")
+
     item: Dict[str, Any] = {"name": agent_name}
     item.update(TEAM[agent_name])
     mapping = agent_model_map.get(agent_name, {})
     item["provider_id"] = mapping.get("provider_id", get_default_provider_id() or "")
-    item["provider_model"] = mapping.get("model", TEAM[agent_name].get("model", ""))
+    item["provider_model"] = mapping.get("model", default_provider_model)
     return item
 
 
