@@ -954,61 +954,101 @@ class WriterAgent(BaseAgent):
         # 3. 初始化全局论文记忆池（跨章节一致性）
         paper_memory = self._init_paper_memory(analyzer_result, section_results, sub_problems)
 
+        # v5.1: 把 research_agent 搜集到的文献预填到 paper_memory.citations，
+        # 解决此前 bib 为空的问题（chapters[*].citations 不一定被填充）
+        for paper in literature or []:
+            if not isinstance(paper, dict):
+                continue
+            entry = {
+                "key": paper.get("key") or paper.get("arxiv_id") or f"ref_{len(paper_memory['citations']) + 1}",
+                "title": paper.get("title", ""),
+                "author": paper.get("author", ""),
+                "year": str(paper.get("year", "")),
+                "venue": paper.get("venue", "") or paper.get("journal", "") or paper.get("source", ""),
+                "doi": paper.get("doi", ""),
+                "arxiv_id": paper.get("arxiv_id", ""),
+                "url": paper.get("url", "") or paper.get("link", ""),
+                "publisher": paper.get("publisher", ""),
+                "chapter": "research_agent",
+            }
+            # 去重：以 arxiv_id 或 doi 作为唯一键
+            is_dup = any(
+                (entry["arxiv_id"] and c.get("arxiv_id") == entry["arxiv_id"])
+                or (entry["doi"] and c.get("doi") == entry["doi"])
+                or (entry["title"] and c.get("title") == entry["title"])
+                for c in paper_memory["citations"]
+            )
+            if not is_dup and (entry["title"] or entry["arxiv_id"] or entry["doi"] or entry["url"]):
+                paper_memory["citations"].append(entry)
+
+        # 也从 section_results 里的 literature 字段兜底
+        if not paper_memory["citations"]:
+            for sr in section_results or []:
+                for paper in sr.get("literature", []) or []:
+                    if isinstance(paper, dict) and (paper.get("title") or paper.get("arxiv_id")):
+                        paper_memory["citations"].append({
+                            "key": paper.get("key") or paper.get("arxiv_id") or f"ref_{len(paper_memory['citations']) + 1}",
+                            "title": paper.get("title", ""),
+                            "author": paper.get("author", ""),
+                            "year": str(paper.get("year", "")),
+                            "venue": paper.get("venue", "") or paper.get("journal", ""),
+                            "doi": paper.get("doi", ""),
+                            "arxiv_id": paper.get("arxiv_id", ""),
+                            "url": paper.get("url", "") or paper.get("link", ""),
+                            "chapter": sr.get("sub_problem_name", "modeler"),
+                        })
+
+        logger.info(
+            f"[WriterAgent] paper_memory citations pre-filled: {len(paper_memory['citations'])} entries"
+        )
+
         # 4. 按章节独立生成
         chapters: List[Dict[str, Any]] = []
         chapter_plan = self.get_template_chapters(template)
 
-        # 是否启用自评质量循环（默认启用）
+        # v5.1: use_critique 已合并到 peer_review_agent；WriterAgent 不再做章节级自评循环
+        # 这里保留参数读取以便向后兼容，但不再驱动 _generate_chapter_with_critique
         use_critique = task_input.get("use_critique", True)
-        logger.info(f"WriterAgent use_critique={use_critique}")
+        logger.info(f"[WriterAgent] use_critique={use_critique} (由 peer_review_agent 统一处理)")
 
         for idx, plan in enumerate(chapter_plan):
-            if use_critique:
-                chapter = await self._generate_chapter_with_critique(
-                    plan=plan,
-                    chapter_index=idx,
-                    chapters=chapters,
-                    chapter_plan=chapter_plan,
-                    problem_text=problem_text,
-                    outline=outline,
-                    section_results=section_results,
-                    sub_problems=sub_problems,
-                    analyzer_result=analyzer_result,
-                    data_result=data_result,
-                    literature=literature,
-                    available_figures=available_figures,
-                    template=template,
-                    peer_review_feedback=peer_review_feedback,
-                    experiment_result=experiment_result,
-                    paper_memory=paper_memory,
-                )
-            else:
-                chapter_latex, summary = await self._generate_chapter(
-                    plan=plan,
-                    chapter_index=idx,
-                    chapters=chapters,
-                    chapter_plan=chapter_plan,
-                    problem_text=problem_text,
-                    outline=outline,
-                    section_results=section_results,
-                    sub_problems=sub_problems,
-                    analyzer_result=analyzer_result,
-                    data_result=data_result,
-                    literature=literature,
-                    available_figures=available_figures,
-                    template=template,
-                    previous_issues=[],
-                    peer_review_feedback=peer_review_feedback,
-                    experiment_result=experiment_result,
-                    paper_memory=paper_memory,
-                )
-                chapter = {
-                    "plan": plan,
-                    "latex": chapter_latex,
-                    "summary": summary,
-                    "critique": {"total_score": 0, "passed": True, "issues": [], "disabled": True},
-                    "attempts": 1,
-                }
+            # v5.1: 自评循环已合并到 peer_review_agent，WriterAgent 不再做章节级重写
+            # 如果传入了 peer_review_feedback（即第二轮），注入到 prompt 中指导重写
+            previous_issues: List[str] = []
+            if peer_review_feedback and isinstance(peer_review_feedback, dict):
+                prev = peer_review_feedback.get("issues") or peer_review_feedback.get("feedback")
+                if isinstance(prev, list):
+                    previous_issues = [str(i) for i in prev]
+                elif isinstance(prev, str):
+                    previous_issues = [prev]
+
+            chapter_latex, summary = await self._generate_chapter(
+                plan=plan,
+                chapter_index=idx,
+                chapters=chapters,
+                chapter_plan=chapter_plan,
+                problem_text=problem_text,
+                outline=outline,
+                section_results=section_results,
+                sub_problems=sub_problems,
+                analyzer_result=analyzer_result,
+                data_result=data_result,
+                literature=literature,
+                available_figures=available_figures,
+                template=template,
+                previous_issues=previous_issues,
+                peer_review_feedback=peer_review_feedback,
+                experiment_result=experiment_result,
+                paper_memory=paper_memory,
+            )
+            chapter = {
+                "plan": plan,
+                "latex": chapter_latex,
+                "summary": summary,
+                # v5.1: critique 字段由 peer_review_agent 统一产出
+                "critique": {"total_score": 0, "passed": True, "issues": [], "source": "peer_review_agent"},
+                "attempts": 1,
+            }
             chapters.append(chapter)
 
             # 更新全局记忆池：从当前章节提取关键信息
@@ -1042,6 +1082,8 @@ class WriterAgent(BaseAgent):
                     "score": c.get("critique", {}).get("total_score", 0),
                     "passed": c.get("critique", {}).get("passed", False),
                     "attempts": c.get("attempts", 1),
+                    # v5.1: 把该章节引用到的 citations 一并写入，方便 camera_ready / bib 提取
+                    "citations": self._extract_chapter_citations(c, paper_memory),
                 }
                 for c in chapters
             ],
@@ -1049,6 +1091,9 @@ class WriterAgent(BaseAgent):
             "generated_at": datetime.now().isoformat(),
             "paper_memory": paper_memory.to_dict() if hasattr(paper_memory, "to_dict") else dict(paper_memory),
             "consistency_issues": [i.to_dict() if hasattr(i, "to_dict") else i for i in consistency_issues] if consistency_issues else [],
+            # v5.1: 顶层 citations 字段——paper_memory.citations 的去重副本
+            # camera_ready 在 chapters[*].citations 为空时会回退到此字段
+            "citations": list(paper_memory.get("citations", [])),
         }
 
         logger.info(f"WriterAgent paper assembled: {result['title']}")
@@ -1387,6 +1432,52 @@ class WriterAgent(BaseAgent):
     # v5.0: 全局论文记忆池（跨章节一致性）
     # ====================================================================
 
+    @staticmethod
+    def _scan_cite_keys(latex: str) -> List[str]:
+        """从 LaTeX 文本扫描所有 \\cite{...} 标记的 key。
+
+        支持 \\cite{key1}、\\cite{key1,key2}、\\citep{...}、\\citet{...} 等变体。
+        返回去重后的 key 列表（保持首次出现顺序）。
+        """
+        if not latex:
+            return []
+        keys: List[str] = []
+        seen: set = set()
+        # 匹配 \cite{...}、\citep{...}、\citet{...}、\citealp{...} 等
+        for m in re.finditer(r"\\cite[a-z]*\{([^}]+)\}", latex):
+            for k in m.group(1).split(","):
+                k = k.strip()
+                if k and k not in seen:
+                    seen.add(k)
+                    keys.append(k)
+        return keys
+
+    def _extract_chapter_citations(
+        self,
+        chapter: Dict[str, Any],
+        paper_memory: Dict[str, Any],
+    ) -> List[Dict[str, Any]]:
+        """从单章节 LaTeX 中提取 \\cite{} 标记并反查 paper_memory.citations。
+
+        返回该章节实际引用的 citation 条目列表（已解析 metadata，不是 placeholder）。
+        """
+        latex = chapter.get("latex", "")
+        cite_keys = self._scan_cite_keys(latex)
+        if not cite_keys:
+            return []
+        # 反查 paper_memory.citations
+        memory_map = {c.get("key"): c for c in paper_memory.get("citations", []) if c.get("key")}
+        result = []
+        for key in cite_keys:
+            entry = memory_map.get(key)
+            if entry and not entry.get("_placeholder"):
+                result.append(entry)
+            elif entry:
+                # placeholder 也带上，bib 生成时仍会有 key（缺字段用占位符）
+                result.append(entry)
+        return result
+
+
     def _init_paper_memory(
         self,
         analyzer_result: Dict[str, Any],
@@ -1411,6 +1502,7 @@ class WriterAgent(BaseAgent):
             "metrics": [],      # 评价指标列表
             "cross_references": {},  # {章节id: [引用的其他章节id]}
             "chapter_summaries": {},  # {章节id: 摘要}
+            "citations": [],    # [{key, title, author, year, venue, doi, arxiv_id, url, chapter}] —— v5.1 跨章节引用合并
         }
 
         # 从 analyzer 提取初始术语
@@ -1441,6 +1533,12 @@ class WriterAgent(BaseAgent):
                             "unit": var.get("unit", ""),
                             "chapter": "modeler",
                         }
+
+        # v5.1: 从 context.literature 把 research_agent 搜集到的论文预填进 citations
+        # 这样即便后续章节没显式产生 citations，bib 也能给出原始来源
+        literature = section_results  # 实际由 execute() 注入到 context.literature
+        # 注：literature 通过 context 参数传入，_init_paper_memory 不直接接收；
+        # execute() 会在调用本方法前从 context.literature 预填到 citations 桶。
 
         return memory
 
@@ -1518,6 +1616,25 @@ class WriterAgent(BaseAgent):
 
         # 保存章节摘要
         paper_memory["chapter_summaries"][chapter_id] = summary
+
+        # v5.1: 从 LaTeX 中扫描 \cite{...} 标记，按 key 关联到 paper_memory.citations
+        # 这样 bib 生成时每个章节都能精确带上引用文献
+        for cite_key in self._scan_cite_keys(latex):
+            already = any(c.get("key") == cite_key for c in paper_memory["citations"])
+            if not already:
+                # 占位条目（实际 metadata 会在文献搜索阶段补全）
+                paper_memory["citations"].append({
+                    "key": cite_key,
+                    "title": "",
+                    "author": "",
+                    "year": "",
+                    "venue": "",
+                    "doi": "",
+                    "arxiv_id": "",
+                    "url": "",
+                    "chapter": chapter_id,
+                    "_placeholder": True,
+                })
 
         # 从 LaTeX 提取符号定义（简单启发式）
         # 匹配 "符号 & 含义 & 单位" 表格行

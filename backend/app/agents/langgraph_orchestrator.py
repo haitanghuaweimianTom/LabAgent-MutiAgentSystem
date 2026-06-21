@@ -1632,6 +1632,11 @@ class LangGraphOrchestrator:
         rec = (review.get("recommendation") or "").lower()
         score = review.get("overall_score", 0)
 
+        # 用户已关闭自评/迭代优化 → 直接接受，不进入修订循环
+        if not state.get("use_critique", True):
+            logger.info(f"[LangGraph:{state['task_id']}] use_critique=False, peer review 直接通过")
+            return "accept"
+
         if rec == "accept" or score >= 4.0:
             return "accept"
         if rec == "reject":

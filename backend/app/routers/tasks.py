@@ -1047,6 +1047,48 @@ async def _run_phase2_workflow(task_id: str, problem_text: str, sub_problems: Li
 
         save_task_result(task_id, {"task_id": task_id, "output": output, "completed_at": datetime.now().isoformat()})
 
+        # v5.1: 把 writer output 写到 final/main.tex + final/chapter_summaries.json，
+        # 让 camera_ready 一定可以读到 LaTeX 和 citations（不再依赖 _save_output_files）
+        try:
+            task_output_dir = get_project_output_dir(project_name)
+            final_dir = task_output_dir / "final"
+            final_dir.mkdir(parents=True, exist_ok=True)
+
+            writer_out = output.get("writer_agent") or {}
+            latex_code = writer_out.get("latex_code", "")
+            if latex_code:
+                (final_dir / "main.tex").write_text(latex_code, encoding="utf-8")
+                # 兼容老路径：也写一份 MathModeling_Paper.tex
+                (final_dir / "MathModeling_Paper.tex").write_text(latex_code, encoding="utf-8")
+                logger.info(f"Saved final/main.tex for {task_id} ({len(latex_code)} chars)")
+
+            # chapter_summaries.json —— camera_ready collect_artifacts 读 citations 用
+            chapters = writer_out.get("chapters", []) or []
+            if chapters:
+                (final_dir / "chapter_summaries.json").write_text(
+                    json.dumps(chapters, ensure_ascii=False, indent=2, default=str),
+                    encoding="utf-8",
+                )
+                logger.info(f"Saved final/chapter_summaries.json for {task_id} ({len(chapters)} chapters)")
+
+            # solution.json —— camera_ready 读 metadata + solver 输出
+            (final_dir / "solution.json").write_text(
+                json.dumps({
+                    "title": writer_out.get("title", ""),
+                    "abstract": writer_out.get("abstract", ""),
+                    "keywords": writer_out.get("keywords", []),
+                    "writer_agent": writer_out,
+                    "solver_agent": output.get("solver_agent", {}),
+                    "modeler_agent": output.get("modeler_agent", {}),
+                    "analyzer_agent": output.get("analyzer_agent", {}),
+                    "research_agent": output.get("research_agent", {}),
+                    "citations": writer_out.get("citations", []),  # v5.1: 顶层兜底
+                }, ensure_ascii=False, indent=2, default=str),
+                encoding="utf-8",
+            )
+        except Exception as save_exc:
+            logger.warning(f"Failed to save final/ for {task_id}: {save_exc}")
+
         # v4.2: 自动触发 camera-ready 打包（仅当 phase2 成功）
         try:
             task_output_dir = get_project_output_dir(project_name)
@@ -1201,19 +1243,56 @@ async def get_camera_ready_status(task_id: str):
 
     pkg = task_output_dir / f"camera_ready_{task_id}"
     zip_path = task_output_dir / f"camera_ready_{task_id}.zip"
-    pkg_rel = str(pkg.relative_to(PROJECT_ROOT)) if pkg.exists() else None
-    zip_rel = str(zip_path.relative_to(PROJECT_ROOT)) if zip_path.exists() else None
+
+    # 独立交付物（直接给用户的：tex / pdf / bib / 参考文献来源）
+    tex_path = pkg / "main.tex" if (pkg / "main.tex").exists() else None
+    pdf_in_pkg = pkg / "main.pdf"
+    pdf_in_pkg_rel = str(pdf_in_pkg.relative_to(PROJECT_ROOT)) if pdf_in_pkg.exists() else None
+    # 编译后复制到 output_dir 根的 paper_{task_id}.pdf
+    pdf_root = task_output_dir / f"paper_{task_id}.pdf"
+    pdf_root_rel = str(pdf_root.relative_to(PROJECT_ROOT)) if pdf_root.exists() else None
+    bib_path = pkg / "main.bib" if (pkg / "main.bib").exists() else None
+    refs_sources_path = pkg / "references_sources.txt" if (pkg / "references_sources.txt").exists() else None
+
+    def _rel(p: Optional[Path]) -> Optional[str]:
+        if not p:
+            return None
+        try:
+            return str(p.relative_to(PROJECT_ROOT))
+        except ValueError:
+            return str(p)
+
+    pkg_rel = _rel(pkg) if pkg.exists() else None
+    zip_rel = _rel(zip_path) if zip_path.exists() else None
+    tex_rel = _rel(tex_path)
+    bib_rel = _rel(bib_path)
+    refs_rel = _rel(refs_sources_path)
+
     return {
         "task_id": task_id,
         "package_dir": pkg_rel,
         "zip_path": zip_rel,
+        # 直接可下载的独立交付物
+        "tex_path": tex_rel,
+        "pdf_path": pdf_root_rel or pdf_in_pkg_rel,
+        "bib_path": bib_rel,
+        "refs_sources_path": refs_rel,
         "exists": pkg.exists() or zip_path.exists(),
     }
 
 
 @router.get("/{task_id}/camera-ready/download")
 async def download_camera_ready(task_id: str, path: str):
-    """下载 camera-ready zip 文件。"""
+    """下载 camera-ready 文件（zip 或独立交付物）。
+
+    支持的 file_path.name 格式：
+    - ``camera_ready_<task_id>.zip`` — 完整打包
+    - ``main.tex`` — 论文源文件（必须在 camera_ready_<task_id>/ 内）
+    - ``main.pdf`` — 编译产物（在 camera_ready_<task_id>/ 内或 output_dir 根目录）
+    - ``main.bib`` — 参考文献 bib 文件
+    - ``references_sources.txt`` — 参考文献原始来源（链接/DOI/arXiv）
+    - ``paper_<task_id>.pdf`` — 复制到 output_dir 根目录的 PDF
+    """
     from fastapi.responses import FileResponse
     from ..core.task_persistence import load_task_metadata
 
@@ -1221,9 +1300,17 @@ async def download_camera_ready(task_id: str, path: str):
     if not meta:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    # 安全检查：只允许下载 camera_ready_{task_id}.zip
+    # 安全检查：只允许下载预定义的交付物文件名
     file_path = Path(path)
-    if not file_path.name.startswith(f"camera_ready_{task_id}") or not file_path.suffix == ".zip":
+    allowed_names = {
+        f"camera_ready_{task_id}.zip",
+        "main.tex",
+        "main.pdf",
+        "main.bib",
+        "references_sources.txt",
+        f"paper_{task_id}.pdf",
+    }
+    if file_path.name not in allowed_names:
         raise HTTPException(status_code=400, detail="Invalid file path")
 
     # 解析绝对路径
@@ -1233,14 +1320,35 @@ async def download_camera_ready(task_id: str, path: str):
     except Exception:
         task_output_dir = Path("./output") / f"work_{project_name}"
 
-    full_path = task_output_dir / file_path.name
-    if not full_path.exists():
+    # 候选位置（pkg 内 + output_dir 根目录）
+    pkg_dir = task_output_dir / f"camera_ready_{task_id}"
+    candidates = [
+        pkg_dir / file_path.name,
+        task_output_dir / file_path.name,
+    ]
+    full_path = None
+    for cand in candidates:
+        if cand.exists():
+            full_path = cand
+            break
+
+    if not full_path:
         raise HTTPException(status_code=404, detail="File not found")
+
+    # MIME 类型
+    mime_map = {
+        ".zip": "application/zip",
+        ".tex": "application/x-tex",
+        ".pdf": "application/pdf",
+        ".bib": "application/x-bibtex",
+        ".txt": "text/plain; charset=utf-8",
+    }
+    media_type = mime_map.get(full_path.suffix, "application/octet-stream")
 
     return FileResponse(
         path=str(full_path),
         filename=file_path.name,
-        media_type="application/zip",
+        media_type=media_type,
     )
 
 

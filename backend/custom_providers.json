@@ -21,7 +21,7 @@
       "icon_color": "#d97706",
       "notes": "从 ccswitch 自动同步",
       "created_at": 1781505613,
-      "updated_at": 1781883153,
+      "updated_at": 1782032017,
       "_version": 2
     },
     {
@@ -45,10 +45,10 @@
       "icon_color": "#d97706",
       "notes": "从 ccswitch 自动同步",
       "created_at": 1781853658,
-      "updated_at": 1781883153,
+      "updated_at": 1782032017,
       "_version": 2
     }
   ],
-  "default_provider": "d6cf73d0-0e74-4c48-9b48-8a16ed5264d2",
+  "default_provider": "e62df5b4-647b-40c7-a096-1584bc633524",
   "_version": 2
 }

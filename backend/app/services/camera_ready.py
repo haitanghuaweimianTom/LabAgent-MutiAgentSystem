@@ -74,12 +74,20 @@ class CameraReadyResult:
     artifact_summary: Dict[str, int] = field(default_factory=dict)
     verification: Dict[str, Any] = field(default_factory=dict)
     base_dir: Optional[Path] = None
+    pdf_path: Optional[Path] = None  # 编译生成的 PDF 路径
+    tex_path: Optional[Path] = None  # 主 tex 文件路径
+    bib_path: Optional[Path] = None  # bib 文件路径
+    refs_sources_path: Optional[Path] = None  # 参考文献来源文件路径
 
     def to_dict(self, base_dir: Optional[Path] = None) -> Dict[str, Any]:
         """序列化为字典；``base_dir`` 为参考目录时返回相对路径。"""
         base = base_dir or self.base_dir
         out_rel = str(self.output_dir)
         zip_rel = str(self.zip_path) if self.zip_path else None
+        pdf_rel = str(self.pdf_path) if self.pdf_path else None
+        tex_rel = str(self.tex_path) if self.tex_path else None
+        bib_rel = str(self.bib_path) if self.bib_path else None
+        refs_rel = str(self.refs_sources_path) if self.refs_sources_path else None
         if base:
             try:
                 out_rel = str(self.output_dir.relative_to(base))
@@ -90,9 +98,33 @@ class CameraReadyResult:
                     zip_rel = str(self.zip_path.relative_to(base))
                 except ValueError:
                     pass
+            if self.pdf_path:
+                try:
+                    pdf_rel = str(self.pdf_path.relative_to(base))
+                except ValueError:
+                    pass
+            if self.tex_path:
+                try:
+                    tex_rel = str(self.tex_path.relative_to(base))
+                except ValueError:
+                    pass
+            if self.bib_path:
+                try:
+                    bib_rel = str(self.bib_path.relative_to(base))
+                except ValueError:
+                    pass
+            if self.refs_sources_path:
+                try:
+                    refs_rel = str(self.refs_sources_path.relative_to(base))
+                except ValueError:
+                    pass
         return {
             "output_dir": out_rel,
             "zip_path": zip_rel,
+            "pdf_path": pdf_rel,
+            "tex_path": tex_rel,
+            "bib_path": bib_rel,
+            "refs_sources_path": refs_rel,
             "skipped_reasons": self.skipped_reasons,
             "artifact_summary": self.artifact_summary,
             "verification": self.verification,
@@ -108,6 +140,13 @@ def collect_artifacts(
 ) -> CameraReadyArtifact:
     """从任务输出目录收集 camera-ready 所需的所有产物。
 
+    v5.1 多源兜底：
+    - 优先读 final/ 磁盘文件
+    - final/ 不存在或主 tex 缺失时，回退到 task_result.json 的 writer_agent.latex_code
+    - citations 从多处汇总：chapter_summaries.json、chapters[*].citations、
+      solution.json.citations、writer_agent.paper_memory.citations、
+      research_agent.papers、working memory literature
+
     Args:
         task_id: 任务 ID。
         task_output_dir: 任务输出根目录（含 stage_*/ 与 final/）。
@@ -120,39 +159,57 @@ def collect_artifacts(
     artifact = CameraReadyArtifact(template_id=template_id)
 
     final_dir = task_output_dir / "final"
-    if not final_dir.exists():
-        skipped.append("final dir not found")
-        artifact.collection_skipped = skipped
-        return artifact
 
-    # 1. LaTeX 主文件（优先 .tex，回退到 .md 转 tex）
-    tex_path = final_dir / "MathModeling_Paper.tex"
-    if not tex_path.exists():
-        tex_path = final_dir / "main.tex"
-    if tex_path.exists():
-        artifact.latex_code = tex_path.read_text(encoding="utf-8")
+    # 1. LaTeX 主文件（优先 .tex，回退到 task_result.json 兜底）
+    tex_paths = [
+        final_dir / "MathModeling_Paper.tex",
+        final_dir / "main.tex",
+    ]
+    for tp in tex_paths:
+        if tp.exists():
+            artifact.latex_code = tp.read_text(encoding="utf-8")
+            break
+
+    # 兜底：磁盘没 LaTeX → 从 task_result.json 读 writer_agent.latex_code
+    if not artifact.latex_code:
+        try:
+            from ..core.task_persistence import load_task_result
+            result = load_task_result(task_id)
+            if result:
+                writer_out = result.get("output", {}).get("writer_agent", {}) or {}
+                artifact.latex_code = writer_out.get("latex_code", "")
+                if artifact.latex_code:
+                    skipped.append("latex_code 来自 task_result.json 兜底（final/ 缺 tex）")
+                    artifact.metadata["_latex_source"] = "task_result.json"
+        except Exception as exc:  # noqa: BLE001
+            skipped.append(f"task_result.json 兜底失败: {exc}")
+
+    if not final_dir.exists():
+        # final/ 都没有，但 latex_code 可能从 task_result.json 拿到了；继续收集其他产物
+        skipped.append("final dir not found")
 
     # 2. figures
-    fig_dir = final_dir / "figures"
-    if not fig_dir.exists():
-        fig_dir = task_output_dir / "stage_7_charts"
-    if fig_dir.exists():
-        for p in sorted(fig_dir.glob("*.png")):
-            artifact.figures.append(p)
-        for p in sorted(fig_dir.glob("*.pdf")):
-            artifact.figures.append(p)
+    if final_dir.exists():
+        fig_dir = final_dir / "figures"
+        if not fig_dir.exists():
+            fig_dir = task_output_dir / "stage_7_charts"
+        if fig_dir.exists():
+            for p in sorted(fig_dir.glob("*.png")):
+                artifact.figures.append(p)
+            for p in sorted(fig_dir.glob("*.pdf")):
+                artifact.figures.append(p)
 
     # 3. code files（多文件）
     code_dir = task_output_dir / "code"
     if code_dir.exists():
         for p in sorted(code_dir.rglob("*.py")):
             artifact.code_files.append(p)
-    if not artifact.code_files:
+    if not artifact.code_files and final_dir.exists():
         # 回退到 final/code 或 final 根目录
         for p in sorted(final_dir.glob("*.py")):
             artifact.code_files.append(p)
 
-    # 4. bib：从 chapter_summaries.json 读 citations
+    # 4. chapter_summaries（磁盘 + task_result.json 兜底）
     chap_summ_path = final_dir / "chapter_summaries.json"
     if chap_summ_path.exists():
         try:
@@ -160,22 +217,110 @@ def collect_artifacts(
             artifact.chapter_summaries = data if isinstance(data, list) else []
         except json.JSONDecodeError:
             pass
-
-    # 5. metadata 从 final/solution.json 读
-    sol_path = final_dir / "solution.json"
-    if sol_path.exists():
+    if not artifact.chapter_summaries:
         try:
-            data = json.loads(sol_path.read_text(encoding="utf-8"))
-            if isinstance(data, dict):
-                artifact.metadata = {
-                    "title": data.get("title", ""),
-                    "abstract": data.get("abstract", ""),
-                    "keywords": data.get("keywords", []),
-                }
-        except json.JSONDecodeError:
+            from ..core.task_persistence import load_task_result
+            result = load_task_result(task_id)
+            if result:
+                chapters = (result.get("output", {}).get("writer_agent", {}) or {}).get("chapters", []) or []
+                artifact.chapter_summaries = chapters
+        except Exception:
             pass
 
-    # 6. 收集模板所需的 .cls / .sty 文件
+    # 5. metadata 从 final/solution.json 读；缺失则从 task_result.json 兜底
+    sol_path = final_dir / "solution.json" if final_dir.exists() else None
+    solution_data: Dict[str, Any] = {}
+    if sol_path and sol_path.exists():
+        try:
+            solution_data = json.loads(sol_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            pass
+    if not solution_data:
+        try:
+            from ..core.task_persistence import load_task_result
+            result = load_task_result(task_id)
+            if result:
+                solution_data = result.get("output", {}) or {}
+        except Exception:
+            pass
+    if isinstance(solution_data, dict):
+        # solution_data 可能是顶层 result.output（无 title/abstract），也可能是 final/solution.json
+        # 优先从 solution.json 顶层取；没有再下钻 writer_agent
+        artifact.metadata.update({
+            "title": solution_data.get("title", ""),
+            "abstract": solution_data.get("abstract", ""),
+            "keywords": solution_data.get("keywords", []),
+        })
+        writer_out = solution_data.get("writer_agent") or {}
+        if not artifact.metadata.get("title") and writer_out:
+            artifact.metadata["title"] = writer_out.get("title", "")
+            artifact.metadata["abstract"] = writer_out.get("abstract", "")
+            artifact.metadata["keywords"] = writer_out.get("keywords", [])
+
+    # 6. citations 多源汇总（v5.1 关键修复）
+    # 来源优先级：
+    #   (a) chapters[*].citations 内的实际引用
+    #   (b) solution.json.citations / writer_agent.citations
+    #   (c) paper_memory.citations（WriterAgent 全局记忆池）
+    #   (d) research_agent.papers / papers 列表
+    seen_keys: set = set()
+    citations: List[Dict[str, str]] = []
+
+    def _add_cite(c: Any) -> None:
+        """去重并加入 citations 列表。"""
+        if not isinstance(c, dict):
+            return
+        key = (
+            c.get("key")
+            or c.get("arxiv_id")
+            or c.get("doi")
+            or c.get("title")
+        )
+        if not key:
+            return
+        # 优先用 arxiv_id 或 doi 作唯一键，避免不同 key 同一文献
+        unique = c.get("arxiv_id") or c.get("doi") or key
+        if unique in seen_keys:
+            return
+        seen_keys.add(unique)
+        citations.append({
+            "key": str(key),
+            "type": c.get("type", "article"),
+            "title": c.get("title", ""),
+            "author": c.get("author", ""),
+            "year": str(c.get("year", "")),
+            "venue": c.get("venue", "") or c.get("journal", ""),
+            "doi": c.get("doi", ""),
+            "arxiv_id": c.get("arxiv_id", ""),
+            "url": c.get("url", "") or c.get("link", ""),
+            "publisher": c.get("publisher", ""),
+        })
+
+    # (a) chapters[*].citations
+    for ch in artifact.chapter_summaries or []:
+        if isinstance(ch, dict):
+            for c in ch.get("citations") or []:
+                _add_cite(c)
+    # (b) solution.json.citations / writer_agent.citations（顶层）
+    if isinstance(solution_data, dict):
+        for c in solution_data.get("citations") or []:
+            _add_cite(c)
+        writer_out = solution_data.get("writer_agent") or {}
+        for c in writer_out.get("citations") or []:
+            _add_cite(c)
+        # (c) paper_memory.citations
+        pm = writer_out.get("paper_memory") or {}
+        for c in pm.get("citations") or []:
+            _add_cite(c)
+    # (d) research_agent.papers（research 阶段搜集的文献）
+    if isinstance(solution_data, dict):
+        research_out = solution_data.get("research_agent") or {}
+        for paper in research_out.get("papers") or []:
+            _add_cite(paper)
+
+    artifact.bib_entries = citations
+
+    # 7. 收集模板所需的 .cls / .sty 文件
     try:
         from ..core.paper_templates import load_template
         tpl = load_template(template_id)
@@ -300,6 +445,60 @@ def build_bib(entries: List[Dict[str, str]]) -> str:
         lines.append("}")
         lines.append("")
     return "\n".join(lines) if len(lines) > 1 else "% No citations available\n"
+
+
+def build_references_sources(entries: List[Dict[str, str]]) -> str:
+    """从 citation 列表生成可读的参考文献来源文件（含链接、DOI、arXiv ID）。
+
+    输出格式为纯文本，每篇文献一行，包含：
+    - 标题
+    - 作者
+    - 年份
+    - 来源/期刊
+    - DOI 链接（如果有）
+    - arXiv 链接（如果有）
+    - URL（如果有）
+    """
+    lines = ["# 参考文献来源", "", "本文件列出论文中引用的所有文献及其原始来源链接。", ""]
+    if not entries:
+        lines.append("暂无引用文献。")
+        return "\n".join(lines)
+
+    for i, e in enumerate(entries, 1):
+        if not isinstance(e, dict):
+            continue
+        title = e.get("title", "未知标题")
+        author = e.get("author", "")
+        year = str(e.get("year", ""))
+        venue = e.get("venue", "") or e.get("journal", "")
+        doi = e.get("doi", "")
+        arxiv = e.get("arxiv_id", "")
+        url = e.get("url", "")
+        publisher = e.get("publisher", "")
+
+        lines.append(f"[{i}] {title}")
+        if author:
+            lines.append(f"    作者: {author}")
+        if year:
+            lines.append(f"    年份: {year}")
+        if venue:
+            lines.append(f"    来源: {venue}")
+        if publisher:
+            lines.append(f"    出版商: {publisher}")
+        if doi:
+            lines.append(f"    DOI: https://doi.org/{doi}")
+        # arXiv 链接：只要 arxiv_id 就输出；如果 url 已经是 arxiv 链接就不再重复
+        arxiv_url = f"https://arxiv.org/abs/{arxiv}" if arxiv else ""
+        if arxiv_url and url != arxiv_url:
+            lines.append(f"    arXiv: {arxiv_url}")
+        # url：只在不是 arxiv 直链时输出，避免冗余
+        if url and url != arxiv_url and not url.startswith(f"https://arxiv.org/abs/{arxiv}"):
+            lines.append(f"    URL: {url}")
+        elif url and not arxiv:  # 没 arxiv_id 但有 url 的情况
+            lines.append(f"    URL: {url}")
+        lines.append("")
+
+    return "\n".join(lines)
 
 
 def build_readme(artifact: CameraReadyArtifact, task_id: str) -> str:
@@ -454,7 +653,13 @@ def build(
 
     # 2. main.bib
     bib_text = build_bib(artifact.bib_entries)
-    (pkg_dir / "main.bib").write_text(bib_text, encoding="utf-8")
+    bib_path = pkg_dir / "main.bib"
+    bib_path.write_text(bib_text, encoding="utf-8")
+
+    # 2.5 references_sources.txt（原始链接/DOI 来源，方便用户直接引用）
+    refs_sources_text = build_references_sources(artifact.bib_entries)
+    refs_sources_path = pkg_dir / "references_sources.txt"
+    refs_sources_path.write_text(refs_sources_text, encoding="utf-8")
 
     # 3. figures/
     fig_dir = pkg_dir / "figures"
@@ -542,13 +747,27 @@ def build(
     if not verification.get("success"):
         skipped.append(f"compilation verification: {verification.get('message', 'failed')}")
 
-    # 8b. 将 verification 写回 metadata.json
+    # 9b. 将 verification 写回 metadata.json
     metadata["verification"] = verification
     (pkg_dir / "metadata.json").write_text(
         json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8"
     )
 
-    # 10. zip
+    # 10. 收集独立产物路径
+    tex_path = pkg_dir / "main.tex" if artifact.latex_code else None
+    pdf_path = None
+    if verification.get("success"):
+        compiled_pdf = pkg_dir / "main.pdf"
+        if compiled_pdf.exists():
+            pdf_path = compiled_pdf
+            # 同时复制到 output_dir 根目录，方便用户直接获取
+            try:
+                root_pdf = output_dir / f"paper_{task_id}.pdf"
+                shutil.copy2(compiled_pdf, root_pdf)
+            except Exception:
+                pass
+
+    # 11. zip（可选，默认仍生成以兼容旧流程）
     zip_path: Optional[Path] = None
     if make_zip:
         zip_path = output_dir / f"camera_ready_{task_id}.zip"
@@ -575,4 +794,8 @@ def build(
         artifact_summary=artifact.summary(),
         verification=verification,
         base_dir=output_dir,
+        pdf_path=pdf_path,
+        tex_path=tex_path,
+        bib_path=bib_path if bib_path.exists() else None,
+        refs_sources_path=refs_sources_path if refs_sources_path.exists() else None,
     )
