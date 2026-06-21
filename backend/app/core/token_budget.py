@@ -26,12 +26,13 @@ MODEL_CONTEXT_WINDOWS = {
 
 # 默认预算分配（百分比）
 DEFAULT_BUDGET_ALLOCATION = {
-    "system_prompt": 0.20,
-    "user_query": 0.30,
-    "knowledge_context": 0.15,
-    "memory_context": 0.15,
-    "agent_profile": 0.10,
-    "react_history": 0.10,
+    "system_prompt": 0.18,
+    "user_query": 0.25,
+    "knowledge_context": 0.12,
+    "memory_context": 0.12,
+    "agent_profile": 0.08,
+    "react_history": 0.08,
+    "user_feedback": 0.17,  # Human-in-the-loop 用户反馈
 }
 
 

@@ -232,6 +232,19 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
         </div>
       </div>
 
+      {/* 实时进度条 */}
+      {taskState.state && taskState.state.name !== 'completed' && taskState.state.name !== 'failed' && (
+        <div className={styles.progressBar}>
+          <div
+            className={styles.progressFill}
+            style={{ width: `${taskState.state.progressPercentage}%` }}
+          />
+          <span className={styles.progressText}>
+            {taskState.state.progressPercentage}% · {taskState.state.currentStep || '运行中...'}
+          </span>
+        </div>
+      )}
+
       <div className={styles.tabs}>
         {(['messages', 'result', 'peer_review', 'info'] as const).map(t => (
           <button

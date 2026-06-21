@@ -57,6 +57,9 @@ class ChatRoom:
         # 讨论线程：discuss_id -> list of messages
         self._discussions: Dict[str, List[Message]] = {}
 
+        # 用户反馈队列（用于影响后续 Agent 行为）
+        self._user_feedback: List[Dict[str, Any]] = []
+
         # 自动迭代控制
         self._auto_iterate: bool = True  # 用户未发言时自动迭代
         self._user_last_spoke_at: Optional[datetime] = None
@@ -139,8 +142,75 @@ class ChatRoom:
         self._user_messages.append(msg)
         self._user_last_spoke_at = datetime.now()
         self._waiting_for_user = False
+
+        # 提取并存储用户反馈（用于影响后续 Agent）
+        self._extract_feedback(content, msg.id)
+
         logger.info(f"[用户] {content[:80]}")
         return msg
+
+    def _extract_feedback(self, content: str, msg_id: str) -> None:
+        """从用户消息中提取结构化反馈"""
+        feedback = {
+            "msg_id": msg_id,
+            "content": content,
+            "timestamp": datetime.now().isoformat(),
+            "type": "general",
+            "target_agent": None,
+            "action": None,
+        }
+
+        # 检测反馈类型
+        content_lower = content.lower()
+
+        # 修正建议
+        if any(kw in content_lower for kw in ["修正", "修改", "改", "不对", "错误", "问题", "应该", "建议"]):
+            feedback["type"] = "correction"
+            feedback["action"] = "revise"
+
+        # 确认/批准
+        elif any(kw in content_lower for kw in ["确认", "同意", "可以", "好", "ok", "yes", "没问题"]):
+            feedback["type"] = "approval"
+            feedback["action"] = "proceed"
+
+        # 拒绝/驳回
+        elif any(kw in content_lower for kw in ["拒绝", "不行", "驳回", "重做", "重新", "no", "不对"]):
+            feedback["type"] = "rejection"
+            feedback["action"] = "rework"
+
+        # 问题/疑问
+        elif any(kw in content_lower for kw in ["为什么", "怎么", "什么", "？", "?", "疑问", "不清楚"]):
+            feedback["type"] = "question"
+            feedback["action"] = "clarify"
+
+        self._user_feedback.append(feedback)
+
+    def get_user_feedback(self, since_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """获取用户反馈列表（供 Agent 读取）"""
+        if since_id is None:
+            return list(self._user_feedback)
+        # 找到 since_id 之后的反馈
+        idx = next((i for i, f in enumerate(self._user_feedback) if f["msg_id"] == since_id), -1)
+        return self._user_feedback[idx + 1:]
+
+    def get_latest_feedback_summary(self) -> str:
+        """获取最新用户反馈的摘要（供 LLM 使用）"""
+        if not self._user_feedback:
+            return ""
+
+        recent = self._user_feedback[-5:]  # 最近 5 条
+        lines = ["【用户反馈摘要】"]
+        for f in recent:
+            type_label = {
+                "correction": "修正建议",
+                "approval": "确认",
+                "rejection": "驳回",
+                "question": "疑问",
+                "general": "一般反馈",
+            }.get(f["type"], "反馈")
+            lines.append(f"- [{type_label}] {f['content'][:100]}")
+
+        return "\n".join(lines)
 
     def broadcast(self, sender: str, content: str) -> Message:
         """广播消息"""
@@ -219,6 +289,13 @@ class ChatRoom:
             elif m.msg_type == "discussion":
                 prefix = f"[💬 讨论-{m.sender_label}]"
             lines.append(f"{prefix} {m.content}")
+
+        # 添加用户反馈摘要
+        feedback_summary = self.get_latest_feedback_summary()
+        if feedback_summary:
+            lines.append("")
+            lines.append(feedback_summary)
+
         return "\n".join(lines)
 
     # ===== SSE 订阅 =====

@@ -753,10 +753,63 @@ class BaseAgent(ABC):
         return DEMO_CODE_TEMPLATES["lp_fallback"]
         pass
 
-    @abstractmethod
     async def execute(self, task_input: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
         """执行任务"""
         pass
+
+    async def respond_to_user(
+        self,
+        user_message: str,
+        intent: str = "general",
+        feedback: str = "",
+        context: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """响应用户消息（Human-in-the-loop）。
+
+        Args:
+            user_message: 用户原始消息
+            intent: 用户意图 (general/correction/approval/rejection/question)
+            feedback: 用户反馈摘要
+            context: 任务上下文
+
+        Returns:
+            Agent 的响应内容
+        """
+        chat_room = context.get("chat_room") if context else None
+
+        # 构建响应提示
+        system_prompt = self.get_system_prompt()
+        prompt = f"""用户向你发送了一条消息，请根据你的专业角色回复。
+
+【你的角色】{self.name}
+【用户消息】{user_message}
+【用户意图】{intent}
+"""
+        if feedback:
+            prompt += f"\n【用户历史反馈】\n{feedback}\n"
+
+        prompt += """
+请给出专业、简洁的回复。如果用户提出的是修正建议，请确认已收到并说明如何在后续工作中考虑。
+如果用户询问的是专业问题，请给出详细解答。
+"""
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": prompt},
+        ]
+
+        response = await self.call_llm(messages, context=context)
+        content = response["choices"][0]["message"].get("content", "")
+
+        # 如果有聊天室，自动发送回复
+        if chat_room and hasattr(chat_room, 'post'):
+            chat_room.post(self.name, content, "text")
+
+        return {
+            "agent": self.name,
+            "response": content,
+            "intent": intent,
+        }
 
     def _inject_knowledge_context(self, query_text: str, top_k: int = 3, base_id: Optional[str] = None) -> str:
         """查询知识库并返回上下文文本（静默失败）
@@ -1099,6 +1152,25 @@ class BaseAgent(ABC):
                             elif isinstance(msg["content"], list):
                                 msg["content"].append({"type": "text", "text": "\n\n【论文全文阅读】\n" + paper_context})
                             break
+
+        # ===== 注入用户反馈（Human-in-the-loop）=====
+        if context and context.get("chat_room"):
+            chat_room = context["chat_room"]
+            if hasattr(chat_room, "get_latest_feedback_summary"):
+                feedback_summary = chat_room.get_latest_feedback_summary()
+                if feedback_summary:
+                    allowed = budget_mgr.remaining("user_feedback")
+                    if budget_mgr.estimate_tokens(feedback_summary) > allowed:
+                        feedback_summary = budget_mgr.clip_text(feedback_summary, allowed)
+                    budget_mgr.reserve("user_feedback", budget_mgr.estimate_tokens(feedback_summary))
+                    if feedback_summary:
+                        for msg in messages:
+                            if msg.get("role") == "user":
+                                if isinstance(msg["content"], str):
+                                    msg["content"] = msg["content"] + "\n\n【用户反馈】\n" + feedback_summary
+                                elif isinstance(msg["content"], list):
+                                    msg["content"].append({"type": "text", "text": "\n\n【用户反馈】\n" + feedback_summary})
+                                break
 
         # 最终检查总预算
         try:

@@ -185,6 +185,13 @@ def get_uploaded_files(selected_names: Optional[List[str]] = None, project_name:
 
 @router.post("/submit")
 async def submit_task(req: TaskCreateRequest):
+    # 验证问题描述不能为空
+    if not req.problem_text or not req.problem_text.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="问题描述不能为空，请输入研究题目或问题描述"
+        )
+
     task_id = "task_" + uuid4().hex[:12]
     created_at = datetime.now().isoformat()
 
@@ -564,17 +571,18 @@ async def get_result(task_id: str):
 @router.get("/{task_id}/stream")
 async def stream(task_id: str):
     orch = get_orchestrator()
+    from ..core.task_persistence import load_task_metadata
 
     async def gen():
+        last_status = None
+        last_progress = -1
+        last_step = ""
         while True:
             status = orch.get_task_status(task_id)
-            # 也检查持久化
-            from ..core.task_persistence import load_task_metadata
             meta = load_task_metadata(task_id)
 
             if not status and not meta:
-                data = json.dumps({"error": "not found"})
-                yield "data: " + data + "\n\n"
+                yield "event: error\ndata: " + json.dumps({"error": "not found"}) + "\n\n"
                 break
 
             if status:
@@ -591,14 +599,33 @@ async def stream(task_id: str):
             # 实时更新持久化进度
             save_task_metadata(task_id, "", st, "", progress=prog, current_step=cur, total_steps=tot)
 
-            data = json.dumps({
-                "task_id": task_id,
-                "status": st,
-                "progress": prog,
-                "current_step": cur,
-                "total_steps": tot,
-            })
-            yield "data: " + data + "\n\n"
+            # 只在状态变化时推送事件
+            if st != last_status or prog != last_progress or cur != last_step:
+                last_status = st
+                last_progress = prog
+                last_step = cur
+
+                # 判断事件类型
+                event_type = "phase_changed"
+                if st in [TaskStatus.COMPLETED, "completed"]:
+                    event_type = "completed"
+                elif st in [TaskStatus.FAILED, "failed"]:
+                    event_type = "failed"
+                elif cur and "peer_review" in str(cur).lower():
+                    event_type = "peer_review_done"
+                elif cur and "revise" in str(cur).lower():
+                    event_type = "revision_done"
+
+                payload = {
+                    "task_id": task_id,
+                    "status": st,
+                    "progress": prog,
+                    "current_step": cur,
+                    "total_steps": tot,
+                    "name": map_status_to_event_name(st, cur),
+                }
+                yield f"event: {event_type}\ndata: " + json.dumps(payload) + "\n\n"
+
             if st in [TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED, "completed", "failed", "cancelled"]:
                 break
             await asyncio.sleep(2)
@@ -608,6 +635,38 @@ async def stream(task_id: str):
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache"},
     )
+
+
+def map_status_to_event_name(status: str, current_step: str) -> str:
+    """将后端状态映射到前端状态机名称"""
+    s = (status or "").lower()
+    if s == "completed":
+        return "completed"
+    if s == "failed":
+        return "failed"
+    if s == "paused" or s == "interrupted":
+        return "paused"
+    if s == "preflight_running":
+        return "preflight_running"
+    if s == "self_collecting_data":
+        return "self_collecting_data"
+    if s == "cannot_solve":
+        return "cannot_solve"
+    if s == "phase1_completed" or s == "phase1_completed_reviewing":
+        return "phase1_reviewing"
+    if s == "phase2_running" or s == "running":
+        if current_step and "iterat" in current_step.lower():
+            return "iterating_solver"
+        if current_step and "peer_review" in current_step.lower():
+            return "peer_review"
+        if current_step and "revise" in current_step.lower():
+            return "revising"
+        if current_step and "final" in current_step.lower():
+            return "finalizing"
+        return "phase2_running"
+    if s == "phase1_running":
+        return "phase1_running"
+    return "phase1_running"
 
 
 @router.get("/{task_id}/messages")
@@ -625,7 +684,15 @@ async def get_messages(task_id: str):
 
 @router.post("/{task_id}/messages")
 async def post_user_message(task_id: str, req: dict):
-    """用户向聊天室发送消息（参与 Agent 讨论）。"""
+    """用户向聊天室发送消息（参与 Agent 讨论）。
+
+    Human-in-the-loop 设计：
+    - 用户消息会记录到聊天室，供 Agent 读取
+    - 如果工作流正在等待用户输入（如 phase1_reviewing），
+      用户消息可以触发继续执行
+    - 如果用户提到特定 Agent（@mentions），该 Agent 会优先响应
+    - 如果用户没有提到任何 Agent，系统会智能路由到最相关的 Agent
+    """
     room = get_chat_room(task_id)
     if not room:
         raise HTTPException(status_code=404, detail="聊天室不存在")
@@ -636,7 +703,207 @@ async def post_user_message(task_id: str, req: dict):
 
     mentions = req.get("mentions", [])
     msg = room.user_post(content, mentions=mentions)
-    return {"message_id": msg.id, "status": "sent"}
+
+    # Human-in-the-loop：检查工作流状态，决定是否需要响应用户
+    orch = get_orchestrator()
+    task_status = orch.get_task_status(task_id)
+
+    # 如果任务处于等待用户确认的状态，标记为可以继续
+    if task_status and task_status.status in ["phase1_reviewing", "paused", "interrupted"]:
+        # 用户发言后，解除暂停状态，允许工作流继续
+        orch.resume_task(task_id)
+        room.set_waiting_for_user(False)
+        logger.info(f"Task {task_id}: 用户输入触发工作流继续")
+
+    # 如果用户提到了特定 Agent，触发该 Agent 响应
+    if mentions:
+        for agent_name in mentions:
+            agent = orch.agents.get(agent_name)
+            if agent and hasattr(agent, "execute"):
+                try:
+                    # 异步触发 Agent 响应用户
+                    asyncio.create_task(_agent_respond_to_user(
+                        task_id, agent_name, agent, content, room
+                    ))
+                except Exception as e:
+                    logger.warning(f"Agent {agent_name} 响应用户失败: {e}")
+    else:
+        # 智能路由：用户没有 @mentions 任何 Agent，自动分发给最相关的 Agent
+        current_step = task_status.current_step if task_status else ""
+        routed_agents = _route_user_message(content, current_step)
+
+        for agent_name in routed_agents:
+            if agent_name == "coordinator":
+                # 协调者直接在聊天室回复
+                room.post(
+                    "coordinator",
+                    f"收到您的反馈。我已记录您的建议，将在后续步骤中考虑。"
+                    f"如果您希望特定 Agent 处理，请使用 @Agent名称 提及他们。\n\n"
+                    f"💡 提示：可用 @research_agent、@data_agent、@modeler_agent、"
+                    f"@solver_agent、@writer_agent 等直接联系对应专家。",
+                    "broadcast"
+                )
+            else:
+                agent = orch.agents.get(agent_name)
+                if agent and hasattr(agent, "execute"):
+                    try:
+                        asyncio.create_task(_agent_respond_to_user(
+                            task_id, agent_name, agent, content, room
+                        ))
+                        logger.info(f"Task {task_id}: 智能路由用户消息到 {agent_name}")
+                    except Exception as e:
+                        logger.warning(f"Agent {agent_name} 响应用户失败: {e}")
+
+    return {
+        "message_id": msg.id,
+        "status": "sent",
+        "workflow_resumed": task_status.status in ["phase1_reviewing", "paused", "interrupted"] if task_status else False,
+    }
+
+
+# 智能路由：关键词到 Agent 的映射（用于自动分发用户反馈）
+_AGENT_KEYWORDS = {
+    "research_agent": ["文献", "搜索", "资料", "引用", "reference", "paper", "文献综述", "相关研究", "背景", "survey"],
+    "data_agent": ["数据", "清洗", "预处理", "特征", "dataset", "csv", "表格", "缺失值", "归一化", "标准化"],
+    "analyzer_agent": ["分析", "问题", "分解", "理解", "需求", "约束", "条件", "假设", "问题描述", "任务"],
+    "modeler_agent": ["模型", "建模", "数学", "公式", "方程", "优化", "约束", "变量", "参数", "建模"],
+    "algorithm_engineer_agent": ["算法", "方法", "策略", "创新", "复杂度", "启发式", "元启发式", "遗传算法", "神经网络"],
+    "solver_agent": ["求解", "代码", "编程", "实现", "python", "运行", "调试", "错误", "bug", "计算", "数值"],
+    "writer_agent": ["论文", "写作", "latex", "段落", "章节", "摘要", "引言", "结论", "格式", "排版", "语言", "英文"],
+    "peer_review_agent": ["审稿", "评议", "质量", "缺陷", "改进", "建议", "评价", "评分", "问题", "漏洞"],
+    "figure_agent": ["图表", "图片", "可视化", "画图", "figure", "plot", "chart", "graph", "插图", "示意图"],
+}
+
+
+def _route_user_message(content: str, current_step: str = "") -> List[str]:
+    """智能路由：根据用户消息内容自动分发给最相关的 Agent。
+
+    返回应该响应的 Agent 名称列表（按相关性排序）。
+    """
+    content_lower = content.lower()
+    scores: Dict[str, int] = {}
+
+    # 1. 关键词匹配
+    for agent_name, keywords in _AGENT_KEYWORDS.items():
+        score = 0
+        for kw in keywords:
+            if kw.lower() in content_lower:
+                score += 1
+                # 精确匹配加分
+                if kw in content:
+                    score += 1
+        if score > 0:
+            scores[agent_name] = score
+
+    # 2. 根据当前工作流步骤推断（如果关键词匹配不足）
+    if not scores and current_step:
+        step_lower = current_step.lower()
+        step_mapping = {
+            "research": ["research_agent"],
+            "data": ["data_agent"],
+            "analy": ["analyzer_agent"],
+            "model": ["modeler_agent"],
+            "algorithm": ["algorithm_engineer_agent"],
+            "solver": ["solver_agent"],
+            "writer": ["writer_agent"],
+            "peer_review": ["peer_review_agent"],
+            "figure": ["figure_agent"],
+        }
+        for step_key, agents in step_mapping.items():
+            if step_key in step_lower:
+                scores[agents[0]] = 1  # 给予基础分
+                break
+
+    # 3. 如果没有匹配到任何 Agent，默认路由到协调者
+    if not scores:
+        return ["coordinator"]
+
+    # 按分数排序，返回前 2 个最相关的 Agent
+    sorted_agents = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+    return [agent for agent, _ in sorted_agents[:2]]
+
+
+async def _agent_respond_to_user(
+    task_id: str,
+    agent_name: str,
+    agent,
+    user_content: str,
+    room,
+):
+    """Agent 响应用户消息。
+
+    如果用户给出的是修正建议，Agent 会：
+    1. 确认收到建议
+    2. 将建议记录到聊天室上下文
+    3. 如果是工作流中的 Agent，标记需要重新执行相关步骤
+    """
+    try:
+        # 构建上下文，包含用户反馈历史
+        feedback_summary = room.get_latest_feedback_summary()
+        context = {
+            "task_id": task_id,
+            "chat_room": room,
+            "problem_text": room.problem_text,
+            "user_message": user_content,
+            "user_feedback": feedback_summary,
+        }
+
+        # 检测用户意图
+        content_lower = user_content.lower()
+        is_correction = any(kw in content_lower for kw in ["修正", "修改", "改", "不对", "错误", "问题", "应该", "建议"])
+        is_approval = any(kw in content_lower for kw in ["确认", "同意", "可以", "好", "ok", "yes"])
+
+        if is_correction:
+            # 修正建议：Agent 需要确认并记录
+            if hasattr(agent, "respond_to_user"):
+                output = await agent.respond_to_user(
+                    user_message=user_content,
+                    intent="correction",
+                    feedback=feedback_summary,
+                    context=context,
+                )
+            else:
+                # 在聊天室中广播修正建议已被记录
+                room.post(
+                    agent_name,
+                    f"✅ 已收到您的修正建议。我会在后续工作中考虑这些调整。\n\n"
+                    f"💡 如果您希望立即修改当前结果，请说「重新执行」或「重做」。",
+                    "broadcast"
+                )
+        elif is_approval:
+            # 确认/批准：Agent 感谢并继续
+            if hasattr(agent, "respond_to_user"):
+                output = await agent.respond_to_user(
+                    user_message=user_content,
+                    intent="approval",
+                    feedback=feedback_summary,
+                    context=context,
+                )
+            else:
+                room.post(
+                    agent_name,
+                    f"感谢您的确认！我会继续按当前方向推进工作。",
+                    "broadcast"
+                )
+        else:
+            # 一般询问或讨论
+            if hasattr(agent, "respond_to_user"):
+                output = await agent.respond_to_user(
+                    user_message=user_content,
+                    intent="general",
+                    feedback=feedback_summary,
+                    context=context,
+                )
+            else:
+                room.post(
+                    agent_name,
+                    f"收到您的消息。我会根据您的反馈调整工作。",
+                    "broadcast"
+                )
+                # Agent 回复会由 agent.execute 内部通过 chat_room.post 发送
+    except Exception as e:
+        logger.warning(f"Agent {agent_name} 响应用户时出错: {e}")
+        room.post(agent_name, f"抱歉，我暂时无法处理您的请求。错误: {str(e)[:100]}", "error")
 
 
 @router.get("/{task_id}/messages/stream")
@@ -1025,19 +1292,23 @@ async def rerun_task(task_id: str, req: Optional[RerunRequest] = None):
     historical_problem = meta.get("problem_text") or meta.get("problem", "")
     problem_text = (req.problem_text if req and req.problem_text else None) or historical_problem
     if not problem_text or not problem_text.strip():
-        # 422 前写 metadata 保持状态一致
-        save_task_metadata(
-            task_id=task_id,
-            problem_text=historical_problem,
-            status="cannot_solve",
-            created_at=meta.get("created_at", ""),
-            completed_at=datetime.now().isoformat(),
-            error="rerun: 缺少问题描述",
-        )
-        raise HTTPException(
-            status_code=422,
-            detail="历史任务缺少问题描述，无法重新执行。请新建任务并输入问题。",
-        )
+        # 如果用户通过 rerun 请求补充了问题描述，优先使用
+        if req and req.problem_text and req.problem_text.strip():
+            problem_text = req.problem_text.strip()
+        else:
+            # 422 前写 metadata 保持状态一致
+            save_task_metadata(
+                task_id=task_id,
+                problem_text=historical_problem,
+                status="cannot_solve",
+                created_at=meta.get("created_at", ""),
+                completed_at=datetime.now().isoformat(),
+                error="rerun: 历史任务缺少问题描述，无法重新执行",
+            )
+            raise HTTPException(
+                status_code=422,
+                detail="历史任务缺少问题描述，无法重新执行。请新建任务并输入问题。",
+            )
     data_files = meta.get("data_files", [])
     project_name = meta.get("project_name")
     knowledge_base_id = meta.get("knowledge_base_id")
