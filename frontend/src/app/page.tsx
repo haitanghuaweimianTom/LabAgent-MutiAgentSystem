@@ -28,41 +28,6 @@ declare global {
 
 const apiBase = () => window.__API_BASE__ || 'http://localhost:8000/api/v1';
 
-/* =============================================================
- * 导航分组（侧边栏用）
- * ============================================================= */
-type NavId =
-  | 'dashboard' | 'generate' | 'files' | 'pdf' | 'history'
-  | 'agents' | 'workflows' | 'memory' | 'environment' | 'settings';
-
-const NAV_GROUPS: { label: string; items: { id: NavId; icon: string; label: string }[] }[] = [
-  {
-    label: '工作台',
-    items: [
-      { id: 'dashboard',  icon: '⌂', label: '首页' },
-      { id: 'generate',   icon: '▶', label: '生成' },
-      { id: 'history',    icon: '◷', label: '历史' },
-    ],
-  },
-  {
-    label: '资源',
-    items: [
-      { id: 'files',      icon: '⎙', label: '数据' },
-      { id: 'pdf',        icon: '⎗', label: 'PDF' },
-      { id: 'memory',     icon: '◐', label: '记忆' },
-    ],
-  },
-  {
-    label: '系统',
-    items: [
-      { id: 'agents',     icon: '◉', label: 'Agent' },
-      { id: 'workflows',  icon: '↻', label: '流程' },
-      { id: 'environment',icon: '⎈', label: '环境' },
-      { id: 'settings',   icon: '⚙', label: '设置' },
-    ],
-  },
-];
-
 interface Message {
   id: string;
   sender: string;
@@ -373,127 +338,109 @@ export default function Home() {
   }, [paused]);
 
   // ========== Navigation tabs ==========
-  // NAV_GROUPS 在模块顶层定义（侧边栏渲染用）
+  const navItems = [
+    { id: 'dashboard', label: '🏠 首页', desc: '快速开始' },
+    { id: 'generate', label: '🚀 生成', desc: taskStatus === 'running' || taskStatus === 'phase1' || taskStatus === 'phase2' ? `进行中 ${progress}%` : '实时进度' },
+    { id: 'files', label: '📁 数据', desc: '文件管理' },
+    { id: 'pdf', label: '📄 PDF', desc: '解析/下载' },
+    { id: 'history', label: '📋 历史', desc: '任务记录' },
+    { id: 'agents', label: '🤖 Agent', desc: '团队管理' },
+    { id: 'workflows', label: '🔄 流程', desc: '工作流' },
+    { id: 'memory', label: '🧠 记忆', desc: '经验教训/任务记忆' },
+    { id: 'environment', label: '🐍 环境', desc: 'Conda/Venv 管理' },
+    { id: 'settings', label: '⚙️ 设置', desc: 'Provider/MCP/知识库/系统' },
+  ] as const;
 
   return (
-    <>
-      {/* ===== 顶栏 ===== */}
-      <header className={styles.topbar}>
-        <div className={styles.brand}>
-          <div className={styles['brand-mark']}>M</div>
-          <span className={styles['brand-name']}>MathModel Agent</span>
-          <span className={styles['brand-tag']}>LangGraph · ReAct · Auto-iterate</span>
-        </div>
-        <div className={styles['topbar-right']}>
-          {taskState.state?.peerReview && (
-            <span className="pill pill-info">
-              评审 {(taskState.state.peerReview.overallScore ?? 0).toFixed(1)} / 5
-            </span>
-          )}
-          {taskId && (
-            <span className={`pill ${
-              taskStatus === 'completed' ? 'pill-ok' :
-              taskStatus === 'failed' || taskStatus === 'interrupted' ? 'pill-err' :
-              ['running', 'phase1_running', 'phase2_running'].includes(taskStatus) ? 'pill-info' :
-              'pill-muted'
-            }`}>
-              {taskStatus}
-            </span>
-          )}
-          <span className={styles['topbar-version']}>v2.1.0</span>
-        </div>
+    <main className={styles.main}>
+      <header className={styles.header}>
+        <span className={styles.headerTitle}>多智能体协作论文生产系统 v3.1</span>
+        <p className={styles.subtitle}>LangGraph 编排 · ReAct 工具循环 · 实时协作讨论 · 自动迭代 · CCF-A 论文全自动生成</p>
       </header>
 
-      <div className={styles.layout}>
-        {/* ===== 左侧导航 ===== */}
-        <aside className={styles.sidebar}>
-          {NAV_GROUPS.map((group) => (
-            <div key={group.label} className={styles['nav-section']}>
-              <div className={styles['nav-section-title']}>{group.label}</div>
-              {group.items.map((t) => (
-                <button
-                  key={t.id}
-                  className={styles['nav-item']}
-                  data-active={tab === t.id}
-                  onClick={() => setTab(t.id)}
-                >
-                  <span className={styles['nav-icon']}>{t.icon}</span>
-                  <span>{t.label}</span>
-                </button>
-              ))}
-            </div>
-          ))}
-        </aside>
+      <nav className={styles.nav}>
+        {navItems.map((t) => (
+          <button
+            key={t.id}
+            className={`${styles.navItem} ${tab === t.id ? styles.navItemActive : ''}`}
+            onClick={() => setTab(t.id)}
+          >
+            <span className={styles.navLabel}>{t.label}</span>
+            <span className={styles.navDesc}>{t.desc}</span>
+            {(t.id === 'generate') && (taskStatus === 'running' || taskStatus === 'phase1' || taskStatus === 'phase2') && (
+              <span className={styles.navDot} />
+            )}
+          </button>
+        ))}
+      </nav>
 
-        {/* ===== 主内容区 ===== */}
-        <main className={styles.content}>
-          {tab === 'dashboard' && (
-            <div>
-              <SystemStatus />
-              <ProblemInput
-                onSubmit={handleSubmit}
-                submitting={submitting}
-                taskStatus={taskStatus}
-                progress={progress}
-              />
-            </div>
-          )}
+      <div className={styles.container}>
+        {/* ===== 首页 ===== */}
+        {tab === 'dashboard' && (
+          <div className={styles.dashboard}>
+            <SystemStatus />
+            <ProblemInput
+              onSubmit={handleSubmit}
+              submitting={submitting}
+              taskStatus={taskStatus}
+              progress={progress}
+            />
+          </div>
+        )}
 
-          {tab === 'generate' && (
-            <div>
-              {(phase === 'idle' && taskId && taskStatus !== 'running' && taskStatus !== 'completed') && (
-                <div className="banner banner-info" style={{ marginTop: 16 }}>
-                  <div style={{ flex: 1 }}>
-                    <div className="banner-title">分阶段工作流</div>
-                    <div className="banner-desc">阶段1完成后可确认子问题列表，再启动阶段2建模求解</div>
-                  </div>
-                  <button className="btn btn-primary" onClick={handlePhase1}>
-                    🔄 启动阶段1
+        {/* ===== 生成 ===== */}
+        {tab === 'generate' && (
+          <div className={styles.generateLayout}>
+            {/* Phase1/Phase2 controls */}
+            {(phase === 'idle' && taskId && taskStatus !== 'running' && taskStatus !== 'completed') && (
+              <div style={{ background: 'rgba(52,152,219,0.08)', border: '1px solid rgba(52,152,219,0.2)', borderRadius: 10, padding: '1rem' }}>
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                  <span style={{ color: '#3498db', fontWeight: 600 }}>分阶段工作流</span>
+                  <button onClick={handlePhase1} style={{ padding: '0.4rem 0.8rem', background: 'rgba(52,152,219,0.15)', border: '1px solid rgba(52,152,219,0.3)', borderRadius: 6, color: '#3498db', fontSize: '0.78rem', cursor: 'pointer' }}>
+                    🔄 启动阶段1（分析+数据）
                   </button>
                 </div>
-              )}
+                <div style={{ color: '#888', fontSize: '0.8rem', marginTop: '0.3rem' }}>阶段1完成后可确认子问题列表，再启动阶段2建模求解</div>
+              </div>
+            )}
 
-              {phase === 'phase2_confirm' && (
-                <div className="banner banner-ok" style={{ marginTop: 16, flexDirection: 'column', alignItems: 'stretch' }}>
-                  <div className="banner-title">✅ 阶段1已完成</div>
-                  <div className="banner-desc" style={{ marginBottom: 12 }}>确认子问题后启动阶段2</div>
-                  <div className="section-title" style={{ marginBottom: 8 }}>子问题列表（可编辑）</div>
+            {/* Phase2 sub-problem confirmation */}
+            {phase === 'phase2_confirm' && (
+              <div style={{ background: 'rgba(46,204,113,0.08)', border: '1px solid rgba(46,204,113,0.2)', borderRadius: 10, padding: '1rem' }}>
+                <span style={{ color: '#2ecc71', fontWeight: 600, fontSize: '1rem', display: 'block', marginBottom: '0.8rem' }}>
+                  ✅ 阶段1已完成 — 确认子问题后启动阶段2
+                </span>
+                <div style={{ marginBottom: '0.8rem' }}>
+                  <div style={{ color: '#ddd', fontSize: '0.85rem', marginBottom: '0.5rem' }}>子问题列表（可编辑）：</div>
                   {subProblems.map((sp, idx) => (
-                    <div key={idx} className="flex gap-2 items-center" style={{ marginBottom: 8 }}>
-                      <span className="text-muted text-sm" style={{ width: 24 }}>{idx + 1}.</span>
+                    <div key={idx} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.4rem' }}>
+                      <span style={{ color: '#f39c12', fontSize: '0.85rem', minWidth: 20 }}>{idx + 1}.</span>
                       <input
-                        className="input"
                         value={sp}
                         onChange={e => {
                           const next = [...subProblems];
                           next[idx] = e.target.value;
                           setSubProblems(next);
                         }}
+                        style={{ flex: 1, padding: '0.5rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: '#e0e0e0', fontSize: '0.9rem' }}
                       />
-                      <button className="btn btn-danger btn-sm" onClick={() => setSubProblems(subProblems.filter((_, i) => i !== idx))}>
-                        删除
-                      </button>
+                      <button onClick={() => setSubProblems(subProblems.filter((_, i) => i !== idx))} style={{ padding: '0.3rem 0.5rem', background: 'rgba(231,76,60,0.15)', border: '1px solid rgba(231,76,60,0.3)', borderRadius: 6, color: '#e74c3c', fontSize: '0.75rem', cursor: 'pointer' }}>✕</button>
                     </div>
                   ))}
-                  <button className="btn btn-ghost btn-sm" onClick={() => setSubProblems([...subProblems, ''])}>
-                    + 添加子问题
-                  </button>
-
-                  <div className="divider"></div>
-
-                  <div className="section-title" style={{ marginBottom: 8 }}>求解策略</div>
-                  <div className="flex gap-2">
-                    <label className="flex items-center gap-1" style={{ cursor: 'pointer' }}>
-                      <input type="radio" checked={solveMode === 'sequential'} onChange={() => setSolveMode('sequential')} />
-                      <span>逐个递进</span>
-                    </label>
-                    <label className="flex items-center gap-1" style={{ cursor: 'pointer' }}>
-                      <input type="radio" checked={solveMode === 'batch'} onChange={() => setSolveMode('batch')} />
-                      <span>批量并行</span>
-                    </label>
-                  </div>
-
-                  <div className="flex gap-2" style={{ marginTop: 16 }}>
+                  <button onClick={() => setSubProblems([...subProblems, ''])} style={{ padding: '0.3rem 0.6rem', background: 'rgba(52,152,219,0.15)', border: '1px solid rgba(52,152,219,0.3)', borderRadius: 6, color: '#3498db', fontSize: '0.75rem', cursor: 'pointer', marginTop: '0.3rem' }}>+ 添加子问题</button>
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.8rem' }}>
+                  <span style={{ color: '#ddd', fontSize: '0.85rem' }}>求解策略：</span>
+                  <label style={{ display: 'flex', gap: '0.3rem', alignItems: 'center', cursor: 'pointer' }}>
+                    <input type="radio" checked={solveMode === 'sequential'} onChange={() => setSolveMode('sequential')} />
+                    <span style={{ color: '#aaa', fontSize: '0.85rem' }}>逐个递进</span>
+                  </label>
+                  <label style={{ display: 'flex', gap: '0.3rem', alignItems: 'center', cursor: 'pointer' }}>
+                    <input type="radio" checked={solveMode === 'batch'} onChange={() => setSolveMode('batch')} />
+                    <span style={{ color: '#aaa', fontSize: '0.85rem' }}>批量并行</span>
+                  </label>
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
                   <button onClick={handleConfirmSubproblems} style={{ padding: '0.5rem 1rem', background: 'linear-gradient(135deg, #2ecc71, #27ae60)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }} disabled={submitting}>
                     {submitting ? '启动中...' : '✅ 确认子问题并启动阶段2'}
                   </button>
@@ -632,9 +579,8 @@ export default function Home() {
         {tab === 'settings' && (
           <SettingsPage />
         )}
-        </main>
       </div>
-    </>
+    </main>
   );
 }
 

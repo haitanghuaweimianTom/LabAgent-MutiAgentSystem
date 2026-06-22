@@ -10,35 +10,41 @@
  * ============================================================= */
 
 :root {
-  /* ===== Neutral 暖白系 ===== */
-  --bg:           #FAFAF9;   /* stone-50 主背景 */
-  --bg-soft:      #F5F5F4;   /* stone-100 次背景（hover、stripe） */
-  --surface:      #FFFFFF;   /* 卡片 / 面板 */
-  --border:       #E7E5E4;   /* stone-200 通用边框 */
-  --border-strong:#D6D3D1;   /* stone-300 hover/active */
+  /* ===== Neutral 暖白系（亮色模式 —— v2.2 切换）===== */
+  --bg-light:     #FAFAF9;   /* stone-50 主背景 */
+  --bg-soft:      #F5F5F4;
+  --surface:      #FFFFFF;
+  --border:       #E7E5E4;
+  --border-strong:#D6D3D1;
 
-  /* ===== Text ===== */
-  --text:         #1C1917;   /* stone-900 主文字 */
-  --text-2:       #44403C;   /* stone-700 次文字 */
-  --text-3:       #78716C;   /* stone-500 弱文字 */
-  --text-4:       #A8A29E;   /* stone-400 占位 / disabled */
-  --text-invert:  #FAFAF9;   /* 深色按钮上的文字 */
+  /* ===== Dark 主背景（当前默认）===== */
+  --bg-dark:      #0F172A;   /* slate-900 深色，不渐变 */
+  --bg-dark-soft: #1E293B;   /* slate-800 hover/卡片底 */
+  --border-dark:  #334155;   /* slate-700 */
+  --border-dark-soft:#475569; /* slate-600 */
+
+  /* ===== Text（默认深色模式文字）===== */
+  --text:         #E2E8F0;   /* slate-200 主文字（深色背景下） */
+  --text-2:       #CBD5E1;   /* slate-300 次文字 */
+  --text-3:       #94A3B8;   /* slate-400 弱文字 */
+  --text-4:       #64748B;   /* slate-500 占位 / disabled */
+  --text-invert:  #0F172A;   /* 深色按钮上的文字 */
 
   /* ===== Accent（teal — 专业克制，替代紫渐变）===== */
-  --accent:       #0F766E;   /* teal-700 主行动 */
-  --accent-hover: #115E59;   /* teal-800 hover */
-  --accent-soft:  #F0FDFA;   /* teal-50 高亮背景 */
-  --accent-text:  #134E4A;   /* teal-900 文字 */
+  --accent:       #2DD4BF;   /* teal-400（深色背景下更亮） */
+  --accent-hover: #5EEAD4;   /* teal-300 */
+  --accent-soft:  #134E4A;   /* teal-900 高亮背景 */
+  --accent-text:  #99F6E4;   /* teal-200 文字 */
 
   /* ===== Status ===== */
-  --ok:           #15803D;
-  --ok-soft:      #F0FDF4;
-  --warn:         #B45309;
-  --warn-soft:    #FFFBEB;
-  --err:          #B91C1C;
-  --err-soft:     #FEF2F2;
-  --info:         #1D4ED8;
-  --info-soft:    #EFF6FF;
+  --ok:           #4ADE80;
+  --ok-soft:      #14532D;
+  --warn:         #FBBF24;
+  --warn-soft:    #78350F;
+  --err:          #F87171;
+  --err-soft:     #7F1D1D;
+  --info:         #60A5FA;
+  --info-soft:    #1E3A8A;
 
   /* ===== Sizing ===== */
   --r-sm: 4px;
@@ -90,7 +96,8 @@ html, body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: var(--bg);
+  /* v2.2: 纯深色背景（不再紫渐变），与子组件透明 rgba 样式兼容 */
+  background: var(--bg-dark);
   color: var(--text);
 }
 
@@ -108,7 +115,7 @@ button, input, select, textarea {
   color: inherit;
 }
 
-/* ===== Buttons（4 个状态：default / hover / active / disabled + loading）===== */
+/* ===== Buttons（v2.2: 深色模式）===== */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -116,9 +123,9 @@ button, input, select, textarea {
   gap: var(--sp-2);
   padding: 6px 14px;
   height: 32px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-dark);
   border-radius: var(--r);
-  background: var(--surface);
+  background: var(--bg-dark-soft);
   color: var(--text);
   font-size: var(--t);
   font-weight: 500;
@@ -128,11 +135,11 @@ button, input, select, textarea {
   user-select: none;
 }
 .btn:hover:not(:disabled):not([data-loading]) {
-  background: var(--bg-soft);
-  border-color: var(--border-strong);
+  background: #334155;
+  border-color: var(--border-dark-soft);
 }
 .btn:active:not(:disabled) {
-  background: var(--border);
+  background: #475569;
 }
 .btn:disabled, .btn[data-loading] {
   opacity: 0.5;
@@ -172,7 +179,7 @@ button, input, select, textarea {
   color: var(--text-2);
 }
 .btn-ghost:hover:not(:disabled) {
-  background: var(--bg-soft);
+  background: rgba(255, 255, 255, 0.06);
   color: var(--text);
 }
 
@@ -180,15 +187,15 @@ button, input, select, textarea {
 .btn-sm { height: 24px; padding: 2px 8px; font-size: var(--t-sm); }
 .btn-lg { height: 36px; padding: 8px 18px; font-size: var(--t-lg); }
 
-/* ===== Inputs ===== */
+/* ===== Inputs（深色模式）===== */
 .input, .select, .textarea {
   display: block;
   width: 100%;
   padding: 6px 10px;
   height: 32px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-dark);
   border-radius: var(--r);
-  background: var(--surface);
+  background: var(--bg-dark-soft);
   color: var(--text);
   font-size: var(--t);
   transition: border-color 0.12s ease, box-shadow 0.12s ease;
@@ -199,17 +206,17 @@ button, input, select, textarea {
 
 .input:hover:not(:disabled):not(:focus),
 .select:hover:not(:disabled):not(:focus) {
-  border-color: var(--border-strong);
+  border-color: var(--border-dark-soft);
 }
 
 .input:focus, .select:focus, .textarea:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.2);
 }
 
 .input:disabled, .select:disabled, .textarea:disabled {
-  background: var(--bg-soft);
+  background: rgba(255, 255, 255, 0.03);
   color: var(--text-4);
   cursor: not-allowed;
 }
@@ -218,10 +225,10 @@ button, input, select, textarea {
   border-color: var(--err);
 }
 .input-invalid:focus, .select-invalid:focus {
-  box-shadow: 0 0 0 3px var(--err-soft);
+  box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.2);
 }
 
-/* ===== Tables（清晰可扫描）===== */
+/* ===== Tables（深色模式）===== */
 .table {
   width: 100%;
   border-collapse: separate;
@@ -233,22 +240,22 @@ button, input, select, textarea {
   font-weight: 600;
   color: var(--text-2);
   padding: 8px 12px;
-  background: var(--bg-soft);
-  border-bottom: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--border-dark);
   font-size: var(--t-sm);
   white-space: nowrap;
 }
 .table td {
   padding: 10px 12px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-dark);
   color: var(--text);
   vertical-align: middle;
 }
-.table tbody tr:hover td { background: var(--bg-soft); }
+.table tbody tr:hover td { background: rgba(255, 255, 255, 0.04); }
 .table tbody tr:last-child td { border-bottom: none; }
 .table-numeric td.numeric { text-align: right; font-variant-numeric: tabular-nums; }
 
-/* ===== Status pills（用纯色 + 边框，不依赖渐变）===== */
+/* ===== Status pills（深色模式）===== */
 .pill {
   display: inline-flex;
   align-items: center;
@@ -265,7 +272,7 @@ button, input, select, textarea {
 .pill-warn  { background: var(--warn-soft); color: var(--warn); border-color: var(--warn); }
 .pill-err   { background: var(--err-soft);  color: var(--err);  border-color: var(--err); }
 .pill-info  { background: var(--info-soft); color: var(--info); border-color: var(--info); }
-.pill-muted { background: var(--bg-soft);   color: var(--text-3); border-color: var(--border); }
+.pill-muted { background: rgba(255, 255, 255, 0.06); color: var(--text-3); border-color: var(--border-dark); }
 
 .pill::before {
   content: "";
@@ -276,10 +283,10 @@ button, input, select, textarea {
   background: currentColor;
 }
 
-/* ===== Card（独立信息块，不套娃）===== */
+/* ===== Card（独立信息块，深色）===== */
 .card {
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: var(--bg-dark-soft);
+  border: 1px solid var(--border-dark);
   border-radius: var(--r-lg);
   padding: var(--sp-5);
 }
@@ -289,7 +296,7 @@ button, input, select, textarea {
   justify-content: space-between;
   margin-bottom: var(--sp-4);
   padding-bottom: var(--sp-3);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-dark);
 }
 .card-title {
   font-size: var(--t-lg);
@@ -305,13 +312,13 @@ button, input, select, textarea {
 .card-section + .card-section {
   margin-top: var(--sp-4);
   padding-top: var(--sp-4);
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border-dark);
 }
 
-/* ===== Section（用分隔线代替卡片嵌套）===== */
+/* ===== Section（用分隔线代替卡片嵌套，深色）===== */
 .section {
   padding: var(--sp-5) 0;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-dark);
 }
 .section:last-child { border-bottom: none; }
 .section-title {
@@ -350,17 +357,17 @@ button, input, select, textarea {
 .gap-6 { gap: var(--sp-6); }
 .w-full { width: 100%; }
 
-/* ===== Scrollbar（克制）===== */
+/* ===== Scrollbar（深色）===== */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: var(--border-strong);
+  background: var(--border-dark);
   border-radius: 4px;
 }
-::-webkit-scrollbar-thumb:hover { background: var(--text-4); }
+::-webkit-scrollbar-thumb:hover { background: var(--text-3); }
 
 /* ===== Selection ===== */
 ::selection {
-  background: var(--accent-soft);
-  color: var(--accent-text);
+  background: rgba(45, 212, 191, 0.3);
+  color: var(--text);
 }
