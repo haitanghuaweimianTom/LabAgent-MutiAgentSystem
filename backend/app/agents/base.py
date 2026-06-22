@@ -1006,7 +1006,8 @@ class BaseAgent(ABC):
             except Exception as e2:
                 logger.error(f"[{self.name}] Anthropic retry failed: {e2}")
                 self._call_context["error"] = str(e2)
-                return self._mock_response(messages)
+                # v5.3: 失败必须抛（让熔断器计数）
+                raise RuntimeError(f"Anthropic retry failed: {e2}") from e2
         except httpx.HTTPStatusError as e:
             err_text = e.response.content.decode("utf-8", errors="replace")[:300]
             logger.error(f"[{self.name}] Anthropic HTTP {e.response.status_code}: {err_text}")
@@ -1031,11 +1032,15 @@ class BaseAgent(ABC):
                 except Exception as retry_err:
                     logger.error(f"[{self.name}] 切换 Provider 后重试仍失败: {retry_err}")
             self._call_context["error"] = f"HTTP {e.response.status_code}"
-            return self._mock_response(messages)
+            # v5.3: 失败必须抛（让熔断器计数）
+            raise RuntimeError(
+                f"[{self.name}] Anthropic HTTP {e.response.status_code}: {err_text}"
+            ) from e
         except Exception as e:
             logger.error(f"[{self.name}] Anthropic call failed: {e}")
             self._call_context["error"] = str(e)
-            return self._mock_response(messages)
+            # v5.3: 失败必须抛（让熔断器计数）
+            raise RuntimeError(f"Anthropic call failed: {e}") from e
 
     async def call_llm(
         self,
@@ -1180,8 +1185,14 @@ class BaseAgent(ABC):
 
         # ===== 检查 API Key =====
         if not self.api_key:
-            logger.warning(f"[{self.name}] No API key, returning demo response")
-            return self._mock_response(messages)
+            logger.error(
+                f"[{self.name}] No API key configured. "
+                f"v5.3: 抛错而非返回 mock_response，避免假数据 + 触发熔断器。"
+            )
+            raise RuntimeError(
+                f"[{self.name}] No API key configured. "
+                f"请在 Provider 设置或 .env 中配置 API_KEY"
+            )
 
         # ===== ReAct 工具循环 =====
         if tools:
@@ -1192,7 +1203,30 @@ class BaseAgent(ABC):
                 max_iterations=max_react_iterations,
             )
 
-        return await self._call_llm_once(messages, temperature)
+        # ===== v5.3: CircuitBreaker 包装 =====
+        # 防 API key 被刷爆：连续 N 次失败熔断
+        task_id = (context or {}).get("task_id") if context else None
+        try:
+            from ..core.circuit_breaker import get_breaker, CircuitOpenError
+        except ImportError:
+            get_breaker = None
+            CircuitOpenError = RuntimeError
+
+        breaker = get_breaker(task_id) if (get_breaker and task_id) else None
+        if breaker:
+            breaker.check_or_raise()  # OPEN 时直接抛 CircuitOpenError
+
+        try:
+            result = await self._call_llm_once(messages, temperature)
+        except Exception:
+            # 真失败（不是 mock_response）→ 计入熔断器
+            if breaker:
+                breaker.record_failure()
+            raise
+        else:
+            if breaker:
+                breaker.record_success()
+            return result
 
     async def _call_llm_once(
         self,
@@ -1259,7 +1293,8 @@ class BaseAgent(ABC):
             except Exception as e2:
                 logger.error(f"[{self.name}] Retry also failed: {e2}")
                 self._call_context["error"] = str(e2)
-                return self._mock_response(messages)
+                # v5.3: 失败必须抛
+                raise RuntimeError(f"ReadTimeout retry failed: {e2}") from e2
         except (httpx.RemoteProtocolError, httpx.PoolTimeout, OSError) as e:
             logger.warning(f"[{self.name}] Connection error: {e}, retrying once...")
             try:
@@ -1276,7 +1311,8 @@ class BaseAgent(ABC):
             except Exception as e2:
                 logger.error(f"[{self.name}] Connection retry also failed: {e2}")
                 self._call_context["error"] = str(e2)
-                return self._mock_response(messages)
+                # v5.3: 失败必须抛
+                raise RuntimeError(f"Connection retry failed: {e2}") from e2
         except httpx.HTTPStatusError as e:
             try:
                 err_text = e.response.content.decode("utf-8", errors="replace")[:300]
@@ -1284,11 +1320,15 @@ class BaseAgent(ABC):
                 err_text = "unable to read response"
             logger.error(f"[{self.name}] HTTP {e.response.status_code}: {err_text}")
             self._call_context["error"] = f"HTTP {e.response.status_code}"
-            return self._mock_response(messages)
+            # v5.3: 失败必须抛
+            raise RuntimeError(
+                f"[{self.name}] HTTP {e.response.status_code}: {err_text}"
+            ) from e
         except Exception as e:
             logger.error(f"[{self.name}] LLM call failed: {e}")
             self._call_context["error"] = str(e)
-            return self._mock_response(messages)
+            # v5.3: 失败必须抛
+            raise RuntimeError(f"LLM call failed: {e}") from e
 
     async def _react_loop(
         self,
@@ -1649,7 +1689,8 @@ class BaseAgent(ABC):
                 last_error = str(e)
                 logger.error(f"[{self.name}] Claude Code -p 也失败: {last_error}")
                 self._call_context["error"] = last_error
-                return self._mock_response(messages)
+                # v5.3: 失败必须抛
+                raise RuntimeError(f"Claude Code -p failed: {last_error}") from e
 
         # 将 Claude 的文本响应包装为 OpenAI 兼容格式
         return {
