@@ -2,8 +2,9 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: '多智能体协作论文生产系统',
-  description: 'LangGraph 编排 · ReAct 工具循环 · 实时协作讨论 · 自动迭代 · CCF-A 论文全自动生成',
+  title: 'MathModel Agent',
+  description:
+    '多智能体协作论文生产系统 · LangGraph 编排 · ReAct 工具循环 · 自动迭代 · CCF-A 论文全自动生成',
 };
 
 export default function RootLayout({

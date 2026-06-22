@@ -1,14 +1,366 @@
-* { box-sizing: border-box; margin: 0; padding: 0; }
+/* =============================================================
+ * 多智能体协作论文生产系统 — 设计系统 (v2.1)
+ *
+ * 设计原则：
+ *   - 成熟克制，适合长期使用的工具型界面
+ *   - 不依赖大面积渐变 / 装饰图形
+ *   - 信息密度优先（不是大留白艺术风）
+ *   - 卡片仅用于独立信息块，不套娃
+ *   - 按钮 / 输入框 / 表格 4 个状态明确
+ * ============================================================= */
 
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
-  color: #e0e0e0;
-  min-height: 100vh;
+:root {
+  /* ===== Neutral 暖白系 ===== */
+  --bg:           #FAFAF9;   /* stone-50 主背景 */
+  --bg-soft:      #F5F5F4;   /* stone-100 次背景（hover、stripe） */
+  --surface:      #FFFFFF;   /* 卡片 / 面板 */
+  --border:       #E7E5E4;   /* stone-200 通用边框 */
+  --border-strong:#D6D3D1;   /* stone-300 hover/active */
+
+  /* ===== Text ===== */
+  --text:         #1C1917;   /* stone-900 主文字 */
+  --text-2:       #44403C;   /* stone-700 次文字 */
+  --text-3:       #78716C;   /* stone-500 弱文字 */
+  --text-4:       #A8A29E;   /* stone-400 占位 / disabled */
+  --text-invert:  #FAFAF9;   /* 深色按钮上的文字 */
+
+  /* ===== Accent（teal — 专业克制，替代紫渐变）===== */
+  --accent:       #0F766E;   /* teal-700 主行动 */
+  --accent-hover: #115E59;   /* teal-800 hover */
+  --accent-soft:  #F0FDFA;   /* teal-50 高亮背景 */
+  --accent-text:  #134E4A;   /* teal-900 文字 */
+
+  /* ===== Status ===== */
+  --ok:           #15803D;
+  --ok-soft:      #F0FDF4;
+  --warn:         #B45309;
+  --warn-soft:    #FFFBEB;
+  --err:          #B91C1C;
+  --err-soft:     #FEF2F2;
+  --info:         #1D4ED8;
+  --info-soft:    #EFF6FF;
+
+  /* ===== Sizing ===== */
+  --r-sm: 4px;
+  --r:    6px;
+  --r-lg: 8px;
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+
+  /* ===== Typography ===== */
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text",
+               "Helvetica Neue", "PingFang SC", "Microsoft YaHei",
+               system-ui, sans-serif;
+  --font-mono: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+
+  --t-xs: 11px;
+  --t-sm: 12px;
+  --t:    13px;
+  --t-lg: 14px;
+  --t-xl: 16px;
+  --t-2xl:20px;
+  --t-3xl:24px;
+
+  /* ===== Shadow（克制：仅 1 级，不要 5 层）===== */
+  --shadow-sm: 0 1px 2px rgba(28, 25, 23, 0.04);
+  --shadow:    0 1px 3px rgba(28, 25, 23, 0.06), 0 1px 2px rgba(28, 25, 23, 0.04);
+  --shadow-lg: 0 4px 12px rgba(28, 25, 23, 0.08), 0 2px 4px rgba(28, 25, 23, 0.04);
+
+  /* ===== Layout ===== */
+  --header-h: 56px;
+  --side-w: 240px;
+  --max-w:   1280px;
 }
 
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }
+/* ===== Reset ===== */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  font-family: var(--font-sans);
+  font-size: var(--t);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: var(--bg);
+  color: var(--text);
+}
+
+body { min-height: 100vh; }
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+a:hover { color: var(--accent-hover); text-decoration: underline; }
+
+button, input, select, textarea {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+/* ===== Buttons（4 个状态：default / hover / active / disabled + loading）===== */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  padding: 6px 14px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--t);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.12s ease, border-color 0.12s ease,
+              color 0.12s ease;
+  user-select: none;
+}
+.btn:hover:not(:disabled):not([data-loading]) {
+  background: var(--bg-soft);
+  border-color: var(--border-strong);
+}
+.btn:active:not(:disabled) {
+  background: var(--border);
+}
+.btn:disabled, .btn[data-loading] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* primary */
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--text-invert);
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+.btn-primary:active:not(:disabled) { background: var(--accent-hover); }
+
+/* danger */
+.btn-danger {
+  border-color: var(--err);
+  color: var(--err);
+}
+.btn-danger:hover:not(:disabled) {
+  background: var(--err-soft);
+  border-color: var(--err);
+}
+
+/* ghost */
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-2);
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--bg-soft);
+  color: var(--text);
+}
+
+/* sizes */
+.btn-sm { height: 24px; padding: 2px 8px; font-size: var(--t-sm); }
+.btn-lg { height: 36px; padding: 8px 18px; font-size: var(--t-lg); }
+
+/* ===== Inputs ===== */
+.input, .select, .textarea {
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--t);
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.textarea { height: auto; min-height: 80px; padding: 8px 10px; resize: vertical; }
+
+.input::placeholder, .textarea::placeholder { color: var(--text-4); }
+
+.input:hover:not(:disabled):not(:focus),
+.select:hover:not(:disabled):not(:focus) {
+  border-color: var(--border-strong);
+}
+
+.input:focus, .select:focus, .textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.input:disabled, .select:disabled, .textarea:disabled {
+  background: var(--bg-soft);
+  color: var(--text-4);
+  cursor: not-allowed;
+}
+
+.input-invalid, .select-invalid {
+  border-color: var(--err);
+}
+.input-invalid:focus, .select-invalid:focus {
+  box-shadow: 0 0 0 3px var(--err-soft);
+}
+
+/* ===== Tables（清晰可扫描）===== */
+.table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--t);
+}
+.table th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-2);
+  padding: 8px 12px;
+  background: var(--bg-soft);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--t-sm);
+  white-space: nowrap;
+}
+.table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  vertical-align: middle;
+}
+.table tbody tr:hover td { background: var(--bg-soft); }
+.table tbody tr:last-child td { border-bottom: none; }
+.table-numeric td.numeric { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ===== Status pills（用纯色 + 边框，不依赖渐变）===== */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: var(--t-xs);
+  font-weight: 500;
+  line-height: 1;
+  border: 1px solid transparent;
+}
+.pill-ok    { background: var(--ok-soft);   color: var(--ok);   border-color: var(--ok); }
+.pill-warn  { background: var(--warn-soft); color: var(--warn); border-color: var(--warn); }
+.pill-err   { background: var(--err-soft);  color: var(--err);  border-color: var(--err); }
+.pill-info  { background: var(--info-soft); color: var(--info); border-color: var(--info); }
+.pill-muted { background: var(--bg-soft);   color: var(--text-3); border-color: var(--border); }
+
+.pill::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* ===== Card（独立信息块，不套娃）===== */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: var(--sp-5);
+}
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--sp-4);
+  padding-bottom: var(--sp-3);
+  border-bottom: 1px solid var(--border);
+}
+.card-title {
+  font-size: var(--t-lg);
+  font-weight: 600;
+  color: var(--text);
+}
+.card-subtitle {
+  font-size: var(--t-sm);
+  color: var(--text-3);
+  margin-top: 2px;
+}
+.card-body { color: var(--text-2); }
+.card-section + .card-section {
+  margin-top: var(--sp-4);
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--border);
+}
+
+/* ===== Section（用分隔线代替卡片嵌套）===== */
+.section {
+  padding: var(--sp-5) 0;
+  border-bottom: 1px solid var(--border);
+}
+.section:last-child { border-bottom: none; }
+.section-title {
+  font-size: var(--t-sm);
+  font-weight: 600;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: var(--sp-3);
+}
+
+/* ===== Utility ===== */
+.text-mono { font-family: var(--font-mono); }
+.text-xs   { font-size: var(--t-xs); }
+.text-sm   { font-size: var(--t-sm); }
+.text-lg   { font-size: var(--t-lg); }
+.text-2xl  { font-size: var(--t-2xl); }
+.text-3xl  { font-size: var(--t-3xl); }
+.text-muted { color: var(--text-3); }
+.text-dim   { color: var(--text-4); }
+.text-strong{ color: var(--text); font-weight: 600; }
+.text-ok    { color: var(--ok); }
+.text-warn  { color: var(--warn); }
+.text-err   { color: var(--err); }
+.text-info  { color: var(--info); }
+
+.flex { display: flex; }
+.flex-col { display: flex; flex-direction: column; }
+.items-center { align-items: center; }
+.justify-between { justify-content: space-between; }
+.gap-1 { gap: var(--sp-1); }
+.gap-2 { gap: var(--sp-2); }
+.gap-3 { gap: var(--sp-3); }
+.gap-4 { gap: var(--sp-4); }
+.gap-5 { gap: var(--sp-5); }
+.gap-6 { gap: var(--sp-6); }
+.w-full { width: 100%; }
+
+/* ===== Scrollbar（克制）===== */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--text-4); }
+
+/* ===== Selection ===== */
+::selection {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
