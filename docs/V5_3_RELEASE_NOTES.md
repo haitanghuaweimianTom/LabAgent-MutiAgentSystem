@@ -232,6 +232,92 @@ except CircuitOpenError as e:
 
 这个我没集成（避免再被 linter 还原），但你随时可以在 orchestrator 里加上。
 
+---
+
+## v5.3.2：CircuitOpenError 已接入 Orchestrator（v5.3.2）
+
+**位置**：`backend/app/agents/orchestrator.py`
+
+实现了上面的"如何进一步利用 CircuitBreaker"——但做得更完整：
+
+### 触发流程
+
+1. LLM 第 11 次调用失败 → BaseAgent 抛 `CircuitOpenError`
+2. Orchestrator 的 `except Exception as e:` 接住
+3. 检测 `isinstance(e, CircuitOpenError)` → 走熔断分支
+4. **task_step.status = FAILED**（修复了原代码无条件 COMPLETED 的 bug）
+5. **聊天室广播友好消息**：
+   ```
+   ⛔ 任务已暂停：API key 调用连续失败触发熔断
+   原因：[CircuitBreaker:task_xxx] OPEN: 10 consecutive failures (retry in 300s)
+   建议：检查 API key 是否有效/欠费/限流，修复后点击「重新执行」
+   ```
+6. **持久化 metadata**：`status="failed"` + `error="⛔..."` + `current_step="已暂停（API key 异常）"`
+7. 前端轮询 `GET /tasks/{id}/status` 立即看到 failed 状态
+8. 用户看到聊天室的友好提示，按指引修复 key → 点击「重新执行」
+
+### 关键 bug 修复
+
+**Bug**：之前 `if self.task_history[task_id]: self.task_history[task_id][-1].status = TaskStatus.COMPLETED`
+**永远把最后一步设为 COMPLETED**，即使 writer 抛 CircuitOpenError 也覆盖为 COMPLETED！
+**修复**：用 `writer_failed` 标志：
+```python
+self.task_history[task_id][-1].status = (
+    TaskStatus.FAILED if writer_failed else TaskStatus.COMPLETED
+)
+```
+
+### 测试覆盖（3 个新集成测试）
+
+`backend/tests/test_circuit_breaker_integration.py`：
+
+1. ⭐ `test_orchestrator_circuit_open_marks_task_failed_and_broadcasts`
+   - 注入 CircuitOpenError → 验证：
+     - 聊天室广播包含 ⛔ + 熔断 + API key + 重新执行
+     - task_step.status = FAILED
+     - task_step.error 含 ⛔ 友好消息
+     - metadata.status = failed
+     - metadata.current_step = "已暂停（API key 异常）"
+2. `test_normal_exception_does_not_trigger_circuit_handling`
+   - 普通 RuntimeError 不应触发熔断器友好消息
+3. `test_real_circuit_breaker_triggers_via_consecutive_failures`
+   - 真实 10 次连续失败 → 第 11 次抛 CircuitOpenError
+
+---
+
+## v5.3.2 完整状态
+
+测试结果：
+```
+274 passed in 127s
+```
+
+包含：
+- 原有 228 个回归
+- v5.3 新模块（ContextCompressor / ConsistencyChecker / CircuitBreaker）共 43 个
+- v5.3.2 新集成（Orchestrator 集成）3 个
+
+---
+
+## 用户完整使用流程
+
+1. **任务跑到一半，API key 失效**：
+   - 第 11 次 LLM 调用 → CircuitOpenError
+   - Orchestrator 标记 task failed + 聊天室广播 ⛔
+   - 前端 SSE 推送 status="failed"，current_step="已暂停（API key 异常）"
+
+2. **用户在聊天室看到提示**：
+   ```
+   ⛔ 任务已暂停：API key 调用连续失败触发熔断
+   原因：[CircuitBreaker:task_xxx] OPEN: 10 consecutive failures
+   建议：检查 API key 是否有效/欠费/限流，修复后点击「重新执行」
+   ```
+
+3. **用户修复 key，点击「重新执行」**：
+   - 任务重启，新 task_id
+   - CircuitBreaker 是按 task_id 隔离的，新任务独立计数
+   - 不再无限刷老 key
+
 **测试**：`backend/tests/test_circuit_breaker.py`（16 个全过）
 - CLOSED → OPEN 转换
 - 成功重置窗口

@@ -717,6 +717,31 @@ class Orchestrator:
             task_step.status = TaskStatus.FAILED
             task_step.error = str(e)
             writer_failed = True
+            # v5.3: CircuitOpenError（熔断器触发）必须立即通知用户 + 标记任务失败
+            from ..core.circuit_breaker import CircuitOpenError
+            if isinstance(e, CircuitOpenError):
+                friendly_msg = (
+                    f"⛔ 任务已暂停：API key 调用连续失败触发熔断\n"
+                    f"原因：{e}\n"
+                    f"建议：检查 API key 是否有效/欠费/限流，修复后点击「重新执行」"
+                )
+                task_step.error = friendly_msg
+                room.post("coordinator", friendly_msg, "broadcast")
+                logger.error(f"[Orchestrator] 任务 {task_id} 被 CircuitBreaker 暂停：{e}")
+                # 立即把失败状态写入持久化（前端轮询能立刻看到）
+                try:
+                    from ..core.task_persistence import save_task_metadata
+                    save_task_metadata(
+                        task_id=task_id,
+                        problem_text=problem_text or "",
+                        status="failed",
+                        created_at="",  # 空字符串保留 existing
+                        completed_at=datetime.now().isoformat(),
+                        error=friendly_msg,
+                        current_step="已暂停（API key 异常）",
+                    )
+                except Exception as meta_exc:
+                    logger.warning(f"持久化 CircuitOpenError 状态失败: {meta_exc}")
             # 保存 checkpoint 以便重试
             try:
                 import json
@@ -734,7 +759,10 @@ class Orchestrator:
         task_step.completed_at = datetime.now()
 
         if self.task_history[task_id]:
-            self.task_history[task_id][-1].status = TaskStatus.COMPLETED
+            # v5.3: writer_failed 时保持 FAILED 状态，不要无条件设为 COMPLETED
+            self.task_history[task_id][-1].status = (
+                TaskStatus.FAILED if writer_failed else TaskStatus.COMPLETED
+            )
 
         # 更新黑板：论文结果
         if wm:
