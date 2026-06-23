@@ -9,7 +9,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     app_name: str = "多智能体协作论文生产系统"
-    app_version: str = "3.1.0"
+    app_version: str = "5.3.0"
     debug: bool = True
 
     api_prefix: str = "/api/v1"

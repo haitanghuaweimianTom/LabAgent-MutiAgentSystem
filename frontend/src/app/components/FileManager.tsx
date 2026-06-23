@@ -35,8 +35,20 @@ export default function FileManager({ taskId }: FileManagerProps) {
       const url = new URL(apiBase() + '/data/files');
       if (projectName) url.searchParams.set('project_name', projectName);
       const res = await fetch(url.toString());
-      if (res.ok) setFiles(await res.json());
-    } catch {} finally { setLoading(false); }
+      if (res.ok) {
+        try {
+          const data = await res.json();
+          setFiles(Array.isArray(data) ? data : []);
+        } catch (parse_err) {
+          console.error('[FileManager] JSON parse error:', parse_err);
+          setFiles([]);
+        }
+      }
+    } catch (err) {
+      console.error('[FileManager] loadFiles error:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { loadFiles(); }, [projectName]);
@@ -127,7 +139,7 @@ export default function FileManager({ taskId }: FileManagerProps) {
             <div className={styles.fileInfo}>
               <span className={styles.fileName}>{f.name}</span>
               <span className={styles.fileSize}>
-                {(f.size / 1024).toFixed(1)} KB
+                {typeof f.size === 'number' ? `${(f.size / 1024).toFixed(1)} KB` : '未知大小'}
                 {f.shape ? ` · ${f.shape[0]}行 x ${f.shape[1]}列` : ''}
               </span>
             </div>

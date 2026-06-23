@@ -2,6 +2,104 @@
 
 import { useState, useEffect, useCallback } from 'react';
 
+// =============================================================
+// v5.3.0 深色模式样式常量（替代原 inline 浅色样式）
+// =============================================================
+const fieldStyle: React.CSSProperties = {
+  padding: '6px 10px',
+  height: 32,
+  background: '#0F172A',
+  border: '1px solid #334155',
+  borderRadius: 6,
+  color: '#F8FAFC',
+  fontSize: 14,
+  outline: 'none',
+};
+
+const thStyle: React.CSSProperties = {
+  padding: '8px 10px',
+  borderBottom: '1px solid #334155',
+  background: '#0F172A',
+  color: '#94A3B8',
+  fontSize: 12,
+  fontWeight: 600,
+  textAlign: 'left',
+  whiteSpace: 'nowrap',
+};
+
+const tdStyle: React.CSSProperties = {
+  padding: '8px 10px',
+  borderBottom: '1px solid #334155',
+  color: '#E2E8F0',
+  fontSize: 13,
+  verticalAlign: 'middle',
+};
+
+const primaryBtnStyle: React.CSSProperties = {
+  padding: '6px 16px',
+  height: 32,
+  background: '#2DD4BF',
+  color: '#0F172A',
+  border: 'none',
+  borderRadius: 6,
+  fontSize: 14,
+  fontWeight: 600,
+  cursor: 'pointer',
+};
+
+const primaryBtnSmStyle: React.CSSProperties = {
+  padding: '4px 10px',
+  background: '#2DD4BF',
+  color: '#0F172A',
+  border: 'none',
+  borderRadius: 4,
+  fontSize: 12,
+  fontWeight: 600,
+  cursor: 'pointer',
+};
+
+const secondaryBtnStyle: React.CSSProperties = {
+  padding: '6px 16px',
+  height: 32,
+  background: '#1E293B',
+  color: '#CBD5E1',
+  border: '1px solid #334155',
+  borderRadius: 6,
+  fontSize: 14,
+  cursor: 'pointer',
+};
+
+const secondaryBtnSmStyle: React.CSSProperties = {
+  padding: '4px 10px',
+  background: '#1E293B',
+  color: '#CBD5E1',
+  border: '1px solid #334155',
+  borderRadius: 4,
+  fontSize: 12,
+  cursor: 'pointer',
+};
+
+const dangerBtnSmStyle: React.CSSProperties = {
+  padding: '4px 10px',
+  background: '#7F1D1D',
+  color: '#FCA5A5',
+  border: '1px solid #B91C1C',
+  borderRadius: 4,
+  fontSize: 12,
+  cursor: 'pointer',
+};
+
+const disabledBtnStyle: React.CSSProperties = {
+  padding: '4px 10px',
+  background: '#1E293B',
+  color: '#475569',
+  border: '1px solid #334155',
+  borderRadius: 4,
+  fontSize: 12,
+  cursor: 'not-allowed',
+  opacity: 0.6,
+};
+
 interface EnvironmentInfo {
   name: string;
   backend: string;
@@ -137,13 +235,36 @@ export default function EnvironmentManager() {
 
   return (
     <div style={{ padding: 16, maxWidth: 960, margin: '0 auto' }}>
-      <h2>🐍 环境管理</h2>
-      {msg && <div style={{ padding: 10, marginBottom: 12, background: '#fff3cd', borderRadius: 6 }}>{msg}</div>}
+      <h2 style={{ color: '#F8FAFC', fontSize: 20, marginBottom: 12 }}>🐍 环境管理</h2>
 
-      <section style={{ marginBottom: 24, padding: 16, border: '1px solid #ddd', borderRadius: 8 }}>
-        <h3>创建新环境</h3>
+      {msg && (
+        <div style={{
+          padding: '10px 14px',
+          marginBottom: 12,
+          background: /失败|错误|error|fail/i.test(msg) ? '#7F1D1D' : '#1E3A8A',
+          color: '#F8FAFC',
+          borderRadius: 6,
+          border: '1px solid #334155',
+          fontSize: 13,
+        }}>
+          {msg}
+        </div>
+      )}
+
+      <section style={{
+        marginBottom: 24,
+        padding: 16,
+        background: '#1E293B',
+        border: '1px solid #334155',
+        borderRadius: 8,
+      }}>
+        <h3 style={{ color: '#F8FAFC', fontSize: 16, marginBottom: 12 }}>创建新环境</h3>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-          <select value={newBackend} onChange={(e) => setNewBackend(e.target.value)}>
+          <select
+            value={newBackend}
+            onChange={(e) => setNewBackend(e.target.value)}
+            style={fieldStyle}
+          >
             {backends.map((b) => (
               <option key={b} value={b}>{b}</option>
             ))}
@@ -152,70 +273,106 @@ export default function EnvironmentManager() {
             placeholder="环境名称"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
+            style={fieldStyle}
           />
           <input
             placeholder="Python 版本"
             value={newPython}
             onChange={(e) => setNewPython(e.target.value)}
+            style={fieldStyle}
           />
-          <button onClick={createEnv} disabled={creating || !newName.trim()}>
+          <button
+            onClick={createEnv}
+            disabled={creating || !newName.trim()}
+            style={primaryBtnStyle}
+          >
             {creating ? '创建中...' : '创建'}
           </button>
         </div>
       </section>
 
       {installTarget && (
-        <section style={{ marginBottom: 24, padding: 16, border: '1px solid #ddd', borderRadius: 8, background: '#f8f9fa' }}>
-          <h3>安装依赖到 {installTarget.name}</h3>
+        <section style={{
+          marginBottom: 24,
+          padding: 16,
+          background: '#1E293B',
+          border: '1px solid #334155',
+          borderRadius: 8,
+        }}>
+          <h3 style={{ color: '#F8FAFC', fontSize: 16, marginBottom: 12 }}>
+            安装依赖到 {installTarget.name}
+          </h3>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
             <input
               placeholder="requirements.txt 路径（留空使用项目默认）"
               value={requirementsPath}
               onChange={(e) => setRequirementsPath(e.target.value)}
-              style={{ minWidth: 320 }}
+              style={{ ...fieldStyle, minWidth: 320 }}
             />
-            <button onClick={installReqs} disabled={installing}>{installing ? '安装中...' : '安装'}</button>
-            <button onClick={() => setInstallTarget(null)}>取消</button>
+            <button onClick={installReqs} disabled={installing} style={primaryBtnStyle}>
+              {installing ? '安装中...' : '安装'}
+            </button>
+            <button onClick={() => setInstallTarget(null)} style={secondaryBtnStyle}>
+              取消
+            </button>
           </div>
         </section>
       )}
 
       <section>
-        <h3>环境列表</h3>
+        <h3 style={{ color: '#F8FAFC', fontSize: 16, marginBottom: 12 }}>环境列表</h3>
         {loading ? (
-          <p>加载中...</p>
+          <p style={{ color: '#94A3B8', fontSize: 13 }}>加载中...</p>
         ) : envs.length === 0 ? (
-          <p>暂无环境</p>
+          <p style={{ color: '#94A3B8', fontSize: 13 }}>暂无环境</p>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, color: '#E2E8F0' }}>
             <thead>
-              <tr style={{ background: '#f0f0f0' }}>
-                <th style={{ padding: 8, border: '1px solid #ddd' }}>名称</th>
-                <th style={{ padding: 8, border: '1px solid #ddd' }}>后端</th>
-                <th style={{ padding: 8, border: '1px solid #ddd' }}>Python</th>
-                <th style={{ padding: 8, border: '1px solid #ddd' }}>路径</th>
-                <th style={{ padding: 8, border: '1px solid #ddd' }}>状态</th>
-                <th style={{ padding: 8, border: '1px solid #ddd' }}>操作</th>
+              <tr style={{ background: '#0F172A' }}>
+                <th style={thStyle}>名称</th>
+                <th style={thStyle}>后端</th>
+                <th style={thStyle}>Python</th>
+                <th style={thStyle}>路径</th>
+                <th style={thStyle}>状态</th>
+                <th style={{ ...thStyle, minWidth: 220 }}>操作</th>
               </tr>
             </thead>
             <tbody>
               {envs.map((env) => (
-                <tr key={`${env.backend}-${env.name}`}>
-                  <td style={{ padding: 8, border: '1px solid #ddd' }}>{env.name}</td>
-                  <td style={{ padding: 8, border: '1px solid #ddd' }}>{env.backend}</td>
-                  <td style={{ padding: 8, border: '1px solid #ddd' }}>{env.python_version}</td>
-                  <td style={{ padding: 8, border: '1px solid #ddd', fontSize: 12, maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis' }}>{env.path}</td>
-                  <td style={{ padding: 8, border: '1px solid #ddd' }}>
-                    {env.is_active ? <span style={{ color: 'green', fontWeight: 'bold' }}>● 激活</span> : '未激活'}
+                <tr key={`${env.backend}-${env.name}`} style={{ borderBottom: '1px solid #334155' }}>
+                  <td style={tdStyle}>{env.name}</td>
+                  <td style={tdStyle}>{env.backend}</td>
+                  <td style={tdStyle}>{env.python_version}</td>
+                  <td style={{ ...tdStyle, maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'ui-monospace, Menlo, Consolas, monospace', fontSize: 12, color: '#94A3B8' }}>
+                    {env.path}
                   </td>
-                  <td style={{ padding: 8, border: '1px solid #ddd' }}>
-                    <button onClick={() => activateEnv(env.backend, env.name)} disabled={env.is_active}>
+                  <td style={tdStyle}>
+                    {env.is_active ? (
+                      <span style={{ color: '#4ADE80', fontWeight: 700, fontSize: 13 }}>
+                        ● 激活
+                      </span>
+                    ) : (
+                      <span style={{ color: '#94A3B8', fontSize: 13 }}>未激活</span>
+                    )}
+                  </td>
+                  <td style={{ ...tdStyle, minWidth: 220 }}>
+                    <button
+                      onClick={() => activateEnv(env.backend, env.name)}
+                      disabled={env.is_active}
+                      style={env.is_active ? disabledBtnStyle : primaryBtnSmStyle}
+                    >
                       激活
                     </button>{' '}
-                    <button onClick={() => setInstallTarget({ backend: env.backend, name: env.name })}>
+                    <button
+                      onClick={() => setInstallTarget({ backend: env.backend, name: env.name })}
+                      style={secondaryBtnSmStyle}
+                    >
                       安装依赖
                     </button>{' '}
-                    <button onClick={() => deleteEnv(env.backend, env.name)} style={{ color: 'red' }}>
+                    <button
+                      onClick={() => deleteEnv(env.backend, env.name)}
+                      style={dangerBtnSmStyle}
+                    >
                       删除
                     </button>
                   </td>
