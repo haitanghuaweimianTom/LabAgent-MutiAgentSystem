@@ -1,6 +1,6 @@
 .container {
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: #1E293B;
+  border: 1px solid #334155;
   border-radius: 14px;
   padding: 1.2rem;
 }
@@ -12,18 +12,18 @@
   margin-bottom: 0.5rem;
 }
 
-.title { font-size: 1rem; color: #fff; font-weight: 600; }
+.title { font-size: 1rem; color: #F8FAFC; font-weight: 600; }
 
 .uploadBtn {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem 1rem;
-  background: linear-gradient(135deg, #9b59b6, #8e44ad);
-  color: #fff;
+  background: #2DD4BF;
+  color: #F8FAFC;
   border-radius: 8px;
   cursor: pointer;
-  font-size: 0.85rem;
+  font-size: 0.9375rem;
   font-weight: 600;
   transition: transform 0.2s;
 }
@@ -31,9 +31,9 @@
 .uploadBtn:hover { transform: translateY(-1px); }
 .uploadBtn:disabled { opacity: 0.6; cursor: not-allowed; }
 
-.hint { color: #777; font-size: 0.8rem; margin-bottom: 1rem; }
+.hint { color: #64748B; font-size: 0.875rem; margin-bottom: 1rem; }
 
-.empty { text-align: center; padding: 2rem; color: #555; font-size: 0.9rem; }
+.empty { text-align: center; padding: 2rem; color: #475569; font-size: 0.9375rem; }
 
 .fileList { display: flex; flex-direction: column; gap: 0.5rem; }
 
@@ -48,7 +48,7 @@
 }
 
 .fileIcon {
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   padding: 0.2rem 0.5rem;
   background: rgba(155,89,182,0.2);
   border-radius: 4px;
@@ -59,26 +59,26 @@
 }
 
 .fileInfo { flex: 1; }
-.fileName { display: block; font-size: 0.9rem; color: #ddd; }
-.fileSize { display: block; font-size: 0.78rem; color: #777; margin-top: 0.2rem; }
+.fileName { display: block; font-size: 0.9375rem; color: #CBD5E1; }
+.fileSize { display: block; font-size: 0.78rem; color: #64748B; margin-top: 0.2rem; }
 
 .insights { display: flex; gap: 0.3rem; flex-wrap: wrap; }
-.insightTag { font-size: 0.72rem; padding: 0.15rem 0.5rem; background: rgba(46,204,113,0.1); border-radius: 10px; color: #2ecc71; }
+.insightTag { font-size: 0.72rem; padding: 0.15rem 0.5rem; background: rgba(74, 222, 128, 0.15); border-radius: 10px; color: #2ecc71; }
 
 .deleteBtn {
   padding: 0.3rem 0.6rem;
-  background: rgba(231,76,60,0.15);
+  background: rgba(248, 113, 113, 0.15);
   color: #e74c3c;
-  border: 1px solid rgba(231,76,60,0.3);
+  border: 1px solid rgba(248, 113, 113, 0.15);
   border-radius: 6px;
   cursor: pointer;
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   transition: all 0.2s;
   margin-left: 0.5rem;
   flex-shrink: 0;
 }
 
-.deleteBtn:hover { background: rgba(231,76,60,0.3); }
+.deleteBtn:hover { background: rgba(248, 113, 113, 0.15); }
 
 .batchBar {
   display: flex;
@@ -94,8 +94,8 @@
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  color: #aaa;
-  font-size: 0.85rem;
+  color: #94A3B8;
+  font-size: 0.9375rem;
   cursor: pointer;
 }
 
@@ -103,16 +103,16 @@
 
 .batchDeleteBtn {
   padding: 0.4rem 0.8rem;
-  background: rgba(231,76,60,0.2);
+  background: rgba(248, 113, 113, 0.15);
   color: #e74c3c;
-  border: 1px solid rgba(231,76,60,0.4);
+  border: 1px solid rgba(248, 113, 113, 0.15);
   border-radius: 6px;
   cursor: pointer;
-  font-size: 0.85rem;
+  font-size: 0.9375rem;
   font-weight: 600;
   transition: all 0.2s;
 }
 
-.batchDeleteBtn:hover { background: rgba(231,76,60,0.35); }
+.batchDeleteBtn:hover { background: rgba(248, 113, 113, 0.15); }
 
 .fileCheck { accent-color: #3498db; width: 16px; height: 16px; cursor: pointer; }

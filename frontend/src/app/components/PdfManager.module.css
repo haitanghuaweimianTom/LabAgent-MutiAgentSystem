@@ -1,6 +1,6 @@
 .container {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #1E293B;
+  border: 1px solid #334155;
   border-radius: 14px;
   padding: 1rem;
   display: flex;
@@ -10,7 +10,7 @@
 
 .title {
   font-size: 1rem;
-  color: #fff;
+  color: #F8FAFC;
   font-weight: 600;
 }
 
@@ -21,8 +21,8 @@
 }
 
 .sectionTitle {
-  font-size: 0.85rem;
-  color: #aaa;
+  font-size: 0.9375rem;
+  color: #94A3B8;
   font-weight: 600;
 }
 
@@ -38,15 +38,15 @@
   min-width: 200px;
   padding: 0.5rem 0.7rem;
   background: rgba(0, 0, 0, 0.25);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid #334155;
   border-radius: 8px;
   color: #e0e0e0;
-  font-size: 0.85rem;
+  font-size: 0.9375rem;
 }
 
 .input:focus {
   outline: none;
-  border-color: rgba(52, 152, 219, 0.5);
+  border-color: rgba(45, 212, 191, 0.15);
 }
 
 .fileInput {
@@ -55,26 +55,26 @@
 
 .fileLabel {
   padding: 0.5rem 0.8rem;
-  background: rgba(52, 152, 219, 0.15);
-  border: 1px solid rgba(52, 152, 219, 0.3);
+  background: rgba(45, 212, 191, 0.15);
+  border: 1px solid rgba(45, 212, 191, 0.15);
   border-radius: 8px;
   color: #3498db;
-  font-size: 0.85rem;
+  font-size: 0.9375rem;
   cursor: pointer;
   transition: background 0.2s;
 }
 
 .fileLabel:hover {
-  background: rgba(52, 152, 219, 0.25);
+  background: rgba(45, 212, 191, 0.15);
 }
 
 .btn {
   padding: 0.5rem 0.9rem;
-  background: linear-gradient(135deg, #3498db, #2980b9);
-  color: #fff;
+  background: #2DD4BF;
+  color: #F8FAFC;
   border: none;
   border-radius: 8px;
-  font-size: 0.85rem;
+  font-size: 0.9375rem;
   cursor: pointer;
   transition: opacity 0.2s;
 }
@@ -90,33 +90,33 @@
 
 .btnSecondary {
   padding: 0.4rem 0.7rem;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: #334155;
+  border: 1px solid #475569;
   border-radius: 6px;
-  color: #ccc;
-  font-size: 0.8rem;
+  color: #CBD5E1;
+  font-size: 0.875rem;
   cursor: pointer;
 }
 
 .btnSecondary:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: #334155;
 }
 
 .select {
   padding: 0.45rem 0.6rem;
   background: rgba(0, 0, 0, 0.25);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid #334155;
   border-radius: 6px;
   color: #e0e0e0;
-  font-size: 0.8rem;
+  font-size: 0.875rem;
 }
 
 .checkbox {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  color: #aaa;
-  font-size: 0.8rem;
+  color: #94A3B8;
+  font-size: 0.875rem;
   cursor: pointer;
 }
 
@@ -134,7 +134,7 @@
   align-items: center;
   padding: 0.7rem 0.9rem;
   background: rgba(0, 0, 0, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid #334155;
   border-radius: 10px;
 }
 
@@ -148,7 +148,7 @@
 
 .fileName {
   color: #e0e0e0;
-  font-size: 0.85rem;
+  font-size: 0.9375rem;
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
@@ -156,8 +156,8 @@
 }
 
 .fileMeta {
-  color: #888;
-  font-size: 0.75rem;
+  color: #94A3B8;
+  font-size: 0.875rem;
 }
 
 .fileActions {
@@ -169,13 +169,13 @@
 .empty {
   text-align: center;
   padding: 2rem;
-  color: #888;
-  font-size: 0.85rem;
+  color: #94A3B8;
+  font-size: 0.9375rem;
 }
 
 .result {
   background: rgba(0, 0, 0, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid #334155;
   border-radius: 10px;
   padding: 0.8rem;
   max-height: 400px;
@@ -188,19 +188,19 @@
   flex-wrap: wrap;
   margin-bottom: 0.6rem;
   padding-bottom: 0.6rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid #334155;
 }
 
 .tag {
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   color: #a0d0ff;
-  background: rgba(52, 152, 219, 0.12);
+  background: rgba(45, 212, 191, 0.15);
   padding: 0.15rem 0.5rem;
   border-radius: 4px;
 }
 
 .resultText {
-  color: #ccc;
+  color: #CBD5E1;
   font-size: 0.82rem;
   line-height: 1.6;
   white-space: pre-wrap;
@@ -209,8 +209,8 @@
 
 .error {
   color: #e74c3c;
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   padding: 0.5rem;
-  background: rgba(231, 76, 60, 0.1);
+  background: rgba(248, 113, 113, 0.15);
   border-radius: 6px;
 }

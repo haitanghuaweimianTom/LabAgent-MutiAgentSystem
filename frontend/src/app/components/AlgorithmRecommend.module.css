@@ -1,6 +1,6 @@
 .container {
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: #1E293B;
+  border: 1px solid #334155;
   border-radius: 14px;
   padding: 1.2rem;
   margin-bottom: 1rem;
@@ -13,14 +13,14 @@
   margin-bottom: 0.8rem;
 }
 
-.title { font-size: 0.95rem; color: #fff; font-weight: 600; }
-.subtitle { font-size: 0.75rem; color: #888; }
+.title { font-size: 0.95rem; color: #F8FAFC; font-weight: 600; }
+.subtitle { font-size: 0.875rem; color: #94A3B8; }
 
 .list { display: flex; flex-direction: column; gap: 0.6rem; }
 
 .card {
   background: rgba(0,0,0,0.2);
-  border: 1px solid rgba(255,255,255,0.08);
+  border: 1px solid #334155;
   border-radius: 10px;
   overflow: hidden;
 }
@@ -30,21 +30,21 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.6rem 0.8rem;
-  background: rgba(52,152,219,0.08);
-  border-bottom: 1px solid rgba(255,255,255,0.06);
+  background: rgba(45, 212, 191, 0.15);
+  border-bottom: 1px solid #334155;
 }
 
 .rank {
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   color: #3498db;
   font-weight: 700;
-  background: rgba(52,152,219,0.15);
+  background: rgba(45, 212, 191, 0.15);
   padding: 0.1rem 0.4rem;
   border-radius: 4px;
 }
 
-.name { font-size: 0.9rem; color: #fff; font-weight: 600; }
-.nameEn { font-size: 0.75rem; color: #888; font-style: italic; }
+.name { font-size: 0.9375rem; color: #F8FAFC; font-weight: 600; }
+.nameEn { font-size: 0.875rem; color: #94A3B8; font-style: italic; }
 .score { margin-left: auto; font-size: 0.72rem; color: #2ecc71; font-weight: 600; }
 
 .cardBody { padding: 0.7rem 0.8rem; }
@@ -53,15 +53,15 @@
 .row:last-child { margin-bottom: 0; }
 
 .label {
-  font-size: 0.75rem;
-  color: #888;
+  font-size: 0.875rem;
+  color: #94A3B8;
   font-weight: 600;
   min-width: 60px;
   flex-shrink: 0;
 }
 
-.text { font-size: 0.82rem; color: #bbb; line-height: 1.5; }
-.textMono { font-size: 0.8rem; color: #ccc; font-family: 'Courier New', monospace; line-height: 1.5; }
+.text { font-size: 0.82rem; color: #94A3B8; line-height: 1.5; }
+.textMono { font-size: 0.875rem; color: #CBD5E1; font-family: 'Courier New', monospace; line-height: 1.5; }
 
 .tags { display: flex; flex-wrap: wrap; gap: 0.3rem; }
 
@@ -82,7 +82,7 @@
 
 .pros, .cons {
   font-size: 0.78rem;
-  color: #aaa;
+  color: #94A3B8;
 }
 
 .prosLabel { color: #2ecc71; font-weight: 600; margin-right: 0.3rem; }

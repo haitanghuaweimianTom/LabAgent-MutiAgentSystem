@@ -2,8 +2,8 @@
   display: flex;
   height: 100%;
   min-height: 500px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #1E293B;
+  border: 1px solid #334155;
   border-radius: 14px;
   overflow: hidden;
 }
@@ -14,13 +14,13 @@
   min-width: 200px;
   display: flex;
   flex-direction: column;
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  border-right: 1px solid #334155;
   background: rgba(0, 0, 0, 0.2);
 }
 
 .sidebarHeader {
   padding: 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid #334155;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -28,17 +28,17 @@
 
 .sidebarTitle {
   font-size: 0.95rem;
-  color: #fff;
+  color: #F8FAFC;
   font-weight: 600;
 }
 
 .addBaseBtn {
   padding: 0.3rem 0.6rem;
-  background: rgba(46, 204, 113, 0.15);
-  border: 1px solid rgba(46, 204, 113, 0.3);
+  background: rgba(74, 222, 128, 0.15);
+  border: 1px solid rgba(74, 222, 128, 0.15);
   border-radius: 6px;
   color: #2ecc71;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   cursor: pointer;
   font-weight: 600;
 }
@@ -62,17 +62,17 @@
 }
 
 .baseItem:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: #1E293B;
 }
 
 .baseItemActive {
-  background: rgba(52, 152, 219, 0.12);
-  border-color: rgba(52, 152, 219, 0.25);
+  background: rgba(45, 212, 191, 0.15);
+  border-color: rgba(45, 212, 191, 0.15);
 }
 
 .baseItemName {
-  color: #ddd;
-  font-size: 0.85rem;
+  color: #CBD5E1;
+  font-size: 0.9375rem;
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
@@ -81,13 +81,13 @@
 }
 
 .baseItemActive .baseItemName {
-  color: #fff;
+  color: #F8FAFC;
 }
 
 .baseItemCount {
-  font-size: 0.7rem;
-  color: #888;
-  background: rgba(255, 255, 255, 0.06);
+  font-size: 0.8125rem;
+  color: #94A3B8;
+  background: #334155;
   padding: 0.1rem 0.4rem;
   border-radius: 10px;
   margin-left: 0.4rem;
@@ -100,9 +100,9 @@
   padding: 0.1rem 0.3rem;
   background: transparent;
   border: none;
-  color: #888;
+  color: #94A3B8;
   cursor: pointer;
-  font-size: 0.85rem;
+  font-size: 0.9375rem;
 }
 
 .baseItem:hover .baseItemMenu {
@@ -119,7 +119,7 @@
 
 .mainHeader {
   padding: 1rem 1.5rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid #334155;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -128,7 +128,7 @@
 
 .mainTitle {
   font-size: 1rem;
-  color: #fff;
+  color: #F8FAFC;
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
@@ -143,10 +143,10 @@
 
 .actionBtn {
   padding: 0.4rem 0.8rem;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #334155;
+  border: 1px solid #334155;
   border-radius: 6px;
-  color: #aaa;
+  color: #94A3B8;
   font-size: 0.78rem;
   cursor: pointer;
   transition: all 0.15s;
@@ -154,33 +154,33 @@
 }
 
 .actionBtn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: #334155;
+  color: #F8FAFC;
 }
 
 .actionBtnPrimary {
-  background: rgba(46, 204, 113, 0.15);
-  border-color: rgba(46, 204, 113, 0.3);
+  background: rgba(74, 222, 128, 0.15);
+  border-color: rgba(74, 222, 128, 0.15);
   color: #2ecc71;
 }
 
 .actionBtnPrimary:hover {
-  background: rgba(46, 204, 113, 0.25);
+  background: rgba(74, 222, 128, 0.15);
 }
 
 .searchInput {
   padding: 0.4rem 0.7rem;
   background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid #334155;
   border-radius: 6px;
   color: #e0e0e0;
-  font-size: 0.85rem;
+  font-size: 0.9375rem;
   width: 200px;
   outline: none;
 }
 
 .searchInput:focus {
-  border-color: rgba(52, 152, 219, 0.4);
+  border-color: rgba(45, 212, 191, 0.15);
 }
 
 /* Tabs */
@@ -188,7 +188,7 @@
   display: flex;
   gap: 0;
   padding: 0 1.5rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid #334155;
 }
 
 .tab {
@@ -196,15 +196,15 @@
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
-  color: #888;
-  font-size: 0.85rem;
+  color: #94A3B8;
+  font-size: 0.9375rem;
   cursor: pointer;
   font-weight: 500;
   transition: all 0.15s;
 }
 
 .tab:hover {
-  color: #ddd;
+  color: #CBD5E1;
 }
 
 .tabActive {
@@ -220,10 +220,10 @@
 }
 
 .emptyState {
-  color: #666;
+  color: #64748B;
   text-align: center;
   padding: 3rem 1rem;
-  font-size: 0.9rem;
+  font-size: 0.9375rem;
 }
 
 .itemRow {
@@ -232,7 +232,7 @@
   gap: 0.8rem;
   padding: 0.7rem 0.9rem;
   background: rgba(0, 0, 0, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid #334155;
   border-radius: 8px;
   margin-bottom: 0.5rem;
   transition: background 0.15s;
@@ -255,7 +255,7 @@
 }
 
 .itemName {
-  color: #eee;
+  color: #E2E8F0;
   font-size: 0.88rem;
   font-weight: 500;
   white-space: nowrap;
@@ -264,8 +264,8 @@
 }
 
 .itemSource {
-  color: #666;
-  font-size: 0.75rem;
+  color: #64748B;
+  font-size: 0.875rem;
   margin-top: 0.15rem;
 }
 
@@ -277,21 +277,21 @@
 }
 
 .itemSize {
-  color: #888;
+  color: #94A3B8;
   font-size: 0.78rem;
 }
 
 .statusIcon {
-  font-size: 0.85rem;
+  font-size: 0.9375rem;
 }
 
 .deleteBtn {
   padding: 0.2rem 0.4rem;
-  background: rgba(231, 76, 60, 0.1);
-  border: 1px solid rgba(231, 76, 60, 0.2);
+  background: rgba(248, 113, 113, 0.15);
+  border: 1px solid rgba(248, 113, 113, 0.15);
   border-radius: 4px;
   color: #e74c3c;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.15s;
@@ -299,11 +299,11 @@
 
 .downloadBtn {
   padding: 0.2rem 0.4rem;
-  background: rgba(52, 152, 219, 0.1);
-  border: 1px solid rgba(52, 152, 219, 0.2);
+  background: rgba(45, 212, 191, 0.15);
+  border: 1px solid rgba(45, 212, 191, 0.15);
   border-radius: 4px;
   color: #3498db;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.15s;
@@ -315,7 +315,7 @@
   border: 1px solid rgba(243, 156, 18, 0.2);
   border-radius: 4px;
   color: #f39c12;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.15s;
@@ -327,7 +327,7 @@
   border: 1px solid rgba(155, 89, 182, 0.2);
   border-radius: 4px;
   color: #9b59b6;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.15s;
@@ -348,7 +348,7 @@
 .searchResultItem {
   padding: 0.7rem;
   background: rgba(0, 0, 0, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid #334155;
   border-radius: 8px;
   margin-bottom: 0.5rem;
 }
@@ -360,18 +360,18 @@
 }
 
 .searchResultName {
-  color: #fff;
+  color: #F8FAFC;
   font-weight: 600;
   font-size: 0.88rem;
 }
 
 .searchResultScore {
   color: #3498db;
-  font-size: 0.8rem;
+  font-size: 0.875rem;
 }
 
 .searchResultText {
-  color: #aaa;
+  color: #94A3B8;
   font-size: 0.82rem;
   white-space: pre-wrap;
   line-height: 1.4;
@@ -390,7 +390,7 @@
 
 .modal {
   background: #1e1e2e;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid #334155;
   border-radius: 14px;
   padding: 1.5rem;
   width: 90%;
@@ -402,32 +402,32 @@
 
 .modalTitle {
   font-size: 1rem;
-  color: #fff;
+  color: #F8FAFC;
   font-weight: 600;
 }
 
 .modalInput {
   padding: 0.6rem;
   background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid #334155;
   border-radius: 8px;
   color: #e0e0e0;
-  font-size: 0.9rem;
+  font-size: 0.9375rem;
   outline: none;
   width: 100%;
 }
 
 .modalInput:focus {
-  border-color: rgba(52, 152, 219, 0.4);
+  border-color: rgba(45, 212, 191, 0.15);
 }
 
 .modalTextarea {
   padding: 0.6rem;
   background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid #334155;
   border-radius: 8px;
   color: #e0e0e0;
-  font-size: 0.9rem;
+  font-size: 0.9375rem;
   outline: none;
   width: 100%;
   min-height: 120px;
@@ -444,16 +444,16 @@
 .msgBar {
   padding: 0.5rem 1rem;
   border-radius: 8px;
-  font-size: 0.85rem;
+  font-size: 0.9375rem;
   text-align: center;
 }
 
 .msgSuccess {
   color: #2ecc71;
-  background: rgba(46, 204, 113, 0.1);
+  background: rgba(74, 222, 128, 0.15);
 }
 
 .msgError {
   color: #e74c3c;
-  background: rgba(231, 76, 60, 0.1);
+  background: rgba(248, 113, 113, 0.15);
 }

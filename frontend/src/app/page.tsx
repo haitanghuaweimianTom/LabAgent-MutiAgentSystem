@@ -354,7 +354,8 @@ export default function Home() {
   return (
     <main className={styles.main}>
       <header className={styles.header}>
-        <span className={styles.headerTitle}>多智能体协作论文生产系统 v3.1</span>
+        <span className={styles.headerTitle}>多智能体协作论文生产系统</span>
+        <span className={styles.topbarVersion}>v5.3.0</span>
         <p className={styles.subtitle}>LangGraph 编排 · ReAct 工具循环 · 实时协作讨论 · 自动迭代 · CCF-A 论文全自动生成</p>
       </header>
 

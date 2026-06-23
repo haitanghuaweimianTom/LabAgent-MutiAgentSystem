@@ -38,20 +38,31 @@
   background: #1E293B;
   border-bottom: 1px solid #334155;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 .headerTitle {
   font-size: 18px;
   color: #F8FAFC;
   font-weight: 700;
-  display: block;
+  display: inline-block;
+}
+.topbarVersion {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+  color: #94A3B8;
+  background: #0F172A;
+  border: 1px solid #334155;
+  padding: 2px 8px;
+  border-radius: 4px;
 }
 .subtitle {
   color: #CBD5E1;
   font-size: 13px;
   margin-top: 4px;
   display: block;
+  flex-basis: 100%;
 }
 
 /* ===== 导航（横向 tab 风格） ===== */

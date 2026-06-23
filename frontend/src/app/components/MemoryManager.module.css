@@ -24,8 +24,8 @@
 }
 
 .statCard {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #1E293B;
+  border: 1px solid #334155;
   border-radius: 10px;
   padding: 1rem;
   text-align: center;
@@ -38,8 +38,8 @@
 }
 
 .statLabel {
-  font-size: 0.85rem;
-  color: #aaa;
+  font-size: 0.9375rem;
+  color: #94A3B8;
   margin-top: 0.3rem;
 }
 
@@ -47,18 +47,18 @@
   display: flex;
   gap: 0.5rem;
   margin-bottom: 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid #334155;
   padding-bottom: 0.5rem;
 }
 
 .tab {
   padding: 0.5rem 1rem;
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid #334155;
   border-radius: 6px;
-  color: #aaa;
+  color: #94A3B8;
   cursor: pointer;
-  font-size: 0.9rem;
+  font-size: 0.9375rem;
 }
 
 .tabActive {
@@ -70,7 +70,7 @@
 .sectionTitle {
   font-size: 1rem;
   font-weight: 600;
-  color: #ddd;
+  color: #CBD5E1;
   margin-bottom: 0.8rem;
 }
 
@@ -84,49 +84,49 @@
 .input {
   padding: 0.5rem;
   background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid #475569;
   border-radius: 6px;
   color: #e0e0e0;
-  font-size: 0.9rem;
+  font-size: 0.9375rem;
 }
 
 .select {
   padding: 0.5rem;
   background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid #475569;
   border-radius: 6px;
   color: #e0e0e0;
-  font-size: 0.9rem;
+  font-size: 0.9375rem;
 }
 
 .btn {
   padding: 0.5rem 1rem;
-  background: rgba(52, 152, 219, 0.15);
-  border: 1px solid rgba(52, 152, 219, 0.3);
+  background: rgba(45, 212, 191, 0.15);
+  border: 1px solid rgba(45, 212, 191, 0.15);
   border-radius: 6px;
   color: #3498db;
   cursor: pointer;
-  font-size: 0.85rem;
+  font-size: 0.9375rem;
 }
 
 .btnDanger {
   padding: 0.4rem 0.8rem;
-  background: rgba(231, 76, 60, 0.15);
-  border: 1px solid rgba(231, 76, 60, 0.3);
+  background: rgba(248, 113, 113, 0.15);
+  border: 1px solid rgba(248, 113, 113, 0.15);
   border-radius: 6px;
   color: #e74c3c;
   cursor: pointer;
-  font-size: 0.8rem;
+  font-size: 0.875rem;
 }
 
 .btnSuccess {
   padding: 0.5rem 1rem;
-  background: linear-gradient(135deg, #2ecc71, #27ae60);
+  background: #4ADE80;
   border: none;
   border-radius: 6px;
-  color: #fff;
+  color: #F8FAFC;
   cursor: pointer;
-  font-size: 0.85rem;
+  font-size: 0.9375rem;
   font-weight: 600;
 }
 
@@ -137,8 +137,8 @@
 }
 
 .card {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #1E293B;
+  border: 1px solid #334155;
   border-radius: 10px;
   padding: 1rem;
 }
@@ -159,14 +159,14 @@
 
 .tag {
   padding: 0.2rem 0.5rem;
-  background: rgba(52, 152, 219, 0.15);
+  background: rgba(45, 212, 191, 0.15);
   border-radius: 4px;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   color: #3498db;
 }
 
 .tagSuccess {
-  background: rgba(46, 204, 113, 0.15);
+  background: rgba(74, 222, 128, 0.15);
   color: #2ecc71;
 }
 
@@ -176,20 +176,20 @@
 }
 
 .content {
-  font-size: 0.9rem;
+  font-size: 0.9375rem;
   line-height: 1.6;
-  color: #ccc;
+  color: #CBD5E1;
 }
 
 .empty {
-  color: #888;
+  color: #94A3B8;
   text-align: center;
   padding: 2rem;
 }
 
 .form {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #1E293B;
+  border: 1px solid #334155;
   border-radius: 10px;
   padding: 1rem;
   margin-bottom: 1.5rem;
@@ -207,22 +207,22 @@
   min-height: 80px;
   padding: 0.5rem;
   background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid #475569;
   border-radius: 6px;
   color: #e0e0e0;
-  font-size: 0.9rem;
+  font-size: 0.9375rem;
   font-family: inherit;
   resize: vertical;
 }
 
 .jsonView {
   background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid #334155;
   border-radius: 6px;
   padding: 1rem;
   font-family: 'Fira Code', 'Consolas', monospace;
-  font-size: 0.8rem;
-  color: #ccc;
+  font-size: 0.875rem;
+  color: #CBD5E1;
   overflow-x: auto;
   white-space: pre-wrap;
   word-break: break-word;

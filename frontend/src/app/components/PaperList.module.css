@@ -1,6 +1,6 @@
 .container {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #1E293B;
+  border: 1px solid #334155;
   border-radius: 14px;
   overflow: hidden;
   display: flex;
@@ -14,12 +14,12 @@
   align-items: center;
   padding: 0.8rem 1rem;
   background: rgba(0, 0, 0, 0.2);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid #334155;
 }
 
 .title {
   font-size: 0.95rem;
-  color: #fff;
+  color: #F8FAFC;
   font-weight: 600;
 }
 
@@ -35,20 +35,20 @@
 .empty {
   text-align: center;
   padding: 2rem;
-  color: #888;
-  font-size: 0.9rem;
+  color: #94A3B8;
+  font-size: 0.9375rem;
 }
 
 .card {
   background: rgba(0, 0, 0, 0.25);
   border-radius: 10px;
   padding: 0.8rem 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid #334155;
   transition: border-color 0.2s;
 }
 
 .card:hover {
-  border-color: rgba(52, 152, 219, 0.3);
+  border-color: rgba(45, 212, 191, 0.15);
 }
 
 .cardHeader {
@@ -60,7 +60,7 @@
 }
 
 .titleLink {
-  font-size: 0.9rem;
+  font-size: 0.9375rem;
   font-weight: 600;
   color: #3498db;
   text-decoration: none;
@@ -74,16 +74,16 @@
 
 .year {
   font-size: 0.78rem;
-  color: #888;
-  background: rgba(255, 255, 255, 0.06);
+  color: #94A3B8;
+  background: #334155;
   padding: 0.15rem 0.5rem;
   border-radius: 4px;
   white-space: nowrap;
 }
 
 .authors {
-  font-size: 0.8rem;
-  color: #aaa;
+  font-size: 0.875rem;
+  color: #94A3B8;
   margin-bottom: 0.4rem;
   line-height: 1.4;
 }
@@ -97,7 +97,7 @@
 }
 
 .tag {
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   color: #e0c080;
   background: rgba(224, 192, 128, 0.1);
   padding: 0.15rem 0.4rem;
@@ -105,7 +105,7 @@
 }
 
 .category {
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   color: #a0e0a0;
   background: rgba(160, 224, 160, 0.1);
   padding: 0.15rem 0.4rem;
@@ -113,22 +113,22 @@
 }
 
 .pdfLink {
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   color: #e74c3c;
   text-decoration: none;
   margin-left: auto;
   padding: 0.15rem 0.4rem;
-  border: 1px solid rgba(231, 76, 60, 0.3);
+  border: 1px solid rgba(248, 113, 113, 0.15);
   border-radius: 4px;
 }
 
 .pdfLink:hover {
-  background: rgba(231, 76, 60, 0.15);
+  background: rgba(248, 113, 113, 0.15);
 }
 
 .toggleBtn {
   font-size: 0.78rem;
-  color: #888;
+  color: #94A3B8;
   background: none;
   border: none;
   cursor: pointer;
@@ -137,22 +137,22 @@
 }
 
 .toggleBtn:hover {
-  color: #ccc;
+  color: #CBD5E1;
 }
 
 .abstract {
   font-size: 0.82rem;
-  color: #bbb;
+  color: #94A3B8;
   line-height: 1.6;
   margin-top: 0.4rem;
   padding-top: 0.4rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid #334155;
   max-height: 200px;
   overflow-y: auto;
 }
 
 .citation {
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   color: #e8a0a0;
   background: rgba(232, 160, 160, 0.1);
   padding: 0.15rem 0.4rem;
@@ -160,7 +160,7 @@
 }
 
 .venue {
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   color: #c0a0e8;
   background: rgba(192, 160, 232, 0.1);
   padding: 0.15rem 0.4rem;
@@ -172,7 +172,7 @@
 }
 
 .doi {
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   color: #a0c0e8;
   text-decoration: none;
   padding: 0.15rem 0.4rem;
@@ -193,20 +193,20 @@
 
 .fieldTag {
   font-size: 0.72rem;
-  color: #888;
-  background: rgba(255, 255, 255, 0.05);
+  color: #94A3B8;
+  background: #1E293B;
   padding: 0.1rem 0.35rem;
   border-radius: 3px;
 }
 
 .tldr {
-  font-size: 0.8rem;
-  color: #aaa;
+  font-size: 0.875rem;
+  color: #94A3B8;
   margin-bottom: 0.5rem;
   padding: 0.4rem 0.6rem;
-  background: rgba(255, 255, 255, 0.03);
+  background: #1E293B;
   border-radius: 6px;
-  border-left: 2px solid rgba(52, 152, 219, 0.4);
+  border-left: 2px solid rgba(45, 212, 191, 0.15);
   line-height: 1.5;
 }
 
@@ -217,7 +217,7 @@
 }
 
 .relevance {
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   color: #f39c12;
   background: rgba(243, 156, 18, 0.1);
   padding: 0.15rem 0.4rem;
@@ -225,13 +225,13 @@
 }
 
 .extraction {
-  font-size: 0.8rem;
-  color: #bbb;
+  font-size: 0.875rem;
+  color: #94A3B8;
   margin-bottom: 0.5rem;
   padding: 0.5rem 0.7rem;
-  background: rgba(46, 204, 113, 0.05);
+  background: rgba(74, 222, 128, 0.15);
   border-radius: 6px;
-  border-left: 2px solid rgba(46, 204, 113, 0.4);
+  border-left: 2px solid rgba(74, 222, 128, 0.15);
   line-height: 1.5;
 }
 

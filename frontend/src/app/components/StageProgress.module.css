@@ -1,6 +1,6 @@
 .container {
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: #1E293B;
+  border: 1px solid #334155;
   border-radius: 14px;
   padding: 1.2rem;
   margin-bottom: 1rem;
@@ -13,8 +13,8 @@
   margin-bottom: 1rem;
 }
 
-.title { font-size: 1rem; color: #fff; font-weight: 600; }
-.summary { font-size: 0.8rem; color: #888; }
+.title { font-size: 1rem; color: #F8FAFC; font-weight: 600; }
+.summary { font-size: 0.875rem; color: #94A3B8; }
 
 .stages {
   display: grid;
@@ -48,7 +48,7 @@
   left: -50%;
   width: 100%;
   height: 2px;
-  background: rgba(255,255,255,0.08);
+  background: #334155;
   z-index: 0;
 }
 
@@ -64,28 +64,28 @@
   border-radius: 20px;
   font-size: 0.82rem;
   font-weight: 600;
-  border: 1px solid rgba(255,255,255,0.1);
-  background: rgba(255,255,255,0.04);
-  color: #888;
+  border: 1px solid #334155;
+  background: #1E293B;
+  color: #94A3B8;
   z-index: 1;
   white-space: nowrap;
 }
 
 .badge.running {
-  background: rgba(52,152,219,0.15);
-  border-color: rgba(52,152,219,0.5);
+  background: rgba(45, 212, 191, 0.15);
+  border-color: rgba(45, 212, 191, 0.15);
   color: #3498db;
 }
 
 .badge.completed {
-  background: rgba(46,204,113,0.15);
-  border-color: rgba(46,204,113,0.5);
+  background: rgba(74, 222, 128, 0.15);
+  border-color: rgba(74, 222, 128, 0.15);
   color: #2ecc71;
 }
 
 .badge.failed {
-  background: rgba(231,76,60,0.15);
-  border-color: rgba(231,76,60,0.5);
+  background: rgba(248, 113, 113, 0.15);
+  border-color: rgba(248, 113, 113, 0.15);
   color: #e74c3c;
 }
 
@@ -97,12 +97,12 @@
   opacity: 0.7;
 }
 
-.icon { font-size: 0.9rem; }
-.badgeLabel { font-size: 0.8rem; }
+.icon { font-size: 0.9375rem; }
+.badgeLabel { font-size: 0.875rem; }
 
 .spinner {
   width: 12px; height: 12px;
-  border: 2px solid rgba(52,152,219,0.3);
+  border: 2px solid rgba(45, 212, 191, 0.15);
   border-top-color: #3498db;
   border-radius: 50%;
   animation: spin 1s linear infinite;
@@ -121,12 +121,12 @@
   text-align: center;
 }
 
-.detailText { font-size: 0.75rem; color: #aaa; line-height: 1.4; }
-.subDetail { font-size: 0.72rem; color: #666; margin-top: 0.3rem; }
+.detailText { font-size: 0.875rem; color: #94A3B8; line-height: 1.4; }
+.subDetail { font-size: 0.72rem; color: #64748B; margin-top: 0.3rem; }
 
 .miniBar {
   height: 3px;
-  background: rgba(255,255,255,0.08);
+  background: #334155;
   border-radius: 2px;
   margin-top: 0.4rem;
   overflow: hidden;
@@ -142,10 +142,10 @@
 .memorySection {
   margin-top: 1rem;
   padding-top: 1rem;
-  border-top: 1px solid rgba(255,255,255,0.06);
+  border-top: 1px solid #334155;
 }
 
-.memoryTitle { font-size: 0.85rem; color: #f39c12; font-weight: 600; margin-bottom: 0.5rem; }
+.memoryTitle { font-size: 0.9375rem; color: #f39c12; font-weight: 600; margin-bottom: 0.5rem; }
 
 .memoryList {
   display: flex;
@@ -158,10 +158,10 @@
   align-items: center;
   gap: 0.3rem;
   padding: 0.3rem 0.6rem;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.08);
+  background: #1E293B;
+  border: 1px solid #334155;
   border-radius: 6px;
 }
 
-.memoryLabel { font-size: 0.72rem; color: #aaa; font-weight: 600; white-space: nowrap; }
-.memoryContent { font-size: 0.72rem; color: #666; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.memoryLabel { font-size: 0.72rem; color: #94A3B8; font-weight: 600; white-space: nowrap; }
+.memoryContent { font-size: 0.72rem; color: #64748B; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

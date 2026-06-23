@@ -1,6 +1,6 @@
 .container {
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: #1E293B;
+  border: 1px solid #334155;
   border-radius: 14px;
   overflow: hidden;
   display: flex;
@@ -14,29 +14,29 @@
   align-items: center;
   padding: 0.8rem 1rem;
   background: rgba(0,0,0,0.2);
-  border-bottom: 1px solid rgba(255,255,255,0.06);
+  border-bottom: 1px solid #334155;
 }
 
-.title { font-size: 0.95rem; color: #fff; font-weight: 600; }
+.title { font-size: 0.95rem; color: #F8FAFC; font-weight: 600; }
 
 .tabs { display: flex; gap: 0.3rem; }
 
 .tab {
   padding: 0.3rem 0.8rem;
   border-radius: 6px;
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   cursor: pointer;
-  border: 1px solid rgba(255,255,255,0.1);
-  background: rgba(255,255,255,0.04);
-  color: #888;
+  border: 1px solid #334155;
+  background: #1E293B;
+  color: #94A3B8;
   transition: all 0.2s;
 }
 
-.tab:hover { background: rgba(255,255,255,0.08); color: #ddd; }
+.tab:hover { background: #334155; color: #CBD5E1; }
 
 .tabActive {
-  background: rgba(52,152,219,0.15);
-  border-color: rgba(52,152,219,0.4);
+  background: rgba(45, 212, 191, 0.15);
+  border-color: rgba(45, 212, 191, 0.15);
   color: #3498db;
 }
 
@@ -47,43 +47,43 @@
   background: rgba(0,0,0,0.15);
 }
 
-.empty { text-align: center; padding: 3rem; color: #555; font-size: 0.9rem; }
+.empty { text-align: center; padding: 3rem; color: #475569; font-size: 0.9375rem; }
 
 .abstractBox {
-  background: rgba(52,152,219,0.06);
-  border: 1px solid rgba(52,152,219,0.15);
+  background: rgba(45, 212, 191, 0.15);
+  border: 1px solid rgba(45, 212, 191, 0.15);
   border-radius: 10px;
   padding: 1rem;
   margin-bottom: 1rem;
 }
 
-.abstractTitle { font-size: 0.9rem; color: #3498db; font-weight: 700; margin-bottom: 0.5rem; }
-.abstractText { font-size: 0.85rem; color: #ccc; line-height: 1.7; }
-.keywords { margin-top: 0.5rem; font-size: 0.8rem; color: #888; }
-.keywordsLabel { color: #aaa; font-weight: 600; }
+.abstractTitle { font-size: 0.9375rem; color: #3498db; font-weight: 700; margin-bottom: 0.5rem; }
+.abstractText { font-size: 0.9375rem; color: #CBD5E1; line-height: 1.7; }
+.keywords { margin-top: 0.5rem; font-size: 0.875rem; color: #94A3B8; }
+.keywordsLabel { color: #94A3B8; font-weight: 600; }
 
 .markdownBody {
   font-size: 0.88rem;
   line-height: 1.8;
-  color: #ddd;
+  color: #CBD5E1;
 }
 
-.markdownBody :global(h2) { font-size: 1.1rem; color: #fff; margin: 1.2rem 0 0.6rem; padding-bottom: 0.3rem; border-bottom: 1px solid rgba(255,255,255,0.08); }
-.markdownBody :global(h3) { font-size: 1rem; color: #eee; margin: 1rem 0 0.5rem; }
-.markdownBody :global(h4) { font-size: 0.92rem; color: #ddd; margin: 0.8rem 0 0.4rem; }
+.markdownBody :global(h2) { font-size: 1.1rem; color: #F8FAFC; margin: 1.2rem 0 0.6rem; padding-bottom: 0.3rem; border-bottom: 1px solid #334155; }
+.markdownBody :global(h3) { font-size: 1rem; color: #E2E8F0; margin: 1rem 0 0.5rem; }
+.markdownBody :global(h4) { font-size: 0.92rem; color: #CBD5E1; margin: 0.8rem 0 0.4rem; }
 .markdownBody :global(p) { margin-bottom: 0.6rem; }
-.markdownBody :global(strong) { color: #fff; }
-.markdownBody :global(em) { color: #bbb; }
+.markdownBody :global(strong) { color: #F8FAFC; }
+.markdownBody :global(em) { color: #94A3B8; }
 .markdownBody :global(pre) { background: rgba(0,0,0,0.4); padding: 0.8rem; border-radius: 8px; overflow-x: auto; margin: 0.6rem 0; }
 .markdownBody :global(code) { font-family: 'Courier New', monospace; font-size: 0.82rem; }
 .markdownBody :global(img) { max-width: 100%; border-radius: 6px; margin: 0.6rem 0; }
 .markdownBody :global(a) { color: #3498db; text-decoration: none; }
 .markdownBody :global(a:hover) { text-decoration: underline; }
-.markdownBody :global(li) { margin-left: 1rem; margin-bottom: 0.3rem; color: #bbb; }
+.markdownBody :global(li) { margin-left: 1rem; margin-bottom: 0.3rem; color: #94A3B8; }
 .markdownBody :global(table) { width: 100%; border-collapse: collapse; margin: 0.6rem 0; font-size: 0.82rem; }
-.markdownBody :global(td), .markdownBody :global(th) { border: 1px solid rgba(255,255,255,0.1); padding: 0.4rem 0.6rem; }
-.markdownBody :global(th) { background: rgba(255,255,255,0.05); color: #fff; }
-.markdownBody :global(td) { color: #ccc; }
+.markdownBody :global(td), .markdownBody :global(th) { border: 1px solid #334155; padding: 0.4rem 0.6rem; }
+.markdownBody :global(th) { background: #1E293B; color: #F8FAFC; }
+.markdownBody :global(td) { color: #CBD5E1; }
 
 .mathBlock {
   background: rgba(0,0,0,0.2);
@@ -91,13 +91,13 @@
   border-radius: 8px;
   margin: 0.6rem 0;
   text-align: center;
-  color: #ddd;
+  color: #CBD5E1;
   font-family: 'Times New Roman', serif;
   font-size: 0.95rem;
   overflow-x: auto;
 }
 
-.mathInline { color: #ddd; font-family: 'Times New Roman', serif; }
+.mathInline { color: #CBD5E1; font-family: 'Times New Roman', serif; }
 
 .latexCode {
   background: rgba(0,0,0,0.4);
@@ -120,7 +120,7 @@
 }
 
 .inlineCode {
-  background: rgba(255,255,255,0.06);
+  background: #334155;
   padding: 0.1rem 0.4rem;
   border-radius: 4px;
   color: #e0c080;
@@ -131,6 +131,6 @@
 .img { max-width: 100%; border-radius: 6px; margin: 0.6rem 0; }
 .link { color: #3498db; text-decoration: none; }
 .link:hover { text-decoration: underline; }
-.li { margin-left: 1rem; margin-bottom: 0.3rem; color: #bbb; }
+.li { margin-left: 1rem; margin-bottom: 0.3rem; color: #94A3B8; }
 .tableWrapper { overflow-x: auto; margin: 0.6rem 0; }
 .table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
