@@ -22,7 +22,12 @@ export default function FileManager({ taskId }: FileManagerProps) {
   const [files, setFiles] = useState<FileInfo[]>([]);
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(false);
-  const selectedFiles = useAppStore((s) => s.selectedFiles);
+  const selectedFilesRaw = useAppStore((s) => s.selectedFiles);
+  // v5.3.0: 防御性归一化 —— 如果 selectedFiles 被 redux-persist 错误反序列化为 Array，
+  // 转回 Set 以避免 .has / .size 不存在的运行时错误
+  const selectedFiles: Set<string> = selectedFilesRaw instanceof Set
+    ? selectedFilesRaw
+    : new Set(Array.isArray(selectedFilesRaw) ? selectedFilesRaw : []);
   const toggleFile = useAppStore((s) => s.toggleFileSelection);
   const selectAll = useAppStore((s) => s.selectAllFiles);
   const clearSelection = useAppStore((s) => s.clearFileSelection);

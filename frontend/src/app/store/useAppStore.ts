@@ -238,8 +238,16 @@ export const useAppStore = create<AppState>()(
       name: 'app-store',
       partialize: (state) => ({
         activeProjectId: state.activeProjectId,
+        // Set 不能 JSON 序列化，必须转 Array；rehydrate 时 onRehydrateStorage 转回 Set
         selectedFiles: Array.from(state.selectedFiles),
       }),
+      onRehydrateStorage: () => (state) => {
+        if (!state) return;
+        // 把 Array 转回 Set（持久化时 Array.from，反序列化必须 new Set）
+        if (Array.isArray((state as any).selectedFiles)) {
+          (state as any).selectedFiles = new Set((state as any).selectedFiles);
+        }
+      },
     }
   )
 );
