@@ -66,6 +66,17 @@ async def lifespan(app: FastAPI):
     # 确保所有必要目录存在
     from .core.paths import ensure_dirs
     ensure_dirs()
+    # v5.3.0: 迁移旧格式数据目录（outputs/<name>/data/*.csv → user_uploads/）
+    try:
+        from .core.paths import migrate_legacy_data_dir
+        m_stats = migrate_legacy_data_dir(verbose=False)
+        if m_stats["files_moved"] > 0:
+            logger.info(
+                f"v5.3.0 数据目录迁移: 扫描 {m_stats['projects_scanned']} 个项目, "
+                f"移动 {m_stats['files_moved']} 个文件到 user_uploads/"
+            )
+    except Exception as mig_exc:
+        logger.warning(f"v5.3.0 数据迁移失败（不影响启动）: {mig_exc}")
     # 迁移旧格式 provider 配置
     migrate_legacy_to_new()
     # 自动检测并同步 ccswitch Provider 配置

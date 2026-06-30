@@ -29,13 +29,50 @@ class AuthField(str, Enum):
     ANTHROPIC_AUTH_TOKEN = "anthropic_auth_token"  # 使用 ANTHROPIC_AUTH_TOKEN (阿里云TokenPlan 等)
 
 
-def type_to_api_format(p_type: str) -> str:
-    """Provider type -> API format mapping"""
+class ProviderType(str, Enum):
+    """Provider 类型枚举 — 覆盖规范要求的所有类型。"""
+
+    OPENAI = "openai"
+    OPENAI_RESPONSES = "openai_responses"
+    OPENAI_ASSISTANTS = "openai_assistants"
+    AZURE_OPENAI = "azure_openai"
+    OPENAI_COMPATIBLE = "openai_compatible"
+    ANTHROPIC = "anthropic"
+    ANTHROPIC_BEDROCK = "anthropic_bedrock"
+    ANTHROPIC_VERTEX = "anthropic_vertex"
+    ANTHROPIC_BATCH = "anthropic_batch"
+    DASHSCOPE = "dashscope"
+    ZHIPU = "zhipu"
+    GOOGLE_GEMINI = "google_gemini"
+    OLLAMA = "ollama"
+    CUSTOM_HTTP = "custom_http"
+
+    # 旧版别名（向后兼容）
+    GEMINI = "gemini"
+
+
+def type_to_api_format(p_type: str, api_host: str = "") -> str:
+    """Provider type -> API format mapping.
+
+    不再根据 api_host 做特殊判断；格式完全由 provider type 与 meta 决定。
+    """
     mapping = {
-        "openai": "openai_chat",
-        "anthropic": "anthropic",
-        "gemini": "gemini_native",
-        "ollama": "ollama_chat",
+        ProviderType.OPENAI: "openai_chat",
+        ProviderType.OPENAI_RESPONSES: "openai_responses",
+        ProviderType.OPENAI_ASSISTANTS: "openai_assistants",
+        ProviderType.AZURE_OPENAI: "azure_openai",
+        ProviderType.OPENAI_COMPATIBLE: "openai_chat",
+        ProviderType.ANTHROPIC: "anthropic",
+        ProviderType.ANTHROPIC_BEDROCK: "anthropic",
+        ProviderType.ANTHROPIC_VERTEX: "anthropic",
+        ProviderType.ANTHROPIC_BATCH: "anthropic",
+        ProviderType.DASHSCOPE: "openai_chat",
+        ProviderType.ZHIPU: "openai_chat",
+        ProviderType.GOOGLE_GEMINI: "gemini_native",
+        ProviderType.GEMINI: "gemini_native",
+        ProviderType.OLLAMA: "ollama_chat",
+        ProviderType.CUSTOM_HTTP: "openai_chat",
+        # 旧版兼容
         "minimax": "openai_chat",
         "claude_cli": "anthropic",
     }
@@ -43,26 +80,62 @@ def type_to_api_format(p_type: str) -> str:
 
 
 def type_to_category(p_type: str, api_host: str = "") -> str:
-    """Provider type + host -> category mapping"""
-    official_hosts = {"api.openai.com", "api.anthropic.com", "generativelanguage.googleapis.com"}
-    cn_official_hosts = {"dashscope.aliyuncs.com", "api.siliconflow.cn", "open.bigmodel.cn", "api.moonshot.cn"}
-    if p_type in ("openai", "anthropic", "gemini") and api_host in official_hosts:
+    """Provider type -> category mapping.
+
+    分类仅依赖 provider type，不再硬编码 host。
+    """
+    official_types = {
+        ProviderType.OPENAI,
+        ProviderType.OPENAI_RESPONSES,
+        ProviderType.OPENAI_ASSISTANTS,
+        ProviderType.ANTHROPIC,
+        ProviderType.GOOGLE_GEMINI,
+        ProviderType.GEMINI,
+    }
+    cn_types = {
+        ProviderType.DASHSCOPE,
+        ProviderType.ZHIPU,
+        "minimax",
+        "moonshot",
+    }
+    cloud_types = {
+        ProviderType.AZURE_OPENAI,
+        ProviderType.ANTHROPIC_BEDROCK,
+        ProviderType.ANTHROPIC_VERTEX,
+        ProviderType.OLLAMA,
+    }
+    aggregator_types = {ProviderType.OPENAI_COMPATIBLE, "openrouter"}
+
+    if p_type in official_types:
         return ProviderCategory.OFFICIAL
-    if api_host and any(h in api_host for h in cn_official_hosts):
+    if p_type in cn_types:
         return ProviderCategory.CN_OFFICIAL
-    if p_type == "minimax":
-        return ProviderCategory.THIRD_PARTY
-    if p_type == "ollama":
+    if p_type in cloud_types:
         return ProviderCategory.CLOUD_PROVIDER
+    if p_type in aggregator_types:
+        return ProviderCategory.AGGREGATOR
+    if p_type == ProviderType.CUSTOM_HTTP:
+        return ProviderCategory.CUSTOM
     return ProviderCategory.CUSTOM
 
 
 def type_to_icon(p_type: str) -> str:
     type_icons = {
-        "openai": "OpenAI",
-        "anthropic": "Anthropic",
-        "gemini": "Gemini",
-        "ollama": "Ollama",
+        ProviderType.OPENAI: "OpenAI",
+        ProviderType.OPENAI_RESPONSES: "OpenAI",
+        ProviderType.OPENAI_ASSISTANTS: "OpenAI",
+        ProviderType.AZURE_OPENAI: "Azure",
+        ProviderType.OPENAI_COMPATIBLE: "OpenAI",
+        ProviderType.ANTHROPIC: "Anthropic",
+        ProviderType.ANTHROPIC_BEDROCK: "AWS",
+        ProviderType.ANTHROPIC_VERTEX: "GoogleCloud",
+        ProviderType.ANTHROPIC_BATCH: "Anthropic",
+        ProviderType.DASHSCOPE: "Aliyun",
+        ProviderType.ZHIPU: "Zhipu",
+        ProviderType.GOOGLE_GEMINI: "Gemini",
+        ProviderType.GEMINI: "Gemini",
+        ProviderType.OLLAMA: "Ollama",
+        ProviderType.CUSTOM_HTTP: "Custom",
         "minimax": "MiniMax",
         "claude_cli": "CLI",
     }
@@ -71,10 +144,21 @@ def type_to_icon(p_type: str) -> str:
 
 def type_to_icon_color(p_type: str) -> str:
     colors = {
-        "openai": "#10a37f",
-        "anthropic": "#d9733e",
-        "gemini": "#4285f4",
-        "ollama": "#000000",
+        ProviderType.OPENAI: "#10a37f",
+        ProviderType.OPENAI_RESPONSES: "#10a37f",
+        ProviderType.OPENAI_ASSISTANTS: "#10a37f",
+        ProviderType.AZURE_OPENAI: "#0078d4",
+        ProviderType.OPENAI_COMPATIBLE: "#10a37f",
+        ProviderType.ANTHROPIC: "#d9733e",
+        ProviderType.ANTHROPIC_BEDROCK: "#ff9900",
+        ProviderType.ANTHROPIC_VERTEX: "#4285f4",
+        ProviderType.ANTHROPIC_BATCH: "#d9733e",
+        ProviderType.DASHSCOPE: "#ff6a00",
+        ProviderType.ZHIPU: "#1677ff",
+        ProviderType.GOOGLE_GEMINI: "#4285f4",
+        ProviderType.GEMINI: "#4285f4",
+        ProviderType.OLLAMA: "#000000",
+        ProviderType.CUSTOM_HTTP: "#666666",
         "minimax": "#6366f1",
         "claude_cli": "#8b5cf6",
     }

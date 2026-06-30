@@ -35,6 +35,19 @@ PEER_REVIEW_SYSTEM = """你是一名严谨的 CCF-A 类会议/期刊审稿人。
   不要泛泛而谈"改进方法部分"）
 - 分数（1-5）必须基于论文 *实际可见* 的内容
 
+【实验可复现性检查（如论文包含实验）】
+- 是否有完整的 train/eval 脚本或实验流程描述？
+- 是否设置了随机种子（random seed）？
+- 是否记录了关键超参数？
+- baseline 对比是否有明确来源说明（引用或自实现）？
+- 数据集是否有公开引用或链接？
+
+【严格控制幻觉】
+- 只评估论文 *实际* 包含的章节、方法、实验；不要凭空补充论文里没有的引用或结果
+- suggested_edits 要具体到章节或公式（"在 Section 4.2 补充与 SoTA 的对比"，
+  不要泛泛而谈"改进方法部分"）
+- 分数（1-5）必须基于论文 *实际可见* 的内容
+
 【四维度评分（每项 1-5，越高越好）】
 - novelty: 相对于已有工作的新意
 - soundness: 技术严谨性（理论 + 实验）
@@ -57,6 +70,14 @@ PEER_REVIEW_SYSTEM = """你是一名严谨的 CCF-A 类会议/期刊审稿人。
   "comments": {
     "major": ["主要问题 1 (≤80字)", ...],
     "minor": ["次要问题 1 (≤60字)", ...]
+  },
+  "reproducibility": {
+    "has_train_script": true|false,
+    "has_random_seed": true|false,
+    "has_hyperparams": true|false,
+    "has_baseline_source": true|false,
+    "has_dataset_reference": true|false,
+    "score": 1-5
   },
   "recommendation": "accept|revise|reject",
   "suggested_edits": [
@@ -248,6 +269,14 @@ class PeerReviewAgent(BaseAgent):
                 "major": list(data.get("comments", {}).get("major", []) or []),
                 "minor": list(data.get("comments", {}).get("minor", []) or []),
             },
+            "reproducibility": data.get("reproducibility", {
+                "has_train_script": False,
+                "has_random_seed": False,
+                "has_hyperparams": False,
+                "has_baseline_source": False,
+                "has_dataset_reference": False,
+                "score": 3,
+            }),
             "recommendation": rec,
             "suggested_edits": list(data.get("suggested_edits", []) or []),
             "confidence": clamp(int(data.get("confidence", 3))),
@@ -259,6 +288,14 @@ class PeerReviewAgent(BaseAgent):
             "scores": {"novelty": 3, "soundness": 3, "clarity": 3, "significance": 3},
             "overall_score": 3.0,
             "comments": {"major": [], "minor": []},
+            "reproducibility": {
+                "has_train_script": False,
+                "has_random_seed": False,
+                "has_hyperparams": False,
+                "has_baseline_source": False,
+                "has_dataset_reference": False,
+                "score": 3,
+            },
             "recommendation": "revise",
             "suggested_edits": [],
             "confidence": 1,

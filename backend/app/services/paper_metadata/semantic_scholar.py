@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
-from app.config import get_settings
+from ...config import get_settings
 
 from ..rate_limiter import AsyncTokenBucket
 from .base import PaperMetadataProvider

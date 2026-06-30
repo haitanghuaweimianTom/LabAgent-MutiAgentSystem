@@ -333,11 +333,22 @@ def collect_artifacts(
                 artifact.cls_files.append(cls_path)
             else:
                 skipped.append(f"cls file not found: {tpl.cls_file}")
-        # 同时收集同目录下的 .sty
+        # 收集模板显式指定的 sty_files
+        if tpl and tpl.sty_files:
+            for sty_rel in tpl.sty_files:
+                sty_path = Path(sty_rel)
+                if not sty_path.is_absolute():
+                    sty_path = project_root / sty_rel
+                if sty_path.exists():
+                    artifact.sty_files.append(sty_path)
+                else:
+                    skipped.append(f"sty file not found: {sty_rel}")
+        # 同时收集 .cls 同目录下的 .sty（向后兼容）
         if artifact.cls_files:
             cls_dir = artifact.cls_files[0].parent
             for p in sorted(cls_dir.glob("*.sty")):
-                artifact.sty_files.append(p)
+                if p not in artifact.sty_files:
+                    artifact.sty_files.append(p)
     except Exception as exc:  # noqa: BLE001
         skipped.append(f"failed to collect cls/sty files: {exc}")
 

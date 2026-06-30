@@ -432,7 +432,7 @@ class PreflightDecisionService:
         project_name: Optional[str] = None,
         max_queries: int = 3,
     ) -> Tuple[bool, List[str]]:
-        """根据 collection_plan 尝试自主搜集数据
+        """根据 collection_plan 尝试自主搜集数据（v5.3.0: 实际下载而非只记录 URL）。
 
         Args:
             collection_plan: LLM 给出的搜集计划文本
@@ -442,11 +442,10 @@ class PreflightDecisionService:
             max_queries: 最大搜索查询数
 
         Returns:
-            (success, new_file_paths)
+            (success, new_file_paths) —— file_paths 是真实落盘的文件相对路径
         """
         logger.info(f"Task {task_id}: 开始自主搜集数据")
-        target_dir = Path(get_project_data_dir(project_name))
-        target_dir.mkdir(parents=True, exist_ok=True)
+        from .self_collector import collect_urls, extract_urls_from_search_result
 
         # 从 collection_plan 中拆出候选查询（简单按行/分号拆分）
         queries = [q.strip("-• \t") for q in re.split(r"[\n;]", collection_plan) if len(q.strip()) > 5]
@@ -456,33 +455,38 @@ class PreflightDecisionService:
         for query in queries:
             try:
                 result = await search_fn(query)
-                # 期望 result 是 dict，可能包含 urls / papers / datasets
-                urls = []
-                if isinstance(result, dict):
-                    urls.extend(result.get("urls", []))
-                    urls.extend(result.get("datasets", []))
-                    for paper in result.get("papers", []):
-                        if isinstance(paper, dict):
-                            urls.append(paper.get("url") or paper.get("pdf_url") or "")
-                elif isinstance(result, list):
-                    for item in result:
-                        if isinstance(item, dict):
-                            urls.append(item.get("url") or item.get("pdf_url") or "")
-
-                # 目前只做记录，不自动下载（避免安全风险）。实际下载可在 Phase 2 工具层补齐。
-                for url in urls:
-                    if url and isinstance(url, str):
-                        logger.info(f"Task {task_id}: 发现候选数据 URL {url}")
-                        # 占位：把 URL 写到 project_dir/self_collected_urls.txt
-                        url_file = target_dir / "self_collected_urls.txt"
-                        with open(url_file, "a", encoding="utf-8") as f:
-                            f.write(f"{url}\n")
-                        collected_files.append(str(url_file))
+                urls = extract_urls_from_search_result(result)
+                if not urls:
+                    continue
+                # v5.3.0: 实际下载文件到 self_collected/
+                download_results = await collect_urls(
+                    urls,
+                    project_name=project_name,
+                    source_query=query,
+                    concurrency=4,
+                    timeout_sec=30,
+                    max_size_mb=50,
+                )
+                for dr in download_results:
+                    if dr.filename:
+                        logger.info(
+                            f"Task {task_id}: 下载成功 {dr.url} → {dr.filename} ({dr.size}B)"
+                        )
+                        # 返回相对路径
+                        from ..core.paths import _PROJECT_ROOT
+                        try:
+                            rel = (Path("outputs") / (project_name or "_global") / "data" / "self_collected" / dr.filename)
+                            collected_files.append(str(rel))
+                        except Exception:
+                            collected_files.append(dr.filename)
+                    else:
+                        logger.info(
+                            f"Task {task_id}: 跳过 {dr.url} ({dr.error})"
+                        )
             except Exception as e:
                 logger.warning(f"Task {task_id}: 自主搜集数据查询失败: {e}")
 
-        # 保守策略：只有真正下载到文件才算 success
-        # 当前版本先返回 True 表示已尝试，并把 URL 列表留给二次 preflight 或前端提示
+        # success = 至少下载到 1 个文件
         return len(collected_files) > 0, collected_files
 
 

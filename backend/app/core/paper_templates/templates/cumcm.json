@@ -4,7 +4,7 @@
   "domain": "math_modeling",
   "description": "CUMCM 12 章标准结构，含评阅标准与 mcmthesis 排版；为默认/兜底模板。",
   "documentclass": "cumcmthesis",
-  "cls_file": "config/latex_templates/cumcm/mcmthesis.cls",
+  "cls_file": "config/latex_templates/mcm/mcmthesis.cls",
   "bib_style": "plain",
   "language": "zh",
   "acceptance_threshold": 75,

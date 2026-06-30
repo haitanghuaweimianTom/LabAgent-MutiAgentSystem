@@ -356,6 +356,7 @@ async def submit_task(req: TaskCreateRequest):
         data_files=data_files,
         project_name=project_name,
         knowledge_base_id=req.knowledge_base_id,
+        knowledge_base_ids=req.knowledge_base_ids,
         template=final_template,
         workflow_type=final_workflow,
         mode=final_mode,
@@ -369,7 +370,7 @@ async def submit_task(req: TaskCreateRequest):
     # 9. 启动工作流
     asyncio.create_task(_run_workflow(
         task_id, req.problem_text, req.workflow, data_files,
-        final_mode, project_name, req.knowledge_base_id,
+        final_mode, project_name, req.get_effective_kb_ids() or None,
         final_template, final_workflow,
         preflight_report.to_dict(),
         use_critique,
@@ -393,12 +394,15 @@ async def _run_workflow(
     data_files: list,
     mode: str = "batch",
     project_name: Optional[str] = None,
-    knowledge_base_id: Optional[str] = None,
+    knowledge_base_ids: Optional[List[str]] = None,  # v5.3.0: 多 KB
     template: str = "math_modeling",
     workflow_type: str = "standard",
     preflight_report: Optional[Dict] = None,
     use_critique: bool = True,
 ):
+    # v5.3.0: 兼容旧接口 — knowledge_base_ids 是单值时也转 list
+    if knowledge_base_ids is not None and not isinstance(knowledge_base_ids, list):
+        knowledge_base_ids = [knowledge_base_ids]
     try:
         orch = get_orchestrator()
         # execute_workflow 内部会保存结果
@@ -406,7 +410,9 @@ async def _run_workflow(
         await orch.execute_workflow(
             task_id, problem_text, workflow,
             data_files=data_files, mode=mode, project_name=project_name,
-            knowledge_base_id=knowledge_base_id, template=template, workflow_type=workflow_type,
+            knowledge_base_ids=knowledge_base_ids,
+            knowledge_base_id=knowledge_base_ids[0] if knowledge_base_ids else None,
+            template=template, workflow_type=workflow_type,
             use_critique=use_critique,
         )
         logger.info(f"Task {task_id} completed and saved")
@@ -464,7 +470,11 @@ async def confirm_preflight(task_id: str, req: dict):
     problem_text = meta.get("problem_text", "")
     project_name = meta.get("project_name")
     data_files = meta.get("data_files", [])
-    knowledge_base_id = meta.get("knowledge_base_id")
+    # v5.3.0: 多 KB 兼容 — 优先 knowledge_base_ids，回退到 knowledge_base_id
+    knowledge_base_ids = meta.get("knowledge_base_ids")
+    if knowledge_base_ids is None:
+        legacy_kb_id = meta.get("knowledge_base_id")
+        knowledge_base_ids = [legacy_kb_id] if legacy_kb_id else None
 
     save_task_metadata(
         task_id=task_id,
@@ -479,7 +489,8 @@ async def confirm_preflight(task_id: str, req: dict):
         mode=mode,
         data_files=data_files,
         project_name=project_name,
-        knowledge_base_id=knowledge_base_id,
+        knowledge_base_id=knowledge_base_ids[0] if knowledge_base_ids else None,
+        knowledge_base_ids=knowledge_base_ids,
         preflight_report=meta.get("preflight_report"),
         data_schemas=meta.get("data_schemas"),
         auto_decision_path=meta.get("auto_decision_path"),
@@ -487,7 +498,7 @@ async def confirm_preflight(task_id: str, req: dict):
 
     asyncio.create_task(_run_workflow(
         task_id, problem_text, None, data_files,
-        mode, project_name, knowledge_base_id,
+        mode, project_name, knowledge_base_ids,
         template, workflow_type,
         meta.get("preflight_report"),
     ))
@@ -1419,7 +1430,11 @@ async def rerun_task(task_id: str, req: Optional[RerunRequest] = None):
             )
     data_files = meta.get("data_files", [])
     project_name = meta.get("project_name")
-    knowledge_base_id = meta.get("knowledge_base_id")
+    # v5.3.0: 多 KB 兼容
+    knowledge_base_ids = meta.get("knowledge_base_ids")
+    if knowledge_base_ids is None:
+        legacy_kb_id = meta.get("knowledge_base_id")
+        knowledge_base_ids = [legacy_kb_id] if legacy_kb_id else None
     template = (req.template if req and req.template else None) or meta.get("template", "math_modeling")
     workflow_type = (req.workflow_type if req and req.workflow_type else None) or meta.get("workflow_type", "standard")
     mode = (req.mode if req and req.mode else None) or meta.get("mode", "batch")
@@ -1447,7 +1462,8 @@ async def rerun_task(task_id: str, req: Optional[RerunRequest] = None):
         current_step="重新执行中",
         data_files=data_files,
         project_name=project_name,
-        knowledge_base_id=knowledge_base_id,
+        knowledge_base_id=knowledge_base_ids[0] if knowledge_base_ids else None,
+        knowledge_base_ids=knowledge_base_ids,
         template=template,
         workflow_type=workflow_type,
         mode=mode,
@@ -1462,7 +1478,7 @@ async def rerun_task(task_id: str, req: Optional[RerunRequest] = None):
         data_files=data_files,
         mode=mode,
         project_name=project_name,
-        knowledge_base_id=knowledge_base_id,
+        knowledge_base_ids=knowledge_base_ids,
         template=template,
         workflow_type=workflow_type,
     ))

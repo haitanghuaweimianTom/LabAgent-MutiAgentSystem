@@ -58,9 +58,24 @@ class TaskCreateRequest(BaseModel):
     mode: Optional[str] = "batch"  # "batch"=一次性, "sequential"=逐个递进
     options: Optional[Dict[str, Any]] = Field(default_factory=dict)
     data_files: Optional[List[str]] = None  # 前端选中的数据文件名列表（为空则使用全部上传文件）
-    knowledge_base_id: Optional[str] = None  # 指定使用的知识库ID，为空则使用所有知识库
+    knowledge_base_id: Optional[str] = None  # 旧版字段（向后兼容）：单 KB
+    knowledge_base_ids: Optional[List[str]] = None  # v5.3.0: 多 KB 列表（优先于单数）
     data_source: Optional[str] = "upload"  # "upload" / "self_collect" / "upload_and_collect"
     problem_type: Optional[str] = None  # 用户显式选择的问题类型
+
+    def get_effective_kb_ids(self) -> List[str]:
+        """v5.3.0: 解析实际使用的 KB 列表。
+
+        优先级：
+          1. knowledge_base_ids（多选）
+          2. knowledge_base_id（单数，向后兼容）
+          3. 空列表 → 由 Agent 自动选择（项目私有 + 全局公共）
+        """
+        if self.knowledge_base_ids:
+            return list(self.knowledge_base_ids)
+        if self.knowledge_base_id:
+            return [self.knowledge_base_id]
+        return []
 
 
 class TaskCancelRequest(BaseModel):

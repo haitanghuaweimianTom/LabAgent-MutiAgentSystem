@@ -17,6 +17,7 @@ from .registry import (
     TemplateRegistry,
     get_registry,
     load_template,
+    list_templates,
     register_template,
 )
 
@@ -27,5 +28,6 @@ __all__ = [
     "TemplateRegistry",
     "get_registry",
     "load_template",
+    "list_templates",
     "register_template",
 ]

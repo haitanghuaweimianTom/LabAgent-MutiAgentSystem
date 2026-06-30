@@ -215,13 +215,49 @@ class MCPManager:
                 description=f"内置工具: {tool_name}",
             )
 
+        # v5.3.0: 所有 Agent 默认配备 web_search + paper_search + file_read + file_write
+        # 用户可在设置中自定义每个 Agent 的工具
         self.agent_tools_map = {
-            "research_agent": ["web_search", "paper_search", "file_write"],
-            "analyzer_agent": ["web_search"],
-            "modeler_agent": [],
-            "solver_agent": ["code_execute", "file_write"],
-            "writer_agent": ["file_write", "latex_compile"],
+            "research_agent": ["web_search", "paper_search", "arxiv_search", "arxiv_download", "arxiv_abstract", "arxiv_citation", "scholar_search", "file_read", "file_write"],
+            "analyzer_agent": ["web_search", "paper_search", "sequentialthinking", "arxiv_search", "arxiv_abstract", "scholar_search", "file_read", "file_write"],
+            "modeler_agent": ["web_search", "paper_search", "sequentialthinking", "arxiv_search", "arxiv_abstract", "scholar_search", "file_read", "file_write"],
+            "solver_agent": ["web_search", "paper_search", "file_read", "file_write", "code_execute"],
+            "writer_agent": ["web_search", "paper_search", "file_read", "file_write", "arxiv_abstract", "latex_compile"],
+            "data_agent": ["web_search", "paper_search", "file_read", "file_write", "code_execute"],
+            "algorithm_engineer_agent": ["web_search", "paper_search", "arxiv_search", "arxiv_abstract", "scholar_search", "file_read", "file_write"],
+            "financial_analyst_agent": ["web_search", "paper_search", "file_read", "file_write"],
+            "figure_agent": ["web_search", "paper_search", "file_read", "file_write"],
+            "peer_review_agent": ["web_search", "paper_search", "arxiv_search", "arxiv_abstract", "file_read", "file_write"],
+            "experimentation_agent": ["web_search", "paper_search", "arxiv_search", "arxiv_abstract", "file_read", "file_write"],
         }
+
+    def set_agent_tools(self, agent_name: str, tools: List[str]) -> None:
+        """设置 Agent 的工具列表（用户自定义配置）"""
+        self.agent_tools_map[agent_name] = tools
+        # 持久化到配置文件
+        self._persist_agent_tools()
+
+    def _persist_agent_tools(self) -> None:
+        """将 agent_tools_map 持久化到配置文件"""
+        settings = get_settings()
+        if settings.claude_mcp_config_path:
+            config_path = Path(settings.claude_mcp_config_path)
+        else:
+            config_path = Path(__file__).parent.parent.parent / "config" / "mcp_config.json"
+        try:
+            self.save_config(str(config_path))
+        except Exception as e:
+            logger.warning(f"Failed to persist agent tools config: {e}")
+
+    def get_all_agent_tools(self) -> Dict[str, List[str]]:
+        """获取所有 Agent 的工具配置（包含未显式配置的 Agent）"""
+        # 获取所有已注册的 Agent
+        from ..agents.base import AgentFactory
+        all_agents = AgentFactory.list_agents()
+        result = {}
+        for agent_name in all_agents:
+            result[agent_name] = self.get_tools_for_agent(agent_name)
+        return result
 
     def add_custom_server(self, config: MCPServerConfig) -> None:
         """添加自定义MCP服务器"""

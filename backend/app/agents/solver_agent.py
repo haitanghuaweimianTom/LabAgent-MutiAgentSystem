@@ -1240,20 +1240,19 @@ class SolverAgent(BaseAgent):
 
                 Path(file_path).write_text(raw_code, encoding="utf-8")
 
-                from ..core.environment_manager import get_active_python
-                python_exe = get_active_python()
-                proc = subprocess.run(
-                    [python_exe, "-X", "utf8", file_path],
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",
-                    timeout=120,
+                # v5.3.0: 使用沙箱执行代码（替代直接 subprocess）
+                from ..core.sandbox import CodeSandbox, SandboxConfig
+                sandbox_config = SandboxConfig(
+                    max_cpu_time=120,
+                    max_memory_mb=1024,
+                    workspace_persist=True,  # 保留工作区以便后续分析
                 )
+                sandbox = CodeSandbox(sandbox_config)
+                result = sandbox.execute_file(file_path)
 
-                stdout_text = proc.stdout.strip()
-                stderr_text = proc.stderr.strip()
-                exec_ok = proc.returncode == 0
+                stdout_text = result.stdout.strip()
+                stderr_text = result.stderr.strip()
+                exec_ok = result.success
 
                 numerical_results = {}
                 key_findings = []
@@ -1343,6 +1342,13 @@ class SolverAgent(BaseAgent):
         section_results = context.get("section_results", [])
         data_result = context.get("data_result", {})
         previous_solutions = []  # 前序求解结果
+
+        # 构建数据上下文（复用 _solve_single / _solve_all 的逻辑）
+        analyses = data_result.get("analyses", []) or []
+        data_context = "\n".join([
+            f"- {a.get('file_name', '')}: {a.get('shape', [0,0])[0]}行×{a.get('shape', [0,0])[1]}列"
+            for a in analyses
+        ])
 
         all_solutions = []
 
@@ -2242,3 +2248,345 @@ async def _llm_second_opinion(problem_text: str, **params: Any) -> Dict[str, Any
 from ..services.result_validator import register_alternative_method
 
 register_alternative_method("llm_second_opinion", _llm_second_opinion)
+
+
+# ====================================================================
+# v6.0: 代码自动演化 —— 迭代改进而非一次性生成
+# ====================================================================
+
+class CodeEvolutionEngine:
+    """代码自动演化引擎 —— 对已有代码进行迭代改进。
+
+    核心能力：
+    1. 代码变异：修改超参数、替换算法组件、调整网络结构
+    2. 代码评估：执行并获取性能指标
+    3. 选择：保留性能更好的代码变体
+    4. 迭代：重复变异-评估-选择直到收敛
+
+    与 solver_agent 集成：
+    - 在 _run_code_with_autofix 成功后，可选进入演化循环
+    - 每次演化生成多个变体，选择最优
+    - 返回最优代码 + 演化历史
+    """
+
+    def __init__(
+        self,
+        solver_agent: "SolverAgent",
+        max_generations: int = 3,
+        population_size: int = 4,
+        mutation_rate: float = 0.3,
+    ):
+        self.solver = solver_agent
+        self.max_generations = max_generations
+        self.population_size = population_size
+        self.mutation_rate = mutation_rate
+        self.history: List[Dict[str, Any]] = []
+
+    # ---------- 代码变异策略 ----------
+
+    def _mutate_hyperparameters(self, code: str) -> str:
+        """变异超参数：修改学习率、batch_size、epochs 等。"""
+        mutations = [
+            # 学习率
+            (r'lr\s*=\s*[\d.]+[e\-]*\d*', lambda m: f"lr = {self._random_lr()}"),
+            (r'learning_rate\s*=\s*[\d.]+[e\-]*\d*', lambda m: f"learning_rate = {self._random_lr()}"),
+            # batch size
+            (r'batch_size\s*=\s*\d+', lambda m: f"batch_size = {random.choice([16, 32, 64, 128])}"),
+            # epochs
+            (r'epochs\s*=\s*\d+', lambda m: f"epochs = {random.choice([10, 20, 50, 100])}"),
+            # dropout
+            (r'dropout\s*=\s*[\d.]+', lambda m: f"dropout = {random.uniform(0.1, 0.5):.2f}"),
+            # weight decay
+            (r'weight_decay\s*=\s*[\d.]+[e\-]*\d*', lambda m: f"weight_decay = {random.uniform(1e-5, 1e-2):.6f}"),
+        ]
+
+        result = code
+        for pattern, replacer in mutations:
+            if random.random() < self.mutation_rate and re.search(pattern, result):
+                result = re.sub(pattern, replacer, result, count=1)
+        return result
+
+    def _mutate_optimizer(self, code: str) -> str:
+        """变异优化器：替换 SGD/Adam/AdamW/RMSprop。"""
+        optimizers = ["SGD", "Adam", "AdamW", "RMSprop"]
+        current = re.search(r'optim\.(\w+)\(', code)
+        if current and random.random() < self.mutation_rate:
+            current_name = current.group(1)
+            new_name = random.choice([o for o in optimizers if o != current_name])
+            code = code.replace(f"optim.{current_name}(", f"optim.{new_name}(", 1)
+        return code
+
+    def _mutate_activation(self, code: str) -> str:
+        """变异激活函数：替换 ReLU/GELU/Swish/LeakyReLU。"""
+        activations = ["ReLU", "GELU", "LeakyReLU", "SiLU", "ELU"]
+        current = re.search(r'nn\.(\w+)\(\)', code)
+        if current and random.random() < self.mutation_rate:
+            current_name = current.group(1)
+            if current_name in activations:
+                new_name = random.choice([a for a in activations if a != current_name])
+                code = code.replace(f"nn.{current_name}()", f"nn.{new_name}()", 1)
+        return code
+
+    def _mutate_architecture(self, code: str) -> str:
+        """变异网络结构：修改层数、通道数等。"""
+        # 修改通道数
+        if random.random() < self.mutation_rate:
+            channel_patterns = re.findall(r'(\d+)(\s*,\s*out_channels\s*=\s*)(\d+)', code)
+            for match in channel_patterns[:2]:
+                old_val = int(match[2])
+                new_val = max(8, min(512, old_val + random.choice([-16, -8, 8, 16])))
+                code = code.replace(f"{match[1]}{old_val}", f"{match[1]}{new_val}", 1)
+        return code
+
+    def _mutate_data_augmentation(self, code: str) -> str:
+        """变异数据增强策略。"""
+        aug_patterns = [
+            (r'transforms\.RandomCrop\(\d+', lambda m: f"transforms.RandomCrop({random.choice([28, 32, 40])}"),
+            (r'transforms\.RandomHorizontalFlip\(p=[\d.]+\)', lambda m: f"transforms.RandomHorizontalFlip(p={random.uniform(0.3, 0.7):.2f})"),
+        ]
+        result = code
+        for pattern, replacer in aug_patterns:
+            if random.random() < self.mutation_rate and re.search(pattern, result):
+                result = re.sub(pattern, replacer, result, count=1)
+        return result
+
+    def _random_lr(self) -> str:
+        """随机生成学习率。"""
+        lr = random.choice([1e-1, 1e-2, 1e-3, 5e-4, 1e-4, 5e-5, 1e-5])
+        return f"{lr:.0e}" if lr >= 1e-3 else f"{lr:.1e}"
+
+    def mutate_code(self, code: str, strategy: str = "auto") -> str:
+        """对代码进行综合变异。
+
+        Args:
+            code: 原始代码
+            strategy: "auto" | "hyperparams" | "optimizer" | "architecture" | "all"
+        """
+        result = code
+        if strategy in ("auto", "all", "hyperparams"):
+            result = self._mutate_hyperparameters(result)
+        if strategy in ("auto", "all", "optimizer"):
+            result = self._mutate_optimizer(result)
+        if strategy in ("auto", "all", "architecture"):
+            result = self._mutate_activation(result)
+            result = self._mutate_architecture(result)
+        if strategy in ("auto", "all"):
+            result = self._mutate_data_augmentation(result)
+        return result
+
+    # ---------- 演化主循环 ----------
+
+    async def evolve(
+        self,
+        initial_code: str,
+        problem_context: str,
+        sp_id: int = 1,
+        project_name: Optional[str] = None,
+        max_evaluations: int = 8,
+    ) -> Dict[str, Any]:
+        """对初始代码进行迭代演化改进。
+
+        Args:
+            initial_code: 初始代码（已执行成功的）
+            problem_context: 问题描述
+            sp_id: 子问题编号
+            project_name: 项目名称
+            max_evaluations: 最大评估次数（包含初始代码）
+
+        Returns:
+            {
+                "best_code": 最优代码,
+                "best_fitness": 最优性能,
+                "best_metrics": 最优指标,
+                "generations": 演化历史,
+                "total_evaluations": 总评估次数,
+                "improvement": 相对初始的改进比例,
+            }
+        """
+        logger.info(f"[CodeEvolution] 开始代码自动演化: sp_id={sp_id}, max_eval={max_evaluations}")
+
+        # 初始评估
+        initial_result = await self._evaluate_code(initial_code, problem_context, sp_id, project_name)
+        initial_fitness = initial_result.get("fitness", 0.0)
+
+        population = [(initial_code, initial_fitness, initial_result)]
+        best_code = initial_code
+        best_fitness = initial_fitness
+        best_metrics = initial_result.get("metrics", {})
+
+        self.history = [{
+            "generation": 0,
+            "best_fitness": best_fitness,
+            "avg_fitness": best_fitness,
+            "population_size": 1,
+        }]
+
+        evaluations_done = 1
+
+        for gen in range(self.max_generations):
+            if evaluations_done >= max_evaluations:
+                break
+
+            logger.info(f"[CodeEvolution] 第 {gen + 1}/{self.max_generations} 代")
+
+            # 生成变体
+            new_variants = []
+            for _ in range(min(self.population_size, max_evaluations - evaluations_done)):
+                parent_code = random.choice([c for c, _, _ in population])
+                variant_code = self.mutate_code(parent_code, strategy="auto")
+                if variant_code != parent_code:
+                    new_variants.append(variant_code)
+
+            # 评估变体
+            evaluated = []
+            for variant_code in new_variants:
+                try:
+                    result = await self._evaluate_code(variant_code, problem_context, sp_id, project_name)
+                    fitness = result.get("fitness", 0.0)
+                    evaluated.append((variant_code, fitness, result))
+                    evaluations_done += 1
+                    logger.info(f"[CodeEvolution] 变体评估: fitness={fitness:.4f}")
+                except Exception as e:
+                    logger.warning(f"[CodeEvolution] 变体评估失败: {e}")
+
+            # 合并并选择
+            population.extend(evaluated)
+            population.sort(key=lambda x: x[1], reverse=True)
+            population = population[:self.population_size]
+
+            # 更新最优
+            if population and population[0][1] > best_fitness:
+                best_code, best_fitness, best_metrics = population[0]
+                logger.info(f"[CodeEvolution] 发现更优解: fitness={best_fitness:.4f}")
+
+            self.history.append({
+                "generation": gen + 1,
+                "best_fitness": best_fitness,
+                "avg_fitness": sum(f for _, f, _ in population) / len(population) if population else 0,
+                "population_size": len(population),
+            })
+
+        improvement = (best_fitness - initial_fitness) / max(abs(initial_fitness), 1e-6) if initial_fitness != 0 else 0
+
+        return {
+            "best_code": best_code,
+            "best_fitness": best_fitness,
+            "best_metrics": best_metrics,
+            "initial_fitness": initial_fitness,
+            "generations": self.history,
+            "total_evaluations": evaluations_done,
+            "improvement": round(improvement, 4),
+            "improved": best_fitness > initial_fitness,
+        }
+
+    async def _evaluate_code(
+        self,
+        code: str,
+        problem_context: str,
+        sp_id: int,
+        project_name: Optional[str],
+    ) -> Dict[str, Any]:
+        """评估代码变体。
+
+        使用 solver_agent 的 _run_code_with_autofix 执行代码，
+        从执行结果中提取性能指标作为适应度。
+        """
+        exec_info = await self.solver._run_code_with_autofix(
+            initial_code=code,
+            problem_context=problem_context,
+            sp_id=sp_id,
+            max_retries=1,  # 演化阶段只试1次，快速迭代
+            project_name=project_name,
+        )
+
+        exec_result = exec_info.get("execution_result", {})
+        if not exec_result.get("success"):
+            return {"fitness": 0.0, "metrics": {}, "success": False}
+
+        # 提取性能指标作为适应度
+        numerical = exec_info.get("numerical_results", {})
+        fitness = self._extract_fitness(numerical)
+
+        return {
+            "fitness": fitness,
+            "metrics": numerical,
+            "success": True,
+            "attempts": exec_info.get("attempts", 1),
+        }
+
+    def _extract_fitness(self, numerical: Dict[str, Any]) -> float:
+        """从数值结果中提取适应度值。
+
+        优先使用准确率、F1 等越高越好的指标，
+        回退到损失值（取负）。
+        """
+        # 优先指标（越高越好）
+        for key in ["accuracy", "val_accuracy", "f1", "precision", "recall", "auc", "mAP"]:
+            if key in numerical:
+                val = numerical[key]
+                if isinstance(val, (int, float)):
+                    return float(val)
+
+        # 损失值（越低越好，取负）
+        for key in ["loss", "val_loss", "mse", "mae"]:
+            if key in numerical:
+                val = numerical[key]
+                if isinstance(val, (int, float)) and val > 0:
+                    return -float(val)
+
+        # 默认：如果有任何数值，取第一个
+        for v in numerical.values():
+            if isinstance(v, (int, float)):
+                return float(v)
+
+        return 0.0
+
+
+# 便捷函数：在 SolverAgent 中集成代码演化
+async def evolve_solution(
+    solver: "SolverAgent",
+    initial_code: str,
+    problem_context: str,
+    sp_id: int = 1,
+    project_name: Optional[str] = None,
+    enable_evolution: bool = True,
+    max_evaluations: int = 8,
+) -> Dict[str, Any]:
+    """对求解结果进行自动演化改进。
+
+    Args:
+        solver: SolverAgent 实例
+        initial_code: 初始代码
+        problem_context: 问题描述
+        sp_id: 子问题编号
+        project_name: 项目名称
+        enable_evolution: 是否启用演化
+        max_evaluations: 最大评估次数
+
+    Returns:
+        包含最优代码和演化历史的字典
+    """
+    if not enable_evolution:
+        return {
+            "best_code": initial_code,
+            "evolved": False,
+            "reason": "代码自动演化已禁用",
+        }
+
+    engine = CodeEvolutionEngine(
+        solver_agent=solver,
+        max_generations=3,
+        population_size=4,
+    )
+
+    result = await engine.evolve(
+        initial_code=initial_code,
+        problem_context=problem_context,
+        sp_id=sp_id,
+        project_name=project_name,
+        max_evaluations=max_evaluations,
+    )
+
+    result["evolved"] = True
+    return result
+

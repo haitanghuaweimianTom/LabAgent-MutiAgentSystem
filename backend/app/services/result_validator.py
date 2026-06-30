@@ -84,9 +84,18 @@ class ResultValidator:
 
         # 概率/比例字段检查
         lower_key = key.lower()
-        if any(k in lower_key for k in ["概率", "比例", "percentage", "percent", "ratio", "accuracy", "r2", "precision", "recall"]):
+        if any(k in lower_key for k in ["概率", "比例", "percentage", "percent", "ratio", "accuracy", "r2", "precision", "recall", "f1", "auc"]):
             if abs_val > 1.0:
-                self.issues.append(ValidationIssue("warning", "range", f"概率/比例字段 {path} 超过 1.0 ({value})", path))
+                self.issues.append(ValidationIssue("error", "range", f"概率/比例字段 {path} 超过 1.0 ({value})", path))
+            if abs_val < 0:
+                self.issues.append(ValidationIssue("error", "range", f"概率/比例字段 {path} 为负数 ({value})", path))
+
+        # 准确率/精确率/召回率/F1 特殊检查
+        if any(k in lower_key for k in ["accuracy", "精确率", "precision", "recall", "召回率", "f1", "auc"]):
+            if abs_val > 1.0:
+                self.issues.append(ValidationIssue("error", "range", f"指标 {path} 不能大于 1.0 ({value})", path))
+            if abs_val < 0:
+                self.issues.append(ValidationIssue("error", "range", f"指标 {path} 不能为负数 ({value})", path))
 
         # 非负字段检查
         if any(k in lower_key for k in ["厚度", "距离", "长度", "数量", "人数", "价格", "成本", "销量", "weight", "count", "distance", "thickness"]):

@@ -963,6 +963,7 @@ class Orchestrator:
         mode: str = "batch",
         project_name: Optional[str] = None,
         knowledge_base_id: Optional[str] = None,
+        knowledge_base_ids: Optional[List[str]] = None,  # v5.3.0: 多 KB
         template: str = "math_modeling",
         workflow_type: str = "standard",
         use_critique: bool = True,
@@ -986,6 +987,7 @@ class Orchestrator:
                     mode=mode,
                     project_name=project_name,
                     knowledge_base_id=knowledge_base_id,
+                    knowledge_base_ids=knowledge_base_ids,
                     template=template,
                     workflow_type=workflow_type,
                     use_critique=use_critique,

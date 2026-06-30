@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import styles from './KnowledgeBaseManager.module.css';
+import { useAppStore } from '../store/useAppStore';
 
 const apiBase = () => window.__API_BASE__ || 'http://localhost:8000/api/v1';
 
@@ -32,6 +33,9 @@ interface KnowledgeBase {
   updated_at?: number;
   embedding_model?: Record<string, any>;
   reranker_model?: Record<string, any> | null;
+  // v5.3.0: scope
+  scope?: 'global' | 'project';
+  project_name?: string | null;
 }
 
 interface SearchResult {
@@ -91,9 +95,16 @@ export default function KnowledgeBaseManager() {
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState('');
 
+  // v5.3.0: scope 过滤
+  const [scopeFilter, setScopeFilter] = useState<'all' | 'global' | 'project'>('all');
+  const activeProject = useAppStore((s) => s.projects.find((p) => p.id === s.activeProjectId));
+  const projectName = activeProject?.name || '';
+
   // Create base modal
   const [showCreateBase, setShowCreateBase] = useState(false);
   const [newBaseName, setNewBaseName] = useState('');
+  const [newBaseScope, setNewBaseScope] = useState<'global' | 'project'>('global');
+  const [newBaseProjectName, setNewBaseProjectName] = useState('');
 
   // Rename base modal
   const [showRenameBase, setShowRenameBase] = useState(false);
@@ -141,19 +152,28 @@ export default function KnowledgeBaseManager() {
 
   const loadBases = useCallback(async () => {
     try {
-      const res = await fetch(apiBase() + '/knowledge/bases');
+      const url = new URL(apiBase() + '/knowledge/bases');
+      if (scopeFilter !== 'all') {
+        url.searchParams.set('scope', scopeFilter);
+        if (scopeFilter === 'project' && projectName) {
+          url.searchParams.set('project_name', projectName);
+        }
+      }
+      const res = await fetch(url.toString());
       if (res.ok) {
         const data = await res.json();
         const list: KnowledgeBase[] = data.bases || [];
         setBases(list);
         if (list.length > 0 && !activeBaseId) {
           setActiveBaseId(list[0].id);
+        } else if (list.length === 0) {
+          setActiveBaseId(null);
         }
       }
     } catch {
       showMsg('加载知识库列表失败', true);
     }
-  }, [activeBaseId, showMsg]);
+  }, [activeBaseId, scopeFilter, projectName, showMsg]);
 
   const loadItems = useCallback(async (baseId: string | null) => {
     if (!baseId) { setItems([]); return; }
@@ -183,17 +203,27 @@ export default function KnowledgeBaseManager() {
   const handleCreateBase = async () => {
     const name = newBaseName.trim();
     if (!name) { showMsg('名称不能为空', true); return; }
+    if (newBaseScope === 'project' && !newBaseProjectName.trim()) {
+      showMsg('项目私有 KB 必须指定项目名', true);
+      return;
+    }
     try {
+      const body: any = { name, scope: newBaseScope };
+      if (newBaseScope === 'project') {
+        body.project_name = newBaseProjectName.trim();
+      }
       const res = await fetch(apiBase() + '/knowledge/bases', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (data.success && data.base) {
-        showMsg(`知识库 "${name}" 已创建`);
+        showMsg(`知识库 "${name}" 已创建 (scope=${newBaseScope})`);
         setShowCreateBase(false);
         setNewBaseName('');
+        setNewBaseScope('global');
+        setNewBaseProjectName('');
         setBases(prev => [...prev, data.base]);
         setActiveBaseId(data.base.id);
       } else {
@@ -548,6 +578,20 @@ export default function KnowledgeBaseManager() {
           <span className={styles.sidebarTitle}>📚 知识库</span>
           <button className={styles.addBaseBtn} onClick={() => setShowCreateBase(true)}>+ 新建</button>
         </div>
+        {/* v5.3.0: scope 过滤 tabs */}
+        <div style={{ display: 'flex', gap: '0.25rem', padding: '0.4rem 0.6rem', borderBottom: '1px solid #334155' }}>
+          {(['all', 'global', 'project'] as const).map(s => (
+            <button
+              key={s}
+              className={`${styles.actionBtn} ${scopeFilter === s ? styles.actionBtnPrimary : ''}`}
+              style={{ fontSize: '0.78rem', padding: '0.3rem 0.6rem' }}
+              onClick={() => setScopeFilter(s)}
+              type="button"
+            >
+              {s === 'all' ? '全部' : s === 'global' ? '🌐 全局' : '📁 项目'}
+            </button>
+          ))}
+        </div>
         <div className={styles.baseList}>
           {bases.map(base => (
             <div
@@ -555,7 +599,18 @@ export default function KnowledgeBaseManager() {
               className={`${styles.baseItem} ${base.id === activeBaseId ? styles.baseItemActive : ''}`}
               onClick={() => { setActiveBaseId(base.id); setShowSearch(false); setSearchResults([]); }}
             >
-              <span className={styles.baseItemName}>{base.name}</span>
+              <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+                <span className={styles.baseItemName}>{base.name}</span>
+                <span style={{
+                  fontSize: '0.7rem',
+                  color: base.scope === 'project' ? '#8B5CF6' : '#2DD4BF',
+                  marginTop: '0.15rem',
+                }}>
+                  {base.scope === 'project'
+                    ? `📁 ${base.project_name || '项目'}`
+                    : '🌐 全局'}
+                </span>
+              </div>
               <span className={styles.baseItemCount}>{base.item_count ?? 0}</span>
               <button
                 className={styles.baseItemMenu}
@@ -750,6 +805,32 @@ export default function KnowledgeBaseManager() {
               onKeyDown={e => e.key === 'Enter' && handleCreateBase()}
               autoFocus
             />
+            {/* v5.3.0: scope 选择 */}
+            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.6rem' }}>
+              <button
+                className={`${styles.actionBtn} ${newBaseScope === 'global' ? styles.actionBtnPrimary : ''}`}
+                onClick={() => setNewBaseScope('global')}
+                type="button"
+              >
+                🌐 全局公共
+              </button>
+              <button
+                className={`${styles.actionBtn} ${newBaseScope === 'project' ? styles.actionBtnPrimary : ''}`}
+                onClick={() => setNewBaseScope('project')}
+                type="button"
+              >
+                📁 项目私有
+              </button>
+            </div>
+            {newBaseScope === 'project' && (
+              <input
+                className={styles.modalInput}
+                placeholder="项目名（如 work_2026_xxx）"
+                value={newBaseProjectName}
+                onChange={e => setNewBaseProjectName(e.target.value)}
+                style={{ marginTop: '0.5rem' }}
+              />
+            )}
             <div className={styles.modalActions}>
               <button className={styles.actionBtn} onClick={() => setShowCreateBase(false)}>取消</button>
               <button className={`${styles.actionBtn} ${styles.actionBtnPrimary}`} onClick={handleCreateBase}>创建</button>

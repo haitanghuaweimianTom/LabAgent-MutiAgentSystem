@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 
 from .provider_models import (
     type_to_api_format, type_to_category, type_to_icon, type_to_icon_color,
-    import_preset, get_preset_by_id, PROVIDER_PRESETS,
+    import_preset, get_preset_by_id, PROVIDER_PRESETS, ProviderType,
 )
 
 logger = logging.getLogger(__name__)
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 CONFIG_FILE = Path(__file__).parent.parent.parent / "custom_providers.json"
 CONFIG_VERSION = 2  # 当前 schema 版本号
 
-PROVIDER_TYPES = ["openai", "anthropic", "gemini", "ollama", "minimax", "claude_cli"]
+PROVIDER_TYPES = [m.value for m in ProviderType]
 
 
 def _read_config() -> Dict:
@@ -79,9 +79,9 @@ def migrate_legacy_to_new() -> bool:
 
         # 补全 meta
         if not mp.get("meta"):
-            mp["meta"] = {"api_format": type_to_api_format(p_type)}
+            mp["meta"] = {"api_format": type_to_api_format(p_type, api_host)}
         else:
-            mp["meta"].setdefault("api_format", type_to_api_format(p_type))
+            mp["meta"].setdefault("api_format", type_to_api_format(p_type, api_host))
 
         mp["_version"] = CONFIG_VERSION
         mp.setdefault("created_at", int(time.time()))
@@ -142,7 +142,7 @@ def add_custom_provider(data: Dict[str, Any]) -> Dict[str, Any]:
         "name": data["name"],
         "type": p_type,
         "category": data.get("category", type_to_category(p_type, api_host)),
-        "meta": data.get("meta", {"api_format": type_to_api_format(p_type)}),
+        "meta": data.get("meta", {"api_format": type_to_api_format(p_type, api_host)}),
         "api_key": data.get("api_key", ""),
         "api_host": api_host,
         "models": data.get("models", []),
@@ -177,7 +177,7 @@ def update_custom_provider(provider_id: str, data: Dict[str, Any]) -> Dict[str, 
                 meta = p.get("meta", {})
                 if "meta" in data:
                     meta = {**meta, **data["meta"]}
-                meta.setdefault("api_format", type_to_api_format(p_type))
+                meta.setdefault("api_format", type_to_api_format(p_type, api_host))
                 data["meta"] = meta
                 data.setdefault("category", type_to_category(p_type, api_host))
                 data.setdefault("icon", type_to_icon(p_type))
@@ -187,6 +187,69 @@ def update_custom_provider(provider_id: str, data: Dict[str, Any]) -> Dict[str, 
             _write_config(config)
             return config["providers"][i]
     raise ValueError(f"Provider '{provider_id}' 不存在")
+
+
+def auto_detect_models(provider_id: str) -> List[str]:
+    """从 Provider API 自动获取可用模型列表"""
+    provider = get_custom_provider(provider_id)
+    if not provider:
+        return []
+
+    import httpx
+
+    api_key = provider.get("api_key", "")
+    api_host = provider.get("api_host", "")
+    p_type = provider.get("type", "openai")
+    meta = provider.get("meta", {})
+    api_format = meta.get("api_format", type_to_api_format(p_type, api_host))
+
+    if not api_host:
+        return []
+
+    try:
+        # OpenAI 风格: GET /v1/models
+        if api_format in (
+            "openai_chat",
+            "openai_responses",
+            "anthropic_messages",
+            "openai_compatible",
+            "azure_openai",
+            "custom_http",
+        ) or p_type in ("openai", "openai_compatible", "dashscope", "zhipu"):
+            headers = {"Authorization": f"Bearer {api_key}"}
+            with httpx.Client(timeout=10.0) as client:
+                response = client.get(f"{api_host}/models", headers=headers)
+                if response.status_code == 200:
+                    result = response.json()
+                    models = result.get("data", [])
+                    return [m.get("id", m.get("name", "")) for m in models if m.get("id") or m.get("name")]
+
+        # Azure OpenAI: GET /openai/models?api-version=...
+        elif api_format == "azure_openai" or p_type == "azure_openai":
+            api_version = meta.get("api_version", "2024-06-01")
+            headers = {"api-key": api_key}
+            with httpx.Client(timeout=10.0) as client:
+                response = client.get(
+                    f"{api_host}/openai/models?api-version={api_version}", headers=headers
+                )
+                if response.status_code == 200:
+                    result = response.json()
+                    models = result.get("data", [])
+                    return [m.get("id", m.get("name", "")) for m in models if m.get("id") or m.get("name")]
+
+        # Ollama 风格: GET /api/tags
+        elif api_format == "ollama_chat" or p_type == "ollama":
+            with httpx.Client(timeout=10.0) as client:
+                response = client.get(f"{api_host}/api/tags")
+                if response.status_code == 200:
+                    result = response.json()
+                    models = result.get("models", [])
+                    return [m.get("name", "") for m in models if m.get("name")]
+
+    except Exception as e:
+        logger.warning(f"自动获取模型列表失败: {e}")
+
+    return []
 
 
 def delete_custom_provider(provider_id: str) -> bool:
@@ -297,7 +360,7 @@ def build_test_config(provider: Dict[str, Any]) -> Dict[str, Any]:
         "api_key": provider.get("api_key", ""),
         "api_host": provider.get("api_host", ""),
         "model": next((m.get("name") for m in provider.get("models", []) if m.get("enabled")), ""),
-        "api_format": meta.get("api_format", type_to_api_format(provider.get("type", "openai"))),
+        "api_format": meta.get("api_format", type_to_api_format(provider.get("type", "openai"), provider.get("api_host", ""))),
         "auth_field": meta.get("auth_field", ""),
         "is_full_url": meta.get("is_full_url", False),
     }
@@ -564,6 +627,12 @@ def sync_ccswitch_to_local(force: bool = False) -> Dict[str, Any]:
             if cs_p.get("models"):
                 local["models"] = cs_p["models"]
             local["meta"] = cs_p.get("meta", local.get("meta", {}))
+            # 保留本地已修正的 api_format，防止 ccswitch 覆盖为错误的 anthropic
+            local_meta = local.get("meta", {})
+            if local_meta.get("api_format") == "openai_chat" and cs_p.get("meta", {}).get("api_format") == "anthropic":
+                local["meta"] = local_meta  # 保留本地修正值
+            else:
+                local["meta"] = cs_p.get("meta", local_meta)
             local["updated_at"] = int(time.time())
             updated += 1
         else:

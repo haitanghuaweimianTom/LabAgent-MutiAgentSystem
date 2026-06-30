@@ -58,6 +58,11 @@ class KnowledgeBaseConfig(BaseModel):
     chunkOverlap: int = 128
     embedding_model: Optional[Dict[str, Any]] = None  # {"type": "openai", ...}
     reranker_model: Optional[Dict[str, Any]] = None   # {"type": "cross-encoder", ...}
+    # v5.3.0: 两级 KB scope
+    # - "global": 全局公共，所有项目可用（默认）
+    # - "project": 项目私有，仅指定项目可用
+    scope: Literal["global", "project"] = "global"
+    project_name: Optional[str] = None  # scope="project" 时必填
 
 
 class KnowledgeManager:
@@ -303,10 +308,32 @@ class KnowledgeManager:
         safe.pop("api_key", None)
         return safe
 
-    def list_bases(self) -> List[Dict[str, Any]]:
-        """列出所有知识库"""
-        return [
-            {
+    def list_bases(
+        self,
+        scope: Optional[str] = None,
+        project_name: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """列出所有知识库（v5.3.0: 支持按 scope / project 过滤）。
+
+        Args:
+            scope: 'global' / 'project' / None（None = 全部）
+            project_name: 当 scope='project' 时按项目过滤
+        """
+        results: List[Dict[str, Any]] = []
+        for b in self._bases.values():
+            # 默认旧 KB 是 global
+            b_scope = getattr(b, "scope", "global")
+            b_proj = getattr(b, "project_name", None)
+
+            if scope == "global" and b_scope != "global":
+                continue
+            if scope == "project":
+                if b_scope != "project":
+                    continue
+                if project_name and b_proj != project_name:
+                    continue
+            # scope is None → 不过滤
+            results.append({
                 "id": b.id,
                 "name": b.name,
                 "description": b.description,
@@ -316,16 +343,36 @@ class KnowledgeManager:
                 "updated_at": b.updated_at,
                 "embedding_model": self._sanitize_model_config(b.embedding_model),
                 "reranker_model": self._sanitize_model_config(b.reranker_model),
-            }
-            for b in self._bases.values()
-        ]
+                "scope": b_scope,
+                "project_name": b_proj,
+            })
+        return results
 
     def get_base(self, base_id: str) -> Optional[KnowledgeBaseConfig]:
         """获取知识库配置"""
         return self._bases.get(base_id)
 
-    def create_base(self, name: str, description: str = "") -> KnowledgeBaseConfig:
-        """创建新知识库"""
+    def create_base(
+        self,
+        name: str,
+        description: str = "",
+        scope: str = "global",
+        project_name: Optional[str] = None,
+    ) -> KnowledgeBaseConfig:
+        """创建新知识库（v5.3.0: 支持 scope）。
+
+        Args:
+            scope: 'global'（默认）/ 'project'
+            project_name: scope='project' 时必填；scope='global' 时忽略
+
+        Raises:
+            ValueError: scope='project' 但 project_name 为空
+        """
+        if scope not in ("global", "project"):
+            raise ValueError(f"invalid scope: {scope!r}")
+        if scope == "project" and not project_name:
+            raise ValueError("scope='project' requires project_name")
+
         now = int(__import__("time").time() * 1000)
         base = KnowledgeBaseConfig(
             id=f"kb_{uuid.uuid4().hex[:8]}",
@@ -333,11 +380,15 @@ class KnowledgeManager:
             description=description,
             created_at=now,
             updated_at=now,
+            scope=scope,
+            project_name=project_name if scope == "project" else None,
         )
         self._bases[base.id] = base
         self._persist_index()
         self._persist_base(base)
-        logger.info(f"[KnowledgeManager] 创建知识库: {name} ({base.id})")
+        logger.info(
+            f"[KnowledgeManager] 创建知识库: {name} ({base.id}, scope={scope})"
+        )
         return base
 
     def delete_base(self, base_id: str) -> bool:
@@ -393,9 +444,20 @@ class KnowledgeManager:
         base.items.append(item)
         base.updated_at = now
 
-        # 更新向量索引
+        # 增量更新向量索引（避免每次重建 O(n^2) 嵌入）
         kb = self._get_kb_instance(base_id)
-        self._rebuild_kb_vectors(base, kb)
+        text = self._extract_text(item)
+        if text:
+            try:
+                kb.add_document(
+                    title=item.metadata.get("original_title", item.id),
+                    content=text,
+                    doc_id=f"{item.id}_{item.updated_at}",
+                    source=item.source,
+                    metadata={"item_id": item.id, **item.metadata},
+                )
+            except Exception as e:
+                logger.debug(f"[KnowledgeManager] 添加文档到向量库失败: {e}")
 
         self._persist_base(base)
         self._persist_index()
@@ -525,6 +587,78 @@ class KnowledgeManager:
                     parts.append(ctx)
             except Exception as e:
                 logger.warning(f"[KnowledgeManager] 知识库 {base_id} 查询失败，已跳过: {e}")
+        return "\n---\n".join(parts)
+
+    # ===== v5.3.0: 任务级 KB 注入 =====
+
+    def _resolve_task_bases(
+        self,
+        task_project_name: Optional[str],
+        base_ids: Optional[List[str]],
+    ) -> List[KnowledgeBaseConfig]:
+        """解析任务应该用哪些 KB。
+
+        优先级：
+          1. base_ids 显式列表（前端勾选）
+          2. 自动 = 项目私有 KB (project_name=task_project_name) + 全局公共 KB
+          3. 全部 KB（旧兜底）
+
+        Returns: 按 [项目私有优先, 全局次之, 字母] 排序的列表
+        """
+        if base_ids:
+            bases = [self._bases[bid] for bid in base_ids if bid in self._bases]
+            return bases
+
+        # 自动模式：项目私有 + 全局公共
+        candidates: List[KnowledgeBaseConfig] = []
+        for b in self._bases.values():
+            b_scope = getattr(b, "scope", "global")
+            b_proj = getattr(b, "project_name", None)
+            if b_scope == "global":
+                candidates.append(b)
+            elif b_scope == "project" and b_proj == task_project_name:
+                candidates.append(b)
+        # 排序：项目私有在前，全局在后
+        candidates.sort(
+            key=lambda b: (
+                0 if getattr(b, "scope", "global") == "project" else 1,
+                b.id,
+            )
+        )
+        return candidates
+
+    def query_context_for_task(
+        self,
+        task_project_name: Optional[str],
+        base_ids: Optional[List[str]],
+        query: str,
+        top_k: int = 3,
+        max_chars: int = 4000,
+    ) -> str:
+        """v5.3.0: 任务级 KB 注入（支持多 KB）。
+
+        按 KB 数均分 max_chars，避免超 token 预算。
+
+        Returns: 合并的上下文字符串（每个 KB 之间用 --- 分隔）
+        """
+        bases = self._resolve_task_bases(task_project_name, base_ids)
+        if not bases:
+            return ""
+
+        per_base_chars = max_chars // len(bases)
+        parts: List[str] = []
+        for b in bases:
+            try:
+                ctx = self.query_context(b.id, query, top_k=top_k, max_chars=per_base_chars)
+                if ctx:
+                    header = f"【知识库: {b.name}】"
+                    if getattr(b, "scope", "global") == "project":
+                        header += f" (项目私有)"
+                    parts.append(f"{header}\n{ctx}")
+            except Exception as e:
+                logger.warning(
+                    f"[KnowledgeManager] 任务 KB {b.id} 查询失败，已跳过: {e}"
+                )
         return "\n---\n".join(parts)
 
     def get_items(self, base_id: str, item_type: Optional[str] = None) -> List[KnowledgeItem]:

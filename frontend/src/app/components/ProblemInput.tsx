@@ -25,7 +25,8 @@ interface ProblemInputProps {
     template: string;
     mode: string;
     useCritique: boolean;
-    knowledgeBaseId: string | null;
+    knowledgeBaseId: string | null;          // 旧，向后兼容（单 KB）
+    knowledgeBaseIds: string[];              // v5.3.0: 多 KB
     dataSource: 'upload' | 'self_collect' | 'upload_and_collect';
     problemType: string;
     dataFiles: string[];
@@ -57,11 +58,17 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
   const [showNewProject, setShowNewProject] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Knowledge base selector
+  // v5.3.0: Knowledge base 多选
   const knowledgeBases = useAppStore((s) => s.knowledgeBases);
-  const activeKnowledgeBaseId = useAppStore((s) => s.activeKnowledgeBaseId);
   const setKnowledgeBases = useAppStore((s) => s.setKnowledgeBases);
-  const [knowledgeBaseId, setKnowledgeBaseId] = useState<string | null>(activeKnowledgeBaseId);
+  const selectedKBIdsRaw = useAppStore((s) => s.selectedKBIds);
+  const toggleKBSelection = useAppStore((s) => s.toggleKBSelection);
+  const clearKBSelection = useAppStore((s) => s.clearKBSelection);
+  const selectedKBIds: Set<string> = selectedKBIdsRaw instanceof Set
+    ? selectedKBIdsRaw
+    : new Set(Array.isArray(selectedKBIdsRaw) ? selectedKBIdsRaw : []);
+  // 兼容旧字段：仍保留单 KB 引用，便于单选向后兼容
+  const [legacyKBId, setLegacyKBId] = useState<string | null>(null);
 
   const apiBase = () => window.__API_BASE__ || 'http://localhost:8000/api/v1';
 
@@ -73,7 +80,9 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
 
   const loadKnowledgeBases = useCallback(async () => {
     try {
-      const res = await fetch(apiBase() + '/knowledge/bases');
+      const url = new URL(apiBase() + '/knowledge/bases');
+      url.searchParams.set('include_task', 'false');
+      const res = await fetch(url.toString());
       if (res.ok) {
         const data = await res.json();
         setKnowledgeBases(data.bases || []);
@@ -117,6 +126,8 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
     if (!problemText.trim()) { alert('请输入问题描述'); return; }
     const finalProjectName = projectName.trim() || activeProject?.name || '未命名项目';
     const dataFiles = selectedFiles.size > 0 ? Array.from(selectedFiles) : [];
+    // v5.3.0: 多 KB 列表优先；空则降级到单 KB 字段
+    const kbIds = selectedKBIds instanceof Set ? Array.from(selectedKBIds) : [];
     onSubmit({
       problemText,
       projectName: finalProjectName,
@@ -124,7 +135,8 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
       template,
       mode: 'sequential',
       useCritique,
-      knowledgeBaseId,
+      knowledgeBaseId: kbIds.length === 1 ? kbIds[0] : legacyKBId,  // 单选兼容旧字段
+      knowledgeBaseIds: kbIds,
       dataSource,
       problemType,
       dataFiles,
@@ -200,17 +212,75 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
           onChange={e => setProjectName(e.target.value)}
           maxLength={60}
         />
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.5rem' }}>
-          <select
-            style={{ flex: 1, padding: '0.5rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: '#e0e0e0', fontSize: '0.9rem' }}
-            value={knowledgeBaseId || ''}
-            onChange={e => setKnowledgeBaseId(e.target.value || null)}
-          >
-            <option value="">📚 使用所有知识库</option>
-            {knowledgeBases.map((kb) => (
-              <option key={kb.id} value={kb.id}>{kb.name}</option>
-            ))}
-          </select>
+        <div style={{ marginTop: '0.5rem' }}>
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.4rem' }}>
+            <span style={{ color: '#94A3B8', fontSize: '0.85rem' }}>
+              📚 关联知识库（v5.3.0：可多选）
+            </span>
+            {selectedKBIds.size > 0 && (
+              <button
+                type="button"
+                onClick={clearKBSelection}
+                style={{
+                  padding: '0.2rem 0.6rem',
+                  background: 'transparent',
+                  color: '#64748B',
+                  border: '1px solid #334155',
+                  borderRadius: 6,
+                  fontSize: '0.78rem',
+                  cursor: 'pointer',
+                }}
+              >
+                清空
+              </button>
+            )}
+          </div>
+          {knowledgeBases.length === 0 ? (
+            <div style={{
+              padding: '0.5rem',
+              color: '#64748B',
+              fontSize: '0.85rem',
+              fontStyle: 'italic',
+            }}>
+              暂无知识库；留空将自动使用项目私有 + 全局公共 KB
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+              {knowledgeBases.map((kb) => {
+                const selected = selectedKBIds.has(kb.id);
+                const isProject = (kb as any).scope === 'project';
+                return (
+                  <button
+                    key={kb.id}
+                    type="button"
+                    onClick={() => toggleKBSelection(kb.id)}
+                    title={(kb as any).description || kb.name}
+                    style={{
+                      padding: '0.35rem 0.75rem',
+                      background: selected
+                        ? (isProject ? '#8B5CF6' : '#2DD4BF')
+                        : 'rgba(0,0,0,0.3)',
+                      color: selected ? '#0F172A' : '#CBD5E1',
+                      border: `1px solid ${selected
+                        ? (isProject ? '#A78BFA' : '#5EEAD4')
+                        : 'rgba(255,255,255,0.15)'}`,
+                      borderRadius: 16,
+                      cursor: 'pointer',
+                      fontSize: '0.85rem',
+                      fontWeight: selected ? 600 : 400,
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    {isProject ? '📁' : '🌐'} {kb.name}
+                    {selected && ' ✓'}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <div style={{ marginTop: '0.3rem', color: '#64748B', fontSize: '0.75rem' }}>
+            不选 = 自动注入「项目私有 + 全局公共」KB；勾选 = 仅使用勾选的 KB
+          </div>
         </div>
         <div className={styles.ocrRow}>
           <label className={styles.ocrBtn}>

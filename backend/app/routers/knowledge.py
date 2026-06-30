@@ -26,11 +26,16 @@ router = APIRouter(prefix="/knowledge", tags=["知识库"])
 class CreateBaseRequest(BaseModel):
     name: str
     description: str = ""
+    # v5.3.0: 两级 KB scope
+    scope: Literal["global", "project"] = "global"
+    project_name: Optional[str] = None
 
 
 class UpdateBaseRequest(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
+    scope: Optional[Literal["global", "project"]] = None
+    project_name: Optional[str] = None
 
 
 class UpdateBaseModelRequest(BaseModel):
@@ -63,23 +68,48 @@ class QueryContextRequest(BaseModel):
     max_chars: int = 1500
 
 
+class QueryContextForTaskRequest(BaseModel):
+    """v5.3.0: 多 KB 任务级注入"""
+    query: str
+    base_ids: Optional[List[str]] = None
+    project_name: Optional[str] = None
+    top_k: int = 3
+    max_chars: int = 4000
+
+
 # ===== 知识库管理端点 =====
 
 @router.get("/bases")
-async def list_bases(include_task: bool = False):
-    """列出所有知识库。默认排除任务级内部知识库（task_kb_*）。"""
+async def list_bases(
+    include_task: bool = False,
+    scope: Optional[Literal["global", "project"]] = Query(
+        None, description="v5.3.0: 按 scope 过滤（None = 全部）"
+    ),
+    project_name: Optional[str] = Query(
+        None, description="v5.3.0: scope='project' 时按项目过滤"
+    ),
+):
+    """列出所有知识库（v5.3.0: 支持 scope 过滤）。"""
     km = get_knowledge_manager()
-    bases = km.list_bases()
+    bases = km.list_bases(scope=scope, project_name=project_name)
     if not include_task:
-        bases = [b for b in bases if not b.name.startswith("task_kb_")]
+        bases = [b for b in bases if not b.get("name", "").startswith("task_kb_")]
     return {"bases": bases}
 
 
 @router.post("/bases")
 async def create_base(req: CreateBaseRequest):
-    """创建新知识库"""
+    """创建新知识库（v5.3.0: 支持 scope / project_name）"""
     km = get_knowledge_manager()
-    base = km.create_base(name=req.name, description=req.description)
+    try:
+        base = km.create_base(
+            name=req.name,
+            description=req.description,
+            scope=req.scope,
+            project_name=req.project_name,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     return {"success": True, "base": base.model_dump()}
 
 
@@ -345,6 +375,37 @@ async def query_context(base_id: str, req: QueryContextRequest):
         base_id, req.query, top_k=req.top_k, max_chars=req.max_chars
     )
     return {"query": req.query, "context": context, "has_context": bool(context)}
+
+
+@router.post("/query-context-for-task")
+async def query_context_for_task(req: QueryContextForTaskRequest):
+    """v5.3.0: 多 KB 任务级注入。
+
+    base_ids 给定时只查这些；否则自动选当前任务 project 私有 + 全部全局。
+    """
+    km = get_knowledge_manager()
+    context = km.query_context_for_task(
+        task_project_name=req.project_name,
+        base_ids=req.base_ids,
+        query=req.query,
+        top_k=req.top_k,
+        max_chars=req.max_chars,
+    )
+    bases = km._resolve_task_bases(req.project_name, req.base_ids)
+    return {
+        "query": req.query,
+        "context": context,
+        "has_context": bool(context),
+        "used_bases": [
+            {
+                "id": b.id,
+                "name": b.name,
+                "scope": getattr(b, "scope", "global"),
+                "project_name": getattr(b, "project_name", None),
+            }
+            for b in bases
+        ],
+    }
 
 
 # ===== 文件上传端点 =====

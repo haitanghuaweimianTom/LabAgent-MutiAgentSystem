@@ -88,6 +88,11 @@ interface AppState {
   addKnowledgeBase: (base: KnowledgeBase) => void;
   removeKnowledgeBase: (id: string) => void;
   renameKnowledgeBase: (id: string, name: string) => void;
+  // v5.3.0: 多 KB 选择（任务提交用）
+  selectedKBIds: Set<string>;
+  toggleKBSelection: (id: string) => void;
+  clearKBSelection: () => void;
+  setKBSelection: (ids: string[]) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -233,6 +238,18 @@ export const useAppStore = create<AppState>()(
             b.id === id ? { ...b, name } : b
           ),
         })),
+
+      // v5.3.0: 多 KB 选择（任务提交时勾选）
+      selectedKBIds: new Set(),
+      toggleKBSelection: (id) =>
+        set((s) => {
+          const next = new Set(s.selectedKBIds);
+          if (next.has(id)) next.delete(id);
+          else next.add(id);
+          return { selectedKBIds: next };
+        }),
+      clearKBSelection: () => set({ selectedKBIds: new Set() }),
+      setKBSelection: (ids) => set({ selectedKBIds: new Set(ids) }),
     }),
     {
       name: 'app-store',
@@ -240,12 +257,18 @@ export const useAppStore = create<AppState>()(
         activeProjectId: state.activeProjectId,
         // Set 不能 JSON 序列化，必须转 Array；rehydrate 时 onRehydrateStorage 转回 Set
         selectedFiles: Array.from(state.selectedFiles),
+        selectedKBIds: Array.from(state.selectedKBIds),
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) return;
         // 把 Array 转回 Set（持久化时 Array.from，反序列化必须 new Set）
         if (Array.isArray((state as any).selectedFiles)) {
           (state as any).selectedFiles = new Set((state as any).selectedFiles);
+        }
+        if (Array.isArray((state as any).selectedKBIds)) {
+          (state as any).selectedKBIds = new Set((state as any).selectedKBIds);
+        } else if (!(state as any).selectedKBIds) {
+          (state as any).selectedKBIds = new Set();
         }
       },
     }

@@ -13,6 +13,7 @@ from ..core.provider_config import (
     remove_model_from_provider, get_presets, get_presets_by_category,
     import_preset_as_provider, build_test_config, parse_cc_switch_json,
     get_ccswitch_status, sync_ccswitch_to_local, _ccswitch_auto_sync,
+    auto_detect_models,
 )
 
 from ..routers.tasks import reset_orchestrator
@@ -119,6 +120,53 @@ async def list_all_models():
                     "is_default": p.get("id") == default_id,
                 })
     return {"models": all_models}
+
+
+from ..core.provider_models import ApiFormat, AuthField
+
+
+@router.get("/api-formats")
+async def list_api_formats():
+    """获取所有支持的 API 格式"""
+    return {
+        "formats": [
+            {"id": fmt.value, "label": fmt.name.replace("_", " ").title(), "desc": _api_format_desc(fmt.value)}
+            for fmt in ApiFormat
+        ]
+    }
+
+
+@router.get("/auth-fields")
+async def list_auth_fields():
+    """获取所有支持的认证字段"""
+    return {
+        "fields": [
+            {"id": field.value, "label": field.name.replace("_", " ").title(), "desc": _auth_field_desc(field.value)}
+            for field in AuthField
+        ]
+    }
+
+
+def _api_format_desc(api_format: str) -> str:
+    """API 格式描述"""
+    descs = {
+        "openai_chat": "/chat/completions",
+        "openai_responses": "/responses",
+        "anthropic": "/v1/messages",
+        "gemini_native": "google.ai",
+        "ollama_chat": "/api/chat",
+    }
+    return descs.get(api_format, "")
+
+
+def _auth_field_desc(auth_field: str) -> str:
+    """认证字段描述"""
+    descs = {
+        "bearer_token": "Authorization: Bearer <key>",
+        "x_api_key": "x-api-key: <key>",
+        "anthropic_auth_token": "ANTHROPIC_AUTH_TOKEN (阿里云TokenPlan/Kimi Coding)",
+    }
+    return descs.get(auth_field, "")
 
 
 # ===== CC Switch 集成（必须放在 /{provider_id} 之前，避免路径参数冲突） =====
@@ -251,6 +299,20 @@ async def test_provider(provider_id: str, body: Optional[Dict[str, Any]] = None)
                 content = result.get("content", [{}])[0].get("text", "")
                 return {"success": True, "response": content[:50], "latency_ms": int(response.elapsed.total_seconds() * 1000)}
 
+        elif api_format == "anthropic_messages":
+            # 兼容 Anthropic Messages API 但使用 OpenAI 风格 endpoint（如 Kimi Coding）
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            }
+            payload = {"model": model, "messages": [{"role": "user", "content": "Say hi"}], "max_tokens": 10}
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(f"{api_host}/chat/completions", headers=headers, json=payload)
+                response.raise_for_status()
+                result = response.json()
+                content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+                return {"success": True, "response": content[:50], "latency_ms": int(response.elapsed.total_seconds() * 1000)}
+
         elif api_format == "ollama_chat":
             payload = {"model": model or "qwen2.5:latest", "messages": [{"role": "user", "content": "Hi"}], "stream": False}
             async with httpx.AsyncClient(timeout=30.0) as client:
@@ -274,3 +336,22 @@ async def test_provider(provider_id: str, body: Optional[Dict[str, Any]] = None)
         return {"success": False, "error": f"HTTP {e.response.status_code}", "detail": e.response.text[:300]}
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+
+@router.post("/{provider_id}/auto-detect-models")
+async def detect_models(provider_id: str):
+    """自动从 Provider API 获取可用模型列表"""
+    provider = get_custom_provider(provider_id)
+    if not provider:
+        raise HTTPException(status_code=404, detail=f"Provider '{provider_id}' 不存在")
+
+    models = auto_detect_models(provider_id)
+    if models:
+        # 更新 provider 的模型列表
+        current_models = provider.get("models", [])
+        current_names = {m.get("name") for m in current_models}
+        new_models = current_models + [{"name": m, "enabled": True} for m in models if m not in current_names]
+        if len(new_models) > len(current_models):
+            update_custom_provider(provider_id, {"models": new_models})
+        return {"success": True, "models": models, "message": f"检测到 {len(models)} 个模型"}
+    return {"success": False, "models": [], "message": "未能自动获取模型列表，请手动添加"}

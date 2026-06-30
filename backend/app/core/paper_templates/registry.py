@@ -94,6 +94,7 @@ class PaperTemplate:
     domain: str
     documentclass: str
     cls_file: str = ""
+    sty_files: List[str] = field(default_factory=list)
     bib_style: str = "plain"
     language: str = "zh"
     acceptance_threshold: int = 75
@@ -131,6 +132,7 @@ class PaperTemplate:
             domain=data.get("domain", "general"),
             documentclass=data.get("documentclass", "article"),
             cls_file=data.get("cls_file", ""),
+            sty_files=list(data.get("sty_files", []) or []),
             bib_style=data.get("bib_style", "plain"),
             language=data.get("language", "zh"),
             acceptance_threshold=int(data.get("acceptance_threshold", 75)),
@@ -263,6 +265,10 @@ def load_template(template_id: Optional[str]) -> PaperTemplate:
     """便捷函数：按 ID 取一个模板。"""
     return get_registry().get(template_id)
 
+
+def list_templates() -> List[PaperTemplate]:
+    """便捷函数：列出所有已注册模板。"""
+    return get_registry().list_templates()
 
 def register_template(template: PaperTemplate, *, overwrite: bool = False) -> None:
     """便捷函数：动态注册一个模板。"""

@@ -19,6 +19,7 @@ import httpx
 # Token 预算与 Agent 独立记忆
 from ..core.token_budget import get_token_budget_manager
 from ..core.agent_memory import get_agent_profile
+from ..core.llm import get_unified_llm_client
 
 
 class ToolDef(TypedDict):
@@ -455,6 +456,9 @@ class BaseAgent(ABC):
         self.api_base_url = api_base_url or ""
         self.provider_id = provider_id or ""
         self._knowledge_base_id: Optional[str] = None
+        # v5.3.0: 多 KB 注入支持
+        self._knowledge_base_ids: Optional[List[str]] = None
+        self._task_project_name: Optional[str] = None
 
         # LLM 后端: provider_id 或自动检测
         from ..config import get_settings
@@ -488,6 +492,160 @@ class BaseAgent(ABC):
             self._agent_profile = None
             logger.debug(f"[{self.name}] Agent 独立记忆加载跳过: {e}")
 
+    def _get_mcp_tool_defs(self) -> List[ToolDef]:
+        """获取此 Agent 配置的 MCP 工具定义列表（用于 ReAct 循环）。
+
+        从 MCPManager 的 agent_tools_map 读取此 Agent 的工具配置，
+        转换为 ToolDef 格式供 LLM 使用。
+        """
+        try:
+            from ..mcp.config import get_mcp_manager
+            mcp_manager = get_mcp_manager()
+            agent_tools = mcp_manager.get_tools_for_agent(self.name)
+            if not agent_tools:
+                return []
+
+            tool_defs: List[ToolDef] = []
+            for tool_name in agent_tools:
+                # 根据工具名称生成 ToolDef
+                tool_def = self._build_mcp_tool_def(tool_name)
+                if tool_def:
+                    tool_defs.append(tool_def)
+            return tool_defs
+        except Exception as e:
+            logger.warning(f"[{self.name}] Failed to load MCP tool defs: {e}")
+            return []
+
+    def _build_mcp_tool_def(self, tool_name: str) -> Optional[ToolDef]:
+        """根据 MCP 工具名称构建 ToolDef（供 LLM 使用）。"""
+        # 工具定义映射：名称 -> (描述, 参数schema)
+        MCP_TOOL_SCHEMAS: Dict[str, Tuple[str, Dict[str, Any]]] = {
+            "web_search": (
+                "搜索网页获取实时信息。支持 DuckDuckGo/Brave 搜索。",
+                {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "搜索关键词"},
+                    },
+                    "required": ["query"],
+                }
+            ),
+            "paper_search": (
+                "搜索学术论文。支持 Google Scholar, ArXiv, PubMed, JSTOR。",
+                {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "搜索关键词"},
+                        "limit": {"type": "integer", "description": "返回结果数量", "default": 5},
+                    },
+                    "required": ["query"],
+                }
+            ),
+            "arxiv_search": (
+                "搜索 arXiv 论文。",
+                {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "搜索关键词"},
+                        "max_results": {"type": "integer", "description": "最大结果数", "default": 5},
+                    },
+                    "required": ["query"],
+                }
+            ),
+            "arxiv_download": (
+                "下载 arXiv 论文 PDF。",
+                {
+                    "type": "object",
+                    "properties": {
+                        "paper_id": {"type": "string", "description": "arXiv 论文 ID (如 2401.12345)"},
+                    },
+                    "required": ["paper_id"],
+                }
+            ),
+            "arxiv_abstract": (
+                "获取 arXiv 论文摘要。",
+                {
+                    "type": "object",
+                    "properties": {
+                        "paper_id": {"type": "string", "description": "arXiv 论文 ID"},
+                    },
+                    "required": ["paper_id"],
+                }
+            ),
+            "arxiv_citation": (
+                "获取 arXiv 论文引用信息。",
+                {
+                    "type": "object",
+                    "properties": {
+                        "paper_id": {"type": "string", "description": "arXiv 论文 ID"},
+                    },
+                    "required": ["paper_id"],
+                }
+            ),
+            "scholar_search": (
+                "搜索 Google Scholar 学术论文。",
+                {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "搜索关键词"},
+                    },
+                    "required": ["query"],
+                }
+            ),
+            "file_read": (
+                "读取本地文件内容。",
+                {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "文件路径"},
+                    },
+                    "required": ["path"],
+                }
+            ),
+            "file_write": (
+                "写入内容到本地文件。",
+                {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "文件路径"},
+                        "content": {"type": "string", "description": "文件内容"},
+                    },
+                    "required": ["path", "content"],
+                }
+            ),
+            "code_execute": (
+                "执行代码片段。",
+                {
+                    "type": "object",
+                    "properties": {
+                        "code": {"type": "string", "description": "代码内容"},
+                        "language": {"type": "string", "description": "编程语言", "default": "python"},
+                    },
+                    "required": ["code"],
+                }
+            ),
+            "latex_compile": (
+                "编译 LaTeX 文档。",
+                {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "LaTeX 文件路径"},
+                    },
+                    "required": ["path"],
+                }
+            ),
+        }
+
+        if tool_name not in MCP_TOOL_SCHEMAS:
+            return None
+
+        desc, params = MCP_TOOL_SCHEMAS[tool_name]
+        return {
+            "name": tool_name,
+            "description": desc,
+            "parameters": params,
+        }
+
     def _resolve_provider_config(self) -> None:
         """从当前指定的 Provider（或全局默认）解析 API 配置"""
         from ..core.provider_config import get_custom_provider, get_default_provider
@@ -503,7 +661,8 @@ class BaseAgent(ABC):
             meta = provider.get("meta", {})
             self._provider_auth_field = meta.get("auth_field", "")
             # 如果 model 未指定或是旧默认值，使用 provider 的第一个可用模型
-            if not self.model or self.model == self.default_model:
+            provider_models = [m.get("name") for m in provider.get("models", []) if m.get("enabled")]
+            if not self.model or self.model == self.default_model or self.model not in provider_models:
                 first_model = next(
                     (m.get("name") for m in provider.get("models", []) if m.get("enabled")),
                     None
@@ -534,6 +693,32 @@ class BaseAgent(ABC):
         logger.warning(f"[{self.name}] 所有 Provider 均不可用，进入演示模式")
         return False
 
+    def _get_current_provider(self) -> Dict[str, Any]:
+        """构造当前解析到的 provider dict，供 UnifiedLLMClient 使用。"""
+        from ..core.provider_config import get_custom_provider, get_default_provider
+        provider = None
+        if self.provider_id:
+            provider = get_custom_provider(self.provider_id)
+        if not provider:
+            provider = get_default_provider()
+        if not provider:
+            return {
+                "type": "openai_compatible",
+                "api_key": self.api_key,
+                "api_host": self.api_base_url,
+                "meta": {"auth_field": self._provider_auth_field},
+                "models": [{"name": self.model, "enabled": True}] if self.model else [],
+            }
+        result = dict(provider)
+        # 允许运行时覆盖
+        result["api_key"] = self.api_key or result.get("api_key", "")
+        result["api_host"] = self.api_base_url or result.get("api_host", "")
+        meta = dict(result.get("meta", {}) or {})
+        if self._provider_auth_field:
+            meta["auth_field"] = self._provider_auth_field
+        result["meta"] = meta
+        return result
+
     # 子类可以重写此属性以获得更大的token限制
     _max_tokens_override: int = 0
 
@@ -550,20 +735,22 @@ class BaseAgent(ABC):
         system_instruction: str,
         workspace_dir: Optional[str] = None,
         timeout: int = 300,
+        prefer_cli: bool = True,
     ) -> Dict[str, Any]:
         """
-        【全自动编程入口 v3.0】将编程任务全权委托给 Claude Code CLI。
+        【全自动编程入口 v4.0】优先 Claude Code CLI，自动回退 HTTP API。
 
         工作流程：
-        1. 调用 Claude Code -p 模式，Claude 生成 Python 代码 + 执行命令
-        2. Python subprocess 负责写文件 + 执行（避免 --agent 模式的 Python REPL 崩溃）
-        3. 返回结构化结果
+        1. 如果 Claude Code CLI 可用且 prefer_cli=True，调用 CLI 生成代码+执行
+        2. 如果 CLI 不可用或调用失败，自动回退到 HTTP API（call_llm）生成代码
+        3. 统一返回结构化结果
 
         参数：
             task_description: 完整编程任务描述
             system_instruction: Claude Code 行为指令（CLAUDE_CODER_SYSTEM）
             workspace_dir: 工作目录（默认为 outputs/_global/）
             timeout: 超时秒数
+            prefer_cli: 是否优先使用 Claude Code CLI（默认 True）
 
         返回：
             {
@@ -576,6 +763,7 @@ class BaseAgent(ABC):
                 "numerical_results": {},         # 数值结果
                 "interpretation": str,           # 结果解释
                 "attempts": int,                # 尝试次数
+                "backend": "claude_cli" | "http_api",  # 实际使用的后端
             }
         """
         import asyncio
@@ -583,35 +771,39 @@ class BaseAgent(ABC):
         from ..core.paths import get_output_dir
         output_dir = workspace_dir or str(get_output_dir())
 
-        logger.info(f"[{self.name}] 通过 Claude CLI 全自动编程，工作目录: {output_dir}")
+        # ===== 判断使用哪个后端 =====
+        cli_available = _find_claude_code() is not None if prefer_cli else False
+        backend = "claude_cli" if cli_available else "http_api"
+        logger.info(f"[{self.name}] 全自动编程后端: {backend}, 工作目录: {output_dir}")
 
-        # ===== 第一步：调用 Claude Code -p 模式生成代码和执行命令 =====
-        claude_text = ""
-        try:
-            claude_text = await asyncio.to_thread(
-                _call_claude_code_direct,
-                prompt=task_description,
-                model=self._claude_model,
-                system_prompt=system_instruction,
+        if backend == "claude_cli":
+            # ===== CLI 路径 =====
+            claude_text = ""
+            try:
+                claude_text = await asyncio.to_thread(
+                    _call_claude_code_direct,
+                    prompt=task_description,
+                    model=self._claude_model,
+                    system_prompt=system_instruction,
+                    timeout=timeout,
+                    task_dir=output_dir,
+                )
+                logger.info(f"[{self.name}] Claude CLI 返回 {len(claude_text)} chars")
+            except Exception as e:
+                logger.warning(f"[{self.name}] Claude CLI 调用失败，回退到 HTTP API: {e}")
+                backend = "http_api"
+                # 继续执行下方的 HTTP API 路径
+
+        if backend == "http_api":
+            # ===== HTTP API 回退路径 =====
+            return await self._call_claude_coder_http(
+                task_description=task_description,
+                system_instruction=system_instruction,
+                workspace_dir=output_dir,
                 timeout=timeout,
-                task_dir=output_dir,
             )
-            logger.info(f"[{self.name}] Claude CLI 返回 {len(claude_text)} chars")
-        except Exception as e:
-            logger.error(f"[{self.name}] Claude CLI 调用失败: {e}")
-            return {
-                "success": False,
-                "code": "",
-                "file_path": "",
-                "execution_output": "",
-                "execution_stderr": str(e),
-                "key_findings": [],
-                "numerical_results": {},
-                "interpretation": "",
-                "attempts": 0,
-            }
 
-        # ===== 第二步：解析 Claude 返回的 JSON，提取 code 和 execution_command =====
+        # ===== CLI 路径继续：解析 Claude 返回的 JSON =====
         parsed = None
         raw = claude_text.strip()
         if raw.startswith("{"):
@@ -626,18 +818,13 @@ class BaseAgent(ABC):
                         pass
 
         if not parsed:
-            logger.warning(f"[{self.name}] Claude 返回无法解析，原始文本前200字: {raw[:200]}")
-            return {
-                "success": False,
-                "code": raw[:500],
-                "file_path": "",
-                "execution_output": "",
-                "execution_stderr": f"Claude 返回无法解析: {raw[:300]}",
-                "key_findings": [],
-                "numerical_results": {},
-                "interpretation": "",
-                "attempts": 1,
-            }
+            logger.warning(f"[{self.name}] Claude 返回无法解析，回退到 HTTP API。原始文本前200字: {raw[:200]}")
+            return await self._call_claude_coder_http(
+                task_description=task_description,
+                system_instruction=system_instruction,
+                workspace_dir=output_dir,
+                timeout=timeout,
+            )
 
         code = parsed.get("code", "")
         file_path = parsed.get("file_path", os.path.join(output_dir, "code", "solver.py"))
@@ -646,27 +833,24 @@ class BaseAgent(ABC):
         numerical_results = parsed.get("numerical_results", {})
         interpretation = parsed.get("interpretation", "")
 
-        # ===== 第三步：写代码文件 + 执行 =====
+        # ===== 写代码文件 + 执行 =====
         exec_output = ""
         exec_stderr = ""
         exec_success = False
         attempts = 1
 
-        # 确保目录存在
         code_dir = os.path.dirname(file_path)
         if code_dir:
             os.makedirs(code_dir, exist_ok=True)
 
-        # 写文件
         if code:
             try:
                 with open(file_path, "w", encoding="utf-8") as f:
                     f.write(code)
                 logger.info(f"[{self.name}] 代码已写入: {file_path}")
             except Exception as e:
-                logger.warning(f"[{self.name}] 写文件失败: {e}，跳过写文件步骤")
+                logger.warning(f"[{self.name}] 写文件失败: {e}")
 
-        # 执行代码
         if execution_command:
             try:
                 env = os.environ.copy()
@@ -685,7 +869,6 @@ class BaseAgent(ABC):
                 exec_stderr = result.stderr.strip()
                 exec_success = result.returncode == 0
 
-                # 尝试解析执行输出中的 JSON
                 if exec_output.startswith("{"):
                     try:
                         output_json = json.loads(exec_output)
@@ -697,7 +880,7 @@ class BaseAgent(ABC):
 
                 logger.info(f"[{self.name}] 执行{'成功' if exec_success else '失败'}: {exec_output[:200]}")
             except subprocess.TimeoutExpired:
-                exec_stderr = f"执行超时（120秒）"
+                exec_stderr = "执行超时（120秒）"
                 logger.warning(f"[{self.name}] 执行超时")
             except Exception as e:
                 exec_stderr = str(e)
@@ -713,6 +896,191 @@ class BaseAgent(ABC):
             "numerical_results": numerical_results,
             "interpretation": interpretation,
             "attempts": attempts,
+            "backend": "claude_cli",
+        }
+
+    async def _call_claude_coder_http(
+        self,
+        task_description: str,
+        system_instruction: str,
+        workspace_dir: Optional[str] = None,
+        timeout: int = 300,
+    ) -> Dict[str, Any]:
+        """
+        【HTTP API 全自动编程】当 Claude Code CLI 不可用时回退到此路径。
+
+        工作流程：
+        1. 通过 call_llm() 让 LLM 生成代码（JSON 格式）
+        2. 解析 JSON 提取 code
+        3. 写文件 + subprocess 执行
+        4. 如果执行失败，最多重试 3 次（每次将错误信息反馈给 LLM）
+        """
+        import asyncio
+
+        output_dir = workspace_dir or str(get_output_dir())
+        code_dir = os.path.join(output_dir, "code")
+        os.makedirs(code_dir, exist_ok=True)
+        file_path = os.path.join(code_dir, "solver_http.py")
+
+        max_retries = 3
+        for attempt in range(1, max_retries + 1):
+            logger.info(f"[{self.name}] HTTP API 编程尝试 {attempt}/{max_retries}")
+
+            # 构建 prompt（包含前序错误信息）
+            prompt = task_description
+            if attempt > 1:
+                prompt += f"\n\n【前序尝试失败信息】\n{last_error}\n请修正代码并重新生成。"
+
+            messages = [
+                {"role": "system", "content": system_instruction},
+                {"role": "user", "content": prompt},
+            ]
+
+            try:
+                response = await self.call_llm(messages=messages, temperature=0.3)
+                content = ""
+                if isinstance(response, dict):
+                    content = response.get("choices", [{}])[0].get("message", {}).get("content", "")
+                elif isinstance(response, str):
+                    content = response
+
+                # 解析 JSON 提取代码
+                parsed = self.extract_json(content) or {}
+                if not parsed:
+                    # 尝试直接提取代码块
+                    parsed = {"code": _extract_code_from_response(content) or ""}
+
+                code = parsed.get("code", "")
+                if not code:
+                    last_error = f"LLM 未返回有效代码 (attempt {attempt})"
+                    logger.warning(f"[{self.name}] {last_error}")
+                    continue
+
+                # 写文件
+                with open(file_path, "w", encoding="utf-8") as f:
+                    f.write(code)
+
+                # 执行
+                try:
+                    env = os.environ.copy()
+                    result = subprocess.run(
+                        [sys.executable, file_path],
+                        capture_output=True,
+                        text=True,
+                        encoding="utf-8",
+                        errors="replace",
+                        timeout=120,
+                        cwd=output_dir,
+                        env=env,
+                    )
+                    exec_output = result.stdout.strip()
+                    exec_stderr = result.stderr.strip()
+                    exec_success = result.returncode == 0
+
+                    # 解析执行输出中的 JSON
+                    numerical_results = {}
+                    key_findings = parsed.get("key_findings", [])
+                    interpretation = parsed.get("interpretation", "")
+                    if exec_output.startswith("{"):
+                        try:
+                            output_json = json.loads(exec_output)
+                            numerical_results = output_json
+                            key_findings = key_findings or output_json.get("key_findings", [])
+                            interpretation = interpretation or output_json.get("interpretation", "")
+                        except json.JSONDecodeError:
+                            pass
+
+                    if exec_success:
+                        logger.info(f"[{self.name}] HTTP API 编程成功 (attempt {attempt})")
+                        return {
+                            "success": True,
+                            "code": code,
+                            "file_path": file_path,
+                            "execution_output": exec_output,
+                            "execution_stderr": exec_stderr,
+                            "key_findings": key_findings,
+                            "numerical_results": numerical_results,
+                            "interpretation": interpretation,
+                            "attempts": attempt,
+                            "backend": "http_api",
+                        }
+                    else:
+                        last_error = f"执行失败 (exit={result.returncode}): {exec_stderr[:500]}"
+                        logger.warning(f"[{self.name}] {last_error}")
+                        if attempt == max_retries:
+                            return {
+                                "success": False,
+                                "code": code,
+                                "file_path": file_path,
+                                "execution_output": exec_output,
+                                "execution_stderr": exec_stderr,
+                                "key_findings": key_findings,
+                                "numerical_results": numerical_results,
+                                "interpretation": interpretation,
+                                "attempts": attempt,
+                                "backend": "http_api",
+                            }
+                except subprocess.TimeoutExpired:
+                    last_error = "执行超时（120秒）"
+                    logger.warning(f"[{self.name}] {last_error}")
+                    if attempt == max_retries:
+                        return {
+                            "success": False,
+                            "code": code,
+                            "file_path": file_path,
+                            "execution_output": "",
+                            "execution_stderr": last_error,
+                            "key_findings": [],
+                            "numerical_results": {},
+                            "interpretation": "",
+                            "attempts": attempt,
+                            "backend": "http_api",
+                        }
+                except Exception as e:
+                    last_error = f"执行异常: {e}"
+                    logger.warning(f"[{self.name}] {last_error}")
+                    if attempt == max_retries:
+                        return {
+                            "success": False,
+                            "code": code,
+                            "file_path": file_path,
+                            "execution_output": "",
+                            "execution_stderr": str(e),
+                            "key_findings": [],
+                            "numerical_results": {},
+                            "interpretation": "",
+                            "attempts": attempt,
+                            "backend": "http_api",
+                        }
+            except Exception as e:
+                last_error = f"LLM 调用失败: {e}"
+                logger.error(f"[{self.name}] {last_error}")
+                if attempt == max_retries:
+                    return {
+                        "success": False,
+                        "code": "",
+                        "file_path": "",
+                        "execution_output": "",
+                        "execution_stderr": str(e),
+                        "key_findings": [],
+                        "numerical_results": {},
+                        "interpretation": "",
+                        "attempts": attempt,
+                        "backend": "http_api",
+                    }
+
+        # 理论上不会到达这里，但兜底
+        return {
+            "success": False,
+            "code": "",
+            "file_path": "",
+            "execution_output": "",
+            "execution_stderr": "所有重试均失败",
+            "key_findings": [],
+            "numerical_results": {},
+            "interpretation": "",
+            "attempts": max_retries,
+            "backend": "http_api",
         }
 
     @abstractmethod
@@ -811,26 +1179,74 @@ class BaseAgent(ABC):
             "intent": intent,
         }
 
-    def _inject_knowledge_context(self, query_text: str, top_k: int = 3, base_id: Optional[str] = None) -> str:
+    def _inject_knowledge_context(
+        self,
+        query_text: str,
+        top_k: int = 3,
+        base_id: Optional[str] = None,
+        base_ids: Optional[List[str]] = None,
+        project_name: Optional[str] = None,
+    ) -> str:
         """查询知识库并返回上下文文本（静默失败）
 
-        v2 多库版：查询所有知识库，合并上下文注入。
-        若指定了 base_id（或 agent 设置了 _knowledge_base_id），则只查询该知识库。
+        v5.3.0 多 KB 注入：
+        优先级：
+          1. base_ids / self._knowledge_base_ids（多 KB，按 KB 均分 max_chars）
+          2. base_id / self._knowledge_base_id（旧版单 KB，向后兼容）
+          3. 自动选（项目私有 + 全局公共，由 query_context_for_task 处理）
+          4. 全部 KB（旧兜底）
         """
         try:
             from ..core.knowledge_manager import get_knowledge_manager
             km = get_knowledge_manager()
+
+            # 优先级 1: 多 KB
+            effective_ids = base_ids or self._knowledge_base_ids
+            if effective_ids:
+                ctx = km.query_context_for_task(
+                    task_project_name=project_name or self._task_project_name,
+                    base_ids=effective_ids,
+                    query=query_text,
+                    top_k=top_k,
+                    max_chars=4000,
+                )
+                if ctx:
+                    logger.info(
+                        f"[{self.name}] 注入多 KB 上下文 "
+                        f"(bases={len(effective_ids)}, {len(ctx)} chars)"
+                    )
+                    return f"\n\n## 知识库参考上下文\n{ctx}\n"
+
+            # 优先级 2: 单 KB（向后兼容）
             target_id = base_id or self._knowledge_base_id
             if target_id:
                 ctx = km.query_context(target_id, query_text, top_k=top_k, max_chars=1500)
                 if ctx:
                     logger.info(f"[{self.name}] 注入知识库上下文 (base={target_id}, {len(ctx)} chars)")
                     return f"\n\n## 知识库参考上下文\n{ctx}\n"
-            else:
-                ctx = km.query_all_context(query_text, top_k=top_k, max_chars=1500)
+
+            # 优先级 3: 自动选（项目私有 + 全局公共）
+            eff_project = project_name or self._task_project_name
+            if eff_project:
+                ctx = km.query_context_for_task(
+                    task_project_name=eff_project,
+                    base_ids=None,
+                    query=query_text,
+                    top_k=top_k,
+                    max_chars=4000,
+                )
                 if ctx:
-                    logger.info(f"[{self.name}] 注入知识库上下文 (all bases, {len(ctx)} chars)")
+                    logger.info(
+                        f"[{self.name}] 注入自动选择 KB 上下文 "
+                        f"(project={eff_project}, {len(ctx)} chars)"
+                    )
                     return f"\n\n## 知识库参考上下文\n{ctx}\n"
+
+            # 优先级 4: 全部 KB（旧兜底）
+            ctx = km.query_all_context(query_text, top_k=top_k, max_chars=1500)
+            if ctx:
+                logger.info(f"[{self.name}] 注入知识库上下文 (all bases, {len(ctx)} chars)")
+                return f"\n\n## 知识库参考上下文\n{ctx}\n"
         except Exception as e:
             logger.debug(f"[{self.name}] 知识库查询失败: {e}")
         return ""
@@ -914,7 +1330,7 @@ class BaseAgent(ABC):
         return ""
 
     def _get_api_format(self) -> str:
-        """从 provider 元数据或 llm_backend 推断 API 格式"""
+        """从 provider 元数据或 llm_backend 推断 API 格式。"""
         from ..core.provider_config import get_custom_provider, get_default_provider
         provider = None
         if self.provider_id:
@@ -927,120 +1343,6 @@ class BaseAgent(ABC):
         if self.llm_backend == "anthropic":
             return "anthropic"
         return "openai_chat"
-
-    async def _call_anthropic(
-        self,
-        messages: List[Dict[str, Any]],
-        temperature: Optional[float],
-        tools: Optional[List[Dict[str, Any]]] = None,
-    ) -> Dict[str, Any]:
-        """调用 Anthropic Messages API，支持多种认证方式，可选 tools。"""
-        if self._provider_auth_field == "anthropic_auth_token":
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            }
-        else:
-            headers = {
-                "x-api-key": self.api_key,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            }
-        payload: Dict[str, Any] = {
-            "model": self.model,
-            "max_tokens": self.effective_max_tokens,
-            "temperature": temperature if temperature is not None else self.temperature,
-            "messages": messages,
-        }
-        if tools:
-            payload["tools"] = tools
-
-        timeout = 300.0 if self.effective_max_tokens > 8192 else 120.0
-
-        def _normalize(data: Dict[str, Any]) -> Dict[str, Any]:
-            content_text = ""
-            tool_calls = []
-            for c in data.get("content", []):
-                if c.get("type") == "text":
-                    content_text += c.get("text", "")
-                elif c.get("type") == "tool_use":
-                    tool_calls.append({
-                        "id": c.get("id"),
-                        "type": "function",
-                        "function": {
-                            "name": c.get("name", ""),
-                            "arguments": json.dumps(c.get("input", {})),
-                        },
-                    })
-            msg: Dict[str, Any] = {"role": "assistant", "content": content_text}
-            if tool_calls:
-                msg["tool_calls"] = tool_calls
-            return {"choices": [{"message": msg}]}
-
-        try:
-            body_bytes = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                response = await client.post(
-                    f"{self.api_base_url}/v1/messages",
-                    headers=headers,
-                    content=body_bytes,
-                )
-                response.raise_for_status()
-                text = response.content.decode("utf-8")
-                data = json.loads(text)
-                return _normalize(data)
-        except httpx.ReadTimeout:
-            logger.warning(f"[{self.name}] Anthropic ReadTimeout, retrying...")
-            try:
-                async with httpx.AsyncClient(timeout=timeout * 1.5) as client:
-                    response = await client.post(
-                        f"{self.api_base_url}/v1/messages",
-                        headers=headers,
-                        content=body_bytes,
-                    )
-                    response.raise_for_status()
-                    text = response.content.decode("utf-8")
-                    data = json.loads(text)
-                    return _normalize(data)
-            except Exception as e2:
-                logger.error(f"[{self.name}] Anthropic retry failed: {e2}")
-                self._call_context["error"] = str(e2)
-                # v5.3: 失败必须抛（让熔断器计数）
-                raise RuntimeError(f"Anthropic retry failed: {e2}") from e2
-        except httpx.HTTPStatusError as e:
-            err_text = e.response.content.decode("utf-8", errors="replace")[:300]
-            logger.error(f"[{self.name}] Anthropic HTTP {e.response.status_code}: {err_text}")
-            # 401/403 → 尝试自动切换到其他可用 Provider
-            if e.response.status_code in (401, 403) and self._try_next_provider():
-                logger.info(f"[{self.name}] 切换 Provider 后重试请求...")
-                try:
-                    if self._provider_auth_field == "anthropic_auth_token":
-                        headers = {"Authorization": f"Bearer {self.api_key}", "anthropic-version": "2023-06-01", "content-type": "application/json"}
-                    else:
-                        headers = {"x-api-key": self.api_key, "anthropic-version": "2023-06-01", "content-type": "application/json"}
-                    async with httpx.AsyncClient(timeout=timeout) as client:
-                        response = await client.post(
-                            f"{self.api_base_url}/v1/messages",
-                            headers=headers,
-                            content=body_bytes,
-                        )
-                        response.raise_for_status()
-                        text = response.content.decode("utf-8")
-                        data = json.loads(text)
-                        return _normalize(data)
-                except Exception as retry_err:
-                    logger.error(f"[{self.name}] 切换 Provider 后重试仍失败: {retry_err}")
-            self._call_context["error"] = f"HTTP {e.response.status_code}"
-            # v5.3: 失败必须抛（让熔断器计数）
-            raise RuntimeError(
-                f"[{self.name}] Anthropic HTTP {e.response.status_code}: {err_text}"
-            ) from e
-        except Exception as e:
-            logger.error(f"[{self.name}] Anthropic call failed: {e}")
-            self._call_context["error"] = str(e)
-            # v5.3: 失败必须抛（让熔断器计数）
-            raise RuntimeError(f"Anthropic call failed: {e}") from e
 
     async def call_llm(
         self,
@@ -1073,6 +1375,19 @@ class BaseAgent(ABC):
                     self.model = routed
             except Exception as exc:  # noqa: BLE001
                 logger.debug(f"AgentModelRouter unavailable: {exc}")
+
+        # ===== v5.3.0: 自动注入 MCP 工具 =====
+        # 如果调用者没有显式传入 tools，自动从 MCPManager 加载此 Agent 配置的工具
+        if tools is None:
+            tools = self._get_mcp_tool_defs()
+        elif tools:
+            # 合并用户传入的 tools 和 MCP 工具
+            mcp_tools = self._get_mcp_tool_defs()
+            if mcp_tools:
+                existing_names = {t["name"] for t in tools}
+                for mt in mcp_tools:
+                    if mt["name"] not in existing_names:
+                        tools = tools + [mt]
 
         self._call_context = {
             "messages": messages,
@@ -1234,101 +1549,24 @@ class BaseAgent(ABC):
         temperature: Optional[float] = None,
         tools: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
-        """单次 LLM 调用（含可选 tools 字段）。"""
-        api_format = self._get_api_format()
+        """单次 LLM 调用，统一路由到 UnifiedLLMClient。"""
+        provider = self._get_current_provider()
 
-        if api_format == "anthropic":
-            return await self._call_anthropic(messages, temperature, tools=tools)
+        # kimi-for-coding 等模型只支持 temperature=1
+        if (self.model and "kimi-for-coding" in self.model) or (self.api_base_url and "kimi.com" in self.api_base_url):
+            temp = 1
+        else:
+            temp = temperature if temperature is not None else self.temperature
 
-        # 默认 OpenAI Chat Completions（兼容 openai_chat / openai_responses / ollama_chat）
-        if api_format not in ("openai_chat", "openai_responses", "ollama_chat", "gemini_native"):
-            logger.warning(f"[{self.name}] 未知 api_format={api_format}，回退到 openai_chat")
-
-        if api_format == "gemini_native":
-            # Gemini 原生格式暂不支持 tools，先不带 tools 调用
-            if tools:
-                logger.warning(f"[{self.name}] gemini_native 工具适配未实现，忽略 tools")
-            tools = None
-
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json; charset=utf-8",
-        }
-        payload: Dict[str, Any] = {
-            "model": self.model,
-            "messages": messages,
-            "temperature": temperature if temperature is not None else self.temperature,
-            "max_tokens": self.effective_max_tokens,
-        }
-        if tools:
-            payload["tools"] = tools
-            payload["tool_choice"] = "auto"
-
-        timeout = 300.0 if self.effective_max_tokens > 8192 else 120.0
-
-        try:
-            body_bytes = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                response = await client.post(
-                    f"{self.api_base_url}/chat/completions",
-                    headers=headers,
-                    content=body_bytes,
-                )
-                response.raise_for_status()
-                text = response.content.decode("utf-8")
-                return json.loads(text)
-        except httpx.ReadTimeout:
-            logger.warning(f"[{self.name}] ReadTimeout ({timeout}s), retrying once...")
-            try:
-                body_bytes = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-                async with httpx.AsyncClient(timeout=timeout * 1.5) as client:
-                    response = await client.post(
-                        f"{self.api_base_url}/chat/completions",
-                        headers=headers,
-                        content=body_bytes,
-                    )
-                    response.raise_for_status()
-                    text = response.content.decode("utf-8")
-                    return json.loads(text)
-            except Exception as e2:
-                logger.error(f"[{self.name}] Retry also failed: {e2}")
-                self._call_context["error"] = str(e2)
-                # v5.3: 失败必须抛
-                raise RuntimeError(f"ReadTimeout retry failed: {e2}") from e2
-        except (httpx.RemoteProtocolError, httpx.PoolTimeout, OSError) as e:
-            logger.warning(f"[{self.name}] Connection error: {e}, retrying once...")
-            try:
-                body_bytes = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-                async with httpx.AsyncClient(timeout=timeout * 2) as client:
-                    response = await client.post(
-                        f"{self.api_base_url}/chat/completions",
-                        headers=headers,
-                        content=body_bytes,
-                    )
-                    response.raise_for_status()
-                    text = response.content.decode("utf-8")
-                    return json.loads(text)
-            except Exception as e2:
-                logger.error(f"[{self.name}] Connection retry also failed: {e2}")
-                self._call_context["error"] = str(e2)
-                # v5.3: 失败必须抛
-                raise RuntimeError(f"Connection retry failed: {e2}") from e2
-        except httpx.HTTPStatusError as e:
-            try:
-                err_text = e.response.content.decode("utf-8", errors="replace")[:300]
-            except Exception:
-                err_text = "unable to read response"
-            logger.error(f"[{self.name}] HTTP {e.response.status_code}: {err_text}")
-            self._call_context["error"] = f"HTTP {e.response.status_code}"
-            # v5.3: 失败必须抛
-            raise RuntimeError(
-                f"[{self.name}] HTTP {e.response.status_code}: {err_text}"
-            ) from e
-        except Exception as e:
-            logger.error(f"[{self.name}] LLM call failed: {e}")
-            self._call_context["error"] = str(e)
-            # v5.3: 失败必须抛
-            raise RuntimeError(f"LLM call failed: {e}") from e
+        client = get_unified_llm_client()
+        return await client.chat_completion(
+            provider=provider,
+            messages=messages,
+            model=self.model,
+            temperature=temp,
+            max_tokens=self.effective_max_tokens,
+            tools=tools,
+        )
 
     async def _react_loop(
         self,
@@ -1337,46 +1575,35 @@ class BaseAgent(ABC):
         temperature: Optional[float],
         max_iterations: int,
     ) -> Dict[str, Any]:
-        """ReAct Thought-Action-Observation 循环。"""
-        api_format = self._get_api_format()
-        tools_payload = self._build_tools_payload(tools, api_format)
+        """ReAct Thought-Action-Observation 循环（统一使用 OpenAI 格式消息）。"""
+        tools_payload = self._build_tools_payload(tools)
 
         last_response: Optional[Dict[str, Any]] = None
         for iteration in range(max_iterations):
             response = await self._call_llm_once(messages, temperature, tools=tools_payload)
             last_response = response
-            tool_calls = self._parse_tool_calls(response, api_format)
+            tool_calls = self._parse_tool_calls(response)
             if not tool_calls:
                 # LLM 已给出最终答案
                 return response
 
             # 构造 assistant message（包含 tool_calls）
-            assistant_msg = self._extract_assistant_message(response, api_format)
-            assistant_with_tools = self._inject_tool_calls(assistant_msg, tool_calls, api_format)
+            assistant_msg = self._extract_assistant_message(response)
+            assistant_with_tools = self._inject_tool_calls(assistant_msg, tool_calls)
             messages.append(assistant_with_tools)
 
             # 执行工具并追加 observation messages
             for tc in tool_calls:
                 observation = await self._execute_tool_call(tc)
-                messages.append(self._build_tool_result_message(tc, observation, api_format))
+                messages.append(self._build_tool_result_message(tc, observation))
 
             logger.info(f"[{self.name}] ReAct iteration {iteration + 1}/{max_iterations}: executed {len(tool_calls)} tool(s)")
 
         logger.warning(f"[{self.name}] ReAct 达到最大迭代次数 {max_iterations}，返回最后一次响应")
         return last_response or self._mock_response(messages)
 
-    def _build_tools_payload(self, tools: List[ToolDef], api_format: str) -> List[Dict[str, Any]]:
-        """把统一 ToolDef 转成不同 provider 的 tools 格式。"""
-        if api_format == "anthropic":
-            return [
-                {
-                    "name": t["name"],
-                    "description": t["description"],
-                    "input_schema": t["parameters"],
-                }
-                for t in tools
-            ]
-        # OpenAI / Ollama 通用格式
+    def _build_tools_payload(self, tools: List[ToolDef]) -> List[Dict[str, Any]]:
+        """把统一 ToolDef 转成 OpenAI 格式 tools。"""
         return [
             {
                 "type": "function",
@@ -1389,34 +1616,25 @@ class BaseAgent(ABC):
             for t in tools
         ]
 
-    def _parse_tool_calls(self, response: Dict[str, Any], api_format: str) -> List[ToolCall]:
-        """从 LLM 响应中解析 tool_calls。"""
+    def _parse_tool_calls(self, response: Dict[str, Any]) -> List[ToolCall]:
+        """从已归一化的 LLM 响应中解析 tool_calls。"""
         tool_calls: List[ToolCall] = []
         try:
-            if api_format == "anthropic":
-                msg = response["choices"][0]["message"]
-                for tc in msg.get("tool_calls", []):
-                    tool_calls.append({
-                        "id": tc.get("id"),
-                        "name": tc["function"]["name"],
-                        "arguments": json.loads(tc["function"].get("arguments", "{}")),
-                    })
-            else:
-                msg = response["choices"][0]["message"]
-                for tc in msg.get("tool_calls", []):
-                    args = tc.get("function", {}).get("arguments", "{}")
-                    if isinstance(args, str):
-                        args = json.loads(args)
-                    tool_calls.append({
-                        "id": tc.get("id"),
-                        "name": tc["function"]["name"],
-                        "arguments": args,
-                    })
+            msg = response["choices"][0]["message"]
+            for tc in msg.get("tool_calls", []):
+                args = tc.get("function", {}).get("arguments", "{}")
+                if isinstance(args, str):
+                    args = json.loads(args)
+                tool_calls.append({
+                    "id": tc.get("id"),
+                    "name": tc["function"]["name"],
+                    "arguments": args,
+                })
         except Exception as e:
             logger.debug(f"[{self.name}] 未解析到 tool_calls: {e}")
         return tool_calls
 
-    def _extract_assistant_message(self, response: Dict[str, Any], api_format: str) -> Dict[str, Any]:
+    def _extract_assistant_message(self, response: Dict[str, Any]) -> Dict[str, Any]:
         """从响应中提取 assistant message（不含 tool_calls）。"""
         try:
             msg = response["choices"][0]["message"]
@@ -1428,23 +1646,8 @@ class BaseAgent(ABC):
         self,
         assistant_msg: Dict[str, Any],
         tool_calls: List[ToolCall],
-        api_format: str,
     ) -> Dict[str, Any]:
-        """把 tool_calls 注入 assistant message。"""
-        if api_format == "anthropic":
-            # Anthropic 期望 content 是 list，包含 text 和 tool_use
-            content: List[Dict[str, Any]] = []
-            if assistant_msg.get("content"):
-                content.append({"type": "text", "text": str(assistant_msg["content"])})
-            for tc in tool_calls:
-                content.append({
-                    "type": "tool_use",
-                    "id": tc.get("id") or f"toolu_{tc['name']}",
-                    "name": tc["name"],
-                    "input": tc["arguments"],
-                })
-            return {"role": "assistant", "content": content}
-        # OpenAI 格式
+        """把 tool_calls 注入 assistant message（OpenAI 格式）。"""
         assistant_msg["tool_calls"] = [
             {
                 "id": tc.get("id") or f"call_{tc['name']}_{i}",
@@ -1462,21 +1665,9 @@ class BaseAgent(ABC):
         self,
         tool_call: ToolCall,
         observation: str,
-        api_format: str,
     ) -> Dict[str, Any]:
-        """构造 tool 执行结果 message。"""
+        """构造 tool 执行结果 message（OpenAI 格式）。"""
         tool_id = tool_call.get("id") or f"tool_{tool_call['name']}"
-        if api_format == "anthropic":
-            return {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "tool_result",
-                        "tool_use_id": tool_id,
-                        "content": observation,
-                    }
-                ],
-            }
         return {
             "role": "tool",
             "tool_call_id": tool_id,
@@ -1485,12 +1676,15 @@ class BaseAgent(ABC):
         }
 
     async def _execute_tool_call(self, tool_call: ToolCall) -> str:
-        """执行本地工具调用并返回 observation。"""
+        """执行本地工具调用并返回 observation。
+        v5.3.0: 支持 MCP 工具调用（web_search, paper_search, file_read, file_write 等）。
+        """
         name = tool_call["name"]
         args = tool_call.get("arguments", {})
         logger.info(f"[{self.name}] Executing tool: {name}({args})")
 
         try:
+            # ===== 内置工具（硬编码 Python 实现）=====
             if name == "read_csv_columns":
                 return await self._tool_read_csv_columns(args.get("file_path", ""))
             if name == "run_python":
@@ -1503,11 +1697,74 @@ class BaseAgent(ABC):
                 return await self._tool_search_web(args.get("query", ""))
             if name == "read_paper":
                 return await self._tool_read_paper(args.get("paper_id", ""))
+
+            # ===== v5.3.0: MCP 工具（通过外部 MCP 服务器调用）=====
+            # 检查是否是 MCP 工具（由用户配置给此 Agent 的）
+            mcp_result = await self._execute_mcp_tool(name, args)
+            if mcp_result is not None:
+                return mcp_result
+
         except Exception as e:
             logger.warning(f"[{self.name}] Tool {name} failed: {e}")
             return f"Error executing tool {name}: {e}"
 
         return f"Tool '{name}' is not implemented."
+
+    async def _execute_mcp_tool(self, tool_name: str, args: Dict[str, Any]) -> Optional[str]:
+        """通过 MCP 服务器执行工具调用。
+
+        返回工具执行结果，如果该工具不是此 Agent 配置的 MCP 工具则返回 None。
+        """
+        # 获取此 Agent 配置的 MCP 工具列表
+        from ..mcp.config import get_mcp_manager
+        mcp_manager = get_mcp_manager()
+        agent_tools = mcp_manager.get_tools_for_agent(self.name)
+
+        if tool_name not in agent_tools:
+            return None  # 不是此 Agent 的 MCP 工具，返回 None 让上层处理
+
+        # 查找工具对应的服务器
+        server_name = mcp_manager.BUILTIN_TOOLS.get(tool_name)
+        if not server_name:
+            # 可能是自定义工具，尝试从 tools 映射中查找
+            tool_config = mcp_manager.tools.get(tool_name)
+            if tool_config:
+                server_name = tool_config.server
+
+        if not server_name:
+            return f"MCP tool '{tool_name}' has no associated server."
+
+        # 获取服务器配置
+        server_config = mcp_manager.get_server_config(server_name)
+        if not server_config:
+            return f"MCP server '{server_name}' not found."
+
+        if not server_config.enabled:
+            return f"MCP server '{server_name}' is disabled."
+
+        # 调用 MCP 工具
+        from ..mcp.client import MCPClient, MCPServerConfig as ClientConfig
+        client_config = ClientConfig(
+            name=server_name,
+            command=server_config.command,
+            args=server_config.args,
+            env=server_config.env,
+        )
+        client = MCPClient(client_config)
+        try:
+            await client.connect()
+            # 调用工具
+            result = await client.call_tool(tool_name, args)
+            await client.disconnect()
+            return result or f"MCP tool '{tool_name}' returned empty result."
+        except Exception as e:
+            logger.warning(f"[{self.name}] MCP tool {tool_name} failed: {e}")
+            return f"MCP tool '{tool_name}' failed: {e}"
+        finally:
+            try:
+                await client.disconnect()
+            except Exception:
+                pass
 
     async def _tool_read_csv_columns(self, file_path: str) -> str:
         from ..services.data_schema import get_schema_extractor
@@ -1518,24 +1775,32 @@ class BaseAgent(ABC):
         return f"Columns: {', '.join(cols)}"
 
     async def _tool_run_python(self, code: str) -> str:
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-            f.write(code)
-            f.flush()
-            path = f.name
-        try:
-            proc = subprocess.run(
-                [sys.executable, "-X", "utf8", path],
-                capture_output=True, text=True, timeout=30
-            )
-            out = f"stdout: {proc.stdout[:2000]}"
-            if proc.stderr:
-                out += f"\nstderr: {proc.stderr[:1000]}"
+        """执行 Python 代码（使用沙箱隔离）。
+        v5.3.0: 从直接 subprocess 升级为 CodeSandbox，提供资源限制和文件系统隔离。"""
+        from ..core.sandbox import CodeSandbox, SandboxConfig
+
+        config = SandboxConfig(
+            max_cpu_time=30,
+            max_memory_mb=256,
+            workspace_persist=False,
+        )
+        sandbox = CodeSandbox(config)
+        result = sandbox.execute(code)
+
+        if result.success:
+            out = f"stdout: {result.stdout[:2000]}"
+            if result.stderr:
+                out += f"\nstderr: {result.stderr[:1000]}"
             return out
-        finally:
-            try:
-                os.unlink(path)
-            except Exception:
-                pass
+        else:
+            msg = f"执行失败: {result.message}"
+            if result.timeout_reached:
+                msg += " (超时)"
+            if result.memory_exceeded:
+                msg += " (内存超限)"
+            if result.stderr:
+                msg += f"\nstderr: {result.stderr[:1000]}"
+            return msg
 
     async def _tool_write_python_snippet(self, code: str, path: str) -> str:
         try:

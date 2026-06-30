@@ -38,6 +38,9 @@ export default function SettingsPage() {
   const [claudeTemperature, setClaudeTemperature] = useState('0.3');
   const [claudeMaxTokens, setClaudeMaxTokens] = useState('8192');
 
+  // Available models from providers
+  const [availableModels, setAvailableModels] = useState<{id: string, name: string, provider: string}[]>([]);
+
   useEffect(() => {
     fetch(apiBase() + '/info').then(r => r.ok ? r.json() : null).then(i => {
       if (i) {
@@ -47,6 +50,44 @@ export default function SettingsPage() {
         setClaudeMcpConfigPath(i.claude_mcp_config_path || '');
       }
     }).catch(() => {});
+
+    // Load available models from providers
+    fetch(apiBase() + '/providers/').then(r => r.ok ? r.json() : null).then(data => {
+      if (data) {
+        const models: {id: string, name: string, provider: string}[] = [];
+        const customProviders = data.custom_providers || [];
+        customProviders.forEach((p: any) => {
+          const providerName = p.name || p.id;
+          (p.models || []).forEach((m: any) => {
+            if (m.enabled !== false) {
+              models.push({id: m.name, name: `${m.name} (${providerName})`, provider: p.id});
+            }
+          });
+        });
+        // Also add presets as fallback
+        const presets = data.presets || [];
+        presets.forEach((p: any) => {
+          (p.models || []).forEach((m: any) => {
+            if (m.enabled !== false && !models.find((mm: any) => mm.id === m.name)) {
+              models.push({id: m.name, name: `${m.name} (${p.name})`, provider: p.id});
+            }
+          });
+        });
+        setAvailableModels(models);
+      }
+    }).catch(() => {});
+  }, []);
+
+  // 监听跨组件子 tab 切换事件
+  useEffect(() => {
+    const handler = (e: CustomEvent) => {
+      const targetTab = e.detail as 'providers' | 'mcp' | 'knowledge' | 'system';
+      if (TABS.some(t => t.id === targetTab)) {
+        setActiveTab(targetTab);
+      }
+    };
+    window.addEventListener('mm:settings-tab', handler as EventListener);
+    return () => window.removeEventListener('mm:settings-tab', handler as EventListener);
   }, []);
 
   const handleSaveClaudeSettings = async () => {
@@ -126,7 +167,20 @@ export default function SettingsPage() {
             <div className={styles.settingsSection}>
               <div className={styles.settingsLabel}>Claude 模型</div>
               <div className={styles.apiKeyRow}>
-                <input type="text" className={styles.apiKeyInput} placeholder="claude-3-5-sonnet-20241022" value={claudeModel} onChange={e => setClaudeModel(e.target.value)} />
+                <select
+                  className={styles.apiKeyInput}
+                  value={claudeModel}
+                  onChange={e => setClaudeModel(e.target.value)}
+                  style={{ color: '#F8FAFC', background: '#1E293B', border: '1px solid #334155', padding: '0.5rem', borderRadius: 6 }}
+                >
+                  <option value="">-- 选择模型 --</option>
+                  {availableModels.length === 0 && (
+                    <option value="" disabled>未检测到可用模型，请先在 Provider 管理中添加</option>
+                  )}
+                  {availableModels.map(m => (
+                    <option key={`${m.provider}-${m.id}`} value={m.id}>{m.name}</option>
+                  ))}
+                </select>
               </div>
             </div>
 
@@ -148,14 +202,14 @@ export default function SettingsPage() {
             <div className={styles.settingsSection}>
               <div className={styles.settingsLabel}>温度</div>
               <div className={styles.apiKeyRow}>
-                <input type="number" className={styles.apiKeyInput} placeholder="0.3" value={claudeTemperature} onChange={e => setClaudeTemperature(e.target.value)} min="0" max="1" step="0.1" />
+                <input type="number" className={styles.apiKeyInput} placeholder="0.3" value={claudeTemperature} onChange={e => setClaudeTemperature(e.target.value)} min="0" max="1" step="0.1" style={{ color: '#F8FAFC', background: '#1E293B', border: '1px solid #334155', padding: '0.5rem', borderRadius: 6 }} />
               </div>
             </div>
 
             <div className={styles.settingsSection}>
               <div className={styles.settingsLabel}>最大输出 Token</div>
               <div className={styles.apiKeyRow}>
-                <input type="number" className={styles.apiKeyInput} placeholder="8192" value={claudeMaxTokens} onChange={e => setClaudeMaxTokens(e.target.value)} min="100" max="32000" />
+                <input type="number" className={styles.apiKeyInput} placeholder="8192" value={claudeMaxTokens} onChange={e => setClaudeMaxTokens(e.target.value)} min="100" max="32000" style={{ color: '#F8FAFC', background: '#1E293B', border: '1px solid #334155', padding: '0.5rem', borderRadius: 6 }} />
               </div>
             </div>
 

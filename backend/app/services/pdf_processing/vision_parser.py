@@ -73,7 +73,7 @@ class VisionPdfParser(PdfParser):
             result.metadata = {"total_pages": total_pages, "vision_pages": len(target_pages)}
 
             # 初始化速率限制器
-            from ...rate_limiter import AsyncTokenBucket
+            from ..rate_limiter import AsyncTokenBucket
             bucket = AsyncTokenBucket(rate=self.rate)
 
             tasks = []

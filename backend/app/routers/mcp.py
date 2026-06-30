@@ -79,6 +79,40 @@ async def get_agent_tools(agent_name: str) -> List[str]:
     return mcp_manager.get_tools_for_agent(agent_name)
 
 
+@router.get("/agent-tools", response_model=Dict[str, List[str]])
+async def get_all_agent_tools() -> Dict[str, List[str]]:
+    """
+    获取所有Agent的工具配置
+
+    Returns:
+        {agent_name: [tool_name, ...]}
+    """
+    mcp_manager = get_mcp_manager()
+    return mcp_manager.get_all_agent_tools()
+
+
+@router.post("/agent-tools/{agent_name}", response_model=Dict[str, Any])
+async def set_agent_tools(agent_name: str, body: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    设置Agent的工具列表
+
+    Args:
+        agent_name: Agent名称
+        body: {tools: [tool_name, ...]}
+
+    Returns:
+        设置结果
+    """
+    mcp_manager = get_mcp_manager()
+    tools = body.get("tools", [])
+    mcp_manager.set_agent_tools(agent_name, tools)
+    return {
+        "success": True,
+        "agent": agent_name,
+        "tools": tools,
+    }
+
+
 @router.post("/tools", response_model=Dict[str, Any])
 async def add_custom_tool(tool_config: Dict[str, Any]) -> Dict[str, Any]:
     """

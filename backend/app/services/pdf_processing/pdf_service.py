@@ -288,24 +288,21 @@ class PdfProcessingService:
         """Phase 5 启发式：按页数 + 文件大小 + 视觉请求选 strategy。
 
         - 显式 ``use_vision=True`` + vision_provider → vision
-        - pages < 20 && size < 5MB → pymupdf4llm（快）
-        - pages >= 20 || size >= 5MB → vision（高质量，但需要 vision provider）
-        - 默认 → pymupdf4llm
+        - 否则一律 pymupdf4llm（避免无 vision provider 时卡死/报错）
         """
         use_vision = options.get("use_vision", False)
         if use_vision and options.get("vision_provider"):
-            return "vision"
-        try:
-            size_mb = file_path.stat().st_size / (1024 * 1024)
-            import fitz
-            doc = fitz.open(str(file_path))
-            pages = len(doc)
-            doc.close()
-            if pages >= 20 or size_mb >= 5:
-                return "vision"  # 长文档或大文件建议 vision
-            return "pymupdf4llm"
-        except Exception:
-            return "pymupdf4llm"
+            try:
+                size_mb = file_path.stat().st_size / (1024 * 1024)
+                import fitz
+                doc = fitz.open(str(file_path))
+                pages = len(doc)
+                doc.close()
+                if pages <= (options.get("vision_max_pages") or 5):
+                    return "vision"
+            except Exception:
+                pass
+        return "pymupdf4llm"
 
 
 # 全局服务实例

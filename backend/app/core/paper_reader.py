@@ -174,6 +174,10 @@ class PaperReader:
                 file_path=Path(pdf_path),
                 mode=self.config.parse_strategy,
             )
+            text = result.text or result.markdown or ""
+            errors = result.errors or []
+            if not text and errors:
+                return {"success": False, "error": "; ".join(errors)}
             return {
                 "success": True,
                 "text": result.text or "",
@@ -181,7 +185,7 @@ class PaperReader:
                 "page_contents": result.page_contents or [],
                 "pages": result.pages,
                 "method": getattr(result, "strategy", None) or getattr(result, "method", None) or "auto",
-                "errors": result.errors or [],
+                "errors": errors,
             }
         except Exception as e:
             logger.warning(f"PaperReader: 解析失败 {arxiv_id}: {e}")
@@ -229,6 +233,7 @@ class PaperSectionExtractor:
                     {"role": "user", "content": prompt},
                 ],
                 context={},
+                tools=[],
             )
             content = response.get("choices", [{}])[0].get("message", {}).get("content", "{}")
             result = agent.extract_json(content)

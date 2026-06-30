@@ -4,19 +4,9 @@ import { useState, useEffect, useCallback } from 'react';
 
 const apiBase = () => window.__API_BASE__ || 'http://localhost:8000/api/v1';
 
-const API_FORMATS = [
-  { id: 'openai_chat', label: 'OpenAI Chat', desc: '/chat/completions' },
-  { id: 'openai_responses', label: 'OpenAI Responses', desc: '/responses' },
-  { id: 'anthropic', label: 'Anthropic', desc: '/v1/messages' },
-  { id: 'gemini_native', label: 'Gemini Native', desc: 'google.ai' },
-  { id: 'ollama_chat', label: 'Ollama Chat', desc: '/api/chat' },
-];
-
-const AUTH_FIELDS = [
-  { id: 'bearer_token', label: 'Bearer Token', desc: 'Authorization: Bearer <key>' },
-  { id: 'x_api_key', label: 'x-api-key', desc: 'Anthropic 原生: x-api-key: <key>' },
-  { id: 'anthropic_auth_token', label: 'ANTHROPIC_AUTH_TOKEN', desc: '阿里云TokenPlan/Kimi Coding 等兼容格式' },
-];
+// API 格式和认证字段从后端动态加载
+interface ApiFormat { id: string; label: string; desc: string; }
+interface AuthField { id: string; label: string; desc: string; }
 
 const CATEGORY_COLORS: Record<string, string> = {
   official: '#3498db',
@@ -179,6 +169,30 @@ export default function ProviderSettings() {
     } catch { setMsg('导入失败'); } finally { setImportingJson(false); }
   };
 
+  // 动态加载 API 格式和认证字段
+  const [apiFormats, setApiFormats] = useState<ApiFormat[]>([]);
+  const [authFields, setAuthFields] = useState<AuthField[]>([]);
+
+  // 加载 API 格式和认证字段
+  const loadApiFormats = useCallback(async () => {
+    try {
+      const [fmtRes, authRes] = await Promise.all([
+        fetch(apiBase() + '/providers/api-formats'),
+        fetch(apiBase() + '/providers/auth-fields'),
+      ]);
+      if (fmtRes.ok) {
+        const data = await fmtRes.json();
+        setApiFormats(data.formats || []);
+      }
+      if (authRes.ok) {
+        const data = await authRes.json();
+        setAuthFields(data.fields || []);
+      }
+    } catch {
+      // 如果后端不支持，使用空数组
+    }
+  }, []);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -197,7 +211,8 @@ export default function ProviderSettings() {
       }
     } catch {} finally { setLoading(false); }
     loadCcswitchStatus();
-  }, [loadCcswitchStatus]);
+    loadApiFormats();
+  }, [loadCcswitchStatus, loadApiFormats]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -276,6 +291,13 @@ export default function ProviderSettings() {
     setTesting(provider.id);
     setTestResult(prev => ({ ...prev, [provider.id]: '测试中...' }));
     try {
+      // 自动检测正确的 api_format
+      let apiFormat = provider.meta?.api_format || 'openai_chat';
+      // 如果 provider 类型是 anthropic 但 host 包含 kimi，使用 anthropic_messages (OpenAI兼容模式)
+      if (provider.type === 'anthropic' && provider.api_host.includes('kimi')) {
+        apiFormat = 'anthropic_messages';
+      }
+
       const res = await fetch(apiBase() + '/providers/' + provider.id + '/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -283,7 +305,7 @@ export default function ProviderSettings() {
           api_key: provider.api_key,
           api_host: provider.api_host,
           model: provider.models.find(m => m.enabled)?.name || provider.models[0]?.name || '',
-          api_format: provider.meta?.api_format || 'openai_chat',
+          api_format: apiFormat,
         }),
       });
       const data = await res.json();
@@ -296,6 +318,22 @@ export default function ProviderSettings() {
       setTestResult(prev => ({ ...prev, [provider.id]: '✗ 连接失败' }));
     } finally {
       setTesting(null);
+    }
+  };
+
+  const handleAutoDetectModels = async (providerId: string) => {
+    setMsg('正在自动获取模型列表...');
+    try {
+      const res = await fetch(apiBase() + '/providers/' + providerId + '/auto-detect-models', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setMsg(`✓ 自动检测到 ${data.models.length} 个模型: ${data.models.join(', ')}`);
+        load();
+      } else {
+        setMsg(data.message || '自动获取失败，请手动添加模型');
+      }
+    } catch {
+      setMsg('自动获取失败，请手动添加模型');
     }
   };
 
@@ -517,7 +555,14 @@ export default function ProviderSettings() {
           <div style={{ marginBottom: '1rem' }}>
             <div style={{ color: '#ddd', fontSize: '0.85rem', marginBottom: '0.5rem' }}>API 格式</div>
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-              {API_FORMATS.map(fmt => (
+              {(apiFormats.length > 0 ? apiFormats : [
+                { id: 'openai_chat', label: 'OpenAI Chat', desc: '/chat/completions' },
+                { id: 'openai_responses', label: 'OpenAI Responses', desc: '/responses' },
+                { id: 'anthropic', label: 'Anthropic', desc: '/v1/messages' },
+                { id: 'anthropic_messages', label: 'Anthropic (OpenAI兼容)', desc: '/chat/completions' },
+                { id: 'gemini_native', label: 'Gemini Native', desc: 'google.ai' },
+                { id: 'ollama_chat', label: 'Ollama Chat', desc: '/api/chat' },
+              ]).map(fmt => (
                 <button
                   key={fmt.id}
                   onClick={() => {
@@ -547,7 +592,11 @@ export default function ProviderSettings() {
           <div style={{ marginBottom: '1rem' }}>
             <div style={{ color: '#ddd', fontSize: '0.85rem', marginBottom: '0.5rem' }}>认证方式</div>
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-              {AUTH_FIELDS.map(af => (
+              {(authFields.length > 0 ? authFields : [
+                { id: 'bearer_token', label: 'Bearer Token', desc: 'Authorization: Bearer <key>' },
+                { id: 'x_api_key', label: 'x-api-key', desc: 'Anthropic 原生: x-api-key: <key>' },
+                { id: 'anthropic_auth_token', label: 'ANTHROPIC_AUTH_TOKEN', desc: '阿里云TokenPlan/Kimi Coding 等兼容格式' },
+              ]).map(af => (
                 <button
                   key={af.id}
                   onClick={() => setAddForm(f => ({ ...f, auth_field: af.id }))}
@@ -566,7 +615,11 @@ export default function ProviderSettings() {
               ))}
             </div>
             <div style={{ color: '#666', fontSize: '0.75rem', marginTop: '0.3rem' }}>
-              {AUTH_FIELDS.find(af => af.id === addForm.auth_field)?.desc}
+              {(authFields.length > 0 ? authFields : [
+                { id: 'bearer_token', label: 'Bearer Token', desc: 'Authorization: Bearer <key>' },
+                { id: 'x_api_key', label: 'x-api-key', desc: 'Anthropic 原生: x-api-key: <key>' },
+                { id: 'anthropic_auth_token', label: 'ANTHROPIC_AUTH_TOKEN', desc: '阿里云TokenPlan/Kimi Coding 等兼容格式' },
+              ]).find(af => af.id === addForm.auth_field)?.desc}
             </div>
           </div>
 
@@ -715,6 +768,12 @@ export default function ProviderSettings() {
                   }}
                   style={{ flex: 1, padding: '0.4rem 0.6rem', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, color: '#e0e0e0', fontSize: '0.8rem' }}
                 />
+                <button
+                  onClick={() => handleAutoDetectModels(provider.id)}
+                  style={{ padding: '0.4rem 0.8rem', background: 'rgba(155,89,182,0.15)', border: '1px solid rgba(155,89,182,0.3)', borderRadius: 6, color: '#9b59b6', fontSize: '0.75rem', cursor: 'pointer' }}
+                >
+                  🔍 自动获取
+                </button>
               </div>
             </div>
 

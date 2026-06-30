@@ -4,7 +4,7 @@ import io
 import logging
 import shutil
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Literal
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, File, UploadFile, Query
@@ -13,11 +13,15 @@ from fastapi.responses import JSONResponse
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/data", tags=["数据管理"])
 
-from ..core.paths import get_data_dir, get_project_data_dir
+from ..core.paths import get_data_dir, get_project_data_dir, get_project_data_subdir
+from ..services.data_directory import list_project_files
 
 DATA_DIR: Path = get_data_dir()  # 全局默认目录
 
 ALLOWED_EXTENSIONS = {".csv", ".xlsx", ".xls", ".json", ".txt", ".tsv", ".parquet", ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".pdf"}
+
+# v5.3.0: 数据来源
+DataSource = Literal["user_upload", "self_collected"]
 
 
 def get_extension(filename: str) -> str:
@@ -33,12 +37,19 @@ async def upload_file(
     file: UploadFile = File(...),
     task_id: str = Query(None),
     project_name: str = Query(None),
+    source: DataSource = Query("user_upload", description="数据来源：user_upload（默认）或 self_collected"),
 ):
-    """上传数据文件（支持项目隔离）"""
+    """上传数据文件（支持项目隔离 + source 拆分）。
+
+    向后兼容：source 缺省 = 'user_upload'，与旧版行为一致（直接落到 data/ 根目录）。
+    旧版客户端零改动。
+
+    v5.3.0：传入 source='self_collected' 时文件落到 outputs/<name>/data/self_collected/。
+    """
     if not allowed(file.filename or ""):
         raise HTTPException(status_code=400, detail=f"不支持的文件类型: {get_extension(file.filename or '')}")
 
-    target_dir = get_project_data_dir(project_name)
+    target_dir = get_project_data_subdir(project_name, source=source)
     file_id = uuid4().hex[:8]
     ext = get_extension(file.filename or "")
     save_name = f"{file_id}_{file.filename or 'file'}{ext}"
@@ -54,10 +65,10 @@ async def upload_file(
         rel_path = str(save_path.relative_to(_PROJECT_ROOT))
     except ValueError:
         rel_path = str(save_path)
-    result = {"success": True, "file_id": file_id, "name": save_name, "size": size, "path": rel_path}
+    result = {"success": True, "file_id": file_id, "name": save_name, "size": size, "path": rel_path, "source": source}
 
-    # 如果是数据文件，做初步分析
-    if ext in {".csv", ".xlsx", ".xls", ".json"}:
+    # 如果是数据文件，做初步分析（仅 user_upload 触发）
+    if source == "user_upload" and ext in {".csv", ".xlsx", ".xls", ".json"}:
         try:
             from ..agents.data_agent import DataAgent
             agent = DataAgent(data_dir=str(target_dir))
@@ -66,33 +77,108 @@ async def upload_file(
         except Exception as e:
             logger.warning(f"Auto-analysis failed: {e}")
 
-    logger.info(f"Uploaded{' to project ' + project_name if project_name else ''}: {save_name} ({size} bytes)")
+    logger.info(
+        f"Uploaded{' to project ' + project_name if project_name else ''} "
+        f"(source={source}): {save_name} ({size} bytes)"
+    )
     return result
 
 
 @router.get("/files", response_model=None)
-async def list_files(project_name: str = Query(None)) -> list:
-    """列出已上传文件（支持项目隔离）"""
-    target_dir = get_project_data_dir(project_name)
+async def list_files(
+    project_name: str = Query(None),
+    source: Literal["user_upload", "self_collected", "both"] = Query(
+        "both", description="数据来源过滤"
+    ),
+) -> list:
+    """列出已上传文件（支持项目隔离 + source 拆分）。
+
+    v5.3.0：
+    - source='user_upload' → 只列 user_upload/
+    - source='self_collected' → 只列 self_collected/
+    - source='both'（默认） → 合并返回，每项带 source 字段
+    """
+    if source == "both":
+        return list_project_files(project_name, source="both")
+
+    target_dir = get_project_data_subdir(project_name, source=source)
     files: list = []
     for f in target_dir.iterdir():
-        if f.is_file():
+        if f.is_file() and not f.name.startswith("."):
+            if f.name == "_index.json":
+                continue
             files.append({
                 "name": f.name,
                 "size": f.stat().st_size,
                 "type": f.suffix,
-                "modified": f.stat().st_mtime,
+                "modified": int(f.stat().st_mtime * 1000),
+                "source": source,
             })
     return files
+
+
+@router.get("/self-collected")
+async def list_self_collected_files(project_name: str = Query(None)) -> Dict[str, Any]:
+    """列出 self_collected 目录的文件 + 元数据索引。"""
+    from ..services.data_directory import read_self_collected_index
+    items = list_project_files(project_name, source="self_collected")
+    index = read_self_collected_index(project_name)
+    return {"files": items, "index": index, "total": len(items)}
+
+
+@router.post("/self-collect/trigger")
+async def trigger_self_collect(
+    plan: Dict[str, Any],
+    project_name: str = Query(None),
+    concurrency: int = Query(4, ge=1, le=16),
+    max_size_mb: int = Query(50, ge=1, le=500),
+) -> Dict[str, Any]:
+    """手动触发自收集：传入 {"urls": [...], "query": "..."} → 异步下载。"""
+    from ..services.self_collector import collect_urls
+
+    urls = plan.get("urls") or []
+    query = plan.get("query", "") or ""
+    if not isinstance(urls, list):
+        raise HTTPException(status_code=400, detail="urls must be a list")
+    if not urls:
+        raise HTTPException(status_code=400, detail="urls is empty")
+    urls = [u for u in urls if isinstance(u, str) and u]
+
+    results = await collect_urls(
+        urls,
+        project_name=project_name,
+        source_query=query,
+        concurrency=concurrency,
+        max_size_mb=max_size_mb,
+    )
+    succeeded = sum(1 for r in results if r.filename)
+    failed = [r for r in results if r.error]
+    return {
+        "success": True,
+        "total": len(results),
+        "succeeded": succeeded,
+        "failed": len(failed),
+        "results": [
+            {
+                "url": r.url,
+                "filename": r.filename,
+                "size": r.size,
+                "error": r.error,
+                "http_status": r.http_status,
+            }
+            for r in results
+        ],
+    }
 
 
 @router.get("/analyze")
 async def analyze_file(
     dataset_name: str = Query(...),
     project_name: str = Query(None),
+    source: DataSource = Query("user_upload", description="数据来源"),
 ):
-    """分析数据文件（支持项目隔离）"""
-    target_dir = get_project_data_dir(project_name)
+    """分析数据文件（支持项目隔离 + source）"""
+    target_dir = get_project_data_subdir(project_name, source=source)
     file_path = target_dir / dataset_name
     if not file_path.exists():
         raise HTTPException(status_code=404, detail=f"File not found: {dataset_name}")
@@ -109,14 +195,15 @@ async def analyze_file(
 async def delete_file(
     filename: str,
     project_name: str = Query(None),
+    source: DataSource = Query("user_upload", description="数据来源"),
 ):
-    """删除文件（支持项目隔离）"""
-    target_dir = get_project_data_dir(project_name)
+    """删除文件（支持项目隔离 + source）"""
+    target_dir = get_project_data_subdir(project_name, source=source)
     file_path = target_dir / filename
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
     file_path.unlink()
-    return {"success": True, "deleted": filename}
+    return {"success": True, "deleted": filename, "source": source}
 
 
 # ===== OCR 接口（调用 LLM Vision 能力）=====
@@ -145,39 +232,20 @@ def _pdf_page_to_base64_png(pdf_bytes: bytes, page_number: int = 0) -> str:
     return base64.b64encode(img_bytes).decode("utf-8")
 
 
-def _build_vision_messages(base64_image: str, prompt: str, api_format: str) -> List[Dict[str, Any]]:
-    """根据 API 格式构建多模态消息"""
-    if api_format == "anthropic":
-        return [
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": "image/png",
-                            "data": base64_image,
-                        },
-                    },
-                    {"type": "text", "text": prompt},
-                ],
-            }
-        ]
-    else:
-        # OpenAI / Gemini / Ollama 兼容格式
-        return [
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": f"data:image/png;base64,{base64_image}"},
-                    },
-                    {"type": "text", "text": prompt},
-                ],
-            }
-        ]
+def _build_vision_messages(base64_image: str, prompt: str) -> List[Dict[str, Any]]:
+    """统一使用 OpenAI 风格的多模态消息；由 provider adapter 内部再转换为原生格式。"""
+    return [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/png;base64,{base64_image}"},
+                },
+                {"type": "text", "text": prompt},
+            ],
+        }
+    ]
 
 
 @router.post("/ocr")
@@ -210,9 +278,6 @@ async def ocr_upload(file: UploadFile = File(...), domain: str = "general"):
     from ..agents.data_agent import DataAgent
     agent = DataAgent()
 
-    # 确定 API 格式以选择正确的 vision message 格式
-    api_format = agent._get_api_format()
-
     # 严格控制幻觉：只输出图片中实际可见的内容，不补充。
     prompt = (
         "请提取这张图片中的所有文本内容，"
@@ -221,7 +286,7 @@ async def ocr_upload(file: UploadFile = File(...), domain: str = "general"):
         "如果属于数学建模/科研/工程类题目，完整保留题目描述、公式、表格和附件说明。"
         "保持原有排版格式，不要遗漏任何信息。"
     )
-    messages = _build_vision_messages(base64_image, prompt, api_format)
+    messages = _build_vision_messages(base64_image, prompt)
 
     try:
         response = await agent.call_llm(messages=messages, temperature=0.1)

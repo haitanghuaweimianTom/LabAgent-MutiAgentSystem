@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import styles from './page.module.css';
 
-import SystemStatus from './components/SystemStatus';
+import SystemStatus from './components/SystemStatusClient';
 import ProblemInput from './components/ProblemInput';
 import AgentChat from './components/AgentChat';
 import FileManager from './components/FileManager';
@@ -90,29 +90,36 @@ export default function Home() {
     mode: string;
     useCritique: boolean;
     knowledgeBaseId: string | null;
+    knowledgeBaseIds: string[];  // v5.3.0: 多 KB
     dataSource: 'upload' | 'self_collect' | 'upload_and_collect';
     problemType: string;
     dataFiles: string[];
   }) => {
     setSubmitting(true);
     try {
+      const body: Record<string, any> = {
+        problem_text: params.problemText,
+        project_name: params.projectName,
+        mode: params.mode,
+        options: {
+          workflow: params.workflow,
+          template: params.template,
+          use_critique: params.useCritique,
+        },
+        data_files: params.dataFiles,
+        data_source: params.dataSource,
+        problem_type: params.problemType,
+      };
+      // v5.3.0: 多 KB 优先；单 KB 向后兼容
+      if (params.knowledgeBaseIds && params.knowledgeBaseIds.length > 0) {
+        body.knowledge_base_ids = params.knowledgeBaseIds;
+      } else if (params.knowledgeBaseId) {
+        body.knowledge_base_id = params.knowledgeBaseId;
+      }
       const res = await fetch(apiBase() + '/tasks/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          problem_text: params.problemText,
-          project_name: params.projectName,
-          mode: params.mode,
-          options: {
-            workflow: params.workflow,
-            template: params.template,
-            use_critique: params.useCritique,
-          },
-          data_files: params.dataFiles,
-          knowledge_base_id: params.knowledgeBaseId || undefined,
-          data_source: params.dataSource,
-          problem_type: params.problemType,
-        }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -350,6 +357,22 @@ export default function Home() {
     { id: 'environment', label: '🐍 环境', desc: 'Conda/Venv 管理' },
     { id: 'settings', label: '⚙️ 设置', desc: 'Provider/MCP/知识库/系统' },
   ] as const;
+
+  // 监听跨组件 tab 切换事件（如 FileManager → 知识库管理）
+  useEffect(() => {
+    const handler = (e: CustomEvent) => {
+      const targetTab = e.detail as string;
+      if (targetTab === 'knowledge') {
+        setTab('settings');
+        // 通知 SettingsPage 切换到 knowledge 子 tab
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('mm:settings-tab', { detail: 'knowledge' }));
+        }, 50);
+      }
+    };
+    window.addEventListener('mm:switch-tab', handler as EventListener);
+    return () => window.removeEventListener('mm:switch-tab', handler as EventListener);
+  }, []);
 
   return (
     <main className={styles.main}>

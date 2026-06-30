@@ -344,7 +344,8 @@ class ResearchAgent(BaseAgent):
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": prompt},
-                    ]
+                    ],
+                    tools=[], 
                 )
                 content = response.get("choices", [{}])[0].get("message", {}).get("content", "{}")
                 start = content.find("{")
@@ -380,12 +381,14 @@ class ResearchAgent(BaseAgent):
                 if "arxiv_server" in mcp_mgr.servers:
                     server_name = "arxiv_server"
                     mcp_tool_name = "search_papers"
+                    # arXiv 对超长查询会返回 HTTP 500，截断到前 200 字符并保留完整词
+                    arxiv_query = query[:200].rsplit(" ", 1)[0] if len(query) > 200 else query
                     # arxiv-mcp-server 支持：query, max_results, categories, sort_by, date_from, date_to
                     mcp_tool_args = {
-                        "query": query,
+                        "query": arxiv_query,
                         "max_results": 10,
                         "sort_by": "relevance",
-                        "categories": self._infer_arxiv_categories(query),
+                        "categories": self._infer_arxiv_categories(arxiv_query),
                     }
                 elif "scholarly_research" in mcp_mgr.servers:
                     server_name = "scholarly_research"
@@ -469,12 +472,14 @@ class ResearchAgent(BaseAgent):
                 if "arxiv_server" in mcp_mgr.servers:
                     server_name = "arxiv_server"
                     mcp_tool_name = "search_papers"
+                    # arXiv 对超长查询会返回 HTTP 500，截断到前 200 字符并保留完整词
+                    arxiv_query = query[:200].rsplit(" ", 1)[0] if len(query) > 200 else query
                     # arxiv-mcp-server 支持：query, max_results, categories, sort_by, date_from, date_to
                     mcp_tool_args = {
-                        "query": query,
+                        "query": arxiv_query,
                         "max_results": 10,
                         "sort_by": "relevance",
-                        "categories": self._infer_arxiv_categories(query),
+                        "categories": self._infer_arxiv_categories(arxiv_query),
                     }
                 elif "scholarly_research" in mcp_mgr.servers:
                     server_name = "scholarly_research"
@@ -608,6 +613,16 @@ class ResearchAgent(BaseAgent):
             except Exception as e:
                 logger.warning(f"ResearchAgent: 论文全文阅读管线失败: {e}", exc_info=True)
 
+        # 步骤1.8：跨论文研究空白识别（v6.0 新增）
+        if action in ("search", "deep_search", "search_methods") and verified_papers and len(verified_papers) >= 3:
+            try:
+                gap_analysis = await self._identify_cross_paper_gaps(verified_papers, query)
+                if gap_analysis:
+                    context["cross_paper_gap_analysis"] = gap_analysis
+                    logger.info(f"ResearchAgent: 跨论文研究空白识别完成，发现 {len(gap_analysis.get('gaps', []))} 个 gap")
+            except Exception as e:
+                logger.warning(f"ResearchAgent: 跨论文研究空白识别失败: {e}")
+
         # 步骤2：构建用户 prompt
         system_prompt = self.get_system_prompt(action)
         user_content = f"请搜索以下问题的相关资料：{query}\n\n背景：{context.get('problem_text', '')[:300]}"
@@ -637,7 +652,7 @@ class ResearchAgent(BaseAgent):
 
         # 步骤3：调用 LLM 生成衍生字段
         try:
-            response = await self.call_llm(messages=messages, context=context)
+            response = await self.call_llm(messages=messages, context=context, tools=[])
             content = response.get("choices", [{}])[0].get("message", {}).get("content", "{}")
             result = self.extract_json(content)
             if result:
@@ -687,6 +702,131 @@ class ResearchAgent(BaseAgent):
             fallback["mcp_search_used"] = True
             fallback["raw_mcp_result"] = mcp_result[:2000]
         return fallback
+
+    # ====================================================================
+    # v6.0: 跨论文研究空白识别
+    # ====================================================================
+
+    async def _identify_cross_paper_gaps(
+        self,
+        papers: List[Dict[str, Any]],
+        query: str,
+    ) -> Dict[str, Any]:
+        """跨论文研究空白识别：综合分析多篇论文的 limitations，识别共同 gap。
+
+        算法流程：
+        1. 提取每篇论文的 limitations / future work
+        2. 用 LLM 做跨论文主题聚类（识别共同局限）
+        3. 识别 "多篇论文都提到但未解决" 的问题
+        4. 生成研究空白报告
+
+        Returns:
+            {
+                "gaps": [{"description": "", "frequency": 0, "supporting_papers": [], "severity": "high|medium|low"}],
+                "common_limitations": ["局限1", "局限2"],
+                "future_directions": ["方向1", "方向2"],
+                "novelty_opportunities": ["机会1", "机会2"],
+                "cross_paper_summary": "综合分析摘要",
+            }
+        """
+        if len(papers) < 3:
+            return {}
+
+        # 收集每篇论文的 limitations 和 future work
+        paper_limitations = []
+        for p in papers:
+            extraction = p.get("extraction", {})
+            limitations = extraction.get("limitations", "")
+            if not limitations and p.get("abstract"):
+                # 从摘要中推断（如果 extraction 没有）
+                limitations = f"From abstract: {p['abstract'][-300:]}"
+
+            paper_limitations.append({
+                "arxiv_id": p.get("arxiv_id", ""),
+                "title": p.get("title", ""),
+                "limitations": limitations,
+                "year": p.get("year", 0),
+                "categories": p.get("categories", []),
+            })
+
+        # 构建跨论文分析 prompt
+        system_prompt = """你是一名资深学术研究分析师，擅长从多篇论文中识别共同的研究空白和未解决问题。
+
+【任务】
+分析以下多篇论文的局限性，识别：
+1. 哪些局限是多篇论文共同提到的（高频 gap）
+2. 哪些问题是当前领域普遍未解决的
+3. 哪些方向具有创新机会（少有人做但有价值）
+
+【输出格式（严格JSON）】
+{
+    "gaps": [
+        {
+            "description": "研究空白描述（≤100字）",
+            "frequency": 3,
+            "supporting_papers": ["arxiv_id1", "arxiv_id2"],
+            "severity": "high|medium|low",
+            "novelty_potential": "high|medium|low"
+        }
+    ],
+    "common_limitations": ["共同局限1", "共同局限2"],
+    "future_directions": ["未来方向1", "未来方向2"],
+    "novelty_opportunities": ["创新机会1", "创新机会2"],
+    "cross_paper_summary": "跨论文综合分析（≤300字）"
+}
+
+【规则】
+- 只基于提供的论文内容分析，不要编造
+- frequency 表示有多少篇论文提到该问题
+- severity 表示该问题对领域发展的阻碍程度
+- novelty_potential 表示解决该问题的创新价值"""
+
+        papers_text = json.dumps(paper_limitations, ensure_ascii=False, indent=2)
+        user_prompt = f"""研究主题：{query}
+
+以下是从 {len(papers)} 篇相关论文中提取的局限性分析：
+
+{papers_text[:8000]}
+
+请进行跨论文研究空白识别，输出严格 JSON 格式。"""
+
+        try:
+            response = await self.call_llm(
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=0.3,
+                tools=[], 
+            )
+            content = response.get("choices", [{}])[0].get("message", {}).get("content", "{}")
+            gap_analysis = self.extract_json(content) or {}
+
+            # 验证和补充
+            if gap_analysis:
+                gaps = gap_analysis.get("gaps", [])
+                for gap in gaps:
+                    # 确保 supporting_papers 中的 arxiv_id 真实存在
+                    valid_ids = [p.get("arxiv_id", "") for p in papers]
+                    gap["supporting_papers"] = [
+                        sid for sid in gap.get("supporting_papers", [])
+                        if sid in valid_ids
+                    ]
+                    gap["frequency"] = len(gap["supporting_papers"])
+
+                # 过滤掉 frequency < 2 的（至少两篇论文提到）
+                gap_analysis["gaps"] = [
+                    g for g in gaps
+                    if g.get("frequency", 0) >= 2
+                ]
+
+                gap_analysis["analyzed_paper_count"] = len(papers)
+                gap_analysis["query"] = query
+
+            return gap_analysis
+        except Exception as e:
+            logger.warning(f"跨论文研究空白识别 LLM 调用失败: {e}")
+            return {}
 
     # ====================================================================
     # Phase 4: 可插拔 Reranker 接入

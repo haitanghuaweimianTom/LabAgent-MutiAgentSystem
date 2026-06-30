@@ -341,6 +341,7 @@ class ContextCompressor:
                     json.dumps(droppable, ensure_ascii=False, indent=2, default=str)[:3000],
                 )}],
                 temperature=0.3,
+                tools=[],
             )
 
         try:

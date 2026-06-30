@@ -20,6 +20,7 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -29,6 +30,10 @@ logger = logging.getLogger(__name__)
 
 # 检查点默认保存目录
 CHECKPOINT_BASE_DIR = Path(__file__).parent.parent.parent / "data" / "checkpoints"
+
+# OOM 防护默认阈值（显存使用超过此比例触发预警）
+DEFAULT_VRAM_WARN_THRESHOLD = 0.85  # 85%
+DEFAULT_VRAM_KILL_THRESHOLD = 0.95  # 95%
 
 # ---------------------------------------------------------------------------
 # 数据模型
@@ -52,6 +57,15 @@ class GPUInfo:
 
 
 @dataclass
+class VRAMMonitorConfig:
+    """显存监控配置。"""
+    warn_threshold: float = DEFAULT_VRAM_WARN_THRESHOLD
+    kill_threshold: float = DEFAULT_VRAM_KILL_THRESHOLD
+    check_interval_sec: float = 2.0
+    enabled: bool = True
+
+
+@dataclass
 class TrainingMetrics:
     """从训练日志中提取的指标。"""
 
@@ -71,6 +85,27 @@ class TrainingMetrics:
 
 
 @dataclass
+class CheckpointInfo:
+    """检查点信息。"""
+    path: str
+    epoch: int
+    step: int
+    metric_value: Optional[float] = None
+    metric_name: str = ""
+    saved_at: str = ""
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "path": self.path,
+            "epoch": self.epoch,
+            "step": self.step,
+            "metric_value": self.metric_value,
+            "metric_name": self.metric_name,
+            "saved_at": self.saved_at,
+        }
+
+
+@dataclass
 class TrainingResult:
     """训练执行结果。"""
 
@@ -83,9 +118,23 @@ class TrainingResult:
     duration_sec: float = 0.0
     gpu_used: bool = False
     message: str = ""
+    checkpoints: List[CheckpointInfo] = field(default_factory=list)
+    resumed_from: Optional[str] = None  # 从哪个检查点恢复
 
     def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
+        return {
+            "success": self.success,
+            "stdout": self.stdout[:5000] if self.stdout else "",
+            "stderr": self.stderr[:3000] if self.stderr else "",
+            "returncode": self.returncode,
+            "metrics": self.metrics.to_dict(),
+            "checkpoint_path": self.checkpoint_path,
+            "duration_sec": self.duration_sec,
+            "gpu_used": self.gpu_used,
+            "message": self.message,
+            "checkpoints": [c.to_dict() for c in self.checkpoints],
+            "resumed_from": self.resumed_from,
+        }
 
 
 @dataclass
@@ -220,6 +269,213 @@ class GPUResourceManager:
         best = max(gpus, key=lambda g: g.free_memory_mb)
         return best.id
 
+    def estimate_max_batch_size(
+        self,
+        gpu_id: int,
+        model_memory_mb: float,
+        per_sample_memory_mb: float,
+        safety_factor: float = 0.8,
+    ) -> int:
+        """估算给定 GPU 上可运行的最大 batch size。
+
+        Args:
+            gpu_id: GPU ID
+            model_memory_mb: 模型本身占用的显存（MB）
+            per_sample_memory_mb: 每个样本前向+反向占用的显存（MB）
+            safety_factor: 安全因子（留余量防止 OOM）
+
+        Returns:
+            建议的最大 batch size
+        """
+        gpus = self.get_gpu_info()
+        gpu = next((g for g in gpus if g.id == gpu_id), None)
+        if not gpu:
+            return 1  # 无 GPU，回退到 CPU 模式
+        available_mb = gpu.free_memory_mb * safety_factor
+        # 减去模型本身占用的显存
+        available_for_batch = max(0, available_mb - model_memory_mb)
+        if available_for_batch <= 0:
+            return 1
+        max_batch = int(available_for_batch / per_sample_memory_mb)
+        return max(1, max_batch)
+
+
+# ---------------------------------------------------------------------------
+# 显存监控器（OOM 防护）
+# ---------------------------------------------------------------------------
+
+
+class VRAMMonitor:
+    """显存监控线程：定期检查 GPU 显存使用，超过阈值时发出预警或终止训练。"""
+
+    def __init__(
+        self,
+        gpu_id: int,
+        config: Optional[VRAMMonitorConfig] = None,
+    ):
+        self.gpu_id = gpu_id
+        self.config = config or VRAMMonitorConfig()
+        self._stop_event = threading.Event()
+        self._thread: Optional[threading.Thread] = None
+        self._peak_usage_mb = 0.0
+        self._warned = False
+        self._killed = False
+        self._kill_reason = ""
+
+    def start(self) -> None:
+        """启动监控线程。"""
+        if not self.config.enabled:
+            return
+        self._stop_event.clear()
+        self._thread = threading.Thread(target=self._monitor_loop, daemon=True)
+        self._thread.start()
+        logger.info(f"[VRAMMonitor] 启动监控 GPU {self.gpu_id} (warn={self.config.warn_threshold:.0%}, kill={self.config.kill_threshold:.0%})")
+
+    def stop(self) -> None:
+        """停止监控线程。"""
+        self._stop_event.set()
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=5)
+
+    def _monitor_loop(self) -> None:
+        """监控循环。"""
+        try:
+            import torch
+        except ImportError:
+            return
+
+        while not self._stop_event.is_set():
+            try:
+                if not torch.cuda.is_available():
+                    break
+
+                total = torch.cuda.get_device_properties(self.gpu_id).total_memory / (1024 * 1024)
+                allocated = torch.cuda.memory_allocated(self.gpu_id) / (1024 * 1024)
+                reserved = torch.cuda.memory_reserved(self.gpu_id) / (1024 * 1024)
+                usage_ratio = allocated / total
+
+                self._peak_usage_mb = max(self._peak_usage_mb, allocated)
+
+                # 预警阈值
+                if usage_ratio >= self.config.warn_threshold and not self._warned:
+                    self._warned = True
+                    logger.warning(
+                        f"[VRAMMonitor] GPU {self.gpu_id} 显存预警: "
+                        f"{allocated:.0f}/{total:.0f} MB ({usage_ratio:.1%})"
+                    )
+
+                # 终止阈值
+                if usage_ratio >= self.config.kill_threshold and not self._killed:
+                    self._killed = True
+                    self._kill_reason = (
+                        f"GPU {self.gpu_id} 显存超过 {self.config.kill_threshold:.0%} "
+                        f"({allocated:.0f}/{total:.0f} MB)"
+                    )
+                    logger.error(f"[VRAMMonitor] {self._kill_reason}")
+                    # 触发 OOM 保护：清空 GPU 缓存
+                    torch.cuda.empty_cache()
+
+            except Exception as e:
+                logger.debug(f"[VRAMMonitor] 监控异常: {e}")
+
+            self._stop_event.wait(self.config.check_interval_sec)
+
+    @property
+    def was_killed(self) -> bool:
+        return self._killed
+
+    @property
+    def kill_reason(self) -> str:
+        return self._kill_reason
+
+    @property
+    def peak_usage_mb(self) -> float:
+        return self._peak_usage_mb
+
+
+# ---------------------------------------------------------------------------
+# 检查点管理器
+# ---------------------------------------------------------------------------
+
+
+class CheckpointManager:
+    """训练检查点管理：保存、恢复、自动清理。"""
+
+    def __init__(self, output_dir: Path, max_keep: int = 3):
+        self.output_dir = output_dir
+        self.max_keep = max_keep
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+
+    def save_checkpoint_meta(self, checkpoints: List[CheckpointInfo]) -> None:
+        """保存检查点索引文件。"""
+        meta_path = self.output_dir / "checkpoints.json"
+        meta_path.write_text(
+            json.dumps([c.to_dict() for c in checkpoints], indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+    def load_checkpoint_meta(self) -> List[CheckpointInfo]:
+        """加载检查点索引。"""
+        meta_path = self.output_dir / "checkpoints.json"
+        if not meta_path.exists():
+            return []
+        try:
+            data = json.loads(meta_path.read_text(encoding="utf-8"))
+            return [
+                CheckpointInfo(
+                    path=c["path"],
+                    epoch=c.get("epoch", 0),
+                    step=c.get("step", 0),
+                    metric_value=c.get("metric_value"),
+                    metric_name=c.get("metric_name", ""),
+                    saved_at=c.get("saved_at", ""),
+                )
+                for c in data
+            ]
+        except Exception as e:
+            logger.warning(f"[CheckpointManager] 加载检查点索引失败: {e}")
+            return []
+
+    def find_latest_checkpoint(self) -> Optional[CheckpointInfo]:
+        """找到最新的检查点。"""
+        checkpoints = self.load_checkpoint_meta()
+        if not checkpoints:
+            # 回退到文件扫描
+            candidates = (
+                list(self.output_dir.rglob("*.pt"))
+                + list(self.output_dir.rglob("*.pth"))
+                + list(self.output_dir.rglob("*.ckpt"))
+            )
+            if not candidates:
+                return None
+            candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+            latest = candidates[0]
+            return CheckpointInfo(
+                path=str(latest),
+                epoch=0,
+                step=0,
+                saved_at=time.strftime("%Y-%m-%d %H:%M:%S"),
+            )
+        # 按 epoch 排序取最新
+        checkpoints.sort(key=lambda c: (c.epoch, c.step), reverse=True)
+        return checkpoints[0]
+
+    def cleanup_old_checkpoints(self) -> None:
+        """清理旧检查点，只保留最新的 max_keep 个。"""
+        checkpoints = self.load_checkpoint_meta()
+        if len(checkpoints) <= self.max_keep:
+            return
+        checkpoints.sort(key=lambda c: (c.epoch, c.step), reverse=True)
+        to_remove = checkpoints[self.max_keep:]
+        for ckpt in to_remove:
+            try:
+                Path(ckpt.path).unlink(missing_ok=True)
+                logger.info(f"[CheckpointManager] 清理旧检查点: {ckpt.path}")
+            except Exception as e:
+                logger.warning(f"[CheckpointManager] 清理检查点失败: {e}")
+        # 更新索引
+        self.save_checkpoint_meta(checkpoints[:self.max_keep])
+
 
 # ---------------------------------------------------------------------------
 # 日志解析器
@@ -268,6 +524,29 @@ class TrainingLogParser:
                 except json.JSONDecodeError:
                     continue
         return metrics
+
+    @classmethod
+    def parse_checkpoints(cls, text: str) -> List[CheckpointInfo]:
+        """从训练日志中解析检查点保存信息。"""
+        checkpoints = []
+        # 匹配格式: CHECKPOINT Saved epoch=5 step=1000 path=/path/to/ckpt.pt
+        pattern = re.compile(
+            r"CHECKPOINT\s+Saved\s+epoch=(\d+)\s+step=(\d+)\s+path=(\S+)"
+            r"(?:\s+metric=(\S+):([\d.]+))?",
+            re.IGNORECASE,
+        )
+        for match in pattern.finditer(text):
+            checkpoints.append(
+                CheckpointInfo(
+                    path=match.group(3),
+                    epoch=int(match.group(1)),
+                    step=int(match.group(2)),
+                    metric_name=match.group(4) or "",
+                    metric_value=float(match.group(5)) if match.group(5) else None,
+                    saved_at=time.strftime("%Y-%m-%d %H:%M:%S"),
+                )
+            )
+        return checkpoints
 
 
 # ---------------------------------------------------------------------------
@@ -322,13 +601,21 @@ class GPUExecutor:
             "gpus": [g.to_dict() for g in gpus],
         }
 
-    def execute_training(self, script_path: str, args: Dict[str, Any]) -> TrainingResult:
-        """执行训练脚本。
+    def execute_training(
+        self,
+        script_path: str,
+        args: Dict[str, Any],
+        resume_from: Optional[str] = None,
+        vram_monitor_config: Optional[VRAMMonitorConfig] = None,
+    ) -> TrainingResult:
+        """执行训练脚本，支持检查点恢复和显存监控。
 
         Args:
             script_path: 训练脚本路径（.py 文件）。
             args: 脚本参数字典，如 {"epochs": 10, "batch_size": 32}。
                   自动注入 ``--gpu_id`` 和 ``--output_dir``。
+            resume_from: 从指定检查点路径恢复训练（可选）。
+            vram_monitor_config: 显存监控配置（可选）。
 
         Returns:
             TrainingResult: 包含 stdout、stderr、提取的指标、检查点路径等。
@@ -349,11 +636,26 @@ class GPUExecutor:
         output_dir = CHECKPOINT_BASE_DIR / f"train_{timestamp}"
         output_dir.mkdir(parents=True, exist_ok=True)
 
+        # 检查点管理器
+        ckpt_manager = CheckpointManager(output_dir, max_keep=3)
+
+        # 如果指定了 resume_from，验证检查点存在
+        resumed_from = None
+        if resume_from:
+            resume_path = Path(resume_from)
+            if resume_path.exists():
+                resumed_from = str(resume_path)
+                logger.info(f"[GPUExecutor] 将从检查点恢复: {resume_from}")
+            else:
+                logger.warning(f"[GPUExecutor] 指定的检查点不存在: {resume_from}")
+
         # 构建命令
         cmd = [sys.executable, str(script)]
         merged_args = dict(args)
         merged_args.setdefault("gpu_id", self.gpu_id if self.is_available() else -1)
         merged_args.setdefault("output_dir", str(output_dir))
+        if resumed_from:
+            merged_args["resume_from"] = resumed_from
         for key, val in merged_args.items():
             cmd.append(f"--{key}")
             cmd.append(str(val))
@@ -363,6 +665,15 @@ class GPUExecutor:
             env["CUDA_VISIBLE_DEVICES"] = str(self.gpu_id)
         else:
             env["CUDA_VISIBLE_DEVICES"] = ""
+
+        # 启动显存监控
+        vram_monitor = None
+        if self.is_available() and (vram_monitor_config is None or vram_monitor_config.enabled):
+            vram_monitor = VRAMMonitor(
+                gpu_id=self.gpu_id,
+                config=vram_monitor_config or VRAMMonitorConfig(),
+            )
+            vram_monitor.start()
 
         logger.info(f"Starting training: {' '.join(cmd)}")
         start = time.time()
@@ -376,15 +687,38 @@ class GPUExecutor:
                 timeout=self.timeout,
             )
             duration = time.time() - start
-            metrics = self.parser.parse(result.stdout + "\n" + result.stderr)
 
-            # 查找检查点
+            # 停止显存监控
+            if vram_monitor:
+                vram_monitor.stop()
+
+            # 解析指标和检查点
+            full_output = result.stdout + "\n" + result.stderr
+            metrics = self.parser.parse(full_output)
+            checkpoints = self.parser.parse_checkpoints(full_output)
+
+            # 查找检查点（回退到文件扫描）
             checkpoint_path = self._find_checkpoint(output_dir)
+            if not checkpoints and checkpoint_path:
+                checkpoints = [CheckpointInfo(
+                    path=str(checkpoint_path),
+                    epoch=0,
+                    step=0,
+                    saved_at=time.strftime("%Y-%m-%d %H:%M:%S"),
+                )]
+
+            # 保存检查点索引
+            if checkpoints:
+                ckpt_manager.save_checkpoint_meta(checkpoints)
+                ckpt_manager.cleanup_old_checkpoints()
 
             success = result.returncode == 0
             message = "Training completed successfully." if success else f"Training failed with code {result.returncode}."
             if not self.is_available():
                 message += " (CPU fallback mode)"
+            if vram_monitor and vram_monitor.was_killed:
+                message += f" [VRAM ALERT: {vram_monitor.kill_reason}]"
+                success = False  # 显存超限视为失败
 
             return TrainingResult(
                 success=success,
@@ -396,9 +730,13 @@ class GPUExecutor:
                 duration_sec=round(duration, 2),
                 gpu_used=self.is_available(),
                 message=message,
+                checkpoints=checkpoints,
+                resumed_from=resumed_from,
             )
         except subprocess.TimeoutExpired:
             duration = time.time() - start
+            if vram_monitor:
+                vram_monitor.stop()
             logger.error(f"Training timed out after {self.timeout}s")
             return TrainingResult(
                 success=False,
@@ -412,6 +750,8 @@ class GPUExecutor:
             )
         except Exception as e:
             duration = time.time() - start
+            if vram_monitor:
+                vram_monitor.stop()
             logger.error(f"Training execution error: {e}")
             return TrainingResult(
                 success=False,
@@ -424,6 +764,63 @@ class GPUExecutor:
                 message=f"Training execution error: {e}",
             )
 
+    def resume_training(self, script_path: str, args: Dict[str, Any], output_dir: Optional[str] = None) -> TrainingResult:
+        """从最新的检查点恢复训练。
+
+        Args:
+            script_path: 训练脚本路径。
+            args: 脚本参数。
+            output_dir: 之前的输出目录（包含检查点）。如果为 None，则尝试从 args 中的 output_dir 获取。
+
+        Returns:
+            TrainingResult: 恢复后的训练结果。
+        """
+        # 确定输出目录
+        if output_dir is None:
+            output_dir = args.get("output_dir")
+        if not output_dir:
+            return TrainingResult(
+                success=False,
+                stdout="",
+                stderr="",
+                returncode=-1,
+                metrics=TrainingMetrics(),
+                message="无法恢复训练：未指定 output_dir",
+            )
+
+        # 查找最新检查点
+        ckpt_manager = CheckpointManager(Path(output_dir))
+        latest_ckpt = ckpt_manager.find_latest_checkpoint()
+        if not latest_ckpt:
+            logger.warning(f"[GPUExecutor] 未找到检查点，将从头开始训练: {output_dir}")
+            return self.execute_training(script_path, args)
+
+        logger.info(f"[GPUExecutor] 恢复训练: epoch={latest_ckpt.epoch}, path={latest_ckpt.path}")
+        return self.execute_training(
+            script_path=script_path,
+            args=args,
+            resume_from=latest_ckpt.path,
+        )
+
+    def get_recommended_batch_size(
+        self,
+        model_memory_mb: float = 500.0,
+        per_sample_memory_mb: float = 10.0,
+    ) -> int:
+        """根据当前 GPU 显存推荐 batch size。
+
+        Args:
+            model_memory_mb: 模型预估显存占用（MB）
+            per_sample_memory_mb: 每个样本预估显存占用（MB）
+
+        Returns:
+            推荐 batch size
+        """
+        return self.resource_manager.estimate_max_batch_size(
+            gpu_id=self.gpu_id,
+            model_memory_mb=model_memory_mb,
+            per_sample_memory_mb=per_sample_memory_mb,
+        )
     def execute_inference(self, model_path: str, data_path: str, extra_args: Optional[Dict[str, Any]] = None) -> InferenceResult:
         """执行推理脚本。
 

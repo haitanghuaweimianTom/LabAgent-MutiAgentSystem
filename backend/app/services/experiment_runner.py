@@ -87,6 +87,8 @@ class ExperimentRunner:
     - 批量运行 baseline 脚本
     - 批量运行 ablation 变体脚本
     - 提取指标和检查点路径
+
+    v5.4.0: 集成 GPUExecutor，支持显存监控和检查点恢复。
     """
 
     def __init__(
@@ -95,12 +97,165 @@ class ExperimentRunner:
         python_bin: Optional[str] = None,
         max_runtime_seconds: int = 3600,
         max_memory_mb: int = 8192,
+        use_gpu: bool = True,
+        gpu_id: int = 0,
     ):
         self.sandbox = sandbox or CodeSandbox(
             config=SandboxConfig(max_runtime_seconds=max_runtime_seconds, max_memory_mb=max_memory_mb)
         )
         self.python_bin = python_bin or (shutil.which("python3") or shutil.which("python") or "python")
         self.max_runtime_seconds = max_runtime_seconds
+        self.use_gpu = use_gpu
+        self.gpu_id = gpu_id
+        # v5.4.0: 延迟初始化 GPUExecutor（避免导入时依赖 CUDA）
+        self._gpu_executor: Optional[Any] = None
+
+    def _get_gpu_executor(self) -> Optional[Any]:
+        """获取 GPUExecutor 实例（延迟初始化）。"""
+        if self._gpu_executor is None and self.use_gpu:
+            try:
+                from ..core.gpu_executor import GPUExecutor, VRAMMonitorConfig
+                self._gpu_executor = GPUExecutor(gpu_id=self.gpu_id, timeout=self.max_runtime_seconds)
+                if not self._gpu_executor.is_available():
+                    logger.warning("[ExperimentRunner] GPU 不可用，将使用 CPU 模式")
+                    self._gpu_executor = None
+            except Exception as e:
+                logger.warning(f"[ExperimentRunner] GPUExecutor 初始化失败: {e}")
+                self._gpu_executor = None
+        return self._gpu_executor
+
+    def _run_single_gpu(self, script: ExperimentScript, output_dir: Optional[Path]) -> ExperimentRunResult:
+        """使用 GPUExecutor 运行单个脚本（支持显存监控和检查点恢复）。"""
+        gpu_executor = self._get_gpu_executor()
+        if gpu_executor is None:
+            # GPU 不可用，回退到 sandbox
+            return self._run_single_sandbox(script, output_dir)
+
+        if not script.path.exists():
+            return ExperimentRunResult(
+                name=script.name,
+                role=script.role,
+                success=False,
+                error=f"脚本不存在: {script.path}",
+            )
+
+        # 构建参数
+        args = dict(script.args)
+        if output_dir:
+            role_dir = output_dir / script.role / script.name.replace(" ", "_")
+            args["output_dir"] = str(role_dir)
+
+        # 尝试恢复训练（如果是主实验）
+        resume_from = None
+        if script.role == "main" and output_dir:
+            from ..core.gpu_executor import CheckpointManager
+            ckpt_manager = CheckpointManager(output_dir / script.role / script.name.replace(" ", "_"))
+            latest_ckpt = ckpt_manager.find_latest_checkpoint()
+            if latest_ckpt:
+                resume_from = latest_ckpt.path
+                logger.info(f"[ExperimentRunner] 从检查点恢复: {resume_from}")
+
+        # 显存监控配置
+        from ..core.gpu_executor import VRAMMonitorConfig
+        vram_config = VRAMMonitorConfig(
+            warn_threshold=0.85,
+            kill_threshold=0.95,
+            check_interval_sec=2.0,
+            enabled=True,
+        )
+
+        # 执行训练
+        try:
+            result = gpu_executor.execute_training(
+                script_path=str(script.path),
+                args=args,
+                resume_from=resume_from,
+                vram_monitor_config=vram_config,
+            )
+
+            # 转换结果为 ExperimentRunResult
+            metrics = result.metrics.to_dict() if result.metrics else {}
+            # 合并自定义指标
+            metrics.update(result.metrics.custom if result.metrics else {})
+
+            return ExperimentRunResult(
+                name=script.name,
+                role=script.role,
+                success=result.success,
+                metrics=metrics,
+                stdout=result.stdout,
+                stderr=result.stderr,
+                returncode=result.returncode,
+                duration_sec=result.duration_sec,
+                checkpoint_path=result.checkpoint_path,
+                error=result.message if not result.success else "",
+            )
+        except Exception as e:
+            logger.error(f"[ExperimentRunner] GPU 执行失败: {e}")
+            # GPU 执行失败，回退到 sandbox
+            return self._run_single_sandbox(script, output_dir)
+
+    def _run_single_sandbox(self, script: ExperimentScript, output_dir: Optional[Path]) -> ExperimentRunResult:
+        """使用 CodeSandbox 运行单个脚本（原始实现）。"""
+        if not script.path.exists():
+            return ExperimentRunResult(
+                name=script.name,
+                role=script.role,
+                success=False,
+                error=f"脚本不存在: {script.path}",
+            )
+
+        # 构建命令
+        cmd = [self.python_bin, "-X", "utf8", str(script.path)]
+    def _run_single_sandbox(self, script: ExperimentScript, output_dir: Optional[Path]) -> ExperimentRunResult:
+        """使用 CodeSandbox 运行单个脚本（原始实现）。"""
+        if not script.path.exists():
+            return ExperimentRunResult(
+                name=script.name,
+                role=script.role,
+                success=False,
+                error=f"脚本不存在: {script.path}",
+            )
+
+        # 构建命令
+        cmd = [self.python_bin, "-X", "utf8", str(script.path)]
+        args = dict(script.args)
+        if output_dir:
+            args.setdefault("output_dir", str(output_dir / script.role / script.name.replace(" ", "_")))
+        for key, val in args.items():
+            cmd.append(f"--{key}")
+            cmd.append(str(val))
+
+        # 执行
+        sandbox_result = self.sandbox.run_command(cmd, cwd=script.path.parent)
+
+        # 提取指标
+        metrics = self._extract_metrics(sandbox_result)
+
+        # 查找检查点
+        checkpoint_path = None
+        if output_dir:
+            role_dir = output_dir / script.role / script.name.replace(" ", "_")
+            checkpoint_path = self._find_checkpoint(role_dir)
+
+        return ExperimentRunResult(
+            name=script.name,
+            role=script.role,
+            success=sandbox_result.success,
+            metrics=metrics,
+            stdout=sandbox_result.stdout,
+            stderr=sandbox_result.stderr,
+            returncode=sandbox_result.returncode,
+            duration_sec=sandbox_result.duration_sec,
+            checkpoint_path=str(checkpoint_path) if checkpoint_path else None,
+            error=sandbox_result.message if not sandbox_result.success else "",
+        )
+
+    def _run_single(self, script: ExperimentScript, output_dir: Optional[Path]) -> ExperimentRunResult:
+        """运行单个脚本，优先使用 GPUExecutor（如果可用）。"""
+        if self.use_gpu:
+            return self._run_single_gpu(script, output_dir)
+        return self._run_single_sandbox(script, output_dir)
 
     # ------------------------------------------------------------------
     # 批量执行

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import styles from './SystemStatus.module.css';
 
 interface ProviderInfo {
@@ -44,7 +44,14 @@ interface SystemInfo {
   claude_code_path: string;
 }
 
-const apiBase = () => window.__API_BASE__ || 'http://localhost:8000/api/v1';
+declare global {
+  interface Window {
+    __API_BASE__?: string;
+    __INITIAL_INFO__?: SystemInfo;
+  }
+}
+
+const apiBase = () => (typeof window !== 'undefined' && window.__API_BASE__) || 'http://localhost:8000/api/v1';
 
 function formatUptime(seconds: number): string {
   if (seconds < 60) return `${Math.floor(seconds)}秒`;
@@ -54,27 +61,67 @@ function formatUptime(seconds: number): string {
   return `${h}小时${m}分钟`;
 }
 
-export default function SystemStatus() {
-  const [info, setInfo] = useState<SystemInfo | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [uptime, setUptime] = useState('');
-
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const res = await fetch(apiBase() + '/info');
-        if (res.ok) {
-          const data = await res.json();
-          setInfo(data);
-        }
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
+// 外部存储：读取 window.__INITIAL_INFO__
+// 在 React 水合之前，script 标签已执行并设置 window.__INITIAL_INFO__
+const infoStore = {
+  getSnapshot: (): SystemInfo | null => {
+    if (typeof window === 'undefined') return null;
+    return window.__INITIAL_INFO__ || null;
+  },
+  getServerSnapshot: (): SystemInfo | null => null,
+  subscribe: (callback: () => void) => {
+    // 监听 window.__INITIAL_INFO__ 的变化（通过轮询）
+    const interval = setInterval(() => {
+      if (window.__INITIAL_INFO__) {
+        callback();
+        clearInterval(interval);
       }
-    };
-    load();
-  }, []);
+    }, 50);
+    return () => clearInterval(interval);
+  },
+};
+
+// 骨架屏 loading 状态 — 与最终内容布局一致，水合后无布局偏移
+function SystemStatusSkeleton() {
+  return (
+    <div className={styles.container}>
+      <div className={styles.header}>
+        <span className={styles.title}>🖥️ 系统状态</span>
+        <span className={styles.version} style={{ background: '#1e293b', color: '#475569' }}>加载中...</span>
+      </div>
+      <div className={styles.grid}>
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className={styles.item} style={{ background: '#1e293b' }}>
+            <span className={styles.label} style={{ color: '#334155' }}>加载中</span>
+            <span className={styles.value} style={{ color: '#334155' }}>────</span>
+          </div>
+        ))}
+      </div>
+      <div className={styles.providersTitle} style={{ color: '#334155' }}>Provider 配置状态</div>
+      <div className={styles.providers}>
+        <div className={styles.provider} style={{ background: '#1e293b' }}>
+          <span className={styles.dot} style={{ background: '#334155' }} />
+          <span style={{ color: '#334155' }}>加载中...</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SystemStatusError() {
+  return (
+    <div className={styles.container}>
+      <div className={styles.error}>❌ 无法连接到后端</div>
+      <div className={styles.errorHint}>
+        请确认后端服务已启动：<code>python -m backend.app.main</code>
+      </div>
+    </div>
+  );
+}
+
+// 主内容组件
+function SystemStatusContent({ info }: { info: SystemInfo }) {
+  const [uptime, setUptime] = useState('');
 
   useEffect(() => {
     if (!info?.started_at) return;
@@ -86,25 +133,6 @@ export default function SystemStatus() {
     const timer = setInterval(update, 30000);
     return () => clearInterval(timer);
   }, [info?.started_at]);
-
-  if (loading) {
-    return (
-      <div className={styles.container}>
-        <div className={styles.loading}>⏳ 检测系统状态中...</div>
-      </div>
-    );
-  }
-
-  if (!info) {
-    return (
-      <div className={styles.container}>
-        <div className={styles.error}>❌ 无法连接到后端</div>
-        <div className={styles.errorHint}>
-          请确认后端服务已启动：<code>python -m backend.app.main</code>
-        </div>
-      </div>
-    );
-  }
 
   const defaultModel = info.default_provider?.model || info.default_model || '未配置';
   const defaultProviderName = info.default_provider?.name || info.default_llm_backend || '未配置';
@@ -209,4 +237,25 @@ export default function SystemStatus() {
       </div>
     </div>
   );
+}
+
+// Client Component: 使用 useSyncExternalStore 读取 SSR 注入的数据
+// 架构说明：
+// 1. layout.tsx (Server Component) 在 SSR 阶段 fetch /info 并注入 window.__INITIAL_INFO__
+// 2. 浏览器解析 HTML 时，script 标签先执行，设置 window.__INITIAL_INFO__
+// 3. React 水合时，useSyncExternalStore 读取已存在的数据，立即渲染正确内容
+// 4. 如果后端未启动，显示骨架屏，客户端会自动重试
+export default function SystemStatusClient() {
+  const info = useSyncExternalStore(
+    infoStore.subscribe,
+    infoStore.getSnapshot,
+    infoStore.getServerSnapshot
+  );
+
+  // 如果没有 SSR 数据，显示骨架屏（水合后会自动更新）
+  if (!info) {
+    return <SystemStatusSkeleton />;
+  }
+
+  return <SystemStatusContent info={info} />;
 }
