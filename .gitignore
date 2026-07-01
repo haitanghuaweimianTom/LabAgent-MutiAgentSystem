@@ -81,6 +81,9 @@ Thumbs.db
 *.vrb
 main.pdf
 
+# 面试准备文档（不上传公开仓库）
+技术说明文档.md
+
 # Third-party cloned repositories
 src/knowledge/figures4papers/
 /rules/github-config-rule.md
