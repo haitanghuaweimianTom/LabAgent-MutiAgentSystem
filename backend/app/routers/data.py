@@ -206,6 +206,43 @@ async def delete_file(
     return {"success": True, "deleted": filename, "source": source}
 
 
+@router.delete("/output/{filename}")
+async def delete_output_artifact(
+    filename: str,
+    project_name: str = Query(None, description="项目名，为空时用全局 output"),
+):
+    """删除 output 目录下的产出物（PDF、LaTeX、代码、图表等）"""
+    from ..core.paths import get_project_output_dir, OUTPUT_DIR
+    target_dir = get_project_output_dir(project_name) if project_name else OUTPUT_DIR
+    file_path = target_dir / filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Output artifact not found")
+    file_path.unlink()
+    logger.info(f"删除输出产物: {file_path}")
+    return {"success": True, "deleted": filename, "project": project_name}
+
+
+@router.delete("/output/{project_name}/directory")
+async def delete_output_directory(project_name: str):
+    """删除整个项目的 output 子目录（谨慎操作）"""
+    import shutil
+    from ..core.paths import _PROJECT_ROOT
+    outputs_root = _PROJECT_ROOT / "outputs"
+    target_dir = outputs_root / project_name / "output"
+    if not target_dir.exists():
+        raise HTTPException(status_code=404, detail="Output directory not found")
+    # 安全检查：不允许删除 _global
+    if project_name == "_global":
+        raise HTTPException(status_code=400, detail="Cannot delete global output directory")
+    shutil.rmtree(target_dir)
+    target_dir.mkdir(parents=True, exist_ok=True)  # 重建空目录
+    logger.info(f"清空项目输出目录: {target_dir}")
+    # 同步项目索引
+    from ..core.project_persistence import sync_projects_with_outputs
+    sync_projects_with_outputs()
+    return {"success": True, "deleted": project_name}
+
+
 # ===== OCR 接口（调用 LLM Vision 能力）=====
 
 def _image_to_base64_png(image_bytes: bytes) -> str:

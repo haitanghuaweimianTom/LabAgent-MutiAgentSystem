@@ -29,5 +29,8 @@
       "Bash(uvicorn backend.app.main:app --host 0.0.0.0 --port 8000)",
       "Bash(echo \"Server PID: $!\")"
     ]
+  },
+  "env": {
+    "ANTHROPIC_AUTH_TOKEN": "tp-cs5vm6kbvdokemi2mzwpk0i12ihamujzyjoz7th75a6387il"
   }
 }

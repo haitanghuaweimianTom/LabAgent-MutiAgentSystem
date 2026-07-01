@@ -1699,6 +1699,7 @@ class WriterAgent(BaseAgent):
             chapter_snippets.append(f"【{title}】\n{summary}")
 
         memory_text = self._build_memory_context(paper_memory, [], {})
+        chapters_text = "\n\n".join(chapter_snippets)
 
         prompt = f"""【全局一致性检查任务】
 
@@ -1707,7 +1708,7 @@ class WriterAgent(BaseAgent):
 {memory_text}
 
 章节摘要：
-{"\n\n".join(chapter_snippets)}
+{chapters_text}
 
 请检查以下问题并返回 JSON：
 1. 术语一致性：同一概念在不同章节是否使用了不同名称？

@@ -1094,6 +1094,23 @@ class SolverAgent(BaseAgent):
         """验证求解结果合理性"""
         return get_result_validator().validate(numerical_results, {"model": model})
 
+    @staticmethod
+    def _needs_gpu(code: str) -> bool:
+        """检测代码是否需要 GPU（PyTorch/CUDA）。"""
+        code_lower = code.lower()
+        indicators = [
+            "import torch",
+            "from torch",
+            "torch.cuda",
+            "torch.device",
+            ".to('cuda'",
+            '.to("cuda"',
+            ".to(device",
+            "cuda.is_available",
+            "gpu",
+        ]
+        return any(ind in code_lower for ind in indicators)
+
     async def _run_code_with_autofix(
         self,
         initial_code: str,
@@ -1241,18 +1258,33 @@ class SolverAgent(BaseAgent):
                 Path(file_path).write_text(raw_code, encoding="utf-8")
 
                 # v5.3.0: 使用沙箱执行代码（替代直接 subprocess）
-                from ..core.sandbox import CodeSandbox, SandboxConfig
-                sandbox_config = SandboxConfig(
-                    max_cpu_time=120,
-                    max_memory_mb=1024,
-                    workspace_persist=True,  # 保留工作区以便后续分析
-                )
-                sandbox = CodeSandbox(sandbox_config)
-                result = sandbox.execute_file(file_path)
+                # v5.4.0: 如果代码需要 GPU 且 CUDA 可用，使用 GPUExecutor
+                from ..core.gpu_executor import get_gpu_executor
+                gpu_exec = get_gpu_executor()
+                use_gpu = self._needs_gpu(raw_code) and gpu_exec.is_available()
 
-                stdout_text = result.stdout.strip()
-                stderr_text = result.stderr.strip()
-                exec_ok = result.success
+                if use_gpu:
+                    logger.info(f"[{self.name}] 检测到 GPU 需求，使用 GPUExecutor 执行")
+                    gpu_result = gpu_exec.execute_training(
+                        script_path=file_path,
+                        args={},
+                        timeout=300,
+                    )
+                    exec_ok = gpu_result.success
+                    stdout_text = gpu_result.stdout.strip()
+                    stderr_text = gpu_result.stderr.strip()
+                else:
+                    from ..core.sandbox import CodeSandbox, SandboxConfig
+                    sandbox_config = SandboxConfig(
+                        max_cpu_time=120,
+                        max_memory_mb=1024,
+                        workspace_persist=True,  # 保留工作区以便后续分析
+                    )
+                    sandbox = CodeSandbox(sandbox_config)
+                    result = sandbox.execute_file(file_path)
+                    exec_ok = result.success
+                    stdout_text = result.stdout.strip()
+                    stderr_text = result.stderr.strip()
 
                 numerical_results = {}
                 key_findings = []
@@ -1274,12 +1306,13 @@ class SolverAgent(BaseAgent):
                         "success": exec_ok,
                         "output": stdout_text[:5000],
                         "stderr": stderr_text[:2000],
-                        "env": "http_api_fallback",
+                        "env": "gpu_executor" if use_gpu else "http_api_fallback",
                     },
                     "attempt": attempt + 1,
                     "error": stderr_text if not exec_ok else "",
                     "key_findings": key_findings,
                     "numerical_results": numerical_results,
+                    "gpu_used": use_gpu,
                 }
                 attempt_history.append(last_attempt)
 

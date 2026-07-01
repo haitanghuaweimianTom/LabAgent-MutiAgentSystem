@@ -243,11 +243,13 @@ def list_all_tasks() -> List[Dict[str, Any]]:
     _ensure_dir()
     tasks = []
     for f in TASK_DATA_DIR.glob("task_*.json"):
-        if "_messages" not in f.name and "_result" not in f.name:
-            try:
-                tasks.append(json.loads(f.read_text(encoding="utf-8")))
-            except Exception:
-                pass
+        # 排除非任务文件：消息、结果、检查点
+        if any(suffix in f.name for suffix in ("_messages", "_result", "_checkpoints")):
+            continue
+        try:
+            tasks.append(json.loads(f.read_text(encoding="utf-8")))
+        except Exception:
+            pass
     # 按创建时间倒序
     tasks.sort(key=lambda x: x.get("created_at", ""), reverse=True)
     return tasks
@@ -276,8 +278,19 @@ def mark_interrupted_tasks() -> int:
 
 
 def delete_task(task_id: str) -> bool:
-    """删除任务所有数据（包含 checkpoint、任务级知识库、reading artifacts）"""
+    """删除任务所有数据（包含 checkpoint、任务级知识库、reading artifacts、输出产物）。"""
     deleted = False
+
+    # 先读取元数据以获取项目名
+    meta_file = TASK_DATA_DIR / f"{task_id}.json"
+    project_name = None
+    try:
+        if meta_file.exists():
+            meta = json.loads(meta_file.read_text(encoding="utf-8"))
+            project_name = meta.get("project_name") or task_id
+    except Exception as e:
+        logger.debug(f"读取任务元数据失败: {e}")
+
     for suffix in ["", "_messages", "_result", "_checkpoints"]:
         file = TASK_DATA_DIR / f"{task_id}{suffix}.json"
         if file.exists():
@@ -319,5 +332,33 @@ def delete_task(task_id: str) -> bool:
                             pass
     except Exception as e:
         logger.debug(f"清理项目 artifacts 失败: {e}")
+
+    # 清理任务输出产物目录（PDF、LaTeX、代码、图表等）
+    try:
+        from .paths import _PROJECT_ROOT
+        import shutil
+        output_project = project_name or task_id
+        outputs_root = _PROJECT_ROOT / "outputs"
+
+        # 1) 删除 task_ 前缀的专属输出目录
+        if output_project.startswith("task_"):
+            target_dir = outputs_root / output_project
+            if target_dir.exists():
+                shutil.rmtree(target_dir)
+                logger.info(f"删除任务输出目录: {target_dir}")
+                deleted = True
+
+        # 2) 清理项目目录下的 task 专属子文件夹（output/<task_id>/ 等）
+        for proj_dir in outputs_root.iterdir():
+            if not proj_dir.is_dir() or proj_dir.name.startswith(".") or proj_dir.name == "_global":
+                continue
+            for sub in ("output", "data"):
+                task_sub = proj_dir / sub / task_id
+                if task_sub.exists():
+                    shutil.rmtree(task_sub)
+                    logger.info(f"清理项目 {proj_dir.name} 下的任务子目录: {task_sub}")
+                    deleted = True
+    except Exception as e:
+        logger.debug(f"清理任务输出目录失败: {e}")
 
     return deleted

@@ -88,13 +88,23 @@ class NormalizedResponse:
 
     @staticmethod
     def from_anthropic(data: Dict[str, Any]) -> Dict[str, Any]:
-        """Normalize Anthropic Messages API response."""
+        """Normalize Anthropic Messages API response.
+
+        Handles thinking-enabled models (e.g. MiMo) that emit ``thinking``
+        blocks before ``text`` blocks.  When max_tokens is small the model
+        may spend all budget on thinking with no text left — in that case
+        we fall back to the thinking content so callers get *something*.
+        """
         content_text = ""
+        thinking_text = ""
         tool_calls = []
         for block in data.get("content", []):
-            if block.get("type") == "text":
+            btype = block.get("type", "")
+            if btype == "text":
                 content_text += block.get("text", "")
-            elif block.get("type") == "tool_use":
+            elif btype == "thinking":
+                thinking_text += block.get("thinking", "")
+            elif btype == "tool_use":
                 tool_calls.append(
                     {
                         "id": block.get("id"),
@@ -105,6 +115,9 @@ class NormalizedResponse:
                         },
                     }
                 )
+        # thinking-enabled models: if no text block, fall back to thinking content
+        if not content_text and thinking_text:
+            content_text = thinking_text
         msg: Dict[str, Any] = {"role": "assistant", "content": content_text}
         if tool_calls:
             msg["tool_calls"] = tool_calls

@@ -1966,12 +1966,19 @@ class LangGraphOrchestrator:
                 return workflow
             return "standard"
 
+        # 综述/调研类任务不需要数据文件，直接走 deep_research 工作流
+        template = preflight.get("recommended_template", "")
+        workflow = preflight.get("recommended_workflow", state.get("workflow_type", "standard"))
+        if template == "research_survey" or workflow == "deep_research":
+            if workflow in ("quick", "code_focused", "deep_research", "research_paper"):
+                return workflow
+            return "deep_research"
+
         adequacy = preflight.get("data_adequacy", "sufficient")
         if adequacy == "missing" and preflight.get("llm_should_collect"):
             return "self_collect"
         if adequacy == "missing":
             return "abort"
-        workflow = preflight.get("recommended_workflow", state.get("workflow_type", "standard"))
         if workflow in ("quick", "code_focused", "deep_research", "research_paper"):
             return workflow
         return "standard"

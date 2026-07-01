@@ -2,7 +2,7 @@
 import logging
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from ..core.project_persistence import (
@@ -66,12 +66,28 @@ async def put_project(project_id: str, req: CreateProjectRequest) -> Dict[str, A
 
 
 @router.delete("/{project_id}")
-async def del_project(project_id: str) -> Dict[str, Any]:
-    """删除项目（仅从索引移除，保留 outputs/ 数据）"""
+async def del_project(
+    project_id: str,
+    force: bool = Query(False, description="是否同时删除 outputs/ 目录下的文件"),
+) -> Dict[str, Any]:
+    """删除项目。默认仅从索引移除；force=True 时同时删除 outputs/ 目录。"""
+    import shutil
+    from ..core.paths import _PROJECT_ROOT
+
     success = delete_project(project_id)
     if not success:
         raise HTTPException(status_code=404, detail=f"项目不存在: {project_id}")
-    return {"success": True, "message": f"项目 {project_id} 已删除"}
+
+    if force:
+        outputs_root = _PROJECT_ROOT / "outputs"
+        target_dir = outputs_root / project_id
+        if project_id == "_global":
+            raise HTTPException(status_code=400, detail="Cannot delete global project")
+        if target_dir.exists():
+            shutil.rmtree(target_dir)
+            logger.info(f"强制删除项目目录: {target_dir}")
+
+    return {"success": True, "message": f"项目 {project_id} 已删除", "force": force}
 
 
 @router.post("/{project_id}/rename")

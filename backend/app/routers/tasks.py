@@ -305,10 +305,21 @@ async def submit_task(req: TaskCreateRequest):
                     project_name=project_name,
                 )
                 if success:
-                    # 重新 preflight（包含新搜集到的 URL 列表）
-                    # 当前 self_collect 只保存 URL，未真正下载，因此仍视为 missing
-                    # 后续 Phase 2 工具层实现下载后可在此重新决策
-                    logger.info(f"Task {task_id}: 自主搜集到候选数据 {len(collected)} 条")
+                    # 将搜集到的文件加入 data_files，供后续工作流使用
+                    data_files.extend(collected)
+                    # 更新任务元数据，记录搜集到的文件
+                    save_task_metadata(
+                        task_id=task_id,
+                        problem_text=req.problem_text,
+                        status=TaskStatus.SELF_COLLECTING_DATA,
+                        created_at=created_at,
+                        total_steps=0,
+                        progress=0,
+                        current_step=f"已搜集 {len(collected)} 个数据文件",
+                        data_files=data_files,
+                        project_name=project_name,
+                    )
+                    logger.info(f"Task {task_id}: 自主搜集到 {len(collected)} 个数据文件，已加入工作流")
             except Exception as e:
                 logger.warning(f"Task {task_id}: 自主搜集数据异常: {e}")
 
