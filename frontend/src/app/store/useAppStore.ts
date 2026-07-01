@@ -88,7 +88,7 @@ interface AppState {
   addKnowledgeBase: (base: KnowledgeBase) => void;
   removeKnowledgeBase: (id: string) => void;
   renameKnowledgeBase: (id: string, name: string) => void;
-  // v5.3.0: 多 KB 选择（任务提交用）
+  // v5.4.0: 多 KB 选择（任务提交用）
   selectedKBIds: Set<string>;
   toggleKBSelection: (id: string) => void;
   clearKBSelection: () => void;
@@ -239,7 +239,7 @@ export const useAppStore = create<AppState>()(
           ),
         })),
 
-      // v5.3.0: 多 KB 选择（任务提交时勾选）
+      // v5.4.0: 多 KB 选择（任务提交时勾选）
       selectedKBIds: new Set(),
       toggleKBSelection: (id) =>
         set((s) => {

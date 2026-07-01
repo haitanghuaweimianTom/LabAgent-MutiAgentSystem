@@ -32,7 +32,7 @@ const TRANSPORT_TYPES = [
   { id: 'streamableHttp', label: 'HTTP', desc: 'Streamable HTTP' },
 ];
 
-// v5.3.0: 所有 11 个 Agent（不含 orchestrator）
+// v5.4.0: 所有 11 个 Agent（不含 orchestrator）
 const ALL_AGENTS = [
   { id: 'research_agent', label: '研究员', desc: '搜集相关资料、文献、数据' },
   { id: 'analyzer_agent', label: '分析师', desc: '理解问题、分解任务、制定策略' },

@@ -26,7 +26,7 @@ interface ProblemInputProps {
     mode: string;
     useCritique: boolean;
     knowledgeBaseId: string | null;          // 旧，向后兼容（单 KB）
-    knowledgeBaseIds: string[];              // v5.3.0: 多 KB
+    knowledgeBaseIds: string[];              // v5.4.0: 多 KB
     dataSource: 'upload' | 'self_collect' | 'upload_and_collect';
     problemType: string;
     dataFiles: string[];
@@ -58,7 +58,7 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
   const [showNewProject, setShowNewProject] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // v5.3.0: Knowledge base 多选
+  // v5.4.0: Knowledge base 多选
   const knowledgeBases = useAppStore((s) => s.knowledgeBases);
   const setKnowledgeBases = useAppStore((s) => s.setKnowledgeBases);
   const selectedKBIdsRaw = useAppStore((s) => s.selectedKBIds);
@@ -126,7 +126,7 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
     if (!problemText.trim()) { alert('请输入问题描述'); return; }
     const finalProjectName = projectName.trim() || activeProject?.name || '未命名项目';
     const dataFiles = selectedFiles.size > 0 ? Array.from(selectedFiles) : [];
-    // v5.3.0: 多 KB 列表优先；空则降级到单 KB 字段
+    // v5.4.0: 多 KB 列表优先；空则降级到单 KB 字段
     const kbIds = selectedKBIds instanceof Set ? Array.from(selectedKBIds) : [];
     onSubmit({
       problemText,
@@ -215,7 +215,7 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
         <div style={{ marginTop: '0.5rem' }}>
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.4rem' }}>
             <span style={{ color: '#94A3B8', fontSize: '0.85rem' }}>
-              📚 关联知识库（v5.3.0：可多选）
+              📚 关联知识库（v5.4.0：可多选）
             </span>
             {selectedKBIds.size > 0 && (
               <button

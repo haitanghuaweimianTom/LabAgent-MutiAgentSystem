@@ -90,7 +90,7 @@ export default function Home() {
     mode: string;
     useCritique: boolean;
     knowledgeBaseId: string | null;
-    knowledgeBaseIds: string[];  // v5.3.0: 多 KB
+    knowledgeBaseIds: string[];  // v5.4.0: 多 KB
     dataSource: 'upload' | 'self_collect' | 'upload_and_collect';
     problemType: string;
     dataFiles: string[];
@@ -110,7 +110,7 @@ export default function Home() {
         data_source: params.dataSource,
         problem_type: params.problemType,
       };
-      // v5.3.0: 多 KB 优先；单 KB 向后兼容
+      // v5.4.0: 多 KB 优先；单 KB 向后兼容
       if (params.knowledgeBaseIds && params.knowledgeBaseIds.length > 0) {
         body.knowledge_base_ids = params.knowledgeBaseIds;
       } else if (params.knowledgeBaseId) {
@@ -378,7 +378,7 @@ export default function Home() {
     <main className={styles.main}>
       <header className={styles.header}>
         <span className={styles.headerTitle}>多智能体协作论文生产系统</span>
-        <span className={styles.topbarVersion}>v5.3.0</span>
+        <span className={styles.topbarVersion}>v5.4.0</span>
         <p className={styles.subtitle}>LangGraph 编排 · ReAct 工具循环 · 实时协作讨论 · 自动迭代 · CCF-A 论文全自动生成</p>
       </header>
 

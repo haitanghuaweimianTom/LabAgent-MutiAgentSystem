@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 
 // =============================================================
-// v5.3.0 深色模式样式常量（替代原 inline 浅色样式）
+// v5.4.0 深色模式样式常量（替代原 inline 浅色样式）
 // =============================================================
 const fieldStyle: React.CSSProperties = {
   padding: '6px 10px',

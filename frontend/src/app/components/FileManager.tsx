@@ -162,7 +162,7 @@ export default function FileManager({ taskId }: FileManagerProps) {
         )}
       </div>
 
-      {/* v5.3.0: 3-Tab 切换 */}
+      {/* v5.4.0: 3-Tab 切换 */}
       <div className={styles.tabs}>
         <button
           className={`${styles.tab} ${tab === 'user_upload' ? styles.tabActive : ''}`}

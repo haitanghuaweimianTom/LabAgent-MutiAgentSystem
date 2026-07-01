@@ -33,7 +33,7 @@ interface KnowledgeBase {
   updated_at?: number;
   embedding_model?: Record<string, any>;
   reranker_model?: Record<string, any> | null;
-  // v5.3.0: scope
+  // v5.4.0: scope
   scope?: 'global' | 'project';
   project_name?: string | null;
 }
@@ -95,7 +95,7 @@ export default function KnowledgeBaseManager() {
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState('');
 
-  // v5.3.0: scope 过滤
+  // v5.4.0: scope 过滤
   const [scopeFilter, setScopeFilter] = useState<'all' | 'global' | 'project'>('all');
   const activeProject = useAppStore((s) => s.projects.find((p) => p.id === s.activeProjectId));
   const projectName = activeProject?.name || '';
@@ -578,7 +578,7 @@ export default function KnowledgeBaseManager() {
           <span className={styles.sidebarTitle}>📚 知识库</span>
           <button className={styles.addBaseBtn} onClick={() => setShowCreateBase(true)}>+ 新建</button>
         </div>
-        {/* v5.3.0: scope 过滤 tabs */}
+        {/* v5.4.0: scope 过滤 tabs */}
         <div style={{ display: 'flex', gap: '0.25rem', padding: '0.4rem 0.6rem', borderBottom: '1px solid #334155' }}>
           {(['all', 'global', 'project'] as const).map(s => (
             <button
@@ -805,7 +805,7 @@ export default function KnowledgeBaseManager() {
               onKeyDown={e => e.key === 'Enter' && handleCreateBase()}
               autoFocus
             />
-            {/* v5.3.0: scope 选择 */}
+            {/* v5.4.0: scope 选择 */}
             <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.6rem' }}>
               <button
                 className={`${styles.actionBtn} ${newBaseScope === 'global' ? styles.actionBtnPrimary : ''}`}
