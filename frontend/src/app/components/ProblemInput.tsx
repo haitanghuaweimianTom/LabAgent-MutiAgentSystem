@@ -317,21 +317,24 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
               <option value="综合">综合</option>
             </select>
           </div>
-          <div>
-            <div className={styles.optionLabel}>数据来源</div>
-            <select
-              style={{ width: '100%', padding: '0.5rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: '#e0e0e0', fontSize: '0.9rem' }}
-              value={dataSource}
-              onChange={e => setDataSource(e.target.value as any)}
-            >
-              <option value="upload">我会上传数据</option>
-              <option value="self_collect">无数据，让系统自己搜集</option>
-              <option value="upload_and_collect">我上传数据，系统再补全</option>
-            </select>
-          </div>
+          {/* 文献综述/调研类模板不需要数据来源选项 */}
+          {currentTemplate?.domain !== 'research_survey' && (
+            <div>
+              <div className={styles.optionLabel}>数据来源</div>
+              <select
+                style={{ width: '100%', padding: '0.5rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: '#e0e0e0', fontSize: '0.9rem' }}
+                value={dataSource}
+                onChange={e => setDataSource(e.target.value as any)}
+              >
+                <option value="upload">我会上传数据</option>
+                <option value="self_collect">无数据，让系统自己搜集</option>
+                <option value="upload_and_collect">我上传数据，系统再补全</option>
+              </select>
+            </div>
+          )}
         </div>
 
-        {dataSource !== 'self_collect' && (
+        {dataSource !== 'self_collect' && currentTemplate?.domain !== 'research_survey' && (
           <div style={{ marginTop: '0.5rem', color: '#aaa', fontSize: '0.8rem' }}>
             已勾选 {selectedFiles.size} 个数据文件（请到「数据」标签上传并勾选）
           </div>

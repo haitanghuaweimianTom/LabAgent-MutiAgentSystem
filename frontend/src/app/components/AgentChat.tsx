@@ -145,25 +145,25 @@ export default function AgentChat({
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const [userInput, setUserInput] = useState('');
   const [sending, setSending] = useState(false);
-  const [isNearBottom, setIsNearBottom] = useState(true);
+  const isNearBottomRef = useRef(true);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const stages = deriveStages(taskStatus, progress, currentStep || '', workflowType);
 
-  // 检测滚动位置：距离底部 < 80px 视为“在底部”
+  // 检测滚动位置：距离底部 < 80px 视为”在底部”
   const checkScrollPosition = () => {
     const el = messagesContainerRef.current;
     if (!el) return;
     const threshold = 80;
     const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
     const nearBottom = distanceToBottom < threshold;
-    setIsNearBottom(nearBottom);
+    isNearBottomRef.current = nearBottom;
     setShowScrollButton(!nearBottom);
   };
 
   // 滚动到底部（用户点击按钮或发送消息时）
-  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+  const scrollToBottom = (behavior: ScrollBehavior = 'instant') => {
     messagesEndRef.current?.scrollIntoView({ behavior });
-    setIsNearBottom(true);
+    isNearBottomRef.current = true;
     setShowScrollButton(false);
   };
 
@@ -175,9 +175,9 @@ export default function AgentChat({
   }, []);
 
   useEffect(() => {
-    // 只有用户当前在底部时才自动跟随新消息
-    if (isNearBottom) {
-      scrollToBottom('smooth');
+    // 只有用户当前在底部时才自动跟随新消息（用 ref 避免 stale 闭包）
+    if (isNearBottomRef.current) {
+      scrollToBottom('instant');
     }
   }, [messages]);
 
@@ -198,7 +198,7 @@ export default function AgentChat({
       setUserInput('');
       onUserSend?.(content);
       // 发送后自动回到底部
-      scrollToBottom('smooth');
+      scrollToBottom('instant');
     } catch (e) {
       console.error('发送消息失败:', e);
     } finally {
@@ -279,7 +279,7 @@ export default function AgentChat({
           {showScrollButton && (
             <button
               className={styles.scrollToBottomBtn}
-              onClick={() => scrollToBottom('smooth')}
+              onClick={() => scrollToBottom('instant')}
               title="回到最新消息"
             >
               ↓ 最新消息
