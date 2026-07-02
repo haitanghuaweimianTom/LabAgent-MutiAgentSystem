@@ -57,11 +57,15 @@ def save_task_metadata(
         except Exception:
             pass
 
+    # 如果传入的 problem_text 为空，保留已有的值（避免后续更新覆盖初始值）
+    final_problem_text = problem_text if problem_text else existing.get("problem_text", "")
+    final_problem_preview = final_problem_text[:200].replace("\n", " ").strip() if final_problem_text else ""
+
     data = {
         **existing,
         "task_id": task_id,
-        "problem_text": problem_text,
-        "problem_preview": problem_text[:200].replace("\n", " ").strip() if problem_text else "",
+        "problem_text": final_problem_text,
+        "problem_preview": final_problem_preview,
         "status": status,
         "created_at": created_at,
         "completed_at": completed_at,

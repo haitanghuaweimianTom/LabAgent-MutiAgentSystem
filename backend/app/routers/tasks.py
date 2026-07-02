@@ -618,8 +618,16 @@ async def stream(task_id: str):
                 cur = meta.get("current_step", "")
                 tot = meta.get("total_steps", 0)
 
-            # 实时更新持久化进度
-            save_task_metadata(task_id, "", st, "", progress=prog, current_step=cur, total_steps=tot)
+            # 实时更新持久化进度（不传 problem_text，避免覆盖已有值）
+            save_task_metadata(
+                task_id=task_id,
+                problem_text="",  # 空字符串，由 task_persistence 保留已有值
+                status=st,
+                created_at=meta.get("created_at", "") if meta else "",
+                progress=prog,
+                current_step=cur,
+                total_steps=tot,
+            )
 
             # 只在状态变化时推送事件
             if st != last_status or prog != last_progress or cur != last_step:

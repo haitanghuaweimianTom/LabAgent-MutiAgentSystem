@@ -2079,7 +2079,7 @@ class LangGraphOrchestrator:
 
     def _save_results(self, task_id: str, state: TaskState) -> None:
         """持久化结果到 task_result.json 和 checkpoints。"""
-        from ..core.task_persistence import save_task_result, save_task_checkpoint, save_task_metadata
+        from ..core.task_persistence import save_task_result, save_task_checkpoint, save_task_metadata, save_task_messages
         results = self._resolve_results(state)
         if results:
             save_task_result(task_id, {"task_id": task_id, "output": results})
@@ -2088,6 +2088,15 @@ class LangGraphOrchestrator:
                     save_task_checkpoint(task_id, "langgraph", agent_name, output)
                 except Exception as exc:
                     logger.debug(f"Checkpoint save failed for {agent_name}: {exc}")
+
+        # 保存聊天记录到磁盘
+        try:
+            room = get_chat_room(task_id)
+            if room:
+                msgs = room.get_messages()
+                save_task_messages(task_id, msgs)
+        except Exception as exc:
+            logger.debug(f"Messages save failed: {exc}")
 
         # 标记任务完成状态
         cannot_solve = state.get("cannot_solve_report")

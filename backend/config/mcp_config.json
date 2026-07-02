@@ -134,9 +134,7 @@
       "web_search",
       "paper_search",
       "file_read",
-      "file_write",
-      "arxiv_abstract",
-      "latex_compile"
+      "arxiv_abstract"
     ],
     "data_agent": [
       "web_search",
