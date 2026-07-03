@@ -689,6 +689,9 @@ function getTeamLabel(sender: string): string {
     peer_review_agent: '审稿人',
     experimentation_agent: '实验设计专家',
     figure_agent: '科研绘图师',
+    requirement_decomposer: '需求分解器',
+    innovation_agent: '创新发现专家',
+    summary_agent: '总结专家',
     system: '系统',
     user: '你',
   };

@@ -47,6 +47,9 @@ const AGENT_COLORS: Record<string, string> = {
   peer_review_agent: '#8e44ad',
   experimentation_agent: '#2c3e50',
   figure_agent: '#e84393',
+  requirement_decomposer: '#00b894',
+  innovation_agent: '#6c5ce7',
+  summary_agent: '#fdcb6e',
 };
 
 const AGENT_ICONS: Record<string, string> = {

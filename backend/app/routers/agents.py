@@ -27,6 +27,9 @@ TEAM: Dict[str, Dict[str, str]] = {
     "peer_review_agent": {"name": "peer_review_agent", "label": "审稿人", "description": "四维度同行评议与质量把关", "model": ""},
     "experimentation_agent": {"name": "experimentation_agent", "label": "实验设计专家", "description": "设计严谨可复现的实验方案", "model": ""},
     "figure_agent": {"name": "figure_agent", "label": "科研绘图师", "description": "生成发表级质量图表（Nature/IEEE/ACM 风格）", "model": ""},
+    "requirement_decomposer": {"name": "requirement_decomposer", "label": "需求分解器", "description": "万字以上长提示词自动拆解为结构化研究计划", "model": ""},
+    "innovation_agent": {"name": "innovation_agent", "label": "创新发现专家", "description": "从文献调研中识别研究空白、提出创新方案", "model": ""},
+    "summary_agent": {"name": "summary_agent", "label": "总结专家", "description": "任务完成总结、经验提取与分类存储", "model": ""},
 }
 
 # Agent -> (provider_id, model_name) 映射，持久保存

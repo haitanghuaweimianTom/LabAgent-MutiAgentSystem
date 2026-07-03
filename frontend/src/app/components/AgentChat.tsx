@@ -42,6 +42,9 @@ const TEAM_COLORS: Record<string, string> = {
   peer_review_agent: '#8e44ad',
   experimentation_agent: '#2c3e50',
   figure_agent: '#e84393',
+  requirement_decomposer: '#00b894',
+  innovation_agent: '#6c5ce7',
+  summary_agent: '#fdcb6e',
   system: '#95a5a6',
   user: '#3498db',
 };
@@ -59,6 +62,9 @@ const TEAM_LABELS: Record<string, string> = {
   peer_review_agent: '审稿人',
   experimentation_agent: '实验设计专家',
   figure_agent: '科研绘图师',
+  requirement_decomposer: '需求分解器',
+  innovation_agent: '创新发现专家',
+  summary_agent: '总结专家',
   system: '系统',
   user: '你',
 };
