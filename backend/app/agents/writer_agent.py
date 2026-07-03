@@ -448,8 +448,32 @@ RESEARCH_SURVEY_CHAPTERS: List[ChapterPlan] = [
         ],
     },
     {
+        "id": "datasets",
+        "title": "六、数据集与实验设置",
+        "section_level": 1,
+        "prompt_role": "撰写数据集与实验设置。",
+        "requirements": [
+            "汇总文献中使用的数据集",
+            "说明评价指标和实验设置",
+            "使用表格汇总各数据集的特点和适用场景",
+            "分析现有评估体系的不足",
+        ],
+    },
+    {
+        "id": "results",
+        "title": "七、结果对比与讨论",
+        "section_level": 1,
+        "prompt_role": "撰写结果对比与讨论。",
+        "requirements": [
+            "对比各方法的关键结果",
+            "讨论性能差异的原因",
+            "指出方法适用场景",
+            "分析实验设计的局限性",
+        ],
+    },
+    {
         "id": "conclusion",
-        "title": "六、结论与展望",
+        "title": "八、结论与展望",
         "section_level": 1,
         "prompt_role": "撰写结论与展望。",
         "requirements": [
@@ -937,6 +961,33 @@ class WriterAgent(BaseAgent):
         project_name = context.get("project_name")
         peer_review_feedback = task_input.get("review_feedback") or context.get("peer_review_feedback")
 
+        # 从 research_agent 结果中提取文献（如果 context.literature 为空）
+        if not literature:
+            research_output = all_results.get("research_agent", {})
+            if isinstance(research_output, dict):
+                literature = research_output.get("papers", [])
+
+        # ===== 提取模板特定上下文 =====
+        # 调研报告模板
+        methods = context.get("methods", [])
+        research_gaps = context.get("research_gaps", [])
+        problem_type = context.get("problem_type", "")
+
+        # 数学建模/课程作业模板
+        modeling_approach = context.get("modeling_approach", "")
+        solver_results = context.get("solver_results", [])
+        data_insights = context.get("data_insights", [])
+
+        # 金融分析模板
+        financial_models = context.get("financial_models", [])
+        risk_metrics = context.get("risk_metrics", {})
+        backtest_results = context.get("backtest_results", {})
+
+        # CCF-A 模板
+        algorithm_design = context.get("algorithm_design", "")
+        complexity_analysis = context.get("complexity_analysis", "")
+        experiment_plan = context.get("experiment_plan", {})
+
         # 提取实验执行结果（如果存在）
         experimentation_output = all_results.get("experimentation_agent", {}) or {}
         experiment_result = experimentation_output.get("experiment_result") if isinstance(experimentation_output, dict) else None
@@ -1039,6 +1090,19 @@ class WriterAgent(BaseAgent):
                 peer_review_feedback=peer_review_feedback,
                 experiment_result=experiment_result,
                 paper_memory=paper_memory,
+                # 模板特定上下文
+                methods=methods,
+                research_gaps=research_gaps,
+                problem_type=problem_type,
+                modeling_approach=modeling_approach,
+                solver_results=solver_results,
+                data_insights=data_insights,
+                financial_models=financial_models,
+                risk_metrics=risk_metrics,
+                backtest_results=backtest_results,
+                algorithm_design=algorithm_design,
+                complexity_analysis=complexity_analysis,
+                experiment_plan=experiment_plan,
             )
             chapter = {
                 "plan": plan,
@@ -1183,6 +1247,19 @@ class WriterAgent(BaseAgent):
         peer_review_feedback: Optional[Dict[str, Any]] = None,
         experiment_result: Optional[Dict[str, Any]] = None,
         paper_memory: Optional[Dict[str, Any]] = None,
+        # 模板特定上下文
+        methods: Optional[List] = None,
+        research_gaps: Optional[List] = None,
+        problem_type: Optional[str] = None,
+        modeling_approach: Optional[str] = None,
+        solver_results: Optional[List] = None,
+        data_insights: Optional[List] = None,
+        financial_models: Optional[List] = None,
+        risk_metrics: Optional[Dict] = None,
+        backtest_results: Optional[Dict] = None,
+        algorithm_design: Optional[str] = None,
+        complexity_analysis: Optional[str] = None,
+        experiment_plan: Optional[Dict] = None,
     ) -> Dict[str, Any]:
         """生成单个章节， critique 未通过则重写"""
         chapter_latex = ""
@@ -1211,6 +1288,19 @@ class WriterAgent(BaseAgent):
                 peer_review_feedback=peer_review_feedback if attempt == 1 else None,
                 experiment_result=experiment_result,
                 paper_memory=paper_memory,
+                # 模板特定上下文
+                methods=methods,
+                research_gaps=research_gaps,
+                problem_type=problem_type,
+                modeling_approach=modeling_approach,
+                solver_results=solver_results,
+                data_insights=data_insights,
+                financial_models=financial_models,
+                risk_metrics=risk_metrics,
+                backtest_results=backtest_results,
+                algorithm_design=algorithm_design,
+                complexity_analysis=complexity_analysis,
+                experiment_plan=experiment_plan,
             )
 
             critique = await self._critique_chapter(
@@ -1257,6 +1347,19 @@ class WriterAgent(BaseAgent):
         peer_review_feedback: Optional[Dict[str, Any]] = None,
         experiment_result: Optional[Dict[str, Any]] = None,
         paper_memory: Optional[Dict[str, Any]] = None,
+        # 模板特定上下文
+        methods: Optional[List] = None,
+        research_gaps: Optional[List] = None,
+        problem_type: Optional[str] = None,
+        modeling_approach: Optional[str] = None,
+        solver_results: Optional[List] = None,
+        data_insights: Optional[List] = None,
+        financial_models: Optional[List] = None,
+        risk_metrics: Optional[Dict] = None,
+        backtest_results: Optional[Dict] = None,
+        algorithm_design: Optional[str] = None,
+        complexity_analysis: Optional[str] = None,
+        experiment_plan: Optional[Dict] = None,
     ) -> Tuple[str, str]:
         """调用 LLM 生成单个章节"""
         # v5.0: 使用全局记忆池替代简单的"前2章摘要"
@@ -1294,6 +1397,44 @@ class WriterAgent(BaseAgent):
 
         if literature_summary:
             prompt_parts.append("## 相关文献摘要\n" + literature_summary)
+
+        # ===== 模板特定上下文注入 =====
+        if template == "research_survey":
+            if methods:
+                methods_text = "\n".join(f"- {m.get('name', '')}: {m.get('description', '')[:100]}" for m in methods[:10])
+                prompt_parts.append("## 已发现的研究方法\n" + methods_text)
+            if research_gaps:
+                gaps_text = "\n".join(f"- {g}" for g in research_gaps[:5])
+                prompt_parts.append("## 已识别的研究空白\n" + gaps_text)
+            if problem_type:
+                prompt_parts.append(f"## 问题类型\n{problem_type}")
+
+        elif template in ("math_modeling", "coursework"):
+            if modeling_approach:
+                prompt_parts.append(f"## 建模方法\n{modeling_approach}")
+            if solver_results:
+                solver_text = "\n".join(f"- 子问题{s.get('sub_problem_id', '?')}: {str(s.get('results', {}))[:200]}" for s in solver_results[:5])
+                prompt_parts.append("## 求解结果\n" + solver_text)
+            if data_insights:
+                insights_text = "\n".join(f"- {i}" for i in data_insights[:5])
+                prompt_parts.append("## 数据洞察\n" + insights_text)
+
+        elif template == "financial_analysis":
+            if financial_models:
+                models_text = "\n".join(f"- {m.get('name', '')}: {m.get('description', '')[:100]}" for m in financial_models[:5])
+                prompt_parts.append("## 金融模型\n" + models_text)
+            if risk_metrics:
+                prompt_parts.append(f"## 风险指标\n{json.dumps(risk_metrics, ensure_ascii=False)[:500]}")
+            if backtest_results:
+                prompt_parts.append(f"## 回测结果\n{json.dumps(backtest_results, ensure_ascii=False)[:500]}")
+
+        elif template in ("neurips_2024", "ieee_conference", "acm_sigconf", "springer_lncs"):
+            if algorithm_design:
+                prompt_parts.append(f"## 算法设计\n{algorithm_design}")
+            if complexity_analysis:
+                prompt_parts.append(f"## 复杂度分析\n{complexity_analysis}")
+            if experiment_plan:
+                prompt_parts.append(f"## 实验方案\n{json.dumps(experiment_plan, ensure_ascii=False)[:500]}")
 
         if figure_suggestions:
             prompt_parts.append("## 可用图表（请在合适位置插入）\n" + figure_suggestions)

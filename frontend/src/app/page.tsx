@@ -19,6 +19,7 @@ import { useTaskState } from './hooks/useTaskState';
 import { TaskStatusBadge } from './components/TaskStatusBadge';
 import { CameraReadyPanel } from './components/CameraReadyPanel';
 import { PreFlightPanel, PreflightReport } from './components/PreFlightPanel';
+import DiscussionPanel from './components/DiscussionPanel';
 
 declare global {
   interface Window {
@@ -77,6 +78,9 @@ export default function Home() {
 
   // Preflight report
   const [preflightReport, setPreflightReport] = useState<PreflightReport | null>(null);
+
+  // Discussion panel
+  const [showDiscussion, setShowDiscussion] = useState(false);
 
   const selectedFiles = useAppStore((s) => s.selectedFiles);
   const activeProjectId = useAppStore((s) => s.activeProjectId);
@@ -198,10 +202,16 @@ export default function Home() {
           es.close();
           clearInterval(msgPoll);
         }
-        // Phase1 completed - show sub-problem confirmation
+        // Phase1 completed - auto-confirm for deep_research/research_survey workflows
         if (d.status === 'phase1_completed') {
-          setPhase('phase2_confirm');
-          loadSubProblems(id);
+          const wf = d.workflow_type || '';
+          if (wf === 'deep_research' || wf === 'research_survey') {
+            // 自动确认，不弹窗
+            autoConfirmSubProblems(id);
+          } else {
+            setPhase('phase2_confirm');
+            loadSubProblems(id);
+          }
           es.close();
           clearInterval(msgPoll);
         }
@@ -260,6 +270,31 @@ export default function Home() {
         startSSE(taskId);
       }
     } catch { alert('启动阶段2失败'); } finally { setSubmitting(false); }
+  };
+
+  // 自动确认子问题（用于 deep_research/research_survey 工作流）
+  const autoConfirmSubProblems = async (id: string) => {
+    try {
+      // 先加载子问题
+      const res = await fetch(apiBase() + '/tasks/' + id + '/result');
+      if (res.ok) {
+        const data = await res.json();
+        const output = data.output || {};
+        const analyzer = output.analyzer_agent || {};
+        const sps = analyzer.sub_problems || [];
+        if (sps.length > 0) {
+          // 自动确认
+          await fetch(apiBase() + '/tasks/' + id + '/confirm-subproblems', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sub_problems: sps }),
+          });
+          setPhase('phase2');
+          setTaskStatus('running');
+          startSSE(id);
+        }
+      }
+    } catch {}
   };
 
   const handleConfirmSubproblems = async () => {
@@ -523,6 +558,10 @@ export default function Home() {
               <PreFlightPanel
                 report={preflightReport}
                 onConfirm={() => setPreflightReport(null)}
+                onApplyRecommended={(tpl, wf, mode) => {
+                  setPreflightReport(null);
+                  alert(`推荐配置已记录: 模板=${tpl}, 工作流=${wf}, 模式=${mode}\n请在表单中调整后重新提交。`);
+                }}
               />
             )}
 
@@ -555,6 +594,30 @@ export default function Home() {
               cancelling={cancelling}
               taskId={taskId}
             />
+
+            {/* 讨论面板切换按钮 */}
+            {taskId && taskState.state?.name !== 'completed' && (
+              <button
+                onClick={() => setShowDiscussion(!showDiscussion)}
+                style={{
+                  margin: '0.5rem 0',
+                  padding: '0.4rem 0.8rem',
+                  background: showDiscussion ? 'rgba(59,130,246,0.2)' : 'rgba(59,130,246,0.1)',
+                  border: '1px solid rgba(59,130,246,0.3)',
+                  borderRadius: 6,
+                  color: '#3B82F6',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem',
+                }}
+              >
+                {showDiscussion ? '关闭讨论面板' : 'Agent 讨论面板'}
+              </button>
+            )}
+
+            {/* 讨论面板 */}
+            {showDiscussion && taskId && (
+              <DiscussionPanel taskId={taskId} onClose={() => setShowDiscussion(false)} />
+            )}
 
             {/* Phase 6 (A3): 完成后 Camera-Ready 打包 */}
             {taskState.state?.name === 'completed' && taskId && (

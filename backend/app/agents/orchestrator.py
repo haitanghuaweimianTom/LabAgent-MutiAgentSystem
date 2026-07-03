@@ -22,6 +22,9 @@ from ..core.memory import get_memory_manager, WorkingMemory
 # 不直接使用，仅保证 Orchestrator 加载时新 Agent 已注册。
 from . import experimentation_agent  # noqa: F401
 from . import peer_review_agent  # noqa: F401
+from . import requirement_decomposer  # noqa: F401
+from . import summary_agent  # noqa: F401
+from . import innovation_agent  # noqa: F401
 
 # Phase 3：LangGraph 编排器（按需导入，未安装也不阻断旧流程）
 from .langgraph_orchestrator import LangGraphOrchestrator, LANGGRAPH_AVAILABLE

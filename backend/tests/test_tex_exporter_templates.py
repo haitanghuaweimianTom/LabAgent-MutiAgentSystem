@@ -28,7 +28,7 @@ from src.paper.tex_exporter import MarkdownToTexConverter  # noqa: E402
     ("financial_analysis", "article", ""),
     ("research_survey", "article", ""),
     ("ieee_conference", "IEEEtran", "IEEEtran.cls"),
-    ("neurips_2024", "neurips_2024", "neurips_2024.sty"),
+    ("neurips_2024", "neurips_2024", ""),  # neurips 用 sty_files，无 cls_file
     ("acm_sigconf", "acmart", "acmart.cls"),
     ("springer_lncs", "llncs", "llncs.cls"),
     ("nonexistent-xxx", "cumcmthesis", "mcmthesis.cls"),  # 未知 → fallback

@@ -3,7 +3,7 @@ import logging
 import time
 from contextlib import asynccontextmanager
 from typing import Any, Dict
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -23,6 +23,7 @@ from .routers.knowledge import router as knowledge_router
 from .routers.projects import router as projects_router
 from .routers.memory import router as memory_router
 from .routers.pdf import router as pdf_router
+from .routers.discussion import router as discussion_router
 from .core.provider_config import migrate_legacy_to_new, get_default_provider, list_custom_providers
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -30,6 +31,27 @@ logger = logging.getLogger(__name__)
 
 # 应用启动时间戳（用于计算运行时长）
 _app_start_time: float = 0.0
+
+
+# ---------------------------------------------------------------------------
+# 可选 API Key 认证依赖
+# ---------------------------------------------------------------------------
+# 设置环境变量 MATHMODEL_API_KEY 即可启用认证；留空则所有端点免认证（本地开发模式）。
+import os as _os
+
+_REQUIRED_API_KEY = _os.environ.get("MATHMODEL_API_KEY", "")
+
+
+async def require_api_key(x_api_key: str = Header(default="", alias="X-API-Key")):
+    """FastAPI 依赖：校验 X-API-Key 请求头。
+
+    - 若系统未配置 MATHMODEL_API_KEY（空字符串），则跳过校验（本地开发模式）。
+    - 若已配置，则请求必须携带匹配的 X-API-Key 头。
+    """
+    if not _REQUIRED_API_KEY:
+        return  # 未启用认证
+    if x_api_key != _REQUIRED_API_KEY:
+        raise HTTPException(status_code=401, detail="未授权：X-API-Key 无效或缺失")
 
 
 class SettingsUpdate(BaseModel):
@@ -132,6 +154,7 @@ app.include_router(knowledge_router, prefix="/api/v1")
 app.include_router(projects_router, prefix="/api/v1")
 app.include_router(memory_router, prefix="/api/v1")
 app.include_router(pdf_router, prefix="/api/v1")
+app.include_router(discussion_router, prefix="/api/v1")
 
 
 @app.get("/")
@@ -279,7 +302,7 @@ async def get_runtime_settings():
 
 from .agents.base import _find_claude_code
 
-@app.post("/api/v1/settings")
+@app.post("/api/v1/settings", dependencies=[Depends(require_api_key)])
 async def update_runtime_settings(body: SettingsUpdate):
     changed = False
     if body.minimax_api_key is not None:
@@ -376,7 +399,7 @@ async def update_runtime_settings(body: SettingsUpdate):
 # 以下为调试和测试端点
 
 
-@app.get("/api/v1/debug/key")
+@app.get("/api/v1/debug/key", dependencies=[Depends(require_api_key)])
 async def debug_api_key():
     """调试接口：查看当前API密钥状态"""
     from .core.runtime_config import ENV_FILE
@@ -391,7 +414,7 @@ async def debug_api_key():
     }
 
 
-@app.post("/api/v1/debug/test-llm")
+@app.post("/api/v1/debug/test-llm", dependencies=[Depends(require_api_key)])
 async def debug_test_llm():
     """调试接口：测试LLM调用"""
     import httpx
@@ -430,5 +453,5 @@ async def debug_test_llm():
 
 @app.exception_handler(Exception)
 async def handle_error(request, exc):
-    logger.error(f"Error: {exc}")
-    return JSONResponse(status_code=500, content={"error": str(exc)})
+    logger.error(f"Error: {exc}", exc_info=True)
+    return JSONResponse(status_code=500, content={"error": "服务器内部错误，请查看日志了解详情"})

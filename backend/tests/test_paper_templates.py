@@ -127,7 +127,7 @@ def test_research_survey_uses_article_documentclass():
     tpl = load_template("research_survey")
     assert tpl.documentclass == "article"
     assert "\\title{研究现状调研报告}" in tpl.preamble
-    assert len(tpl.chapter_plan) == 11
+    assert len(tpl.chapter_plan) == 9
 
 
 # ---------- 4. 新增 CCF-A 模板 ----------

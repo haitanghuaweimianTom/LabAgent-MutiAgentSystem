@@ -44,16 +44,18 @@ DEFAULT_ALLOWED_MODULES = {
 }
 
 # 默认阻止的模块（危险操作）
-# 注意：os 和 sys 是 Python 基础模块，几乎所有库都依赖它们
-# 真正的安全依赖资源限制 + 路径隔离，而非完全阻止基础模块
+# 注意：os/sys/subprocess 由资源限制（RLIMIT_NPROC）+ 路径隔离保护
+# subprocess 导入允许但 fork 被 RLIMIT_NPROC=0 阻止
 DEFAULT_BLOCKED_MODULES = {
-    "subprocess", "socket", "urllib", "http", "ftplib",
+    # 网络模块（资源限制无法完全阻止）
+    "socket", "urllib", "http", "ftplib",
     "telnetlib", "smtplib", "poplib", "imaplib", "nntplib", "ssl",
+    # 系统/进程模块
     "ctypes", "mmap", "multiprocessing", "concurrent",
     "asyncio", "tkinter", "wx", "PyQt5", "PyQt6", "PySide2", "PySide6",
     "pip", "setuptools", "distutils", "wheel", "venv", "virtualenv",
     # 额外阻止：可能用于逃逸的模块
-    "pty", "platform", "pwd", "grp", "spwd", "crypt",
+    "pty", "pwd", "grp", "spwd", "crypt",
 }
 
 
@@ -204,19 +206,41 @@ class CodeSandbox:
     # ------------------------------------------------------------------
 
     def _inject_import_hook(self, workspace: Path) -> None:
-        """注入 Python 导入限制（Layer 3，可选）。
+        """注入 Python 导入限制（Layer 3）。
 
-        注意：由于 numpy/pandas/matplotlib 等科学计算库在初始化时会
-        导入 os/sys/subprocess 等模块，过于严格的导入限制会破坏正常库的使用。
-        真正的安全依赖：
-        1. 资源限制（RLIMIT_CPU/AS/NOFILE/NPROC）
-        2. 路径隔离（工作区目录）
-        3. 超时控制
-
-        v5.3.0: 导入限制默认关闭，依赖资源限制保证安全。
+        阻止用户代码直接导入危险模块（网络/进程/系统），但允许已安装的
+        科学计算库（numpy/pandas/matplotlib 等）内部的传递性导入。
+        通过 sys._getframe(1) 检查直接调用者是否在 site-packages 中。
         """
-        # 导入限制已禁用 —— 依赖资源限制 + 路径隔离保证安全
-        pass
+        hook_code = textwrap.dedent("""\
+            import builtins
+            import sys
+
+            _BLOCKED = frozenset(%%BLOCKED_MODULES%%)
+            _orig_import = builtins.__import__
+
+            def _safe_import(name, *args, **kwargs):
+                top = name.split(".")[0]
+                if top in _BLOCKED:
+                    # 检查直接调用者（上一层栈帧）
+                    caller = sys._getframe(1).f_code.co_filename
+                    if "site-packages" in caller or "dist-packages" in caller:
+                        # 库内部传递性导入 → 允许
+                        return _orig_import(name, *args, **kwargs)
+                    raise ImportError(
+                        f"Blocked by sandbox: '{name}' is not allowed in sandboxed code."
+                    )
+                return _orig_import(name, *args, **kwargs)
+
+            builtins.__import__ = _safe_import
+        """).replace("%%BLOCKED_MODULES%%", repr(list(DEFAULT_BLOCKED_MODULES)))
+        hook_file = workspace / "__import_hook__.py"
+        hook_file.write_text(hook_code, encoding="utf-8")
+        sitecustomize = workspace / "sitecustomize.py"
+        sitecustomize.write_text(
+            "import __import_hook__\n",
+            encoding="utf-8",
+        )
 
     # ------------------------------------------------------------------
     # 沙箱执行核心

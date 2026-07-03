@@ -83,10 +83,12 @@ class DataAgent(BaseAgent):
             return {"error": str(e)}
 
     def execute_python_analysis(self, code: str, file_path: str) -> Dict[str, Any]:
-        """执行Python分析代码并捕获结果"""
+        """执行Python分析代码并捕获结果（通过沙箱安全执行）"""
+        import json as _json
+        import tempfile
+
         path = Path(file_path)
         suffix = path.suffix.lower()
-        local_vars = {}
 
         # 读取数据到DataFrame
         try:
@@ -101,67 +103,77 @@ class DataAgent(BaseAgent):
         except Exception:
             return {"error": "Unsupported file type for code execution"}
 
-        full_code = load_code + code
+        # 构建完整代码：加载数据 + 用户代码 + 结果序列化
+        result_path = Path(tempfile.mktemp(suffix=".json"))
+        full_code = (
+            "import pandas as pd\n"
+            "import numpy as np\n"
+            "import json\n"
+            f"{load_code}"
+            f"{code}\n"
+            "\n"
+            "# --- 结果序列化（沙箱安全） ---\n"
+            "import traceback as _tb\n"
+            "_result = {'python_output': ''}\n"
+            "try:\n"
+            "    _df = df if 'df' in dir() else None\n"
+            f"    if _df is not None and hasattr(_df, 'shape'):\n"
+            "        _result['shape'] = list(_df.shape)\n"
+            "        _result['columns'] = list(_df.columns)\n"
+            "        _result['dtypes'] = {c: str(dt) for c, dt in _df.dtypes.items()}\n"
+            "        _num = _df.select_dtypes(include='number').columns.tolist()\n"
+            "        if _num:\n"
+            "            _result['descriptive_stats'] = _df[_num].describe().to_dict()\n"
+            "        _result['missing'] = _df.isnull().sum().to_dict()\n"
+            "        _result['missing_rate'] = float(_df.isnull().sum().sum() / (_df.shape[0] * _df.shape[1]))\n"
+            "        _result['duplicates'] = int(_df.duplicated().sum())\n"
+            "        _result['sample_data'] = _df.head(5).fillna('N/A').values.tolist()\n"
+            "        _result['sample_columns'] = list(_df.columns)\n"
+            "        if len(_num) >= 2:\n"
+            "            _result['correlations'] = _df[_num].corr().round(3).to_dict()\n"
+            "        _cat = _df.select_dtypes(include='object').columns.tolist()\n"
+            "        if _cat:\n"
+            "            _result['categorical_columns'] = _cat\n"
+            "            _result['categorical_unique'] = {c: int(_df[c].nunique()) for c in _cat}\n"
+            "        _result['numerical_columns'] = _num\n"
+            "except Exception as _e:\n"
+            "    _result['python_error'] = str(_e)\n"
+            f"with open(r'{result_path}', 'w') as _f:\n"
+            "    json.dump(_result, _f, default=str, ensure_ascii=False)\n"
+        )
 
-        old_stdout = sys.stdout
-        captured = io.StringIO()
-        result_data = {}
+        # 写入临时文件并执行
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False, encoding="utf-8") as tmp:
+            tmp.write(full_code)
+            code_file = Path(tmp.name)
 
         try:
-            sys.stdout = captured
-            exec(full_code, {"pd": __import__('pandas'), "np": __import__('numpy')}, local_vars)
-            sys.stdout = old_stdout
+            from ..core.sandbox import CodeSandbox
+            sandbox = CodeSandbox()
+            result = sandbox.execute_file(code_file)
 
-            output = captured.getvalue()
-
-            # 提取DataFrame
-            df = local_vars.get("df")
-            if df is not None:
-                import pandas as pd
-                if isinstance(df, pd.DataFrame):
-                    result_data["shape"] = list(df.shape)
-                    result_data["columns"] = list(df.columns)
-                    result_data["dtypes"] = {c: str(dt) for c, dt in df.dtypes.items()}
-
-                    # 数值列描述性统计
-                    num_cols = df.select_dtypes(include="number").columns.tolist()
-                    if num_cols:
-                        result_data["descriptive_stats"] = df[num_cols].describe().to_dict()
-
-                    # 缺失值
-                    result_data["missing"] = df.isnull().sum().to_dict()
-                    result_data["missing_rate"] = float(df.isnull().sum().sum() / (df.shape[0] * df.shape[1]))
-
-                    # 重复行
-                    result_data["duplicates"] = int(df.duplicated().sum())
-
-                    # 样本数据（前5行）
-                    result_data["sample_data"] = df.head(5).fillna("N/A").values.tolist()
-                    result_data["sample_columns"] = list(df.columns)
-
-                    # 数值列相关性
-                    if len(num_cols) >= 2:
-                        corr = df[num_cols].corr().round(3)
-                        result_data["correlations"] = corr.to_dict()
-
-                    # 分类列
-                    cat_cols = df.select_dtypes(include="object").columns.tolist()
-                    if cat_cols:
-                        result_data["categorical_columns"] = cat_cols
-                        result_data["categorical_unique"] = {c: int(df[c].nunique()) for c in cat_cols}
-                    result_data["numerical_columns"] = num_cols
-
-            result_data["python_output"] = output[:2000]  # 截断输出
-            return result_data
-
+            if result.success and result_path.exists():
+                import json as _json_read
+                data = _json_read.loads(result_path.read_text(encoding="utf-8"))
+                data["python_output"] = data.get("python_output", "")[:2000]
+                return data
+            else:
+                return {
+                    "python_error": result.message or "沙箱执行失败",
+                    "code": code[:500],
+                    "returncode": result.returncode,
+                }
         except Exception as e:
-            sys.stdout = old_stdout
             return {"python_error": str(e), "code": code[:500]}
         finally:
-            sys.stdout = old_stdout
+            code_file.unlink(missing_ok=True)
+            result_path.unlink(missing_ok=True)
 
     def build_analysis_code(self, file_path: str, analysis_type: str = "full") -> str:
         """构建Python分析代码模板"""
+        import os
+        # 安全转义路径，防止代码注入
+        safe_path = os.path.realpath(file_path).replace("\\", "\\\\").replace("'", "\\'")
         path = Path(file_path)
         suffix = path.suffix.lower()
         return f"""
@@ -169,7 +181,7 @@ import pandas as pd
 import numpy as np
 
 # 读取数据
-df = pd.read_csv(r'{file_path}', encoding='utf-8-sig')
+df = pd.read_csv(r'{safe_path}', encoding='utf-8-sig')
 
 # 基本信息
 print('=== 数据基本信息 ===')

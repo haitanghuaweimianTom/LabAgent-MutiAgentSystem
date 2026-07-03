@@ -151,9 +151,15 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
     if (!confirm('将使用当前系统配置重新执行此任务，是否继续？')) return;
     setRerunning(true);
     try {
+      // 传递原始任务的 template/workflow_type/mode，确保 rerun 保留用户选择
       const res = await fetch(apiBase() + '/tasks/' + taskId + '/rerun', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          template: meta?.template,
+          workflow_type: meta?.workflow_type,
+          mode: meta?.mode,
+        }),
       });
       if (res.ok) {
         const data = await res.json();
@@ -301,6 +307,137 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
                   ))}
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* 需求分解计划 */}
+          {result?.output?.requirement_plan && (
+            <div className={styles.section}>
+              <div className={styles.sectionTitle}>📋 需求分解计划</div>
+              <div style={{ marginBottom: 8, color: '#60a5fa', fontWeight: 600 }}>
+                {result.output.requirement_plan.research_goal}
+              </div>
+              {result.output.requirement_plan.background && (
+                <div style={{ marginBottom: 8, color: '#ccc', fontSize: '0.9rem' }}>
+                  {result.output.requirement_plan.background}
+                </div>
+              )}
+              {result.output.requirement_plan.key_questions?.length > 0 && (
+                <div style={{ marginBottom: 8 }}>
+                  <strong style={{ color: '#E2E8F0' }}>核心问题：</strong>
+                  {result.output.requirement_plan.key_questions.map((q: string, i: number) => (
+                    <div key={i} style={{ color: '#aaa', fontSize: '0.85rem', marginLeft: 12 }}>• {q}</div>
+                  ))}
+                </div>
+              )}
+              {result.output.requirement_plan.subtasks?.length > 0 && (
+                <div>
+                  <strong style={{ color: '#E2E8F0' }}>子任务：</strong>
+                  {result.output.requirement_plan.subtasks.map((t: any, i: number) => (
+                    <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', marginLeft: 12, marginTop: 4 }}>
+                      <span style={{
+                        padding: '2px 6px', borderRadius: 4, fontSize: '0.75rem',
+                        background: t.priority === 'high' ? 'rgba(239,68,68,0.2)' : t.priority === 'medium' ? 'rgba(234,179,8,0.2)' : 'rgba(34,197,94,0.2)',
+                        color: t.priority === 'high' ? '#f87171' : t.priority === 'medium' ? '#facc15' : '#4ade80',
+                      }}>
+                        {t.priority}
+                      </span>
+                      <span style={{ color: '#ccc', fontSize: '0.85rem' }}>{t.description}</span>
+                      <span style={{ color: '#888', fontSize: '0.75rem' }}>→ {t.suggested_agent}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 创新发现分析 */}
+          {result?.output?.innovation_analysis && (
+            <div className={styles.section}>
+              <div className={styles.sectionTitle}>💡 创新发现分析</div>
+              {result.output.innovation_analysis.research_gaps?.length > 0 && (
+                <div style={{ marginBottom: 12 }}>
+                  <strong style={{ color: '#E2E8F0' }}>研究空白：</strong>
+                  {result.output.innovation_analysis.research_gaps.map((g: any, i: number) => (
+                    <div key={i} style={{ marginLeft: 12, marginTop: 6, padding: '6px 10px', background: 'rgba(59,130,246,0.1)', borderRadius: 6, borderLeft: '3px solid #3B82F6' }}>
+                      <div style={{ color: '#93c5fd', fontSize: '0.85rem', fontWeight: 600 }}>
+                        Gap #{g.gap_id} <span style={{ color: g.importance === 'high' ? '#f87171' : '#facc15' }}>({g.importance})</span>
+                      </div>
+                      <div style={{ color: '#ccc', fontSize: '0.85rem' }}>{g.description}</div>
+                      {g.opportunity && <div style={{ color: '#888', fontSize: '0.8rem', marginTop: 2 }}>机会：{g.opportunity}</div>}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {result.output.innovation_analysis.innovation_ideas?.length > 0 && (
+                <div>
+                  <strong style={{ color: '#E2E8F0' }}>创新方案：</strong>
+                  {result.output.innovation_analysis.innovation_ideas.map((idea: any, i: number) => (
+                    <div key={i} style={{ marginLeft: 12, marginTop: 6, padding: '6px 10px', background: 'rgba(168,85,247,0.1)', borderRadius: 6, borderLeft: '3px solid #a855f7' }}>
+                      <div style={{ color: '#c084fc', fontSize: '0.85rem', fontWeight: 600 }}>{idea.title}</div>
+                      <div style={{ color: '#ccc', fontSize: '0.85rem' }}>新颖性：{idea.novelty}</div>
+                      <div style={{ color: '#aaa', fontSize: '0.8rem' }}>方法：{idea.methodology}</div>
+                      <div style={{ color: '#888', fontSize: '0.8rem' }}>可行性：{idea.feasibility} | 预期贡献：{idea.expected_contribution}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {result.output.innovation_analysis.recommended_approach && (
+                <div style={{ marginTop: 8, padding: '6px 10px', background: 'rgba(34,197,94,0.1)', borderRadius: 6, borderLeft: '3px solid #22c55e' }}>
+                  <strong style={{ color: '#4ade80' }}>推荐方案：</strong>
+                  <span style={{ color: '#ccc', fontSize: '0.85rem' }}> {result.output.innovation_analysis.recommended_approach}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 任务总结报告 */}
+          {result?.output?.task_summary && (
+            <div className={styles.section}>
+              <div className={styles.sectionTitle}>📊 任务总结报告</div>
+              {result.output.task_summary.research_summary && (
+                <div style={{ marginBottom: 8, color: '#ccc', fontSize: '0.9rem' }}>
+                  <strong style={{ color: '#E2E8F0' }}>研究回顾：</strong>{result.output.task_summary.research_summary}
+                </div>
+              )}
+              {result.output.task_summary.paper_quality && (
+                <div style={{ marginBottom: 8, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                  <div style={{ padding: '4px 10px', background: 'rgba(59,130,246,0.15)', borderRadius: 6 }}>
+                    <span style={{ color: '#93c5fd', fontSize: '0.8rem' }}>论文质量 </span>
+                    <span style={{ color: '#60a5fa', fontWeight: 700 }}>{result.output.task_summary.paper_quality.overall_score}/100</span>
+                  </div>
+                  {result.output.task_summary.paper_quality.strengths?.length > 0 && (
+                    <div style={{ color: '#4ade80', fontSize: '0.8rem' }}>优势：{result.output.task_summary.paper_quality.strengths.join('、')}</div>
+                  )}
+                  {result.output.task_summary.paper_quality.weaknesses?.length > 0 && (
+                    <div style={{ color: '#f87171', fontSize: '0.8rem' }}>不足：{result.output.task_summary.paper_quality.weaknesses.join('、')}</div>
+                  )}
+                </div>
+              )}
+              {result.output.task_summary.lessons_learned?.length > 0 && (
+                <div style={{ marginBottom: 8 }}>
+                  <strong style={{ color: '#E2E8F0' }}>经验教训：</strong>
+                  {result.output.task_summary.lessons_learned.map((l: any, i: number) => (
+                    <div key={i} style={{ marginLeft: 12, marginTop: 4, fontSize: '0.85rem' }}>
+                      <span style={{
+                        padding: '1px 5px', borderRadius: 3, fontSize: '0.7rem',
+                        background: 'rgba(234,179,8,0.15)', color: '#facc15', marginRight: 6,
+                      }}>
+                        {l.category}
+                      </span>
+                      <span style={{ color: '#ccc' }}>{l.content}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {result.output.task_summary.recommendations?.length > 0 && (
+                <div>
+                  <strong style={{ color: '#E2E8F0' }}>建议：</strong>
+                  {result.output.task_summary.recommendations.map((r: string, i: number) => (
+                    <div key={i} style={{ marginLeft: 12, color: '#aaa', fontSize: '0.85rem' }}>• {r}</div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -1,9 +1,10 @@
 """环境管理路由 —— 创建/删除/激活 conda 或 venv 环境，安装依赖。"""
 import logging
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 
 from ..core.environment_manager import (
@@ -13,6 +14,55 @@ from ..core.environment_manager import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/environments", tags=["环境管理"])
+
+# 可选 API Key 认证（读取 MATHMODEL_API_KEY 环境变量）
+_REQUIRED_API_KEY = os.environ.get("MATHMODEL_API_KEY", "")
+
+
+async def _require_api_key(x_api_key: str = Header(default="", alias="X-API-Key")):
+    if _REQUIRED_API_KEY and x_api_key != _REQUIRED_API_KEY:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=401, detail="未授权：X-API-Key 无效或缺失")
+
+# 允许执行的命令白名单（仅限环境管理相关操作）
+_ALLOWED_COMMAND_BASENAMES = {
+    "python", "python3", "pip", "pip3",
+    "conda", "mamba",
+    "node", "npm", "npx",
+    "latexmk", "pdflatex", "xelatex", "bibtex",
+}
+
+
+def _validate_command(command: List[str]) -> None:
+    """校验命令是否在白名单内。"""
+    if not command:
+        raise HTTPException(status_code=400, detail="命令不能为空")
+    cmd_base = Path(command[0]).name
+    if cmd_base not in _ALLOWED_COMMAND_BASENAMES:
+        raise HTTPException(
+            status_code=403,
+            detail=f"不允许执行命令: {cmd_base}。允许的命令: {', '.join(sorted(_ALLOWED_COMMAND_BASENAMES))}",
+        )
+    # 阻止 shell 元字符
+    for arg in command:
+        if any(c in arg for c in (";", "|", "&", "$", "`", "(", ")", "{", "}", "\n")):
+            raise HTTPException(status_code=400, detail=f"命令参数包含非法字符: {arg}")
+
+
+def _validate_cwd(cwd: Optional[str], project_root: Optional[Path] = None) -> Optional[Path]:
+    """校验工作目录在允许范围内。"""
+    if not cwd:
+        return None
+    path = Path(cwd).resolve()
+    if not path.exists():
+        raise HTTPException(status_code=400, detail=f"工作目录不存在: {cwd}")
+    # 限制在项目目录或 /tmp 下
+    allowed_roots = [Path("/tmp").resolve(), Path("/home").resolve()]
+    if project_root:
+        allowed_roots.append(project_root.resolve())
+    if not any(str(path).startswith(str(r)) for r in allowed_roots):
+        raise HTTPException(status_code=403, detail=f"工作目录不在允许范围内: {cwd}")
+    return path
 
 
 class CreateEnvRequest(BaseModel):
@@ -102,7 +152,11 @@ async def install_requirements(req: InstallRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=400, detail=f"后端不可用: {req.backend}")
 
     if req.requirements_path:
-        path = Path(req.requirements_path)
+        path = Path(req.requirements_path).resolve()
+        # 校验 requirements 文件路径在允许范围内
+        allowed_prefixes = [Path("/tmp").resolve(), Path("/home").resolve()]
+        if not any(str(path).startswith(str(p)) for p in allowed_prefixes):
+            raise HTTPException(status_code=403, detail="requirements 文件路径不在允许范围内")
         if not path.exists():
             raise HTTPException(status_code=404, detail=f"requirements 文件不存在: {req.requirements_path}")
         success = manager.install_requirements(req.backend, req.name, path)
@@ -115,14 +169,16 @@ async def install_requirements(req: InstallRequest) -> Dict[str, Any]:
     return {"name": req.name, "backend": req.backend, "status": "installed"}
 
 
-@router.post("/run")
+@router.post("/run", dependencies=[Depends(_require_api_key)])
 async def run_command(req: RunCommandRequest) -> Dict[str, Any]:
-    """在环境中运行命令。"""
+    """在环境中运行命令（仅限白名单命令）。"""
     manager = _get_manager()
     if req.backend not in manager.available_backends():
         raise HTTPException(status_code=400, detail=f"后端不可用: {req.backend}")
 
-    cwd = Path(req.cwd) if req.cwd else None
+    _validate_command(req.command)
+    cwd = _validate_cwd(req.cwd)
+
     success, stdout, stderr = manager.run_command(req.backend, req.name, req.command, cwd=cwd)
     return {
         "name": req.name,

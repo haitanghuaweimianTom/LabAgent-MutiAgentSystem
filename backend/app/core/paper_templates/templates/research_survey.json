@@ -1,8 +1,8 @@
 {
   "id": "research_survey",
-  "name": "研究现状调研 / 文献综述",
+  "name": "研究调研报告 / 深度文献综述",
   "domain": "survey",
-  "description": "10 章文献综述结构，适合学术调研、技术趋势分析。",
+  "description": "8章深度调研：全景图+Gaps+跨学科+创新点+文献清单+数据集+结果对比+结论",
   "documentclass": "article",
   "cls_file": "",
   "bib_style": "plain",
@@ -18,122 +18,120 @@
       "section_level": 0,
       "prompt_role": "撰写调研报告摘要和关键词。",
       "requirements": [
-        "200-400字",
-        "说明调研目标、检索策略、主要发现、结论"
+        "300-500字",
+        "包含：调研目标、核心领域、主要发现（3-5个关键结论）、研究空白、创新点方向",
+        "关键词：5-8个，中英文各半"
       ]
     },
     {
-      "id": "introduction",
-      "title": "1 引言",
+      "id": "landscape",
+      "title": "一、研究全景图：现有方法分类与SOTA剖析",
       "section_level": 1,
-      "prompt_role": "撰写引言。",
+      "prompt_role": "撰写研究全景图。这是报告的核心章节之一。",
       "requirements": [
-        "说明调研背景和动机",
-        "明确研究问题和调研范围",
-        "概述报告结构"
+        "根据 research_agent 提供的文献，按方法/架构/范式进行分类",
+        "对每类方法：核心思想、代表性工作（论文名称+年份+关键贡献）、优缺点",
+        "梳理该领域的核心问题和主流解决思路",
+        "使用对比表格总结各类方法的适用场景和性能特点"
       ]
     },
     {
-      "id": "background",
-      "title": "2 研究背景与问题定义",
+      "id": "gaps",
+      "title": "二、核心Research Gaps分析",
       "section_level": 1,
-      "prompt_role": "撰写研究背景与问题定义。",
+      "prompt_role": "撰写Research Gaps分析。这是报告的核心价值所在。",
       "requirements": [
-        "定义核心概念",
-        "描述问题的重要性和应用场景",
-        "梳理相关背景"
+        "从多个维度深度批判现有工作，识别具体的研究空白",
+        "每个Gap必须说明：为什么重要、现有方法为什么无法解决、解决的技术挑战",
+        "按紧迫性和研究可行性排序"
       ]
     },
     {
-      "id": "search_strategy",
-      "title": "3 文献检索策略",
+      "id": "cross_domain",
+      "title": "三、交叉学科启发与迁移",
       "section_level": 1,
-      "prompt_role": "撰写文献检索策略。",
+      "prompt_role": "撰写交叉学科启发。展示跨领域思维能力。",
       "requirements": [
-        "说明检索关键词和数据库（如 arXiv）",
-        "说明筛选标准和Top-K过滤方法",
-        "列出检索结果数量"
+        "从相关学科（如认知科学、分布式系统、控制论、信息论等）寻找可迁移的理论或方法",
+        "对每个启发：说明如何迁移到当前研究领域，具体技术路径",
+        "评估迁移的可行性和潜在价值"
       ]
     },
     {
-      "id": "methods_survey",
-      "title": "4 现有方法综述",
+      "id": "ideas",
+      "title": "四、论文创新点提案（核心部分）",
       "section_level": 1,
-      "prompt_role": "撰写现有方法综述。",
+      "prompt_role": "撰写创新点提案。这是报告最核心的产出。",
       "requirements": [
-        "按类别或时间线组织文献",
-        "对每篇高相关论文说明：方法、创新点、优缺点",
-        "使用表格对比不同方法"
+        "提出3-5个具备顶会潜力的具体论文创新点",
+        "每个Idea必须包含以下字段（缺一不可）：",
+        "  - Idea Title：具有学术吸引力的论文暂定名（英文）",
+        "  - Motivation & Gap：针对什么具体痛点，为什么现有方法不行",
+        "  - Core Methodology：核心方法设计，包含具体算法/架构/机制，需有技术可行性",
+        "  - Cross-Domain Inspiration：灵感来源（如果有）",
+        "  - Experimental Design：评估指标、Baseline模型、适用场景",
+        "  - Expected Contribution：1-2句话核心贡献总结",
+        "  - Potential Risks & Mitigation：失败风险及备选Plan B",
+        "拒绝平庸：不要提出'简单增加XX容量'或'单纯拼接YY'这种低价值Idea",
+        "技术具体：Methodology必须给出具体模块设计、数学直觉或伪代码"
+      ]
+    },
+    {
+      "id": "reading_list",
+      "title": "五、调研必读文献清单",
+      "section_level": 1,
+      "prompt_role": "撰写必读文献清单。",
+      "requirements": [
+        "列出10-15篇该领域最核心、最前沿的论文（必须来自 research_agent 的调研结果）",
+        "每篇论文包含：标题、作者、年份、会议/期刊、一句话阅读指导",
+        "按相关性排序，标注必读程度（★★★必读 / ★★推荐阅读 / ★参考）",
+        "覆盖：经典奠基论文 + 最新SOTA + 交叉学科参考"
       ]
     },
     {
       "id": "datasets",
-      "title": "5 数据集与实验设置",
+      "title": "六、数据集与实验设置",
       "section_level": 1,
       "prompt_role": "撰写数据集与实验设置。",
       "requirements": [
         "汇总文献中使用的数据集",
         "说明评价指标和实验设置",
-        "使用表格汇总"
+        "使用表格汇总各数据集的特点和适用场景",
+        "分析现有评估体系的不足"
       ]
     },
     {
-      "id": "results_discussion",
-      "title": "6 结果对比与讨论",
+      "id": "results",
+      "title": "七、结果对比与讨论",
       "section_level": 1,
       "prompt_role": "撰写结果对比与讨论。",
       "requirements": [
         "对比各方法的关键结果",
         "讨论性能差异的原因",
-        "指出方法适用场景"
-      ]
-    },
-    {
-      "id": "challenges",
-      "title": "7 挑战与局限",
-      "section_level": 1,
-      "prompt_role": "撰写挑战与局限。",
-      "requirements": [
-        "总结当前研究面临的主要挑战",
-        "列出各文献指出的局限性"
-      ]
-    },
-    {
-      "id": "future",
-      "title": "8 未来研究方向",
-      "section_level": 1,
-      "prompt_role": "撰写未来研究方向。",
-      "requirements": [
-        "基于现有文献提出未来研究趋势",
-        "指出潜在的研究机会"
+        "指出方法适用场景",
+        "分析实验设计的局限性"
       ]
     },
     {
       "id": "conclusion",
-      "title": "9 结论",
+      "title": "八、结论与展望",
       "section_level": 1,
-      "prompt_role": "撰写结论。",
+      "prompt_role": "撰写结论与展望。",
       "requirements": [
-        "总结主要发现",
-        "回答引言中提出的问题"
+        "总结调研的核心发现（3-5条）",
+        "指出最具潜力的研究方向",
+        "给出对后续研究者的建议"
       ]
-    },
-    {
-      "id": "references",
-      "title": "10 参考文献",
-      "section_level": 0,
-      "prompt_role": "撰写参考文献。",
-      "requirements": ["规范引用已有文献"]
     }
   ],
-  "system_prompt": "你是一个专业的学术调研报告写作专家，擅长撰写文献综述、研究现状调研和技术趋势分析报告。\n\n【报告格式要求】\n生成结构完整的学术调研报告，使用 article 文档类：\n- 标题页（\\maketitle）\n- 摘要：200-400字\n- 关键词：3-5个\n- 章节：1 引言 → 2 研究背景与问题定义 → 3 文献检索策略 → 4 现有方法综述 → 5 数据集与实验设置 → 6 结果对比与讨论 → 7 挑战与局限 → 8 未来研究方向 → 9 结论 → 10 参考文献\n\n【调研报告特点】\n- 以文献为核心，系统梳理研究现状\n- 重视方法分类和对比\n- 使用大量表格进行方法/数据集/结果对比\n- 客观评价各方法的优缺点\n- 明确提出未来研究方向\n\n【各章节写作要求】\n\n**引言**：\n- 说明调研背景和动机\n- 明确研究问题和调研范围\n- 概述报告结构\n\n**研究背景与问题定义**：\n- 定义核心概念\n- 描述问题的重要性和应用场景\n\n**文献检索策略**：\n- 说明检索关键词、数据库、筛选标准\n- 报告检索结果数量\n\n**现有方法综述**：\n- 按类别或时间线组织\n- 对每篇重要论文说明方法、创新点、优缺点\n- 使用表格对比\n\n**数据集与实验设置**：\n- 汇总常用数据集和评价指标\n\n**结果对比与讨论**：\n- 对比关键结果，分析性能差异原因\n\n**挑战与局限**：\n- 总结当前研究面临的主要挑战\n\n**未来研究方向**：\n- 基于现有文献提出趋势和机会\n\n【引号使用规范（强制约束）】\nLaTeX 源代码中所有引号必须严格遵守以下规则：\n1. 中文正文中的引用、强调：必须使用中文双引号 \"中文内容\" 和中文单引号 '中文内容'\n2. 英文摘要或纯英文段落：使用 LaTeX 原生英文引号 `` 和 ''\n3. 数学公式内：不使用任何引号\n4. 严禁在中文正文中使用 `` 或 '' 等 LaTeX 英文引号\n5. 严禁使用反引号 ` 作为中文引用的开引号\n\n请严格按以下JSON格式返回（必须以JSON开头和结尾，不要有任何其他文字）：\n{\n    \"title\": \"报告标题\",\n    \"abstract\": \"摘要（200-400字）\",\n    \"keywords\": [\"关键词1\", \"关键词2\", \"关键词3\"],\n    \"latex_code\": \"完整LaTeX源代码\",\n    \"sections\": {\n        \"引言\": \"主要内容摘要\",\n        \"研究背景与问题定义\": \"主要内容摘要\",\n        \"文献检索策略\": \"主要内容摘要\",\n        \"现有方法综述\": \"主要内容摘要\",\n        \"数据集与实验设置\": \"主要内容摘要\",\n        \"结果对比与讨论\": \"主要内容摘要\",\n        \"挑战与局限\": \"主要内容摘要\",\n        \"未来研究方向\": \"主要内容摘要\",\n        \"结论\": \"主要内容摘要\"\n    }\n}",
-  "preamble": "\\documentclass{article}\n\\usepackage{ctex}\n\\usepackage{amsmath,amssymb,graphicx,booktabs,longtable}\n\\usepackage[margin=1in]{geometry}\n\n\\title{研究现状调研报告}\n\\author{调研团队}\n\\date{\\today}\n\n\\begin{document}\n\n\\maketitle\n",
+  "system_prompt": "你是一个专业的学术调研报告写作专家，擅长撰写高质量的文献综述和研究现状调研报告。\n\n【报告定位】\n这是一份深度调研报告，不是简单的文献罗列。目标是：\n1. 系统梳理研究现状，建立清晰的分类框架\n2. 深度批判现有工作，识别具体的研究空白\n3. 提出有学术价值的创新点，具备顶会发表潜力\n\n【重要】领域无关性\n- 本模板适用于任何研究领域的文献调研，不限定具体领域\n- 具体的研究领域、关键词、代表性工作、SOTA方法等，全部来自 research_agent 的调研结果\n- 你的任务是将 research_agent 提供的素材，按照下面的结构组织成高质量报告\n- 不要编造不存在的论文、方法或数据\n\n【报告结构（8大章节）】\n- 摘要（300-500字）\n- 一、研究全景图：现有方法分类与SOTA剖析\n- 二、核心Research Gaps分析\n- 三、交叉学科启发与迁移\n- 四、论文创新点提案（核心部分，3-5个Idea）\n- 五、调研必读文献清单（10-15篇）\n- 六、数据集与实验设置\n- 七、结果对比与讨论\n- 八、结论与展望\n\n【LaTeX 格式规范（强制约束）】\n1. 摘要必须使用 \\begin{abstract}...\\end{abstract} 环境\n2. 所有章节标题使用 \\section{标题}，子章节使用 \\subsection{标题}\n3. 严禁在 LaTeX 中使用 markdown 格式（如 ##、**、- 列表等）\n4. 列表使用 \\begin{itemize}...\\end{itemize} 或 \\begin{enumerate}...\\end{enumerate}\n5. 表格使用 booktabs 风格（\\toprule, \\midrule, \\bottomrule）\n6. 数学公式使用 equation 或 align 环境\n7. 引用使用 \\cite{key} 格式\n\n【引号使用规范】\n1. 中文正文中的引用、强调：必须使用中文双引号 \"中文内容\" 和中文单引号 '中文内容'\n2. 英文摘要或纯英文段落：使用 LaTeX 原生英文引号 `` 和 ''\n3. 严禁在中文正文中使用 `` 或 '' 等 LaTeX 英文引号\n\n【写作质量要求】\n- 深度优先：不要泛泛而谈，每个观点都要有具体论文支撑\n- 批判性思维：不是简单罗列，而是深度分析优缺点\n- 技术具体：方法描述要到算法/架构层面，不要停留在概念层面\n- 逻辑严密：Motivation → Gap → Method → Evaluation 形成闭环\n- 学术严谨：所有引用必须有具体论文来源，不要编造\n\n请严格按以下JSON格式返回（必须以JSON开头和结尾，不要有任何其他文字）：\n{\n    \"title\": \"报告标题（英文，具有学术吸引力）\",\n    \"abstract\": \"摘要（300-500字）\",\n    \"keywords\": [\"关键词1\", \"关键词2\", \"关键词3\", \"关键词4\", \"关键词5\"],\n    \"latex_code\": \"完整LaTeX源代码（必须是纯LaTeX，不要markdown）\",\n    \"sections\": {\n        \"研究全景图\": \"主要内容摘要\",\n        \"Research Gaps\": \"主要内容摘要\",\n        \"交叉学科启发\": \"主要内容摘要\",\n        \"创新点提案\": \"主要内容摘要\",\n        \"必读文献\": \"主要内容摘要\",\n        \"结论与展望\": \"主要内容摘要\"\n    }\n}",
+  "preamble": "\\documentclass{article}\n\\usepackage{ctex}\n\\usepackage{amsmath,amssymb,graphicx,booktabs,longtable}\n\\usepackage[margin=1in]{geometry}\n\\usepackage{hyperref}\n\n\\title{研究现状调研报告}\n\\author{调研团队}\n\\date{\\today}\n\n\\begin{document}\n\n\\maketitle\n\n\\begin{abstract}\n（摘要待补充）\n\\end{abstract}\n\n",
   "metadata_defaults": {
     "author": "调研团队",
     "date": "\\today"
   },
   "compile_options": {
     "engine": "xelatex",
-    "extra_packages": ["ctex", "amsmath", "amssymb", "graphicx", "booktabs", "longtable", "geometry"]
+    "extra_packages": ["ctex", "amsmath", "amssymb", "graphicx", "booktabs", "longtable", "geometry", "hyperref"]
   }
 }

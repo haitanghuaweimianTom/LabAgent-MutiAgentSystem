@@ -53,8 +53,8 @@ export const TEMPLATE_OPTIONS: TemplateOption[] = [
   {
     id: 'research_survey',
     name: '研究调研报告',
-    desc: '6章深度调研：全景图+Gaps+跨学科+创新点+文献清单+结论',
-    chapters: 6,
+    desc: '8章深度调研：全景图+Gaps+跨学科+创新点+文献清单+数据集+结果对比+结论',
+    chapters: 8,
     domain: 'research_survey',
     defaultWorkflow: 'deep_research',
   },

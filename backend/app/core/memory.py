@@ -297,7 +297,15 @@ class LessonsMemory:
     - 什么方法被拒绝了，为什么
     - 数据处理的经验教训
     - 模型选择的启发式规则
+    - 实验设计经验
+    - 模板特定的写作经验
     """
+
+    # 支持的分类体系
+    CATEGORIES = {
+        "method_selection", "data_processing", "modeling", "solving",
+        "writing", "experiment_design", "template_specific",
+    }
 
     def __init__(self):
         self.lessons: List[Dict[str, Any]] = []
@@ -311,15 +319,21 @@ class LessonsMemory:
         method: str = "",
         success: bool = True,
         source_task: str = "",
+        subcategory: str = "",
+        tags: Optional[List[str]] = None,
+        impact_score: int = 5,
     ) -> None:
         self.lessons.append({
             "id": f"lesson_{len(self.lessons) + 1}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
-            "category": category,       # "method_selection" / "data_processing" / "modeling" / "solving" / "writing"
+            "category": category,       # "method_selection" / "data_processing" / "modeling" / "solving" / "writing" / "experiment_design" / "template_specific"
+            "subcategory": subcategory,  # 细分分类（如模板名: "ieee_conference"）
             "content": content,
             "problem_type": problem_type,
             "method": method,
             "success": success,
             "source_task": source_task,
+            "tags": tags or [],          # 标签用于精确检索
+            "impact_score": impact_score,  # 1-10 影响力评分
             "created_at": datetime.now().isoformat(),
             "use_count": 0,            # 被引用次数（用于排序）
         })
@@ -433,6 +447,32 @@ class LessonsMemory:
                     return keywords
         return keywords
 
+    def query_by_tags(
+        self,
+        tags: Optional[List[str]] = None,
+        category: str = "",
+        subcategory: str = "",
+        top_k: int = 5,
+    ) -> List[Dict[str, Any]]:
+        """按标签、分类、子分类检索经验教训。"""
+        results = self.lessons
+        if category:
+            results = [l for l in results if l.get("category") == category]
+        if subcategory:
+            results = [l for l in results if l.get("subcategory") == subcategory]
+        if tags:
+            tag_set = set(t.lower() for t in tags)
+            results = [
+                l for l in results
+                if tag_set & set(t.lower() for t in l.get("tags", []))
+            ]
+        # 按 impact_score * (1 + use_count) 排序
+        results.sort(
+            key=lambda l: l.get("impact_score", 5) * (1 + l.get("use_count", 0)),
+            reverse=True,
+        )
+        return results[:top_k]
+
     def get_context_text(self, problem_type: str = "", top_k: int = 5) -> str:
         """获取格式化的经验上下文（注入 Agent prompt）"""
         lessons = self.query(problem_type=problem_type, top_k=top_k)
@@ -442,7 +482,10 @@ class LessonsMemory:
         parts = []
         for l in lessons:
             status = "有效" if l.get("success") else "无效"
-            parts.append(f"- [{l['category']}] {l['content']} (来源: {l.get('source_task', '未知')}, {status})")
+            tags = l.get("tags", [])
+            tag_str = f" [{', '.join(tags)}]" if tags else ""
+            impact = l.get("impact_score", 5)
+            parts.append(f"- [{l['category']}] {l['content']} (来源: {l.get('source_task', '未知')}, {status}, 影响力:{impact}{tag_str})")
 
         return "\n## 历史经验参考\n" + "\n".join(parts) + "\n"
 

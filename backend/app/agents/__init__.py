@@ -9,6 +9,8 @@ from .writer_agent import WriterAgent
 from .algorithm_engineer_agent import AlgorithmEngineerAgent
 from .financial_analyst_agent import FinancialAnalystAgent
 from .figure_agent import FigureAgent
+from .requirement_decomposer import RequirementDecomposerAgent
+from .summary_agent import SummaryAgent
 
 try:
     from .data_agent import DataAgent
@@ -20,5 +22,5 @@ __all__ = [
     "ResearchAgent", "AnalyzerAgent", "ModelerAgent",
     "SolverAgent", "WriterAgent", "DataAgent",
     "AlgorithmEngineerAgent", "FinancialAnalystAgent",
-    "FigureAgent",
+    "FigureAgent", "RequirementDecomposerAgent", "SummaryAgent",
 ]

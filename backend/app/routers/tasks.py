@@ -208,7 +208,7 @@ async def submit_task(req: TaskCreateRequest):
             create_project(name=project_name)
         add_task_to_project(project_name, task_id)
 
-    # 1. 保存初始预检状态
+    # 1. 保存初始预检状态（包含用户选择的模板/工作流，确保 preflight 失败后 rerun 能保留用户选择）
     save_task_metadata(
         task_id=task_id,
         problem_text=req.problem_text,
@@ -217,6 +217,9 @@ async def submit_task(req: TaskCreateRequest):
         total_steps=0,
         progress=0,
         current_step="preflight 决策中",
+        template=template,
+        workflow_type=workflow_type,
+        mode=mode,
     )
 
     # 2. 收集已上传的数据文件
@@ -414,29 +417,46 @@ async def _run_workflow(
     # v5.3.0: 兼容旧接口 — knowledge_base_ids 是单值时也转 list
     if knowledge_base_ids is not None and not isinstance(knowledge_base_ids, list):
         knowledge_base_ids = [knowledge_base_ids]
-    try:
-        orch = get_orchestrator()
-        # execute_workflow 内部会保存结果
-        # TODO(Phase 3): 把 preflight_report 传入 LangGraph orchestrator 的初始 state
-        await orch.execute_workflow(
-            task_id, problem_text, workflow,
-            data_files=data_files, mode=mode, project_name=project_name,
-            knowledge_base_ids=knowledge_base_ids,
-            knowledge_base_id=knowledge_base_ids[0] if knowledge_base_ids else None,
-            template=template, workflow_type=workflow_type,
-            use_critique=use_critique,
-        )
-        logger.info(f"Task {task_id} completed and saved")
-    except Exception as e:
-        logger.error(f"Task {task_id} failed: {e}")
-        save_task_metadata(
-            task_id=task_id,
-            problem_text=problem_text,
-            status=TaskStatus.FAILED,
-            created_at=task_id.replace("task_", ""),
-            completed_at=datetime.now().isoformat(),
-            error=str(e),
-        )
+
+    from ..config import get_settings
+    settings = get_settings()
+    max_retries = settings.max_retry_count if settings.auto_retry_on_failure else 0
+
+    for attempt in range(max_retries + 1):
+        try:
+            orch = get_orchestrator()
+            await orch.execute_workflow(
+                task_id, problem_text, workflow,
+                data_files=data_files, mode=mode, project_name=project_name,
+                knowledge_base_ids=knowledge_base_ids,
+                knowledge_base_id=knowledge_base_ids[0] if knowledge_base_ids else None,
+                template=template, workflow_type=workflow_type,
+                use_critique=use_critique,
+            )
+            logger.info(f"Task {task_id} completed and saved")
+            return
+        except Exception as e:
+            if attempt < max_retries:
+                logger.warning(f"Task {task_id} failed (attempt {attempt + 1}/{max_retries + 1}): {e}, retrying...")
+                save_task_metadata(
+                    task_id=task_id,
+                    problem_text=problem_text,
+                    status="retrying",
+                    created_at=task_id.replace("task_", ""),
+                    current_step=f"重试中 ({attempt + 1}/{max_retries})",
+                    error=str(e),
+                )
+                continue
+            logger.error(f"Task {task_id} failed after {max_retries + 1} attempts: {e}")
+            save_task_metadata(
+                task_id=task_id,
+                problem_text=problem_text,
+                status=TaskStatus.FAILED,
+                created_at=task_id.replace("task_", ""),
+                completed_at=datetime.now().isoformat(),
+                error=str(e),
+            )
+            return
 
 
 @router.post("/{task_id}/preflight")
@@ -528,6 +548,9 @@ async def get_status(task_id: str):
             "progress_percentage": meta.get("progress", 0),
             "current_step": meta.get("current_step", ""),
             "total_steps": meta.get("total_steps", 0),
+            "template": meta.get("template"),
+            "workflow_type": meta.get("workflow_type"),
+            "mode": meta.get("mode"),
         }
 
     orch = get_orchestrator()

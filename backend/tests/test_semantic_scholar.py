@@ -1,4 +1,5 @@
 import asyncio
+import os
 import sys
 from pathlib import Path
 
@@ -10,6 +11,13 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from app.services.paper_metadata import SemanticScholarProvider, get_metadata_enricher
 from app.services.paper_metadata.semantic_scholar import RateLimitedError
 from app.services.rate_limiter import AsyncTokenBucket
+
+
+@pytest.fixture(autouse=True)
+def _clear_proxy_env(monkeypatch):
+    """清除代理环境变量，避免 httpx 使用不支持的 SOCKS 代理。"""
+    for var in ("ALL_PROXY", "all_proxy", "HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"):
+        monkeypatch.delenv(var, raising=False)
 
 
 @pytest.mark.asyncio

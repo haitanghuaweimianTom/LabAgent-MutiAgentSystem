@@ -9,6 +9,13 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 
+@pytest.fixture(autouse=True)
+def _clear_proxy_env(monkeypatch):
+    """清除代理环境变量，避免 httpx 使用不支持的 SOCKS 代理。"""
+    for var in ("ALL_PROXY", "all_proxy", "HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"):
+        monkeypatch.delenv(var, raising=False)
+
+
 @pytest.fixture
 def tmp_paths(tmp_path, monkeypatch):
     """切 paths._PROJECT_ROOT 到 tmp。"""

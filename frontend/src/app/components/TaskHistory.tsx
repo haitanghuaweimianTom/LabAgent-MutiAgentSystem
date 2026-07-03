@@ -15,6 +15,8 @@ interface TaskInfo {
   total_steps: number;
   progress: number;
   current_step: string;
+  template?: string;
+  workflow_type?: string;
 }
 
 const apiBase = () => window.__API_BASE__ || 'http://localhost:8000/api/v1';
@@ -161,6 +163,8 @@ export default function TaskHistory() {
                 </div>
                 <div className={styles.taskPreview}>{task.problem_preview || '（无题目描述）'}</div>
                 <div className={styles.taskMeta}>
+                  {task.template && <span>📄 {task.template}</span>}
+                  {task.workflow_type && <span>⚙️ {task.workflow_type}</span>}
                   {task.current_step && <span>📍 {task.current_step}</span>}
                   {task.total_steps > 0 && <span>📊 {task.total_steps} 步骤</span>}
                   <button className={styles.deleteOneBtn} onClick={e => { e.stopPropagation(); handleDeleteOne(task.task_id); }} title="删除">

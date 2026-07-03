@@ -62,6 +62,10 @@ class TaskState(TypedDict, total=False):
     sub_problems: List[Dict[str, Any]]
     should_pause: bool
     use_critique: bool  # 是否启用 Writer 自评质量循环
+    requirement_plan: Optional[Dict[str, Any]]  # 需求分解结果
+    innovation_analysis: Optional[Dict[str, Any]]  # 创新发现分析
+    experiment_iterations: int  # 实验迭代次数
+    task_summary: Optional[Dict[str, Any]]  # 任务总结报告
 
 
 @dataclass
@@ -806,6 +810,18 @@ class LangGraphOrchestrator:
             return "experiment"
         return "iterative_solver"
 
+    def _route_after_experiment(self, state: TaskState) -> str:
+        """实验后路由：迭代优化或进入求解器。"""
+        step = state.get("current_step", "")
+        if step == "experiment_iterating":
+            return "experiment"  # 回到实验节点继续迭代
+        return "iterative_solver"
+
+    def _get_config(self):
+        """获取全局配置。"""
+        from ..config import get_settings
+        return get_settings()
+
     # ------------------------------------------------------------------
     # Graph 构建
     # ------------------------------------------------------------------
@@ -813,10 +829,12 @@ class LangGraphOrchestrator:
         builder = StateGraph(TaskState)
 
         # 节点注册
+        builder.add_node("requirement_decomposition", self._node_requirement_decomposition)
         builder.add_node("preflight_decision", self._node_preflight_decision)
         builder.add_node("analyzer", self._node_analyzer)
         builder.add_node("data", self._node_data)
         builder.add_node("research", self._node_research)
+        builder.add_node("innovation", self._node_innovation)
         builder.add_node("discuss_approach", self._node_discuss_approach)
         builder.add_node("modeler", self._node_modeler)
         builder.add_node("algorithm_engineer", self._node_algorithm_engineer)
@@ -827,12 +845,13 @@ class LangGraphOrchestrator:
         builder.add_node("experiment", self._node_experiment)
         builder.add_node("figure", self._node_figure)
         builder.add_node("fact_check", self._node_fact_check)
+        builder.add_node("summary", self._node_summary)
         builder.add_node("cannot_solve", self._node_cannot_solve)
         builder.add_node("self_collect", self._node_self_collect)
         builder.add_node("wait_user", self._node_wait_user)
 
         # 入口
-        builder.set_entry_point("preflight_decision")
+        builder.set_entry_point("requirement_decomposition")
 
         # 条件边
         builder.add_conditional_edges(
@@ -872,9 +891,12 @@ class LangGraphOrchestrator:
             },
         )
 
-        # 条件边：research 后决定
+        # 条件边：research → innovation（始终经过创新分析）
+        builder.add_edge("research", "innovation")
+
+        # 条件边：innovation 后决定（继承 research 的路由逻辑）
         builder.add_conditional_edges(
-            "research",
+            "innovation",
             self._route_after_research,
             {
                 "discuss": "discuss_approach",
@@ -941,15 +963,138 @@ class LangGraphOrchestrator:
             {"experiment": "experiment", "iterative_solver": "iterative_solver"},
         )
 
-        builder.add_edge("experiment", "iterative_solver")
+        # 条件边：experiment → 迭代或继续
+        builder.add_conditional_edges(
+            "experiment",
+            self._route_after_experiment,
+            {
+                "experiment": "experiment",   # 迭代优化
+                "iterative_solver": "iterative_solver",  # 正常流程
+            },
+        )
         builder.add_edge("figure", "writer")
         builder.add_edge("writer", "peer_review")
-        builder.add_edge("fact_check", END)
-        builder.add_edge("cannot_solve", END)
+        builder.add_edge("fact_check", "summary")
+        builder.add_edge("cannot_solve", "summary")
+        builder.add_edge("summary", END)
         builder.add_edge("self_collect", "preflight_decision")
         builder.add_edge("wait_user", END)
 
+        # requirement_decomposition → preflight_decision（始终进入）
+        builder.add_edge("requirement_decomposition", "preflight_decision")
+
         return builder.compile()
+
+    # ------------------------------------------------------------------
+    # 需求分解节点
+    # ------------------------------------------------------------------
+    async def _node_requirement_decomposition(self, state: TaskState) -> TaskState:
+        """长提示词自动分解（>3000字符时触发）。"""
+        task_id = state["task_id"]
+        problem_text = state.get("problem_text", "")
+
+        if len(problem_text) < 3000:
+            logger.info(f"[LangGraph:{task_id}] 问题文本较短({len(problem_text)}字)，跳过需求分解")
+            return {**state, "requirement_plan": None, "current_step": "requirement_decomposition_skip"}
+
+        logger.info(f"[LangGraph:{task_id}] 问题文本较长({len(problem_text)}字)，启动需求分解")
+        try:
+            from .requirement_decomposer import RequirementDecomposerAgent
+            agent = RequirementDecomposerAgent()
+            context = {
+                "task_id": task_id,
+                "project_name": state.get("project_name"),
+                "problem_text": problem_text,
+                "files": state.get("files", []),
+            }
+            plan = await agent.execute(context)
+
+            if plan and not plan.get("_fallback"):
+                logger.info(f"[LangGraph:{task_id}] 需求分解完成: {len(plan.get('subtasks', []))} 个子任务")
+                return {**state, "requirement_plan": plan, "current_step": "requirement_decomposition_done"}
+            else:
+                logger.info(f"[LangGraph:{task_id}] 需求分解降级为原始文本")
+                return {**state, "requirement_plan": None, "current_step": "requirement_decomposition_skip"}
+        except Exception as e:
+            logger.warning(f"[LangGraph:{task_id}] 需求分解失败: {e}")
+            return {**state, "requirement_plan": None, "current_step": "requirement_decomposition_skip"}
+
+    # ------------------------------------------------------------------
+    # 创新发现节点
+    # ------------------------------------------------------------------
+    async def _node_innovation(self, state: TaskState) -> TaskState:
+        """从文献调研结果中发现研究空白并提出创新方案。"""
+        task_id = state["task_id"]
+        results = self._resolve_results(state)
+        research_output = results.get("research_agent", {})
+        analyzer_output = results.get("analyzer_agent", {})
+
+        # 如果没有足够数据，跳过创新分析
+        papers = research_output.get("papers", []) if isinstance(research_output, dict) else []
+        if len(papers) < 2:
+            logger.info(f"[LangGraph:{task_id}] 论文不足2篇，跳过创新分析")
+            return {**state, "innovation_analysis": None, "current_step": "innovation_skip"}
+
+        logger.info(f"[LangGraph:{task_id}] 启动创新发现分析（{len(papers)}篇论文）")
+        try:
+            from .innovation_agent import InnovationAgent
+            agent = InnovationAgent()
+            context = {
+                "task_id": task_id,
+                "project_name": state.get("project_name"),
+                "problem_text": state.get("problem_text"),
+                "results": {
+                    "research_agent": research_output,
+                    "analyzer_agent": analyzer_output,
+                },
+            }
+            analysis = await agent.execute(context)
+            return {**state, "innovation_analysis": analysis, "current_step": "innovation_done"}
+        except Exception as e:
+            logger.warning(f"[LangGraph:{task_id}] 创新分析失败: {e}")
+            return {**state, "innovation_analysis": None, "current_step": "innovation_failed"}
+
+    # ------------------------------------------------------------------
+    # 任务总结节点
+    # ------------------------------------------------------------------
+    async def _node_summary(self, state: TaskState) -> TaskState:
+        """任务完成后生成结构化总结报告，并整理知识库。"""
+        task_id = state["task_id"]
+        logger.info(f"[LangGraph:{task_id}] 生成任务总结报告")
+
+        # 1. 生成总结报告
+        summary = None
+        try:
+            from .summary_agent import SummaryAgent
+            agent = SummaryAgent()
+            results = self._resolve_results(state)
+            context = {
+                "task_id": task_id,
+                "project_name": state.get("project_name"),
+                "problem_text": state.get("problem_text"),
+                "paper_template": state.get("paper_template"),
+                "workflow_type": state.get("workflow_type"),
+                "results": results,
+                "sub_problems": state.get("sub_problems", []),
+            }
+            summary = await agent.execute(context)
+        except Exception as e:
+            logger.warning(f"[LangGraph:{task_id}] 任务总结失败: {e}")
+
+        # 2. 整理知识库（下载的文献/数据集自动分类）
+        try:
+            from ..services.knowledge_organizer import KnowledgeOrganizer
+            from ..core.paths import get_project_output_dir
+            from ..core.knowledge_manager import get_knowledge_manager
+            task_dir = get_project_output_dir(state.get("project_name")) / task_id
+            organizer = KnowledgeOrganizer()
+            kb = get_knowledge_manager()
+            org_result = organizer.run_full_organization(task_id, str(task_dir), kb)
+            logger.info(f"[LangGraph:{task_id}] 知识库整理完成: {org_result.get('organized_count', 0)} 个资源")
+        except Exception as e:
+            logger.warning(f"[LangGraph:{task_id}] 知识库整理失败: {e}")
+
+        return {**state, "task_summary": summary, "current_step": "summary_done"}
 
     # ------------------------------------------------------------------
     # 节点实现（骨架，逐步填充）
@@ -1693,7 +1838,51 @@ class LangGraphOrchestrator:
             f"{' + LossDesign' if loss_design_result else ''}"
             f"{' + AutoML' if automl_result else ''}",
         )
+
+        # 实验闭环评估：检查是否需要迭代优化
+        iteration_count = state.get("experiment_iterations", 0)
+        max_iterations = self._get_config().experiment_max_iterations
+        needs_iteration = self._evaluate_experiment_quality(output)
+
+        if needs_iteration and iteration_count < max_iterations and executed:
+            logger.info(f"[LangGraph:{task_id}] 实验质量不足，第 {iteration_count + 1}/{max_iterations} 轮迭代")
+            self._post_chat(task_id, "experimentation_agent", f"实验质量不足，开始第 {iteration_count + 1} 轮迭代优化")
+            # 将当前实验结果反馈给 experimentation_agent 进行改进
+            output["iteration_feedback"] = self._generate_iteration_feedback(output)
+            output["iteration_round"] = iteration_count + 1
+            ref_update = self._set_result(state, "experimentation_agent", output)
+            return {
+                **state,
+                "results": {**state.get("results", {}), **ref_update},
+                "current_step": "experiment_iterating",
+                "experiment_iterations": iteration_count + 1,
+            }
+
         return {**state, "results": {**state.get("results", {}), **ref_update}, "current_step": "experiment_done"}
+
+    def _evaluate_experiment_quality(self, experiment_output: Dict[str, Any]) -> bool:
+        """评估实验质量，决定是否需要迭代。返回 True 表示需要迭代。"""
+        if not isinstance(experiment_output, dict):
+            return False
+        # 检查是否包含 baseline 对比
+        has_baseline = bool(experiment_output.get("baseline_comparison"))
+        # 检查是否包含 ablation study
+        has_ablation = bool(experiment_output.get("ablation_study"))
+        # 检查实验是否成功执行
+        executed = experiment_output.get("executed", False)
+        # 如果缺少 baseline 或 ablation 且已执行，需要迭代
+        if executed and (not has_baseline or not has_ablation):
+            return True
+        return False
+
+    def _generate_iteration_feedback(self, experiment_output: Dict[str, Any]) -> str:
+        """生成实验迭代反馈，指导 experimentation_agent 改进。"""
+        feedback_parts = []
+        if not experiment_output.get("baseline_comparison"):
+            feedback_parts.append("缺少 baseline 对比实验，请添加至少2个 baseline 方法")
+        if not experiment_output.get("ablation_study"):
+            feedback_parts.append("缺少 ablation study，请添加消融实验验证各组件贡献")
+        return "；".join(feedback_parts) if feedback_parts else "请优化实验设计和结果分析"
 
     async def _node_figure(self, state: TaskState) -> TaskState:
         """调用 figure_agent 生成科研图表。"""
@@ -2060,9 +2249,11 @@ class LangGraphOrchestrator:
     # 工具方法
     # ------------------------------------------------------------------
     def _agent_context(self, state: TaskState) -> Dict[str, Any]:
-        """构造传给 Agent.execute 的 context。"""
+        """构造传给 Agent.execute 的 context（模板感知）。"""
         room = get_chat_room(state["task_id"])
         results = self._resolve_results(state)
+        template = state.get("paper_template", "math_modeling")
+        workflow_type = state.get("workflow_type", "standard")
 
         # 合并 model + solve 的 section_results（writer_agent 期望 list[dict]）
         modeler_output = results.get("modeler_agent", {})
@@ -2086,24 +2277,70 @@ class LangGraphOrchestrator:
                 }
             )
 
-        return {
+        # 基础上下文
+        ctx = {
             "problem_text": state["problem_text"],
             "chat_room": room,
             "task_id": state["task_id"],
             "data_files": state.get("files", []),
             "knowledge_base_id": state.get("knowledge_base_id"),
             "task_kb_id": state.get("task_kb_id"),
-            "workflow_type": state.get("workflow_type", "standard"),
-            "template": state.get("paper_template", "math_modeling"),
+            "workflow_type": workflow_type,
+            "template": template,
             "results": results,
             "section_results": section_results,
             "sub_problems": sub_problems,
+            "requirement_plan": state.get("requirement_plan"),  # 需求分解结果（所有Agent可读）
+            "innovation_analysis": state.get("innovation_analysis"),  # 创新发现（所有Agent可读）
+            "task_summary": state.get("task_summary"),  # 任务总结（所有Agent可读）
         }
+
+        # ===== 模板特定上下文 =====
+        research_output = results.get("research_agent", {})
+        analyzer_output = results.get("analyzer_agent", {})
+
+        if template == "research_survey":
+            # 调研报告：重点是文献、研究空白、创新点
+            ctx["literature"] = research_output.get("papers", []) if isinstance(research_output, dict) else []
+            ctx["methods"] = research_output.get("methods", []) if isinstance(research_output, dict) else []
+            ctx["research_gaps"] = analyzer_output.get("research_gaps", []) if isinstance(analyzer_output, dict) else []
+            ctx["problem_type"] = analyzer_output.get("problem_type", "") if isinstance(analyzer_output, dict) else ""
+
+        elif template in ("math_modeling", "coursework"):
+            # 数学建模/课程作业：重点是模型、求解、数据
+            ctx["modeling_approach"] = modeler_output.get("overall_approach", "") if isinstance(modeler_output, dict) else ""
+            ctx["solver_results"] = solver_output.get("sub_problem_solutions", []) if isinstance(solver_output, dict) else []
+            ctx["data_insights"] = results.get("data_agent", {}).get("insights", []) if isinstance(results.get("data_agent"), dict) else []
+
+        elif template == "financial_analysis":
+            # 金融分析：重点是金融数据、风险指标、回测结果
+            financial_output = results.get("financial_analyst_agent", {})
+            ctx["financial_models"] = financial_output.get("models", []) if isinstance(financial_output, dict) else []
+            ctx["risk_metrics"] = financial_output.get("risk_metrics", {}) if isinstance(financial_output, dict) else {}
+            ctx["backtest_results"] = financial_output.get("backtest", {}) if isinstance(financial_output, dict) else {}
+
+        elif template in ("neurips_2024", "ieee_conference", "acm_sigconf", "springer_lncs"):
+            # CCF-A 论文：重点是方法创新、实验对比、理论分析
+            algo_output = results.get("algorithm_engineer_agent", {})
+            ctx["algorithm_design"] = algo_output.get("algorithm_design", "") if isinstance(algo_output, dict) else ""
+            ctx["complexity_analysis"] = algo_output.get("complexity_analysis", "") if isinstance(algo_output, dict) else ""
+            ctx["experiment_plan"] = algo_output.get("experiment_plan", {}) if isinstance(algo_output, dict) else {}
+            ctx["literature"] = research_output.get("papers", []) if isinstance(research_output, dict) else []
+            ctx["methods"] = research_output.get("methods", []) if isinstance(research_output, dict) else []
+
+        return ctx
 
     def _save_results(self, task_id: str, state: TaskState) -> None:
         """持久化结果到 task_result.json 和 checkpoints。"""
         from ..core.task_persistence import save_task_result, save_task_checkpoint, save_task_metadata, save_task_messages
         results = self._resolve_results(state)
+
+        # 将 state 级别的字段合并到 results 中（这些不经过 result_store）
+        for key in ("requirement_plan", "innovation_analysis", "task_summary"):
+            val = state.get(key)
+            if val is not None:
+                results[key] = val
+
         if results:
             save_task_result(task_id, {"task_id": task_id, "output": results})
             for agent_name, output in results.items():

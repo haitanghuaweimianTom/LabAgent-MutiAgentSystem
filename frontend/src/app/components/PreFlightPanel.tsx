@@ -20,6 +20,7 @@ interface PreFlightPanelProps {
   report: PreflightReport;
   onConfirm?: () => void;
   onAdjust?: () => void;
+  onApplyRecommended?: (template: string, workflow: string, mode: string) => void;
 }
 
 const ADEQUACY_LABEL: Record<string, { label: string; color: string }> = {
@@ -28,7 +29,7 @@ const ADEQUACY_LABEL: Record<string, { label: string; color: string }> = {
   missing: { label: '缺少数据', color: '#dc2626' },
 };
 
-export function PreFlightPanel({ report, onConfirm, onAdjust }: PreFlightPanelProps) {
+export function PreFlightPanel({ report, onConfirm, onAdjust, onApplyRecommended }: PreFlightPanelProps) {
   const adequacy = ADEQUACY_LABEL[report.data_adequacy] || { label: report.data_adequacy, color: '#9ca3af' };
 
   return (
@@ -70,8 +71,16 @@ export function PreFlightPanel({ report, onConfirm, onAdjust }: PreFlightPanelPr
         </div>
       )}
 
-      {(onConfirm || onAdjust) && (
+      {(onConfirm || onAdjust || onApplyRecommended) && (
         <div style={{ marginTop: '0.8rem', display: 'flex', gap: '0.5rem' }}>
+          {onApplyRecommended && (
+            <button
+              onClick={() => onApplyRecommended(report.recommended_template, report.recommended_workflow, report.recommended_mode)}
+              style={{ padding: '0.4rem 0.8rem', background: 'linear-gradient(135deg, #9b59b6, #8e44ad)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: '0.85rem' }}
+            >
+              🎯 应用推荐配置
+            </button>
+          )}
           {onConfirm && (
             <button
               onClick={onConfirm}

@@ -92,6 +92,15 @@ class Settings(BaseSettings):
     experiment_enable_baseline: bool = True
     experiment_allow_network: bool = True
 
+    # ===== 全自动模式配置 =====
+    auto_mode_enabled: bool = True              # 全自动模式开关
+    max_concurrent_tasks: int = 3               # 最大并发任务数
+    task_timeout_seconds: int = 7200            # 单任务超时（2小时）
+    auto_retry_on_failure: bool = True          # 失败自动重试
+    max_retry_count: int = 2                    # 最大重试次数
+    human_intervention_timeout: int = 300       # 人类介入超时（5分钟无人响应则自动决策）
+    experiment_max_iterations: int = 3          # 实验自动迭代上限
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

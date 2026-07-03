@@ -175,7 +175,183 @@
       "source_task": "task_6d2543ea83aa",
       "created_at": "2026-07-02T13:31:50.046884",
       "use_count": 0
+    },
+    {
+      "id": "lesson_17_20260703155252",
+      "category": "method_selection",
+      "content": "对于分类/聚类问题问题，采用方案：采用分类/聚类问题方法，通过1个子问题逐步求解",
+      "problem_type": "分类/聚类问题",
+      "method": "采用分类/聚类问题方法，通过1个子问题逐步求解",
+      "success": true,
+      "source_task": "task_fedc56ceafca",
+      "created_at": "2026-07-03T15:52:52.405744",
+      "use_count": 0
+    },
+    {
+      "id": "lesson_18_20260703155252",
+      "category": "literature",
+      "content": "论文: A Survey of Multi-Agent Deep Reinforcement Learning with Communication (['Changxi Zhu', 'Mehdi Dastani', 'Shihan Wang'], 2022). 贡献: Communication is an effective mechanism for coordinating the behaviors of multiple agents, broadening their views of the environment, and to support t",
+      "problem_type": "literature",
+      "method": "A Survey of Multi-Agent Deep Reinforcement Learning with Communication",
+      "success": true,
+      "source_task": "task_fedc56ceafca",
+      "created_at": "2026-07-03T15:52:52.405984",
+      "use_count": 0
+    },
+    {
+      "id": "lesson_19_20260703155252",
+      "category": "literature",
+      "content": "论文: MedAide: Information Fusion and Anatomy of Medical Intents via LLM-based Agent Collaboration (['Dingkang Yang', 'Jinjie Wei', 'Mingcheng Li', 'Jiyao Liu', 'Lihao Liu', 'Ming Hu', 'Junjun He', 'Yakun Ju', 'Wei Zhou', 'Yang Liu', 'Lihua Zhang'], 2024). 贡献: In healthcare intelligence, the ability to fuse heterogeneous, multi-intent information from diverse clinical sources is fundamental to building relia",
+      "problem_type": "literature",
+      "method": "MedAide: Information Fusion and Anatomy of Medical Intents via LLM-based Agent Collaboration",
+      "success": true,
+      "source_task": "task_fedc56ceafca",
+      "created_at": "2026-07-03T15:52:52.405991",
+      "use_count": 0
+    },
+    {
+      "id": "lesson_20_20260703155252",
+      "category": "literature",
+      "content": "论文: Thucy: An LLM-based Multi-Agent System for Claim Verification across Relational Databases (['Michael Theologitis', 'Dan Suciu'], 2025). 贡献: In today's age, it is becoming increasingly difficult to decipher truth from lies. Every day, politicians, media outlets, and public figures make conf",
+      "problem_type": "literature",
+      "method": "Thucy: An LLM-based Multi-Agent System for Claim Verification across Relational Databases",
+      "success": true,
+      "source_task": "task_fedc56ceafca",
+      "created_at": "2026-07-03T15:52:52.405995",
+      "use_count": 0
+    },
+    {
+      "id": "lesson_21_20260703155252",
+      "category": "literature",
+      "content": "论文: Mapping Human Anti-collusion Mechanisms to Multi-agent AI Systems (['Jamiu Idowu', 'Ahmed Almasoud', 'Ayman Alfahid'], 2026). 贡献: As multi-agent AI systems become increasingly autonomous, evidence shows they can develop collusive strategies similar to those long observed in human",
+      "problem_type": "literature",
+      "method": "Mapping Human Anti-collusion Mechanisms to Multi-agent AI Systems",
+      "success": true,
+      "source_task": "task_fedc56ceafca",
+      "created_at": "2026-07-03T15:52:52.405999",
+      "use_count": 0
+    },
+    {
+      "id": "lesson_22_20260703155252",
+      "category": "literature",
+      "content": "论文: Don't Just Demo, Teach Me the Principles: A Principle-Based Multi-Agent Prompting Strategy for Text Classification (['Peipei Wei', 'Dimitris Dimitriadis', 'Yan Xu', 'Mingwei Shen'], 2025). 贡献: We present PRINCIPLE-BASED PROMPTING, a simple but effective multi-agent prompting strategy for text classification. It first asks multiple LLM agents",
+      "problem_type": "literature",
+      "method": "Don't Just Demo, Teach Me the Principles: A Principle-Based Multi-Agent Prompting Strategy for Text Classification",
+      "success": true,
+      "source_task": "task_fedc56ceafca",
+      "created_at": "2026-07-03T15:52:52.406003",
+      "use_count": 0
+    },
+    {
+      "id": "lesson_23_20260703155252",
+      "category": "literature",
+      "content": "论文: A Methodology to Engineer and Validate Dynamic Multi-level Multi-agent Based Simulations (['Jean-Baptiste Soyez', 'Gildas Morvan', 'Daniel Dupont', 'Rochdi Merzouki'], 2013). 贡献: This article proposes a methodology to model and simulate complex systems, based on IRM4MLS, a generic agent-based meta-model able to deal with multi-",
+      "problem_type": "literature",
+      "method": "A Methodology to Engineer and Validate Dynamic Multi-level Multi-agent Based Simulations",
+      "success": true,
+      "source_task": "task_fedc56ceafca",
+      "created_at": "2026-07-03T15:52:52.406006",
+      "use_count": 0
+    },
+    {
+      "id": "lesson_24_20260703155252",
+      "category": "literature",
+      "content": "论文: Augmenting the action space with conventions to improve multi-agent cooperation in Hanabi (['F. Bredell', 'H. A. Engelbrecht', 'J. C. Schoeman'], 2024). 贡献: The card game Hanabi is considered a strong medium for the testing and development of multi-agent reinforcement learning (MARL) algorithms, due to its",
+      "problem_type": "literature",
+      "method": "Augmenting the action space with conventions to improve multi-agent cooperation in Hanabi",
+      "success": true,
+      "source_task": "task_fedc56ceafca",
+      "created_at": "2026-07-03T15:52:52.406011",
+      "use_count": 0
+    },
+    {
+      "id": "lesson_25_20260703155252",
+      "category": "literature",
+      "content": "论文: Learning the Value Systems of Agents with Preference-based and Inverse Reinforcement Learning (['Andrés Holgado-Sánchez', 'Holger Billhardt', 'Alberto Fernández', 'Sascha Ossowski'], 2026). 贡献: Agreement Technologies refer to open computer systems in which autonomous software agents interact with one another, typically on behalf of humans, in",
+      "problem_type": "literature",
+      "method": "Learning the Value Systems of Agents with Preference-based and Inverse Reinforcement Learning",
+      "success": true,
+      "source_task": "task_fedc56ceafca",
+      "created_at": "2026-07-03T15:52:52.406020",
+      "use_count": 0
+    },
+    {
+      "id": "lesson_26_20260703155252",
+      "category": "literature",
+      "content": "论文: AOAD-MAT: Transformer-based multi-agent deep reinforcement learning model considering agents' order of action decisions (['Shota Takayama', 'Katsuhide Fujita'], 2025). 贡献: Multi-agent reinforcement learning focuses on training the behaviors of multiple learning agents that coexist in a shared environment. Recently, MARL ",
+      "problem_type": "literature",
+      "method": "AOAD-MAT: Transformer-based multi-agent deep reinforcement learning model considering agents' order of action decisions",
+      "success": true,
+      "source_task": "task_fedc56ceafca",
+      "created_at": "2026-07-03T15:52:52.406024",
+      "use_count": 0
+    },
+    {
+      "id": "lesson_27_20260703155252",
+      "category": "literature",
+      "content": "论文: Context Engineering for Multi-Agent LLM Code Assistants Using Elicit, NotebookLM, ChatGPT, and Claude Code (['Muhammad Haseeb'], 2025). 贡献: Large Language Models (LLMs) have shown promise in automating code generation and software engineering tasks, yet they often struggle with complex, mu",
+      "problem_type": "literature",
+      "method": "Context Engineering for Multi-Agent LLM Code Assistants Using Elicit, NotebookLM, ChatGPT, and Claude Code",
+      "success": true,
+      "source_task": "task_fedc56ceafca",
+      "created_at": "2026-07-03T15:52:52.406027",
+      "use_count": 0
+    },
+    {
+      "id": "lesson_28_20260703155252",
+      "category": "method_discovery",
+      "content": "发现方法: 向量化记忆检索与存储 (Vector-based Memory with RAG). 将智能体的经验、观察或对话片段通过嵌入模型（如text-embedding-ada-002）转化为向量，存入向量数据库（如Chroma, Pinecone）。检索时，使用当前上下文或查询的向量进行相似度搜索，召回最相关的记忆片段注入到LLM的上下文中。这是当前最主流的短期/长期记忆实现范式。",
+      "problem_type": "method",
+      "method": "向量化记忆检索与存储 (Vector-based Memory with RAG)",
+      "success": true,
+      "source_task": "task_fedc56ceafca",
+      "created_at": "2026-07-03T15:52:52.406031",
+      "use_count": 0
+    },
+    {
+      "id": "lesson_29_20260703155252",
+      "category": "method_discovery",
+      "content": "发现方法: 知识图谱记忆 (Knowledge Graph Memory). 将从交互中提取的实体、关系和事件组织成结构化的知识图谱。智能体通过图遍历（如BFS, DFS）或图神经网络（GNN）来检索相关信息。这种方法擅长处理关系推理和显式知识，但构建和维护成本较高。",
+      "problem_type": "method",
+      "method": "知识图谱记忆 (Knowledge Graph Memory)",
+      "success": true,
+      "source_task": "task_fedc56ceafca",
+      "created_at": "2026-07-03T15:52:52.406034",
+      "use_count": 0
+    },
+    {
+      "id": "lesson_30_20260703155252",
+      "category": "method_discovery",
+      "content": "发现方法: 记忆巩固与反思 (Memory Consolidation & Reflection). 模仿人类睡眠巩固记忆的过程，智能体在任务间歇期（或定期）对原始记忆进行处理、总结、抽象，生成更高层次的‘洞察’或‘总结’存入长期记忆，同时可能遗忘不重要的细节。通常由LLM自身（‘反思智能体’）执行。",
+      "problem_type": "method",
+      "method": "记忆巩固与反思 (Memory Consolidation & Reflection)",
+      "success": true,
+      "source_task": "task_fedc56ceafca",
+      "created_at": "2026-07-03T15:52:52.406037",
+      "use_count": 0
+    },
+    {
+      "id": "lesson_31_20260703155252",
+      "category": "method_discovery",
+      "content": "发现方法: 多智能体记忆协调 (Multi-Agent Memory Coordination). 解决多智能体间记忆同步与冲突的协议或架构。可能包括：1) 中央共享记忆库（如MetaGPT的共享消息池）；2) 点对点记忆广播与订阅；3) 基于重要性或相关性的选择性记忆共享；4) 使用一致性算法（如Raft思想）解决记忆冲突。",
+      "problem_type": "method",
+      "method": "多智能体记忆协调 (Multi-Agent Memory Coordination)",
+      "success": true,
+      "source_task": "task_fedc56ceafca",
+      "created_at": "2026-07-03T15:52:52.406039",
+      "use_count": 0
+    },
+    {
+      "id": "lesson_32_20260703155252",
+      "category": "method_discovery",
+      "content": "发现方法: 分层记忆访问控制 (Hierarchical Memory Access Control). 参考操作系统的内存管理或数据库的缓存层级。设计一个记忆管理器，维护热记忆（当前任务相关）、温记忆（最近访问）、冷记忆（长期存储）和档案库。根据记忆的访问频率、时间衰减和任务相关性动态调整其位置，优化检索效率和成本。",
+      "problem_type": "method",
+      "method": "分层记忆访问控制 (Hierarchical Memory Access Control)",
+      "success": true,
+      "source_task": "task_fedc56ceafca",
+      "created_at": "2026-07-03T15:52:52.406042",
+      "use_count": 0
     }
   ],
-  "count": 16
+  "count": 32
 }
