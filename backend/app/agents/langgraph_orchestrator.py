@@ -416,15 +416,38 @@ class LangGraphOrchestrator:
             except Exception as e:
                 logger.warning(f"AgentProfile 自进化失败（不影响任务结果）: {e}")
 
-            # 清理任务级知识库
+            # 将任务级知识库合并到项目知识库（保留论文内容供未来任务参考）
             task_kb_id = final_state.get("task_kb_id")
             if task_kb_id:
                 try:
                     from ..core.knowledge_manager import get_knowledge_manager
-                    get_knowledge_manager().delete_base(task_kb_id)
-                    logger.info(f"任务级知识库已清理: {task_kb_id}")
+                    km = get_knowledge_manager()
+                    task_base = km._bases.get(task_kb_id)
+                    if task_base and project_name:
+                        # 查找或创建项目级知识库
+                        proj_kb_name = f"project_{project_name}"
+                        proj_base = None
+                        for bid, b in km._bases.items():
+                            if b.name == proj_kb_name:
+                                proj_base = b
+                                break
+                        if not proj_base:
+                            proj_base = km.create_base(
+                                name=proj_kb_name,
+                                description=f"项目 {project_name} 的论文知识库",
+                                scope="project",
+                            )
+                        # 合并论文分块
+                        if hasattr(task_base, 'items') and task_base.items:
+                            for item in task_base.items:
+                                proj_base.items.append(item)
+                            km._save_bases()
+                            logger.info(f"任务级知识库已合并到项目知识库: {proj_kb_name} ({len(task_base.items)} 篇)")
+                        # 删除任务级 KB
+                        km.delete_base(task_kb_id)
+                        logger.info(f"任务级知识库已清理: {task_kb_id}")
                 except Exception as e:
-                    logger.debug(f"清理任务级知识库失败: {e}")
+                    logger.debug(f"合并任务级知识库失败: {e}")
 
             return {
                 "task_id": task_id,
@@ -2098,6 +2121,17 @@ class LangGraphOrchestrator:
         except Exception as exc:
             logger.debug(f"Messages save failed: {exc}")
 
+        # 提取经验教训到持久化记忆
+        try:
+            from ..core.memory import get_memory_manager
+            mm = get_memory_manager()
+            mm.extract_lessons_from_result(task_id, results)
+            # 提取文献/方法经验
+            mm.extract_literature_lessons(task_id, results)
+            logger.info(f"[LangGraph:{task_id}] 经验教训已提取到记忆系统")
+        except Exception as exc:
+            logger.debug(f"Lessons extraction failed: {exc}")
+
         # 标记任务完成状态
         cannot_solve = state.get("cannot_solve_report")
         # 检测是否有 agent 失败（writer 缺失 → 视为任务失败）
@@ -2145,14 +2179,19 @@ class LangGraphOrchestrator:
     # 节点辅助方法
     # ------------------------------------------------------------------
     def _update_progress(self, task_id: str, problem_text: str, progress: int, step: str) -> None:
-        """更新任务进度到持久化。"""
-        from ..core.task_persistence import save_task_metadata
+        """更新任务进度到持久化（同时保存 checkpoint 用于断点续传）。"""
+        from ..core.task_persistence import save_task_metadata, save_task_checkpoint
         try:
             save_task_metadata(
                 task_id=task_id, problem_text=problem_text,
                 status="running", created_at=datetime.now().isoformat(),
                 progress=progress, current_step=step,
             )
+        except Exception:
+            pass
+        # 增量保存 checkpoint，用于断点续传
+        try:
+            save_task_checkpoint(task_id, "langgraph", step, {"progress": progress, "step": step})
         except Exception:
             pass
 

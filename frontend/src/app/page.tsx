@@ -169,16 +169,20 @@ export default function Home() {
         const res = await fetch(apiBase() + '/tasks/' + id + '/messages');
         if (res.ok) {
           const msgs = await res.json();
-          setMessages(
-            msgs.map((m: any) => ({
-              id: m.id,
-              sender: m.sender,
-              sender_label: m.sender_label || getTeamLabel(m.sender) || m.sender,
-              content: m.content,
-              type: m.type || 'text',
-              timestamp: m.timestamp,
-            }))
-          );
+          const newMsgs = msgs.map((m: any) => ({
+            id: m.id,
+            sender: m.sender,
+            sender_label: m.sender_label || getTeamLabel(m.sender) || m.sender,
+            content: m.content,
+            type: m.type || 'text',
+            timestamp: m.timestamp,
+          }));
+          // 只在消息数量或内容变化时更新，避免不必要的 re-render
+          setMessages(prev => {
+            if (prev.length !== newMsgs.length) return newMsgs;
+            if (prev.length > 0 && newMsgs.length > 0 && prev[prev.length - 1].id !== newMsgs[newMsgs.length - 1].id) return newMsgs;
+            return prev;
+          });
         }
       } catch {}
     }, 1000);

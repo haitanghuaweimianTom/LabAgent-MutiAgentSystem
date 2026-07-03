@@ -1,4 +1,181 @@
 {
-  "lessons": [],
-  "count": 0
+  "lessons": [
+    {
+      "id": "lesson_1_20260702133150",
+      "category": "method_selection",
+      "content": "对于综合类问题，采用方案：以LLM驱动的多智能体记忆系统为研究对象，通过系统性文献梳理→痛点分析→交叉学科启发→创新点生成的递进式调研框架，识别研究空白并推演高价值论文方向",
+      "problem_type": "综合类",
+      "method": "以LLM驱动的多智能体记忆系统为研究对象，通过系统性文献梳理→痛点分析→交叉学科启发→创新点生成的递进式调研框架，识别研究空白并推演高价值论文方向",
+      "success": true,
+      "source_task": "task_6d2543ea83aa",
+      "created_at": "2026-07-02T13:31:50.046666",
+      "use_count": 0
+    },
+    {
+      "id": "lesson_2_20260702133150",
+      "category": "literature",
+      "content": "论文: A Survey of Multi-Agent Deep Reinforcement Learning with Communication (['Changxi Zhu', 'Mehdi Dastani', 'Shihan Wang'], 2022). 贡献: Communication is an effective mechanism for coordinating the behaviors of multiple agents, broadening their views of the environment, and to support t",
+      "problem_type": "literature",
+      "method": "A Survey of Multi-Agent Deep Reinforcement Learning with Communication",
+      "success": true,
+      "source_task": "task_6d2543ea83aa",
+      "created_at": "2026-07-02T13:31:50.046803",
+      "use_count": 0
+    },
+    {
+      "id": "lesson_3_20260702133150",
+      "category": "literature",
+      "content": "论文: Thucy: An LLM-based Multi-Agent System for Claim Verification across Relational Databases (['Michael Theologitis', 'Dan Suciu'], 2025). 贡献: In today's age, it is becoming increasingly difficult to decipher truth from lies. Every day, politicians, media outlets, and public figures make conf",
+      "problem_type": "literature",
+      "method": "Thucy: An LLM-based Multi-Agent System for Claim Verification across Relational Databases",
+      "success": true,
+      "source_task": "task_6d2543ea83aa",
+      "created_at": "2026-07-02T13:31:50.046809",
+      "use_count": 0
+    },
+    {
+      "id": "lesson_4_20260702133150",
+      "category": "literature",
+      "content": "论文: MedAide: Information Fusion and Anatomy of Medical Intents via LLM-based Agent Collaboration (['Dingkang Yang', 'Jinjie Wei', 'Mingcheng Li', 'Jiyao Liu', 'Lihao Liu', 'Ming Hu', 'Junjun He', 'Yakun Ju', 'Wei Zhou', 'Yang Liu', 'Lihua Zhang'], 2024). 贡献: In healthcare intelligence, the ability to fuse heterogeneous, multi-intent information from diverse clinical sources is fundamental to building relia",
+      "problem_type": "literature",
+      "method": "MedAide: Information Fusion and Anatomy of Medical Intents via LLM-based Agent Collaboration",
+      "success": true,
+      "source_task": "task_6d2543ea83aa",
+      "created_at": "2026-07-02T13:31:50.046817",
+      "use_count": 0
+    },
+    {
+      "id": "lesson_5_20260702133150",
+      "category": "literature",
+      "content": "论文: Mapping Human Anti-collusion Mechanisms to Multi-agent AI Systems (['Jamiu Idowu', 'Ahmed Almasoud', 'Ayman Alfahid'], 2026). 贡献: As multi-agent AI systems become increasingly autonomous, evidence shows they can develop collusive strategies similar to those long observed in human",
+      "problem_type": "literature",
+      "method": "Mapping Human Anti-collusion Mechanisms to Multi-agent AI Systems",
+      "success": true,
+      "source_task": "task_6d2543ea83aa",
+      "created_at": "2026-07-02T13:31:50.046822",
+      "use_count": 0
+    },
+    {
+      "id": "lesson_6_20260702133150",
+      "category": "literature",
+      "content": "论文: Don't Just Demo, Teach Me the Principles: A Principle-Based Multi-Agent Prompting Strategy for Text Classification (['Peipei Wei', 'Dimitris Dimitriadis', 'Yan Xu', 'Mingwei Shen'], 2025). 贡献: We present PRINCIPLE-BASED PROMPTING, a simple but effective multi-agent prompting strategy for text classification. It first asks multiple LLM agents",
+      "problem_type": "literature",
+      "method": "Don't Just Demo, Teach Me the Principles: A Principle-Based Multi-Agent Prompting Strategy for Text Classification",
+      "success": true,
+      "source_task": "task_6d2543ea83aa",
+      "created_at": "2026-07-02T13:31:50.046826",
+      "use_count": 0
+    },
+    {
+      "id": "lesson_7_20260702133150",
+      "category": "literature",
+      "content": "论文: A Methodology to Engineer and Validate Dynamic Multi-level Multi-agent Based Simulations (['Jean-Baptiste Soyez', 'Gildas Morvan', 'Daniel Dupont', 'Rochdi Merzouki'], 2013). 贡献: This article proposes a methodology to model and simulate complex systems, based on IRM4MLS, a generic agent-based meta-model able to deal with multi-",
+      "problem_type": "literature",
+      "method": "A Methodology to Engineer and Validate Dynamic Multi-level Multi-agent Based Simulations",
+      "success": true,
+      "source_task": "task_6d2543ea83aa",
+      "created_at": "2026-07-02T13:31:50.046831",
+      "use_count": 0
+    },
+    {
+      "id": "lesson_8_20260702133150",
+      "category": "literature",
+      "content": "论文: Augmenting the action space with conventions to improve multi-agent cooperation in Hanabi (['F. Bredell', 'H. A. Engelbrecht', 'J. C. Schoeman'], 2024). 贡献: The card game Hanabi is considered a strong medium for the testing and development of multi-agent reinforcement learning (MARL) algorithms, due to its",
+      "problem_type": "literature",
+      "method": "Augmenting the action space with conventions to improve multi-agent cooperation in Hanabi",
+      "success": true,
+      "source_task": "task_6d2543ea83aa",
+      "created_at": "2026-07-02T13:31:50.046837",
+      "use_count": 0
+    },
+    {
+      "id": "lesson_9_20260702133150",
+      "category": "literature",
+      "content": "论文: Learning the Value Systems of Agents with Preference-based and Inverse Reinforcement Learning (['Andrés Holgado-Sánchez', 'Holger Billhardt', 'Alberto Fernández', 'Sascha Ossowski'], 2026). 贡献: Agreement Technologies refer to open computer systems in which autonomous software agents interact with one another, typically on behalf of humans, in",
+      "problem_type": "literature",
+      "method": "Learning the Value Systems of Agents with Preference-based and Inverse Reinforcement Learning",
+      "success": true,
+      "source_task": "task_6d2543ea83aa",
+      "created_at": "2026-07-02T13:31:50.046847",
+      "use_count": 0
+    },
+    {
+      "id": "lesson_10_20260702133150",
+      "category": "literature",
+      "content": "论文: AOAD-MAT: Transformer-based multi-agent deep reinforcement learning model considering agents' order of action decisions (['Shota Takayama', 'Katsuhide Fujita'], 2025). 贡献: Multi-agent reinforcement learning focuses on training the behaviors of multiple learning agents that coexist in a shared environment. Recently, MARL ",
+      "problem_type": "literature",
+      "method": "AOAD-MAT: Transformer-based multi-agent deep reinforcement learning model considering agents' order of action decisions",
+      "success": true,
+      "source_task": "task_6d2543ea83aa",
+      "created_at": "2026-07-02T13:31:50.046852",
+      "use_count": 0
+    },
+    {
+      "id": "lesson_11_20260702133150",
+      "category": "literature",
+      "content": "论文: Context Engineering for Multi-Agent LLM Code Assistants Using Elicit, NotebookLM, ChatGPT, and Claude Code (['Muhammad Haseeb'], 2025). 贡献: Large Language Models (LLMs) have shown promise in automating code generation and software engineering tasks, yet they often struggle with complex, mu",
+      "problem_type": "literature",
+      "method": "Context Engineering for Multi-Agent LLM Code Assistants Using Elicit, NotebookLM, ChatGPT, and Claude Code",
+      "success": true,
+      "source_task": "task_6d2543ea83aa",
+      "created_at": "2026-07-02T13:31:50.046856",
+      "use_count": 0
+    },
+    {
+      "id": "lesson_12_20260702133150",
+      "category": "method_discovery",
+      "content": "发现方法: 基于向量数据库的检索增强生成（RAG）. 将Agent的经历（对话、观察、行动）编码为向量嵌入，存储在向量数据库中。在需要时，通过语义检索最相关的记忆片段注入LLM的上下文窗口，以实现对长期历史的访问。这是当前实现Agent长期记忆的主流范式。",
+      "problem_type": "method",
+      "method": "基于向量数据库的检索增强生成（RAG）",
+      "success": true,
+      "source_task": "task_6d2543ea83aa",
+      "created_at": "2026-07-02T13:31:50.046861",
+      "use_count": 0
+    },
+    {
+      "id": "lesson_13_20260702133150",
+      "category": "method_discovery",
+      "content": "发现方法: 私有记忆与共享记忆分离架构. 为每个Agent维护独立的私有记忆库（如个人经历、角色设定），同时维护一个全局的共享记忆库（如世界状态、公共知识、团队决议）。Agent通过特定机制（如发布-订阅、中央调度）在私有与共享记忆间进行信息同步与查询。",
+      "problem_type": "method",
+      "method": "私有记忆与共享记忆分离架构",
+      "success": true,
+      "source_task": "task_6d2543ea83aa",
+      "created_at": "2026-07-02T13:31:50.046864",
+      "use_count": 0
+    },
+    {
+      "id": "lesson_14_20260702133150",
+      "category": "method_discovery",
+      "content": "发现方法: 基于知识图谱（KG）的结构化记忆. 将记忆表示为实体和关系的图结构，利用图数据库进行存储和查询。这种方式能更好地捕获记忆间的逻辑关系，支持多跳推理，并可能与符号推理结合，减少LLM的记忆幻觉。",
+      "problem_type": "method",
+      "method": "基于知识图谱（KG）的结构化记忆",
+      "success": true,
+      "source_task": "task_6d2543ea83aa",
+      "created_at": "2026-07-02T13:31:50.046867",
+      "use_count": 0
+    },
+    {
+      "id": "lesson_15_20260702133150",
+      "category": "method_discovery",
+      "content": "发现方法: 基于记忆压缩与反思的巩固机制. 灵感来源于认知科学的‘睡眠巩固’。Agent在特定触发条件下（如任务间隙、交互结束后）对原始记忆流进行抽象、归纳和压缩，生成更高级别、更稳定的语义记忆或摘要，从而优化存储效率并提升记忆质量。",
+      "problem_type": "method",
+      "method": "基于记忆压缩与反思的巩固机制",
+      "success": true,
+      "source_task": "task_6d2543ea83aa",
+      "created_at": "2026-07-02T13:31:50.046870",
+      "use_count": 0
+    },
+    {
+      "id": "lesson_16_20260702133150",
+      "category": "method_discovery",
+      "content": "发现方法: 基于认知架构的记忆管理（如MemGPT）. 模拟操作系统中的虚拟内存管理，将LLM有限的上下文窗口视为‘主存’，将外部存储视为‘磁盘’。通过一套分层的、受控的读写操作（类似页错误和页面置换）来主动、显式地管理信息在主存与外存之间的流动。",
+      "problem_type": "method",
+      "method": "基于认知架构的记忆管理（如MemGPT）",
+      "success": true,
+      "source_task": "task_6d2543ea83aa",
+      "created_at": "2026-07-02T13:31:50.046884",
+      "use_count": 0
+    }
+  ],
+  "count": 16
 }

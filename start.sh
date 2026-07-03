@@ -263,6 +263,7 @@ fi
 
 NEED_BUILD=false
 [ ! -d ".next" ] && NEED_BUILD=true
+[ ! -f ".next/BUILD_ID" ] && NEED_BUILD=true
 if [ "$NEED_BUILD" = false ]; then
     SRC_NEWER=$(find . -path ./node_modules -prune -o -path ./.next -prune -o -type f -newer .next/BUILD_ID -print -quit 2>/dev/null || true)
     [ -n "$SRC_NEWER" ] && NEED_BUILD=true

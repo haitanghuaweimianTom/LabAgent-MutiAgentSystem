@@ -601,6 +601,95 @@ class MemoryManager:
         self._lessons.save()
         logger.info(f"MemoryManager extracted lessons from task {task_id}")
 
+    def extract_literature_lessons(self, task_id: str, result: Dict[str, Any]) -> None:
+        """从研究结果中提取文献、方法、算法经验，持久化到记忆系统。
+
+        提取内容：
+        1. research_agent 发现的论文和方法
+        2. solver_agent 使用的算法和代码模板
+        3. writer_agent 的写作模式
+        """
+        # 从 research_agent 提取文献和方法
+        research = result.get("research_agent", {})
+        if research:
+            papers = research.get("papers", [])
+            methods = research.get("methods", [])
+            for paper in papers[:10]:  # 最多提取 10 篇
+                title = paper.get("title", "")
+                authors = paper.get("authors", "")
+                year = paper.get("year", "")
+                contribution = paper.get("contribution", "") or paper.get("abstract", "")[:200]
+                if title:
+                    self._lessons.add_lesson(
+                        category="literature",
+                        content=f"论文: {title} ({authors}, {year}). 贡献: {contribution[:150]}",
+                        problem_type="literature",
+                        method=title,
+                        success=True,
+                        source_task=task_id,
+                    )
+            for method in methods[:5]:  # 最多提取 5 个方法
+                method_name = method.get("name", "") or method.get("method_name", "")
+                description = method.get("description", "") or method.get("approach", "")
+                if method_name:
+                    self._lessons.add_lesson(
+                        category="method_discovery",
+                        content=f"发现方法: {method_name}. {description[:200]}",
+                        problem_type="method",
+                        method=method_name,
+                        success=True,
+                        source_task=task_id,
+                    )
+
+        # 从 solver_agent 提取算法和代码经验
+        solver = result.get("solver_agent", {})
+        if solver:
+            # 提取使用的算法
+            algorithms = solver.get("algorithms_used", [])
+            for algo in algorithms[:5]:
+                if isinstance(algo, str) and algo:
+                    self._lessons.add_lesson(
+                        category="algorithm",
+                        content=f"算法实践: {algo}",
+                        problem_type="algorithm",
+                        method=algo,
+                        success=True,
+                        source_task=task_id,
+                    )
+            # 提取代码模板
+            code_manifest = solver.get("code_manifest", {})
+            if code_manifest:
+                files = code_manifest.get("files", [])
+                for f in files[:3]:
+                    fname = f.get("name", "") if isinstance(f, dict) else str(f)
+                    if fname:
+                        self._lessons.add_lesson(
+                            category="code_pattern",
+                            content=f"代码文件: {fname}",
+                            problem_type="code",
+                            method=fname,
+                            success=True,
+                            source_task=task_id,
+                        )
+
+        # 从 writer_agent 提取写作模式
+        writer = result.get("writer_agent", {})
+        if writer:
+            template = writer.get("template", "")
+            citations = writer.get("citations", [])
+            if template:
+                self._lessons.add_lesson(
+                    category="writing_pattern",
+                    content=f"论文模板: {template}, 引用数量: {len(citations)}",
+                    problem_type="writing",
+                    method=template,
+                    success=True,
+                    source_task=task_id,
+                )
+
+        self._lessons.save()
+        logger.info(f"MemoryManager extracted literature/method lessons from task {task_id}")
+
 
 # ============================================================
 # 全局实例

@@ -352,16 +352,56 @@ def delete_task(task_id: str) -> bool:
                 logger.info(f"删除任务输出目录: {target_dir}")
                 deleted = True
 
-        # 2) 清理项目目录下的 task 专属子文件夹（output/<task_id>/ 等）
+        # 2) 清理项目目录下的 task 相关文件
         for proj_dir in outputs_root.iterdir():
             if not proj_dir.is_dir() or proj_dir.name.startswith(".") or proj_dir.name == "_global":
                 continue
             for sub in ("output", "data"):
-                task_sub = proj_dir / sub / task_id
+                sub_dir = proj_dir / sub
+                if not sub_dir.exists():
+                    continue
+                # 删除以 task_id 命名的子目录
+                task_sub = sub_dir / task_id
                 if task_sub.exists():
                     shutil.rmtree(task_sub)
                     logger.info(f"清理项目 {proj_dir.name} 下的任务子目录: {task_sub}")
                     deleted = True
+                # 删除包含 task_id 的文件（如 paper_task_xxx.pdf, camera_ready_task_xxx.zip）
+                for f in sub_dir.iterdir():
+                    if f.is_file() and task_id in f.name:
+                        try:
+                            f.unlink()
+                            logger.info(f"清理项目文件: {f}")
+                            deleted = True
+                        except Exception:
+                            pass
+                # 清理 camera_ready_task_xxx 目录
+                for d in sub_dir.iterdir():
+                    if d.is_dir() and task_id in d.name:
+                        try:
+                            shutil.rmtree(d)
+                            logger.info(f"清理项目目录: {d}")
+                            deleted = True
+                        except Exception:
+                            pass
+
+        # 3) 如果项目目录下已无任务产出物，删除整个项目目录
+        if project_name and project_name != "_global":
+            proj_dir = outputs_root / project_name
+            if proj_dir.exists():
+                # 检查 output/ 子目录是否为空
+                output_sub = proj_dir / "output"
+                if output_sub.exists() and not any(output_sub.iterdir()):
+                    # output 为空，删除整个项目目录
+                    shutil.rmtree(proj_dir)
+                    logger.info(f"项目目录已清空并删除: {proj_dir}")
+                    deleted = True
+                    # 同步删除项目索引
+                    try:
+                        from .project_persistence import delete_project
+                        delete_project(project_name)
+                    except Exception:
+                        pass
     except Exception as e:
         logger.debug(f"清理任务输出目录失败: {e}")
 
