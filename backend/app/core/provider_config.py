@@ -612,15 +612,34 @@ def sync_ccswitch_to_local(force: bool = False) -> Dict[str, Any]:
 
     added = 0
     updated = 0
+    skipped = 0
     current_id = ""
+
+    # 构建 api_host 索引用于去重（规范化：去尾部斜杠、去 /v1 后缀、转小写）
+    def _normalize_host(host: str) -> str:
+        h = (host or "").rstrip("/").lower()
+        # 去掉常见的 /v1 /v2 后缀（不同 Provider 可能带或不带版本号）
+        for suffix in ("/v1", "/v2", "/v1beta"):
+            if h.endswith(suffix):
+                h = h[:-len(suffix)]
+                break
+        return h
+
+    local_by_host = {}
+    for pid, p in local_by_id.items():
+        host = _normalize_host(p.get("api_host", ""))
+        if host:
+            local_by_host[host] = pid
 
     for cs_p in ccswitch_providers:
         pid = cs_p["id"]
         if cs_p.get("_ccswitch_current"):
             current_id = pid
 
+        cs_host = _normalize_host(cs_p.get("api_host", ""))
+
         if pid in local_by_id:
-            # 更新已有 provider 的关键字段
+            # 按 ID 匹配 → 更新已有 provider
             local = local_by_id[pid]
             local["api_key"] = cs_p["api_key"]
             local["api_host"] = cs_p["api_host"]
@@ -635,6 +654,14 @@ def sync_ccswitch_to_local(force: bool = False) -> Dict[str, Any]:
                 local["meta"] = cs_p.get("meta", local_meta)
             local["updated_at"] = int(time.time())
             updated += 1
+        elif cs_host and cs_host in local_by_host:
+            # 按 api_host 去重：已存在相同 host 的 provider，跳过新增
+            existing_id = local_by_host[cs_host]
+            logger.info(f"ccswitch 跳过重复 provider: {cs_p['name']} (host={cs_host}), 已存在: {existing_id}")
+            skipped += 1
+            # 如果 ccswitch 的是 current，更新 default_provider 指向已存在的
+            if cs_p.get("_ccswitch_current"):
+                current_id = existing_id
         else:
             # 新增
             new_p = {
@@ -656,6 +683,31 @@ def sync_ccswitch_to_local(force: bool = False) -> Dict[str, Any]:
             }
             local_providers.append(new_p)
             added += 1
+
+    # 清理已有的重复 provider（按 api_host 去重，保留 ccswitch 同步的或先存在的）
+    seen_hosts = {}
+    deduped_providers = []
+    removed = 0
+    for p in local_providers:
+        host = _normalize_host(p.get("api_host", ""))
+        if host and host in seen_hosts:
+            # 重复的 provider：优先保留有 notes="从 ccswitch 自动同步" 的
+            existing_idx = seen_hosts[host]
+            existing_p = deduped_providers[existing_idx]
+            if p.get("notes") == "从 ccswitch 自动同步" and existing_p.get("notes") != "从 ccswitch 自动同步":
+                deduped_providers[existing_idx] = p
+                removed += 1
+                logger.info(f"ccswitch 去重: 替换手动 provider {existing_p['id']} → ccswitch {p['id']}")
+            else:
+                removed += 1
+                logger.info(f"ccswitch 去重: 跳过重复 provider {p['id']} (host={host})")
+        else:
+            seen_hosts[host] = len(deduped_providers)
+            deduped_providers.append(p)
+
+    if removed > 0:
+        local_providers = deduped_providers
+        logger.info(f"ccswitch 去重: 共移除 {removed} 个重复 provider")
 
     config["providers"] = local_providers
     if current_id:
@@ -681,6 +733,8 @@ def sync_ccswitch_to_local(force: bool = False) -> Dict[str, Any]:
         "synced": added + updated,
         "added": added,
         "updated": updated,
+        "skipped": skipped,
+        "removed": removed,
         "default": current_id,
     }
 

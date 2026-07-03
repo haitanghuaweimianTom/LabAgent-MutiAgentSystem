@@ -45,56 +45,7 @@
       "icon_color": "#d97706",
       "notes": "从 ccswitch 自动同步",
       "created_at": 1782926023,
-      "updated_at": 1783054548,
-      "_version": 2
-    },
-    {
-      "id": "f3f84efb-61c1-42dc-9a84-82a5e1823b1e",
-      "name": "Kimi For Coding",
-      "type": "anthropic",
-      "category": "custom",
-      "meta": {
-        "api_format": "anthropic"
-      },
-      "api_key": "sk-kimi-s6lwecwgcJWfZCM8YSVAoE5T9Lwj8WPhElCuoDOjpc7gHmpmkuyTHcavqf7NzKbm",
-      "api_host": "https://api.kimi.com/coding/",
-      "models": [
-        {
-          "name": "kimi-for-coding",
-          "enabled": true
-        }
-      ],
-      "enabled": true,
-      "icon": "Claude",
-      "icon_color": "#d97706",
-      "notes": "从 ccswitch 自动同步",
-      "created_at": 1782926023,
-      "updated_at": 1783054548,
-      "_version": 2
-    },
-    {
-      "id": "mimo",
-      "name": "mimo",
-      "type": "anthropic",
-      "category": "official",
-      "meta": {
-        "api_format": "anthropic",
-        "auth_field": "anthropic_auth_token"
-      },
-      "api_key": "tp-cs5vm6kbvdokemi2mzwpk0i12ihamujzyjoz7th75a6387il",
-      "api_host": "https://token-plan-cn.xiaomimimo.com/anthropic",
-      "models": [
-        {
-          "name": "mimo-v2.5",
-          "enabled": true
-        }
-      ],
-      "enabled": true,
-      "icon": "OpenAI",
-      "icon_color": "#10a37f",
-      "notes": "",
-      "created_at": 1782926378,
-      "updated_at": 1782926378,
+      "updated_at": 1783086909,
       "_version": 2
     },
     {
@@ -118,10 +69,10 @@
       "icon_color": "#d97706",
       "notes": "从 ccswitch 自动同步",
       "created_at": 1782967923,
-      "updated_at": 1783054548,
+      "updated_at": 1783086909,
       "_version": 2
     }
   ],
-  "default_provider": "b04d3b0e-8b84-410c-bdea-b2fdde4c90c0",
+  "default_provider": "048ed5e9-0865-4c42-b5ec-324484384bad",
   "_version": 2
 }
