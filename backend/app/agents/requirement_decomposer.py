@@ -47,6 +47,7 @@ _SYSTEM_PROMPT = """你是一位资深的研究规划专家，擅长将复杂的
 4. 子任务数量建议 3-8 个，避免过细或过粗"""
 
 
+@AgentFactory.register("requirement_decomposer")
 class RequirementDecomposerAgent(BaseAgent):
     name = "requirement_decomposer"
     label = "需求分解器"

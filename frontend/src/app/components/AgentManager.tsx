@@ -65,6 +65,9 @@ const AGENT_ICONS: Record<string, string> = {
   peer_review_agent: '👁️',
   experimentation_agent: '🔬',
   figure_agent: '📈',
+  requirement_decomposer: '📋',
+  innovation_agent: '💡',
+  summary_agent: '📊',
 };
 
 export default function AgentManager() {
