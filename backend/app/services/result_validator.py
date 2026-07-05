@@ -323,34 +323,52 @@ def get_cross_validator(threshold: float = CrossValidator.DEFAULT_THRESHOLD) -> 
 def _analytical_estimate(problem_text: str, **params: Any) -> Dict[str, Any]:
     """基于问题关键词的解析/边界估计（零 LLM 依赖）。
 
-    严格控制幻觉：只返回与问题类型相关的常见边界值，不编造具体结果。
-    若无法识别问题类型，返回空 dict（由 CrossValidator 标记为 skipped）。
+    策略：只在能计算出有意义的理论边界时返回结果，否则返回空 dict（跳过交叉验证）。
+    不返回无意义的 0.0 常量——那会产生大量误报。
+
+    能做的：
+    - 回归问题：返回 [0, 1] 的 R² 合理范围提示（但不返回具体值）
+    - 分类问题：返回 accuracy 应在 [0, 1] 的约束
+    - 无法做的：LP、MCMC、图论等问题需要实际求解器，此处跳过
     """
     text = (problem_text or "").lower()
     result: Dict[str, Any] = {}
 
-    # 线性规划：返回一个典型最优值范围提示
-    if any(k in text for k in ("linear programming", "linear program", "lp", "线性规划")):
-        result["optimal_value"] = 0.0
-        result["status"] = "optimal"
-
-    # 统计检验：p-value 占位（不编造真实值）
-    if any(k in text for k in ("t-test", "p-value", "hypothesis test", "显著性")):
-        result["p_value"] = 0.05
-
-    # 采样 / MCMC：典型样本量
-    if any(k in text for k in ("mcmc", "monte carlo", "sampling", "采样")):
-        result["sample_size"] = 10000
-        result["estimate"] = 0.0
-
-    # 回归 / 机器学习：典型 R2 / accuracy 边界
+    # 回归 / 机器学习：只返回合理范围约束，不返回具体值
+    # CrossValidator 可以用这些范围做 sanity check（如 R² > 1.0 则报错）
     if any(k in text for k in ("regression", "预测", "classification", "分类", "回归")):
-        result["r2"] = 0.0
-        result["rmse"] = 0.0
+        # 提取 numerical_results 中的数值做范围校验
+        numerical_results = params.get("numerical_results", {})
+        if numerical_results:
+            for key, value in numerical_results.items():
+                if isinstance(value, (int, float)):
+                    key_lower = key.lower()
+                    # R² 应在 [0, 1]（负值表示模型比均值差，但理论上可能）
+                    if "r2" in key_lower or "r_squared" in key_lower:
+                        if value > 1.0:
+                            result[key] = {"bound": "upper", "limit": 1.0, "actual": value}
+                    # Accuracy 应在 [0, 1]
+                    if "accuracy" in key_lower or "acc" in key_lower:
+                        if value > 1.0 or value < 0:
+                            result[key] = {"bound": "range", "lower": 0, "upper": 1.0, "actual": value}
+                    # Precision/Recall 应在 [0, 1]
+                    if any(m in key_lower for m in ("precision", "recall", "f1")):
+                        if value > 1.0 or value < 0:
+                            result[key] = {"bound": "range", "lower": 0, "upper": 1.0, "actual": value}
+                    # RMSE 应 > 0
+                    if "rmse" in key_lower or "mse" in key_lower:
+                        if value < 0:
+                            result[key] = {"bound": "lower", "limit": 0, "actual": value}
 
-    # 图 / 网络：典型路径长度
-    if any(k in text for k in ("shortest path", "graph", "network", "最短路径")):
-        result["shortest_path_length"] = 0.0
+    # 线性规划：如果有 numerical_results，校验最优值是否为数值
+    if any(k in text for k in ("linear programming", "linear program", "lp", "线性规划")):
+        numerical_results = params.get("numerical_results", {})
+        optimal = numerical_results.get("optimal_value")
+        if optimal is not None and not isinstance(optimal, (int, float)):
+            result["optimal_value"] = {"bound": "type", "expected": "numeric", "actual": type(optimal).__name__}
+
+    # 其他问题类型（MCMC、图论等）：无法做解析估计，返回空（跳过交叉验证）
+    # 这比返回无意义的 0.0 要好——避免假误报
 
     return result
 

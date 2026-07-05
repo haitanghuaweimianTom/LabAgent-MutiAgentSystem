@@ -1,4 +1,4 @@
-# 多智能体协作论文生产系统 v7.0
+# 多智能体协作论文生产系统 v7.2
 
 > **面向 CCF-A 顶会 / 数学建模竞赛的全自动 AI 科学家多智能体协作平台。**
 > 内置 8 套论文模板（含 NeurIPS 2024、ACM SIGCONF、IEEE Conference、Springer LNCS、综述、CUMCM），
@@ -381,7 +381,7 @@ FastAPI Backend
   ├─ Orchestrator (两阶段工作流)
   │    ├─ Phase 1: analyzer → data → research → [暂停]
   │    └─ Phase 2: modeler + solver → writer → peer_review → finalizing
-  ├─ LangGraph Orchestrator (StateGraph 编排，v7.0 全自动流程)
+  ├─ LangGraph Orchestrator (StateGraph 编排，v7.1 全自动流程 + ReAct 动态迭代)
   │    ├─ requirement_decomposition → preflight → analyzer → data → research
   │    ├─ innovation → discuss_approach → modeler → experiment(自动迭代) → solver
   │    ├─ figure → writer → peer_review → fact_check → summary → END
@@ -728,7 +728,52 @@ MATHMODEL_API_KEY=your-secret-key    # 可选：启用 API 认证
 
 ## 📜 版本历史
 
-### v7.0（2026-07-03）— 当前
+### v7.2（2026-07-04）— 当前
+- **SSE 实时推送（事件驱动）**：
+  - **EventBus**：全局事件总线，基于 asyncio.Queue 的发布-订阅模式
+  - **实时事件流**：Agent 执行状态变化时立即推送（agent_start/agent_complete/phase_change/error）
+  - **历史回放**：新订阅者自动收到最近 100 条历史事件
+  - **替代轮询**：`GET /tasks/{id}/stream` 从 2 秒轮询升级为事件驱动
+- **并行 Agent 执行**：
+  - **parallel_analysis 节点**：data_agent + research_agent + innovation_agent 同时执行
+  - **asyncio.gather 并发**：三个 Agent 并行运行，结果自动合并到 state
+  - **时间节省**：原本串行执行 3 个 Agent 约 3 分钟，并行后约 1 分钟
+- **异步任务队列**：
+  - **AsyncTaskManager**：替代 fire-and-forget 的 asyncio.create_task
+  - **并发限制**：最多 3 个任务同时运行（通过 Semaphore 控制）
+  - **任务取消**：支持真正取消底层协程
+  - **状态跟踪**：pending/running/completed/failed/cancelled
+  - **与 EventBus 集成**：任务状态变化自动推送
+- **Agent 单元测试**：
+  - **31 个测试用例**：覆盖所有 Agent（analyzer/data/research/modeler/solver/writer/peer_review/innovation/requirement_decomposer/summary/experimentation/algorithm_engineer/financial_analyst）
+  - **模板测试**：验证 11 个代码模板无 TODO 占位符
+  - **基础设施测试**：EventBus/TaskManager/Memory/ContextCompressor/CircuitBreaker
+  - **Mock LLM**：所有 Agent 测试使用 mock，不消耗真实 API 额度
+
+### v7.1（2026-07-04）
+- **ReAct 循环改进（核心）**：
+  - **动态迭代次数**：基于工具数量和上下文长度预估所需迭代数 × 1.5 作为上限，硬上限 20
+  - **实时监控**：每 60 秒检查 token 使用量，超过预算 80% 自动触发压缩
+  - **滑动窗口 + 摘要混合**：保留最近 6 轮完整历史，旧的 tool call 压缩为摘要（参考 MemGPT）
+  - **Token 预算优化**：react_history 从 8% 增至 15%，新增 summary_buffer 5%
+- **真实评估器接入**：
+  - **NAS**：`_default_evaluator` 现在实际训练 3 epoch 返回真实准确率（失败回退到参数量估算）
+  - **Loss Design**：`_default_evaluator` 实际训练返回验证损失（失败回退到表达式复杂度）
+  - **AutoML**：目标函数从 `lambda cfg: 0.5` 改为真实 CNN 训练评估
+- **安全加固**：
+  - **网络隔离**：`code_sandbox.py` 优先使用 `unshare --net` 真实 namespace（不可用时回退 + 警告）
+  - **MCP Fallback**：`_execute_mcp_tool` 支持重试 + 本地降级（file_write/latex_compile/web_search/file_read）
+  - **ReAct 不再调用 _mock_response**：循环耗尽时返回明确错误 JSON 而非编造结果
+  - **modeler fallback**：LLM 失败时重试 2 次，仍失败标记 `_degraded_mode=True`
+- **其他改进**：
+  - **EpisodicMemory**：`compress()` 支持 LLM 智能摘要（通过 `llm_client` 参数）
+  - **推理脚本**：`_generate_inference_script` 生成完整推理逻辑（支持 checkpoint/CSV/NPY）
+  - **分析估计**：`_analytical_estimate` 不再返回无意义的 0.0 常量，改为范围校验
+  - **交叉验证**：无替代方法时跳过（不做假比较）
+  - **solver 模板**：`algorithm_design` 替换 TODO 为真实 Dijkstra + Kadane 实现
+  - **experimentation_agent**：删除废弃的 `_try_smoke_execute`，`_empty_plan` 标记失败原因
+
+### v7.0（2026-07-03）
 - **全自动 AI 科学家流程**：
   - **需求自动分解器**：`requirement_decomposer.py`，万字以上长提示词自动拆解为结构化研究计划
   - **创新点发现**：`innovation_agent.py`，从文献调研中识别研究空白、提出创新方案

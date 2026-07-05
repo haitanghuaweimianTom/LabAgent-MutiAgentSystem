@@ -535,8 +535,9 @@ from typing import List, Tuple, Dict, Any, Optional
 def solve(input_data: Optional[str] = None) -> Dict[str, Any]:
     """组合优化/图算法求解模板
 
-    时间复杂度: O(?)  # TODO: 根据具体算法填写
-    空间复杂度: O(?)  # TODO: 根据具体算法填写
+    自动检测问题类型并选择算法（图→Dijkstra，序列→Kadane+统计）
+    时间复杂度: O(NlogN) 到 O((V+E)logV)
+    空间复杂度: O(V+E) 到 O(N)
     """
     # ---------- 1. 输入解析 ----------
     # 支持从文件、字符串或标准输入读取
@@ -550,28 +551,60 @@ def solve(input_data: Optional[str] = None) -> Dict[str, Any]:
         data = input_data
 
     # ---------- 2. 核心算法函数 ----------
-    # TODO: 替换为具体算法实现
     def core_algorithm(parsed_input) -> Dict[str, Any]:
-        """核心算法占位符
-
-        实现要点：
-        - 明确算法名称（如 Dijkstra / 最小生成树 / 动态规划 / 贪心等）
-        - 给出关键步骤的伪代码或注释
-        - 标注复杂度
-        """
-        result = {"status": "placeholder", "value": 0}
-        return result
+        """图最短路径 / 序列分析 / 排序（自动检测问题类型）"""
+        import heapq
+        # 如果输入看起来像邻接表格式 "n m\\nu v w..." → Dijkstra
+        if isinstance(parsed_input, list) and len(parsed_input) >= 2:
+            try:
+                n, m = int(parsed_input[0]), int(parsed_input[1])
+                edges = []
+                idx = 2
+                for _ in range(m):
+                    if idx + 2 < len(parsed_input):
+                        u, v, w = int(parsed_input[idx]), int(parsed_input[idx+1]), float(parsed_input[idx+2])
+                        edges.append((u, v, w))
+                        idx += 3
+                if edges:
+                    graph = {i: [] for i in range(1, n+1)}
+                    for u, v, w in edges:
+                        graph[u].append((v, w))
+                        graph[v].append((u, w))
+                    dist = {i: float('inf') for i in range(1, n+1)}
+                    dist[1] = 0
+                    pq = [(0, 1)]
+                    while pq:
+                        d, u = heapq.heappop(pq)
+                        if d > dist[u]: continue
+                        for v, w in graph[u]:
+                            if dist[u] + w < dist[v]:
+                                dist[v] = dist[u] + w
+                                heapq.heappush(pq, (dist[v], v))
+                    return {"value": dist.get(n, float('inf')), "distances": dict(dist), "algorithm": "Dijkstra"}
+            except (ValueError, IndexError):
+                pass
+        # 回退：数字序列 → 排序+统计+最大子数组和(Kadane)
+        try:
+            nums = [float(x) for x in parsed_input]
+        except (TypeError, ValueError):
+            nums = []
+        if nums:
+            max_sum = cur = nums[0]
+            for x in nums[1:]:
+                cur = max(x, cur + x)
+                max_sum = max(max_sum, cur)
+            return {"value": max_sum, "sorted": sorted(nums), "mean": sum(nums)/len(nums), "max_subarray_sum": max_sum, "algorithm": "Kadane"}
+        return {"value": 0, "algorithm": "fallback"}
 
     # ---------- 3. 解析与执行 ----------
-    parsed = data  # TODO: 根据题目格式解析为图/矩阵/序列等结构
-    result = core_algorithm(parsed)
+    result = core_algorithm(data)
 
     # ---------- 4. 输出结果 ----------
     return {
         "optimal_value": result.get("value"),
         "solution": result,
-        "algorithm": "TODO: 替换为实际算法名",
-        "complexity": "TODO: 时间/空间复杂度",
+        "algorithm": result.get("algorithm", "auto_detect"),
+        "complexity": "O(NlogN) to O((V+E)logV)",
     }
 
 
@@ -598,16 +631,16 @@ def financial_analysis(
     风险说明：本模板仅供学术研究/算法验证，不构成投资建议。
     回测结果不代表未来表现，实际交易需考虑滑点、手续费、流动性等。
     """
-    # ---------- 1. 数据读取占位 ----------
-    # 方式A: 从 CSV 读取（推荐用于真实数据）
-    # df = pd.read_csv(data_path, parse_dates=["date"], index_col="date")
-    # 方式B: 直接传入价格序列（快速测试）
+    # ---------- 1. 数据读取 ----------
+    # 支持三种输入：CSV 文件 / 价格序列 / 生成示例数据
+    is_synthetic = False
     if prices is not None:
         df = pd.DataFrame({"close": prices})
     elif data_path:
         df = pd.read_csv(data_path)
     else:
-        # 生成随机 walk 作为占位数据
+        # 生成随机 walk 作为示例数据（无真实输入时）
+        is_synthetic = True
         np.random.seed(42)
         returns = np.random.normal(0.001, 0.02, 252)
         prices = 100 * np.exp(np.cumsum(returns))
@@ -627,9 +660,8 @@ def financial_analysis(
     drawdown = (cumulative_returns - peak) / peak
     max_drawdown = drawdown.min()
 
-    # ---------- 3. 回测框架占位 ----------
-    # TODO: 替换为具体策略逻辑（如均线交叉、动量、均值回归等）
-    # 示例：简单买入持有
+    # ---------- 3. 回测框架：买入持有 baseline ----------
+    # 策略：第 0 天全仓买入，持有到最后一天
     final_value = initial_capital * cumulative_returns.iloc[-1]
     total_return = (final_value - initial_capital) / initial_capital
 
@@ -639,7 +671,7 @@ def financial_analysis(
     # CVaR / Expected Shortfall (95%)
     cvar_95 = returns[returns <= var_95].mean() if len(returns[returns <= var_95]) > 0 else var_95
 
-    return {
+    result = {
         "initial_capital": initial_capital,
         "final_value": float(final_value),
         "total_return": float(total_return),
@@ -652,6 +684,12 @@ def financial_analysis(
         "n_observations": int(len(returns)),
         "risk_note": "回测结果不代表未来表现；实际交易需考虑手续费、滑点、流动性等。",
     }
+    if is_synthetic:
+        result["_data_source"] = "synthetic"
+        result["_data_warning"] = "⚠️ 本报告使用合成数据（随机 walk），仅供参考。真实分析需要提供实际市场数据。"
+    else:
+        result["_data_source"] = "real"
+    return result
 
 
 # 示例调用
@@ -2227,20 +2265,12 @@ class SolverAgent(BaseAgent):
                 except Exception as exc:  # noqa: BLE001
                     logger.warning(f"analytical_estimate cross-check failed: {exc}")
 
-            # 3. 回退：轻量自比（placeholder，仅当无真实替代方法时）
-            logger.warning(
-                f"No real alternative method available for cross-check; using self-comparison placeholder "
-                f"for sub_problem={sub_problem_id}"
+            # 3. 回退：无真实替代方法时跳过交叉验证（不做假比较）
+            logger.info(
+                f"No real alternative method available for cross-check; skipping for sub_problem={sub_problem_id}"
             )
-            secondary = {k: v * (0.95 + 0.1 * (i % 3) / 3) for i, (k, v) in enumerate(numerical_results.items())}
-            secondary = {k: secondary[k] for k in numerical_results.keys() if k in secondary}
-            results = await cv.cross_check(
-                method_a_name="primary",
-                method_a_results=numerical_results,
-                method_b_name="secondary_estimate",
-                method_b_results=secondary,
-            )
-            return [r.to_dict() for r in results]
+            # 返回空结果而非假比较，避免产生误导性的验证通过
+            return []
         except Exception as exc:  # noqa: BLE001
             logger.debug(f"CrossValidator skipped: {exc}")
             return []

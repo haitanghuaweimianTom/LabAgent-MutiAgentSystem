@@ -1575,11 +1575,68 @@ class BaseAgent(ABC):
         temperature: Optional[float],
         max_iterations: int,
     ) -> Dict[str, Any]:
-        """ReAct Thought-Action-Observation 循环（统一使用 OpenAI 格式消息）。"""
+        """ReAct Thought-Action-Observation 循环（统一使用 OpenAI 格式消息）。
+
+        v7.1 改进：
+        1. 动态迭代次数：基于任务复杂度预估 × 1.5 作为上限
+        2. 实时监控：每60秒检查 token 使用情况，动态调整策略
+        3. 滑动窗口+摘要混合：旧的 tool call 历史自动压缩
+        """
+        import asyncio
+        import time
+
         tools_payload = self._build_tools_payload(tools)
 
+        # ===== 动态迭代次数估算 =====
+        # 基于工具数量和任务复杂度预估所需迭代次数
+        estimated_iterations = self._estimate_react_iterations(tools, messages)
+        actual_max = max(max_iterations, int(estimated_iterations * 1.5))
+        actual_max = min(actual_max, 20)  # 硬上限 20 次
+
+        logger.info(
+            f"[{self.name}] ReAct: estimated={estimated_iterations}, "
+            f"max_iterations={max_iterations}, actual_max={actual_max}"
+        )
+
+        # ===== 滑动窗口配置 =====
+        # 保留最近 N 轮完整历史，更早的压缩为摘要
+        WINDOW_SIZE = 6  # 保留最近6轮（12条消息：assistant+tool各6）
+        COMPRESS_EVERY = 3  # 每3轮压缩一次旧历史
+
         last_response: Optional[Dict[str, Any]] = None
-        for iteration in range(max_iterations):
+        start_time = time.time()
+        monitoring_interval = 60  # 60秒监控间隔
+        last_monitor_time = start_time
+
+        for iteration in range(actual_max):
+            # ===== 实时监控：每60秒检查一次 =====
+            current_time = time.time()
+            if current_time - last_monitor_time >= monitoring_interval:
+                elapsed = current_time - start_time
+                tokens_used = self._estimate_messages_tokens(messages)
+                logger.info(
+                    f"[{self.name}] ReAct monitor: iteration={iteration+1}/{actual_max}, "
+                    f"elapsed={elapsed:.1f}s, tokens_est={tokens_used}"
+                )
+                # 如果 token 使用量超过预算的80%，触发压缩
+                try:
+                    from ..core.token_budget import get_token_budget_manager
+                    budget_mgr = get_token_budget_manager(self.model or "default")
+                    react_budget = budget_mgr.remaining("react_history")
+                    if tokens_used > react_budget * 0.8:
+                        logger.warning(
+                            f"[{self.name}] ReAct: token usage {tokens_used} > 80% of budget {react_budget}, "
+                            f"compressing history"
+                        )
+                        self._compress_react_history(messages, keep_recent=WINDOW_SIZE)
+                except Exception:
+                    pass
+                last_monitor_time = current_time
+
+            # ===== 滑动窗口压缩 =====
+            if iteration > 0 and iteration % COMPRESS_EVERY == 0:
+                self._compress_react_history(messages, keep_recent=WINDOW_SIZE)
+
             response = await self._call_llm_once(messages, temperature, tools=tools_payload)
             last_response = response
             tool_calls = self._parse_tool_calls(response)
@@ -1597,10 +1654,110 @@ class BaseAgent(ABC):
                 observation = await self._execute_tool_call(tc)
                 messages.append(self._build_tool_result_message(tc, observation))
 
-            logger.info(f"[{self.name}] ReAct iteration {iteration + 1}/{max_iterations}: executed {len(tool_calls)} tool(s)")
+            logger.info(f"[{self.name}] ReAct iteration {iteration + 1}/{actual_max}: executed {len(tool_calls)} tool(s)")
 
-        logger.warning(f"[{self.name}] ReAct 达到最大迭代次数 {max_iterations}，返回最后一次响应")
-        return last_response or self._mock_response(messages)
+        logger.warning(f"[{self.name}] ReAct 达到最大迭代次数 {actual_max}，返回最后一次响应")
+        if last_response:
+            return last_response
+        return {
+            "choices": [{"message": {
+                "content": json.dumps({
+                    "error": "ReAct loop exhausted without final answer",
+                    "status": "failed",
+                    "iterations_used": actual_max,
+                    "estimated_iterations": estimated_iterations,
+                    "message": f"Agent {self.name} reached max iterations ({actual_max}) without producing a valid response."
+                }),
+                "role": "assistant"
+            }}]
+        }
+
+    def _estimate_react_iterations(self, tools: List[ToolDef], messages: List[Dict]) -> int:
+        """基于任务复杂度预估所需的 ReAct 迭代次数。
+
+        启发式规则：
+        - 每个独立工具调用约需 1 轮迭代
+        - 复杂任务（多工具协作）需更多轮
+        - 已有上下文越长，可能需要越多轮来消化
+        """
+        n_tools = len(tools) if tools else 0
+        msg_count = len(messages) if messages else 0
+
+        # 基础估计：工具数量的1.5倍（考虑工具链式调用）
+        base_estimate = max(3, int(n_tools * 1.5))
+
+        # 上下文长度修正：消息越多，LLM 可能需要更多轮来处理
+        if msg_count > 20:
+            base_estimate += 2
+        elif msg_count > 10:
+            base_estimate += 1
+
+        return base_estimate
+
+    def _estimate_messages_tokens(self, messages: List[Dict]) -> int:
+        """估算 messages 列表的 token 数量。"""
+        total = 0
+        for msg in messages:
+            content = msg.get("content", "")
+            if isinstance(content, str):
+                total += max(1, len(content) // 3)  # 粗略估算：3字符≈1token
+            elif isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict) and "text" in block:
+                        total += max(1, len(block["text"]) // 3)
+        return total
+
+    def _compress_react_history(self, messages: List[Dict], keep_recent: int = 6):
+        """压缩 ReAct 历史：保留最近 N 轮，旧的替换为摘要。
+
+        参考 MemGPT 的虚拟上下文管理思想：
+        - 核心信息（system prompt + 最近对话）保留在"主存"
+        - 旧的 tool call 压缩后存入"摘要区"
+        """
+        if len(messages) <= keep_recent + 2:  # +2 for system prompt
+            return  # 不需要压缩
+
+        # 保留：system prompt (index 0) + 最近 keep_recent 条消息
+        system_msg = messages[0] if messages and messages[0].get("role") == "system" else None
+        recent_messages = messages[-keep_recent:]
+        old_messages = messages[1:-keep_recent] if system_msg else messages[:-keep_recent]
+
+        if not old_messages:
+            return
+
+        # 将旧消息压缩为摘要
+        summary_parts = []
+        for msg in old_messages:
+            role = msg.get("role", "unknown")
+            content = msg.get("content", "")
+            if isinstance(content, str):
+                # 截断到合理长度
+                truncated = content[:200] + "..." if len(content) > 200 else content
+                summary_parts.append(f"[{role}]: {truncated}")
+
+        if summary_parts:
+            summary = "[历史摘要] " + " | ".join(summary_parts[-5:])  # 最多保留5条摘要
+
+            # 重建 messages：system + summary + recent
+            new_messages = []
+            if system_msg:
+                new_messages.append(system_msg)
+
+            # 添加压缩摘要作为一条 user message
+            new_messages.append({
+                "role": "user",
+                "content": f"[系统提示：以下是之前的工具调用历史摘要，仅供上下文参考]\n{summary}"
+            })
+            new_messages.extend(recent_messages)
+
+            # 清空并重建
+            messages.clear()
+            messages.extend(new_messages)
+
+            logger.debug(
+                f"[{self.name}] ReAct history compressed: {len(old_messages)} old messages → summary, "
+                f"keeping {len(recent_messages)} recent messages"
+            )
 
     def _build_tools_payload(self, tools: List[ToolDef]) -> List[Dict[str, Any]]:
         """把统一 ToolDef 转成 OpenAI 格式 tools。"""
@@ -1714,7 +1871,10 @@ class BaseAgent(ABC):
         """通过 MCP 服务器执行工具调用。
 
         返回工具执行结果，如果该工具不是此 Agent 配置的 MCP 工具则返回 None。
+        支持 fallback 降级：MCP 失败时尝试本地替代方案。
         """
+        import asyncio
+
         # 获取此 Agent 配置的 MCP 工具列表
         from ..mcp.config import get_mcp_manager
         mcp_manager = get_mcp_manager()
@@ -1732,17 +1892,23 @@ class BaseAgent(ABC):
                 server_name = tool_config.server
 
         if not server_name:
-            return f"MCP tool '{tool_name}' has no associated server."
+            logger.warning(f"MCP tool '{tool_name}' has no associated server, attempting fallback")
+            fallback = await self._mcp_fallback(tool_name, args)
+            return fallback
 
         # 获取服务器配置
         server_config = mcp_manager.get_server_config(server_name)
         if not server_config:
-            return f"MCP server '{server_name}' not found."
+            logger.warning(f"MCP server '{server_name}' not found, attempting fallback")
+            fallback = await self._mcp_fallback(tool_name, args)
+            return fallback
 
         if not server_config.enabled:
-            return f"MCP server '{server_name}' is disabled."
+            logger.warning(f"MCP server '{server_name}' is disabled, attempting fallback")
+            fallback = await self._mcp_fallback(tool_name, args)
+            return fallback
 
-        # 调用 MCP 工具
+        # 调用 MCP 工具（带重试）
         from ..mcp.client import MCPClient, MCPServerConfig as ClientConfig
         client_config = ClientConfig(
             name=server_name,
@@ -1750,21 +1916,135 @@ class BaseAgent(ABC):
             args=server_config.args,
             env=server_config.env,
         )
-        client = MCPClient(client_config)
-        try:
-            await client.connect()
-            # 调用工具
-            result = await client.call_tool(tool_name, args)
-            await client.disconnect()
-            return result or f"MCP tool '{tool_name}' returned empty result."
-        except Exception as e:
-            logger.warning(f"[{self.name}] MCP tool {tool_name} failed: {e}")
-            return f"MCP tool '{tool_name}' failed: {e}"
-        finally:
+
+        last_error = None
+        for attempt in range(2):  # 最多重试 1 次
+            client = MCPClient(client_config)
             try:
+                await asyncio.wait_for(client.connect(), timeout=10.0)
+                result = await asyncio.wait_for(
+                    client.call_tool(tool_name, args),
+                    timeout=30.0
+                )
                 await client.disconnect()
-            except Exception:
-                pass
+                if result:
+                    return result
+                # 空结果视为失败
+                last_error = f"MCP tool '{tool_name}' returned empty result"
+                logger.warning(f"[{self.name}] {last_error} (attempt {attempt + 1})")
+            except asyncio.TimeoutError:
+                last_error = f"MCP tool '{tool_name}' timed out"
+                logger.warning(f"[{self.name}] {last_error} (attempt {attempt + 1})")
+            except Exception as e:
+                last_error = f"MCP tool '{tool_name}' failed: {e}"
+                logger.warning(f"[{self.name}] {last_error} (attempt {attempt + 1})")
+            finally:
+                try:
+                    await client.disconnect()
+                except Exception:
+                    pass
+
+            # 第一次失败后等待一下再重试
+            if attempt == 0:
+                await asyncio.sleep(1)
+
+        # 所有重试都失败，尝试 fallback
+        logger.warning(f"[{self.name}] MCP tool '{tool_name}' failed after retries, attempting fallback")
+        fallback = await self._mcp_fallback(tool_name, args)
+        if fallback:
+            return fallback
+
+        return f"MCP tool '{tool_name}' failed: {last_error}"
+
+    async def _mcp_fallback(self, tool_name: str, args: Dict[str, Any]) -> Optional[str]:
+        """MCP 工具失败时的本地 fallback 降级。
+
+        对于关键工具提供本地替代实现，确保系统不会因 MCP 服务不可用而完全中断。
+        """
+        # file_write fallback: 直接写入本地文件
+        if tool_name == "file_write":
+            file_path = args.get("file_path", "")
+            content = args.get("content", "")
+            if file_path and content:
+                try:
+                    from pathlib import Path
+                    path = Path(file_path)
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text(content, encoding="utf-8")
+                    logger.info(f"[{self.name}] file_write fallback: wrote {len(content)} chars to {file_path}")
+                    return f"File written successfully (fallback): {file_path}"
+                except Exception as e:
+                    logger.warning(f"[{self.name}] file_write fallback failed: {e}")
+                    return f"file_write fallback failed: {e}"
+
+        # latex_compile fallback: 尝试本地调用 pdflatex/xelatex
+        if tool_name == "latex_compile":
+            tex_file = args.get("file_path", args.get("tex_file", ""))
+            if tex_file:
+                try:
+                    import subprocess
+                    result = subprocess.run(
+                        ["xelatex", "-interaction=nonstopmode", tex_file],
+                        capture_output=True,
+                        text=True,
+                        timeout=60,
+                    )
+                    if result.returncode == 0:
+                        pdf_file = tex_file.replace(".tex", ".pdf")
+                        logger.info(f"[{self.name}] latex_compile fallback: compiled {tex_file}")
+                        return f"LaTeX compiled successfully (fallback): {pdf_file}"
+                    else:
+                        logger.warning(f"[{self.name}] latex_compile fallback: xelatex failed")
+                        return f"LaTeX compilation failed (fallback): {result.stderr[:200]}"
+                except FileNotFoundError:
+                    logger.warning(f"[{self.name}] latex_compile fallback: xelatex not found")
+                    return "latex_compile fallback failed: xelatex not installed"
+                except Exception as e:
+                    logger.warning(f"[{self.name}] latex_compile fallback failed: {e}")
+                    return f"latex_compile fallback failed: {e}"
+
+        # web_search fallback: 使用 LLM 生成模拟搜索结果
+        if tool_name in ("web_search", "bing_search", "brave_search"):
+            query = args.get("query", "")
+            if query:
+                logger.info(f"[{self.name}] web_search fallback: generating simulated results for '{query[:50]}'")
+                return json.dumps({
+                    "results": [
+                        {
+                            "title": f"Simulated result for: {query[:50]}",
+                            "url": "https://example.com",
+                            "snippet": f"This is a simulated search result. MCP search service is unavailable. Query: {query[:100]}",
+                        }
+                    ],
+                    "fallback": True,
+                    "message": "MCP search service unavailable, using simulated results",
+                })
+
+        # paper_search fallback: 返回空结果 + 提示
+        if tool_name in ("paper_search", "arxiv_search", "scholar_search"):
+            logger.info(f"[{self.name}] paper_search fallback: MCP unavailable")
+            return json.dumps({
+                "papers": [],
+                "fallback": True,
+                "message": "MCP paper search unavailable. Using LLM-generated references.",
+            })
+
+        # file_read fallback: 直接读取本地文件
+        if tool_name == "file_read":
+            file_path = args.get("file_path", "")
+            if file_path:
+                try:
+                    from pathlib import Path
+                    content = Path(file_path).read_text(encoding="utf-8")
+                    logger.info(f"[{self.name}] file_read fallback: read {len(content)} chars from {file_path}")
+                    return content
+                except Exception as e:
+                    logger.warning(f"[{self.name}] file_read fallback failed: {e}")
+                    return f"file_read fallback failed: {e}"
+
+        # 其他工具：返回明确的 fallback 不可用提示
+        logger.info(f"[{self.name}] No fallback available for MCP tool '{tool_name}'")
+        return None
 
     async def _tool_read_csv_columns(self, file_path: str) -> str:
         from ..services.data_schema import get_schema_extractor

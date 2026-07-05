@@ -966,36 +966,217 @@ class GPUExecutor:
         return None
 
     def _generate_inference_script(self) -> str:
-        """生成最小推理脚本内容。"""
+        """生成真实推理脚本内容。
+
+        支持两种模式：
+        1. 模型文件模式：加载 checkpoint 文件进行推理
+        2. 目录模式：扫描目录下的模型文件并批量推理
+
+        输出 JSON 格式：{"device": "...", "model": "...", "predictions": [...], "metrics": {...}}
+        """
         return '''\
-"""Auto-generated minimal inference script."""
+"""Auto-generated inference script with real prediction logic."""
 import argparse
 import json
 import sys
 import os
+import glob
+import time
 
 try:
     import torch
+    import torch.nn as nn
     HAS_TORCH = True
 except ImportError:
     HAS_TORCH = False
 
+try:
+    import numpy as np
+    HAS_NUMPY = True
+except ImportError:
+    HAS_NUMPY = False
+
+
+def load_model(model_path: str, device: str):
+    """加载 PyTorch 模型 checkpoint。"""
+    if not HAS_TORCH:
+        raise RuntimeError("PyTorch is required for model inference")
+
+    checkpoint = torch.load(model_path, map_location=device, weights_only=False)
+
+    # 支持多种 checkpoint 格式
+    if isinstance(checkpoint, dict):
+        if "model_state_dict" in checkpoint:
+            model = checkpoint.get("model")
+            if model is None:
+                # 尝试从 model_class 重建
+                model_class = checkpoint.get("model_class")
+                if model_class:
+                    model = model_class()
+                    model.load_state_dict(checkpoint["model_state_dict"])
+                else:
+                    raise ValueError("Checkpoint has model_state_dict but no model or model_class")
+            else:
+                model.load_state_dict(checkpoint["model_state_dict"])
+        elif "state_dict" in checkpoint:
+            # 简单 state_dict 格式，需要外部提供模型结构
+            raise ValueError("Checkpoint has state_dict but no model architecture. Please provide model class.")
+        else:
+            # 可能是完整的模型对象
+            model = checkpoint
+    else:
+        model = checkpoint
+
+    model = model.to(device)
+    model.eval()
+    return model
+
+
+def load_data(data_path: str, batch_size: int = 32):
+    """加载推理数据。支持 CSV、NPY、图片目录。"""
+    if not HAS_TORCH:
+        raise RuntimeError("PyTorch is required for data loading")
+
+    from torch.utils.data import DataLoader, TensorDataset
+
+    if os.path.isdir(data_path):
+        # 图片目录模式
+        from torchvision import transforms
+        from torchvision.datasets import ImageFolder
+        transform = transforms.Compose([
+            transforms.Resize((224, 224)),
+            transforms.ToTensor(),
+        ])
+        dataset = ImageFolder(data_path, transform=transform)
+        return DataLoader(dataset, batch_size=batch_size, shuffle=False)
+    elif data_path.endswith('.npy'):
+        # NumPy 数组模式
+        data = np.load(data_path)
+        if HAS_NUMPY and isinstance(data, np.ndarray):
+            tensor = torch.from_numpy(data).float()
+            if tensor.dim() == 3:
+                tensor = tensor.unsqueeze(0)
+            dataset = TensorDataset(tensor)
+            return DataLoader(dataset, batch_size=batch_size, shuffle=False)
+    elif data_path.endswith('.csv'):
+        # CSV 模式（假设最后一列是标签）
+        import csv
+        features = []
+        labels = []
+        with open(data_path, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader, None)
+            for row in reader:
+                if len(row) >= 2:
+                    features.append([float(x) for x in row[:-1]])
+                    labels.append(int(row[-1]))
+        if features:
+            X = torch.tensor(features, dtype=torch.float32)
+            y = torch.tensor(labels, dtype=torch.long)
+            dataset = TensorDataset(X, y)
+            return DataLoader(dataset, batch_size=batch_size, shuffle=False)
+
+    raise ValueError(f"Unsupported data format: {data_path}")
+
+
+def run_inference(model, dataloader, device: str):
+    """执行推理并收集预测结果。"""
+    all_predictions = []
+    all_labels = []
+    all_probs = []
+    total_time = 0.0
+
+    with torch.no_grad():
+        for batch in dataloader:
+            if len(batch) == 2:
+                inputs, labels = batch
+                all_labels.extend(labels.cpu().numpy().tolist())
+            else:
+                inputs = batch[0]
+
+            inputs = inputs.to(device)
+            start_time = time.time()
+            outputs = model(inputs)
+            elapsed = time.time() - start_time
+            total_time += elapsed
+
+            # 获取预测结果
+            if isinstance(outputs, torch.Tensor):
+                if outputs.dim() == 1 or (outputs.dim() == 2 and outputs.size(1) == 1):
+                    # 二分类/回归
+                    probs = torch.sigmoid(outputs).cpu().numpy()
+                    preds = (probs > 0.5).astype(int).tolist()
+                else:
+                    # 多分类
+                    probs = torch.softmax(outputs, dim=1).cpu().numpy()
+                    preds = outputs.argmax(dim=1).cpu().numpy().tolist()
+
+                all_predictions.extend(preds)
+                all_probs.extend(probs.tolist() if probs.ndim > 1 else probs.tolist())
+
+    # 计算指标
+    metrics = {"inference_time_s": round(total_time, 4)}
+    if all_labels and all_predictions:
+        correct = sum(1 for p, l in zip(all_predictions, all_labels) if p == l)
+        metrics["accuracy"] = round(correct / len(all_labels), 4) if all_labels else 0
+        metrics["total_samples"] = len(all_labels)
+
+    return all_predictions, metrics
+
+
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--model_path", required=True)
-    parser.add_argument("--data_path", required=True)
-    parser.add_argument("--gpu_id", type=int, default=-1)
-    parser.add_argument("--batch_size", type=int, default=32)
+    parser = argparse.ArgumentParser(description="Auto-generated inference script")
+    parser.add_argument("--model_path", required=True, help="Path to model checkpoint")
+    parser.add_argument("--data_path", required=True, help="Path to inference data")
+    parser.add_argument("--gpu_id", type=int, default=-1, help="GPU device ID (-1 for CPU)")
+    parser.add_argument("--batch_size", type=int, default=32, help="Batch size")
+    parser.add_argument("--output_path", default=None, help="Path to save predictions JSON")
     args = parser.parse_args()
 
+    # 设备选择
     device = "cpu"
     if HAS_TORCH and args.gpu_id >= 0 and torch.cuda.is_available():
         if args.gpu_id < torch.cuda.device_count():
             device = f"cuda:{args.gpu_id}"
 
-    print(f"{{\"device\": \"{device}\", \"model\": \"{args.model_path}\"}}")
-    # 这里仅做占位；实际推理逻辑应由业务脚本提供
-    print("[]")
+    try:
+        # 加载模型
+        model = load_model(args.model_path, device)
+
+        # 加载数据
+        dataloader = load_data(args.data_path, args.batch_size)
+
+        # 执行推理
+        predictions, metrics = run_inference(model, dataloader, device)
+
+        # 构建结果
+        result = {
+            "device": device,
+            "model": args.model_path,
+            "data": args.data_path,
+            "predictions": predictions,
+            "metrics": metrics,
+        }
+
+        # 保存到文件（如果指定了输出路径）
+        if args.output_path:
+            with open(args.output_path, 'w') as f:
+                json.dump(result, f, indent=2)
+
+        # 输出到 stdout
+        print(json.dumps(result))
+
+    except Exception as e:
+        error_result = {
+            "error": str(e),
+            "device": device,
+            "model": args.model_path,
+            "predictions": [],
+            "metrics": {},
+        }
+        print(json.dumps(error_result))
+        sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

@@ -381,14 +381,20 @@ async def submit_task(req: TaskCreateRequest):
         auto_decision_path="llm_collected" if (not data_files and allow_self_collect) else "user_provided",
     )
 
-    # 9. 启动工作流
-    asyncio.create_task(_run_workflow(
-        task_id, req.problem_text, req.workflow, data_files,
-        final_mode, project_name, req.get_effective_kb_ids() or None,
-        final_template, final_workflow,
-        preflight_report.to_dict(),
-        use_critique,
-    ))
+    # 9. 启动工作流（v7.1：使用 AsyncTaskManager 替代 fire-and-forget）
+    from ..core.task_manager import get_task_manager
+    task_mgr = get_task_manager()
+
+    task_mgr.submit(
+        task_id=task_id,
+        coro_factory=lambda: _run_workflow(
+            task_id, req.problem_text, req.workflow, data_files,
+            final_mode, project_name, req.get_effective_kb_ids() or None,
+            final_template, final_workflow,
+            preflight_report.to_dict(),
+            use_critique,
+        ),
+    )
 
     return {
         "task_id": task_id,
@@ -615,78 +621,69 @@ async def get_result(task_id: str):
 
 @router.get("/{task_id}/stream")
 async def stream(task_id: str):
-    orch = get_orchestrator()
+    """SSE 实时事件流（v7.1：基于 EventBus 事件驱动，替代轮询）。
+
+    前端通过 EventSource 连接此端点，实时接收 Agent 执行事件：
+    - agent_start：Agent 开始执行
+    - agent_complete：Agent 执行完成
+    - phase_change：阶段切换
+    - progress：进度更新
+    - error：错误事件
+    - completed/failed：任务终态
+    """
+    from ..core.event_bus import get_event_bus
     from ..core.task_persistence import load_task_metadata
 
+    orch = get_orchestrator()
+    bus = get_event_bus()
+
+    # 订阅事件流
+    queue = bus.subscribe(task_id)
+
     async def gen():
-        last_status = None
-        last_progress = -1
-        last_step = ""
-        while True:
+        try:
+            # 先发送当前状态（给新连接的客户端）
             status = orch.get_task_status(task_id)
             meta = load_task_metadata(task_id)
-
-            if not status and not meta:
-                yield "event: error\ndata: " + json.dumps({"error": "not found"}) + "\n\n"
-                break
-
-            if status:
-                st = status.status
-                prog = status.progress_percentage
-                cur = status.current_step
-                tot = status.total_steps
-            else:
-                st = meta.get("status", "unknown")
-                prog = meta.get("progress", 0)
-                cur = meta.get("current_step", "")
-                tot = meta.get("total_steps", 0)
-
-            # 实时更新持久化进度（不传 problem_text，避免覆盖已有值）
-            save_task_metadata(
-                task_id=task_id,
-                problem_text="",  # 空字符串，由 task_persistence 保留已有值
-                status=st,
-                created_at=meta.get("created_at", "") if meta else "",
-                progress=prog,
-                current_step=cur,
-                total_steps=tot,
-            )
-
-            # 只在状态变化时推送事件
-            if st != last_status or prog != last_progress or cur != last_step:
-                last_status = st
-                last_progress = prog
-                last_step = cur
-
-                # 判断事件类型
-                event_type = "phase_changed"
-                if st in [TaskStatus.COMPLETED, "completed"]:
-                    event_type = "completed"
-                elif st in [TaskStatus.FAILED, "failed"]:
-                    event_type = "failed"
-                elif cur and "peer_review" in str(cur).lower():
-                    event_type = "peer_review_done"
-                elif cur and "revise" in str(cur).lower():
-                    event_type = "revision_done"
-
+            if status or meta:
+                st = status.status if status else meta.get("status", "unknown")
+                prog = status.progress_percentage if status else meta.get("progress", 0)
+                cur = status.current_step if status else meta.get("current_step", "")
                 payload = {
                     "task_id": task_id,
                     "status": st,
                     "progress": prog,
                     "current_step": cur,
-                    "total_steps": tot,
                     "name": map_status_to_event_name(st, cur),
                 }
-                yield f"event: {event_type}\ndata: " + json.dumps(payload) + "\n\n"
+                yield f"event: phase_changed\ndata: " + json.dumps(payload) + "\n\n"
 
-            if st in [TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED, "completed", "failed", "cancelled"]:
-                break
-            await asyncio.sleep(2)
+            # 实时接收 EventBus 事件
+            while True:
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=30)
+                    yield event.to_sse()
+
+                    # 终态时清理
+                    if event.event_type in ("completed", "failed"):
+                        break
+                except asyncio.TimeoutError:
+                    # 30 秒无事件，发送心跳保活
+                    yield ": heartbeat\n\n"
+
+                    # 检查任务是否已结束（防止遗漏终态事件）
+                    status = orch.get_task_status(task_id)
+                    if status and status.status in ("completed", "failed", "cancelled"):
+                        st = status.status
+                        yield f"event: {st}\ndata: " + json.dumps({"task_id": task_id, "status": st}) + "\n\n"
+                        break
+        finally:
+            bus.unsubscribe(task_id, queue)
 
     return StreamingResponse(
         gen(),
         media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache"},
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 

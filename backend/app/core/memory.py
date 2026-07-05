@@ -248,14 +248,27 @@ class EpisodicMemory:
     def get_by_type(self, event_type: str) -> List[Dict[str, Any]]:
         return [e for e in self.entries if e["event_type"] == event_type]
 
-    def compress(self) -> str:
+    def compress(self, llm_client=None) -> str:
         """将原始条目压缩为高层次摘要。
 
-        真实场景下应调用 LLM 进行摘要，这里做简单的规则压缩。
-        Orchestrator 在阶段完成后可调用 LLM 做真正的压缩。
+        优先使用 LLM 智能摘要（如果提供了 llm_client），
+        否则回退到规则压缩。
+
+        Args:
+            llm_client: 可选的 LLM 客户端，用于生成智能摘要。
+                       如果为 None，则使用规则压缩。
         """
         if not self.entries:
             return ""
+
+        # 尝试 LLM 智能摘要
+        if llm_client is not None:
+            try:
+                return self._compress_with_llm(llm_client)
+            except Exception as e:
+                logger.warning(f"LLM compression failed, falling back to rule-based: {e}")
+
+        # 回退到规则压缩
 
         agent_events: Dict[str, List[str]] = {}
         for e in self.entries:
@@ -266,6 +279,69 @@ class EpisodicMemory:
         parts = [f"## {agent}\n" + "\n".join(events) for agent, events in agent_events.items()]
         self.summary = "\n\n".join(parts)
         return self.summary
+
+    def _compress_with_llm(self, llm_client) -> str:
+        """使用 LLM 生成智能摘要。
+
+        将事件日志发送给 LLM，生成结构化的任务执行摘要。
+        """
+        # 构建事件摘要（限制长度，避免 token 超限）
+        events_text = []
+        for e in self.entries[-20:]:  # 最多取最近 20 条
+            events_text.append(
+                f"[{e['timestamp'][:16]}] {e['agent']} ({e['event_type']}): "
+                f"{e['content'][:200]}"
+            )
+
+        prompt = f"""请为以下多智能体协作任务生成一段简洁的执行摘要。
+
+任务ID: {self.task_id}
+事件数量: {len(self.entries)}
+
+最近事件:
+{chr(10).join(events_text)}
+
+要求:
+1. 总结关键决策和结果
+2. 标注重要的成功/失败事件
+3. 提取可供未来任务参考的经验
+4. 控制在 200 字以内
+
+请直接输出摘要内容，不要添加标题或前缀。"""
+
+        try:
+            # 同步调用 LLM（通过 asyncio.run 如果需要）
+            import asyncio
+            if asyncio.iscoroutinefunction(llm_client.chat):
+                response = asyncio.run(llm_client.chat(
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=300,
+                ))
+            else:
+                response = llm_client.chat(
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=300,
+                )
+
+            # 提取内容
+            if isinstance(response, dict):
+                content = response.get("content", "")
+            elif isinstance(response, str):
+                content = response
+            else:
+                content = str(response)
+
+            if content and len(content) > 20:
+                self.summary = content.strip()
+                logger.info(f"EpisodicMemory: LLM compression produced {len(self.summary)} chars summary")
+                return self.summary
+
+        except Exception as e:
+            logger.warning(f"LLM compression call failed: {e}")
+            raise
+
+        # LLM 返回空结果，回退到规则压缩
+        raise ValueError("LLM returned empty result")
 
     def to_dict(self) -> Dict[str, Any]:
         return {

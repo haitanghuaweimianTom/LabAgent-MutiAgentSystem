@@ -301,15 +301,25 @@ class ModelerAgent(BaseAgent):
             ]
 
             model_result = None
-            try:
-                response = await self.call_llm(messages=messages, temperature=0.3)
-                content = response.get("choices", [{}])[0].get("message", {}).get("content", "")
-                model_result = self.extract_json(content)
-            except Exception as e:
-                logger.warning(f"ModelerAgent 逐个建模LLM失败: {e}，使用模板")
+            # 重试最多 2 次
+            for attempt in range(2):
+                try:
+                    response = await self.call_llm(messages=messages, temperature=0.3)
+                    content = response.get("choices", [{}])[0].get("message", {}).get("content", "")
+                    model_result = self.extract_json(content)
+                    if model_result:
+                        break
+                except Exception as e:
+                    logger.warning(f"ModelerAgent 逐个建模LLM失败 (attempt {attempt+1}): {e}")
+                    if attempt < 1:
+                        import asyncio
+                        await asyncio.sleep(2)
 
             if not model_result:
+                # 兜底模板：标记为降级模式，非真实建模结果
                 model_result = self._smart_template_fallback(sp, suggested, sp_type)
+                model_result["_degraded_mode"] = True
+                model_result["_degraded_reason"] = "LLM 调用失败（含重试），使用模板兜底"
 
             model_result["sub_problem_id"] = sp_id
             model_result["sub_problem_name"] = sp_name
@@ -357,21 +367,29 @@ class ModelerAgent(BaseAgent):
             {"role": "system", "content": self.get_system_prompt()},
             {"role": "user", "content": prompt},
         ]
-        try:
-            response = await self.call_llm(messages=messages)
-            content = response.get("choices", [{}])[0].get("message", {}).get("content", "")
-            result = self.extract_json(content)
-            if result:
-                result["sub_problem_index"] = sub_idx
-                result["sub_problem_name"] = sub_problem.get("name", f"子问题{sub_idx+1}")
-                logger.info(f"ModelerAgent 完成: {result.get('model_name', 'unknown')}")
-                return result
-        except Exception as e:
-            logger.warning(f"ModelerAgent LLM解析失败: {e}，使用智能模板")
+        # 重试最多 2 次
+        for attempt in range(2):
+            try:
+                response = await self.call_llm(messages=messages)
+                content = response.get("choices", [{}])[0].get("message", {}).get("content", "")
+                result = self.extract_json(content)
+                if result:
+                    result["sub_problem_index"] = sub_idx
+                    result["sub_problem_name"] = sub_problem.get("name", f"子问题{sub_idx+1}")
+                    logger.info(f"ModelerAgent 完成: {result.get('model_name', 'unknown')}")
+                    return result
+            except Exception as e:
+                logger.warning(f"ModelerAgent LLM解析失败 (attempt {attempt+1}): {e}")
+                if attempt < 1:
+                    import asyncio
+                    await asyncio.sleep(2)
 
+        # 重试全部失败，使用兜底模板（标记为降级）
         result = self._smart_template_fallback(sub_problem, suggested_method, problem_type)
         result["sub_problem_index"] = sub_idx
         result["sub_problem_name"] = sub_problem.get("name", f"子问题{sub_idx+1}")
+        result["_degraded_mode"] = True
+        result["_degraded_reason"] = "LLM 调用失败（含重试），使用模板兜底"
         logger.info(f"ModelerAgent 智能模板: {result.get('model_name')}")
         return result
 

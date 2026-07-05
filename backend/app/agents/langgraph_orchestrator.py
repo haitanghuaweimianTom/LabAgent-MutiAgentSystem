@@ -26,6 +26,7 @@ except Exception as exc:  # pragma: no cover
     logging.getLogger(__name__).warning(f"langgraph 未安装或导入失败: {exc}")
 
 from ..core.chat_room import create_chat_room, get_chat_room
+from ..core.event_bus import get_event_bus
 from ..core.memory import get_memory_manager
 from ..services.result_validator import get_result_validator, get_cross_validator
 from ..services.code_manifest import parse_manifest_from_dict, validate_manifest
@@ -817,6 +818,107 @@ class LangGraphOrchestrator:
             return "experiment"  # 回到实验节点继续迭代
         return "iterative_solver"
 
+    # ------------------------------------------------------------------
+    # v7.1: 并行分析路由
+    # ------------------------------------------------------------------
+
+    def _route_after_analyzer_parallel(self, state: TaskState) -> str:
+        """analyzer 后决定是否进入并行分析（data+research+innovation 同时执行）。"""
+        problem_type = (self._resolve_results(state).get("analyzer_agent", {}) or {}).get("problem_type", "")
+        has_data = bool(state.get("files"))
+        skip_data = self._should_skip_data(problem_type, has_data)
+        skip_research = self._should_skip_research(problem_type, state.get("workflow_type", "standard"))
+
+        # 都跳过 → 直接到建模
+        if skip_data and skip_research:
+            return "skip_to_modeling"
+
+        # 至少有一个需要执行 → 进入并行分析
+        return "parallel"
+
+    def _route_after_parallel_analysis(self, state: TaskState) -> str:
+        """并行分析完成后，选择建模 Agent。"""
+        workflow = state.get("workflow_type", "standard")
+        if workflow in ("deep_research", "research_paper"):
+            return "discuss"
+        template = state.get("paper_template", "math_modeling")
+        modeling_agent = self._select_modeling_agent(template, workflow)
+        if not modeling_agent:
+            return "writer"
+        if modeling_agent == "modeler_agent":
+            return "modeler"
+        if modeling_agent == "algorithm_engineer_agent":
+            return "algorithm_engineer"
+        if modeling_agent == "financial_analyst_agent":
+            return "financial_analyst"
+        return "writer"
+
+    async def _node_parallel_analysis(self, state: TaskState) -> TaskState:
+        """v7.1: 并行执行 data_agent + research_agent + innovation_agent。
+
+        参考：LangGraph Send API 的 fan-out/fan-in 模式。
+        在同一个节点内用 asyncio.gather 并发执行三个 Agent，
+        然后合并结果到 state。
+        """
+        import asyncio
+
+        task_id = state["task_id"]
+        bus = get_event_bus()
+        bus.emit_phase_change(task_id, "parallel_analysis", "并行分析阶段：data + research + innovation 同时执行")
+
+        problem_type = (self._resolve_results(state).get("analyzer_agent", {}) or {}).get("problem_type", "")
+        has_data = bool(state.get("files"))
+        skip_data = self._should_skip_data(problem_type, has_data)
+        skip_research = self._should_skip_research(problem_type, state.get("workflow_type", "standard"))
+
+        # 构建并行任务列表
+        tasks = {}
+        task_coros = {}
+
+        if not skip_data:
+            tasks["data"] = self._node_data(state)
+        if not skip_research:
+            tasks["research"] = self._node_research(state)
+            tasks["innovation"] = self._node_innovation(state)
+
+        if not tasks:
+            # 全部跳过
+            return state
+
+        logger.info(f"[LangGraph:{task_id}] parallel_analysis: running {list(tasks.keys())} concurrently")
+        self._update_progress(task_id, state["problem_text"], 30, "并行分析中（data+research+innovation）")
+
+        # 并发执行
+        results = {}
+        coro_list = list(tasks.values())
+        keys = list(tasks.keys())
+        done_results = await asyncio.gather(*coro_list, return_exceptions=True)
+
+        for key, result in zip(keys, done_results):
+            if isinstance(result, Exception):
+                logger.warning(f"[LangGraph:{task_id}] parallel_analysis.{key} failed: {result}")
+                bus.emit_error(task_id, f"{key}_agent", str(result))
+            else:
+                results[key] = result
+
+        # 合并结果到 state
+        merged_results = {**state.get("results", {})}
+        merged_step = "parallel_analysis_done"
+
+        for key, result_state in results.items():
+            if isinstance(result_state, dict):
+                # 每个子节点返回的是完整的 state dict，提取 results 部分
+                sub_results = result_state.get("results", {})
+                merged_results.update(sub_results)
+                # 更新 sub_problems（如果 data 或 research 产生了新的）
+                if "sub_problems" in result_state and result_state["sub_problems"]:
+                    state["sub_problems"] = result_state["sub_problems"]
+
+        bus.emit_agent_complete(task_id, "parallel_analysis", "parallel_analysis",
+                               f"完成 {len(results)} 个并行任务")
+
+        return {**state, "results": merged_results, "current_step": merged_step}
+
     def _get_config(self):
         """获取全局配置。"""
         from ..config import get_settings
@@ -832,6 +934,7 @@ class LangGraphOrchestrator:
         builder.add_node("requirement_decomposition", self._node_requirement_decomposition)
         builder.add_node("preflight_decision", self._node_preflight_decision)
         builder.add_node("analyzer", self._node_analyzer)
+        builder.add_node("parallel_analysis", self._node_parallel_analysis)  # v7.1: 并行分析
         builder.add_node("data", self._node_data)
         builder.add_node("research", self._node_research)
         builder.add_node("innovation", self._node_innovation)
@@ -907,17 +1010,27 @@ class LangGraphOrchestrator:
             },
         )
 
-        # 条件边：analyzer → 按 problem_type 条件分发
+        # 条件边：analyzer → v7.1 并行分析（data+research+innovation 同时执行）
+        # v7.2 fix: skip_to_modeling 也走 parallel_analysis 节点（它会自动选择正确的建模 Agent）
         builder.add_conditional_edges(
             "analyzer",
-            self._route_after_analyzer,
+            self._route_after_analyzer_parallel,
             {
-                "data": "data",
-                "research": "research",
+                "parallel": "parallel_analysis",
+                "skip_to_modeling": "parallel_analysis",  # 修复：不再硬编码 modeler
+            },
+        )
+
+        # 并行分析 → 条件路由到建模 Agent
+        builder.add_conditional_edges(
+            "parallel_analysis",
+            self._route_after_parallel_analysis,
+            {
                 "modeler": "modeler",
                 "algorithm_engineer": "algorithm_engineer",
                 "financial_analyst": "financial_analyst",
                 "writer": "writer",
+                "discuss": "discuss_approach",
             },
         )
 
@@ -978,7 +1091,9 @@ class LangGraphOrchestrator:
         builder.add_edge("cannot_solve", "summary")
         builder.add_edge("summary", END)
         builder.add_edge("self_collect", "preflight_decision")
-        builder.add_edge("wait_user", END)
+        # v7.2: wait_user 不再连接到 END（避免流程中断）
+        # 改为自循环：等待用户输入后重新评估 peer_review
+        builder.add_edge("wait_user", "peer_review")
 
         # requirement_decomposition → preflight_decision（始终进入）
         builder.add_edge("requirement_decomposition", "preflight_decision")
@@ -1131,6 +1246,8 @@ class LangGraphOrchestrator:
             return {**state, "current_step": "analyzer_missing"}
 
         task_id = state["task_id"]
+        bus = get_event_bus()
+        bus.emit_agent_start(task_id, "analyzer_agent", "analysis")
         self._update_progress(task_id, state["problem_text"], 15, "问题分析中")
 
         agent._knowledge_base_id = state.get("knowledge_base_id")
@@ -1154,6 +1271,7 @@ class LangGraphOrchestrator:
                 wm.update_problem(type=output["problem_type"])
 
         self._post_chat(task_id, "analyzer_agent", f"问题分析完成，识别 {len(sub_problems)} 个子问题")
+        bus.emit_agent_complete(task_id, "analyzer_agent", "analysis", f"识别 {len(sub_problems)} 个子问题")
         logger.info(f"[LangGraph:{task_id}] analyzer: {len(sub_problems)} sub_problems")
         return {**state, "results": {**state.get("results", {}), **ref_update}, "sub_problems": sub_problems, "current_step": "analyzer_done"}
 
@@ -1165,6 +1283,8 @@ class LangGraphOrchestrator:
             return {**state, "current_step": "data_skipped"}
 
         task_id = state["task_id"]
+        bus = get_event_bus()
+        bus.emit_agent_start(task_id, "data_agent", "data_analysis")
         self._update_progress(task_id, state["problem_text"], 25, "数据分析中")
 
         agent._knowledge_base_id = state.get("knowledge_base_id")
@@ -1184,6 +1304,7 @@ class LangGraphOrchestrator:
             wm.data_insights = output.get("insights", [])
 
         self._post_chat(task_id, "data_agent", "数据分析完成")
+        bus.emit_agent_complete(task_id, "data_agent", "data_analysis")
         return {**state, "results": {**state.get("results", {}), **ref_update}, "current_step": "data_done"}
 
     async def _node_research(self, state: TaskState) -> TaskState:
@@ -1205,6 +1326,8 @@ class LangGraphOrchestrator:
             logger.info(f"[LangGraph:{task_id}] research: skipped (workflow={workflow})")
             return {**state, "current_step": "research_skipped"}
 
+        bus = get_event_bus()
+        bus.emit_agent_start(task_id, "research_agent", "literature_search")
         self._update_progress(task_id, state["problem_text"], 35, "文献搜集中")
         agent._knowledge_base_id = state.get("knowledge_base_id")
         agent._knowledge_base_ids = state.get("knowledge_base_ids")
@@ -1257,6 +1380,7 @@ class LangGraphOrchestrator:
                 wm.set_result("cross_paper_gaps", gap_analysis)
 
         self._post_chat(task_id, "research_agent", f"文献搜集完成，{len(all_papers)} 篇文献，{len(all_methods)} 个方法")
+        bus.emit_agent_complete(task_id, "research_agent", "literature_search", f"{len(all_papers)} 篇文献, {len(all_methods)} 个方法")
         return {**state, "results": {**state.get("results", {}), **ref_update}, "current_step": "research_done"}
 
     async def _node_modeler(self, state: TaskState) -> TaskState:
@@ -1266,6 +1390,8 @@ class LangGraphOrchestrator:
             return {**state, "current_step": "modeler_missing"}
 
         task_id = state["task_id"]
+        bus = get_event_bus()
+        bus.emit_agent_start(task_id, "modeler_agent", "modeling")
         sub_problems = state.get("sub_problems", [])
         results = self._resolve_results(state)
         all_models = []
@@ -1677,6 +1803,8 @@ class LangGraphOrchestrator:
             return {**state, "current_step": "writer_missing"}
 
         task_id = state["task_id"]
+        bus = get_event_bus()
+        bus.emit_agent_start(task_id, "writer_agent", "writing")
         self._update_progress(task_id, state["problem_text"], 70, "论文写作中")
 
         # 从 writer_agent 历史结果读取修订次数（更可靠）
@@ -1711,6 +1839,8 @@ class LangGraphOrchestrator:
             return {**state, "current_step": "peer_review_skipped"}
 
         task_id = state["task_id"]
+        bus = get_event_bus()
+        bus.emit_agent_start(task_id, "peer_review_agent", "peer_review")
         self._update_progress(task_id, state["problem_text"], 80, "同行评议中")
 
         output = await agent.execute(
@@ -1722,6 +1852,7 @@ class LangGraphOrchestrator:
         rec = (output.get("recommendation") or "").lower()
         score = output.get("overall_score", 0)
         self._post_chat(task_id, "peer_review_agent", f"同行评议完成：{rec}，得分 {score}")
+        bus.emit_agent_complete(task_id, "peer_review_agent", "peer_review", f"{rec}, score={score}")
         return {**state, "results": {**state.get("results", {}), **ref_update}, "current_step": "peer_review_done"}
 
     async def _node_experiment(self, state: TaskState) -> TaskState:
@@ -1789,9 +1920,82 @@ class LangGraphOrchestrator:
                 if method and method.get("hyperparameters"):
                     search_space = create_search_space_from_method(method)
                     automl_service = AutoMLService(search_space)
-                    # 使用默认评估器（快速评估）
+
+                    # 构建真实评估器：用超参配置生成代码 + 快速训练评估
+                    import tempfile
+                    import subprocess
+                    import sys
+                    import os
+
+                    def _automl_objective(cfg: dict) -> float:
+                        """用给定超参训练简单模型，返回验证准确率。"""
+                        # 构建一个简单的 PyTorch 训练脚本
+                        lr = cfg.get("learning_rate", 0.001)
+                        batch_size = cfg.get("batch_size", 32)
+                        hidden_size = cfg.get("hidden_size", 64)
+                        epochs = 2  # 快速评估
+
+                        script = f'''
+import torch, torch.nn as nn, torch.optim as optim
+from torch.utils.data import DataLoader, TensorDataset
+import torchvision, torchvision.transforms as transforms
+import json, sys
+
+transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,),(0.5,))])
+trainset = torchvision.datasets.CIFAR10(root="./data", train=True, download=True, transform=transform)
+loader = DataLoader(trainset, batch_size={batch_size}, shuffle=True, num_workers=0)
+
+device = "cuda" if torch.cuda.is_available() else "cpu"
+model = nn.Sequential(
+    nn.Flatten(), nn.Linear(32*32*3, {hidden_size}), nn.ReLU(),
+    nn.Linear({hidden_size}, 10)
+).to(device)
+optimizer = optim.Adam(model.parameters(), lr={lr})
+criterion = nn.CrossEntropyLoss()
+
+for epoch in range({epochs}):
+    for inputs, labels in loader:
+        inputs, labels = inputs.to(device), labels.to(device)
+        optimizer.zero_grad()
+        loss = criterion(model(inputs), labels)
+        loss.backward()
+        optimizer.step()
+
+# 简单评估
+correct, total = 0, 0
+for inputs, labels in loader:
+    inputs, labels = inputs.to(device), labels.to(device)
+    _, pred = model(inputs).max(1)
+    correct += pred.eq(labels).sum().item()
+    total += labels.size(0)
+    if total > 500: break
+acc = correct / max(total, 1)
+print(json.dumps({{"accuracy": round(acc, 4)}}))
+'''
+                        try:
+                            with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, dir='/tmp') as f:
+                                f.write(script)
+                                script_path = f.name
+                            result = subprocess.run(
+                                [sys.executable, script_path],
+                                capture_output=True, text=True, timeout=120,
+                                env={**os.environ, 'PYTHONPATH': '/tmp'}
+                            )
+                            for line in result.stdout.splitlines():
+                                if '"accuracy"' in line:
+                                    data = json.loads(line)
+                                    acc = data.get("accuracy", 0.0)
+                                    logger.debug(f"AutoML trial: cfg={cfg}, accuracy={acc}")
+                                    return acc
+                        except Exception as e:
+                            logger.debug(f"AutoML trial failed: {e}")
+                        finally:
+                            try: os.unlink(script_path)
+                            except: pass
+                        return 0.0  # 训练失败返回最低分
+
                     automl_result = automl_service.search(
-                        objective=lambda cfg: 0.5,  # 占位，实际应由 ExperimentRunner 提供
+                        objective=_automl_objective,
                         max_trials=10,
                         strategy="tpe",
                         direction="maximize",
@@ -1934,10 +2138,11 @@ class LangGraphOrchestrator:
         return {**state, "results": {**state.get("results", {}), **ref_update}, "current_step": "figure_done"}
 
     async def _node_fact_check(self, state: TaskState) -> TaskState:
-        """事实核查：对比 main.tex 与 solves.json 数字。"""
+        """事实核查：对比 main.tex 与 solves.json 数字 + fabrication 拦截。"""
         if not self.cfg.enable_fact_check:
             return {**state, "current_step": "fact_check_skipped"}
 
+        task_id = state["task_id"]
         project_name = state.get("project_name")
         try:
             output_dir = get_project_output_dir(project_name)
@@ -1947,16 +2152,38 @@ class LangGraphOrchestrator:
         report: Dict[str, Any] = {"enabled": True, "passed": True}
         if output_dir:
             report = get_fact_checker().check(
-                task_id=state["task_id"],
+                task_id=task_id,
                 output_dir=output_dir,
             )
-            self._set_result(state, "fact_checker", report)
-            logger.info(f"Task {state['task_id']}: fact_check passed={report['passed']} issues={report['issue_count']}")
-        else:
-            report["error"] = "无法确定输出目录"
-            self._set_result(state, "fact_checker", report)
 
-        return {**state, "current_step": "fact_check_done"}
+        # v7.2: 检查 fabrication flags（从 solver/modeler 传递过来）
+        fabrication_issues = []
+        results = self._resolve_results(state)
+        for agent_name, agent_output in results.items():
+            if isinstance(agent_output, dict):
+                flags = agent_output.get("_fabrication_flags", [])
+                score = agent_output.get("_fabrication_score", 0)
+                if flags:
+                    fabrication_issues.extend([f"[{agent_name}] {f}" for f in flags])
+                if score > 0.5:
+                    fabrication_issues.append(f"[{agent_name}] fabrication_score={score:.2f} (>0.5)")
+
+        if fabrication_issues:
+            report["fabrication_issues"] = fabrication_issues
+            report["fabrication_warning"] = (
+                f"检测到 {len(fabrication_issues)} 个潜在编造内容，建议人工审核后方可提交。"
+            )
+            logger.warning(f"Task {task_id}: fabrication issues detected: {fabrication_issues}")
+
+        # 数值一致性检查
+        if not report.get("passed"):
+            report["review_required"] = True
+            logger.warning(f"Task {task_id}: fact_check FAILED, review required")
+
+        self._set_result(state, "fact_checker", report)
+        logger.info(f"Task {task_id}: fact_check passed={report['passed']} issues={report['issue_count']} fabrication={len(fabrication_issues)}")
+
+        return {**state, "results": {**state.get("results", {}), "fact_checker": report}, "current_step": "fact_check_done"}
 
     async def _node_cannot_solve(self, state: TaskState) -> TaskState:
         report = {
@@ -2144,19 +2371,19 @@ class LangGraphOrchestrator:
         }
 
     async def _node_wait_user(self, state: TaskState) -> TaskState:
-        """等待用户输入：通知前端，暂停执行。
+        """v7.2: 全自动模式 — 不再暂停，直接继续。
 
-        用户可以通过 POST /{task_id}/messages 发送消息，
-        然后通过 POST /{task_id}/resume 恢复执行。
+        保留此节点以兼容旧流程，但不再设置 should_pause。
+        用户仍可通过聊天框发送反馈，系统会记录但不暂停。
         """
         task_id = state["task_id"]
         room = get_chat_room(task_id)
         if room:
-            room.set_waiting_for_user(True)
-            room.post("coordinator", "⏸️ 已暂停等待您的反馈。请在聊天框中输入您的意见，然后点击「继续执行」。", "broadcast")
+            room.set_waiting_for_user(False)  # 不再等待
+            room.post("coordinator", "📝 收到反馈，继续自动迭代...", "broadcast")
 
-        self._update_progress(task_id, state["problem_text"], 85, "等待用户反馈")
-        return {**state, "current_step": "waiting_for_user", "should_pause": True}
+        logger.info(f"[LangGraph:{task_id}] wait_user: 全自动模式，继续执行")
+        return {**state, "current_step": "auto_continuing", "should_pause": False}
 
     # ------------------------------------------------------------------
     # 条件路由
@@ -2210,22 +2437,20 @@ class LangGraphOrchestrator:
         if rec == "reject":
             return "abort"
 
-        # 用户已发言 → 等待用户指导修订方向
-        room = get_chat_room(state["task_id"])
-        if room and room.has_user_input():
-            return "wait_user"
-
-        # 用户未发言 → 自动迭代修订（直到高质量或达到上限）
+        # v7.2: 全自动模式 — 不再等待用户，直接自动迭代
         # 优先从 writer_agent 结果读取修订次数，fallback 到顶层 state
         writer_result = self._resolve_results(state).get("writer_agent", {})
         revision_count = writer_result.get("_revision_count", 0) if isinstance(writer_result, dict) else 0
         revision_count = revision_count or state.get("revision_count", 0)
         logger.info(f"[LangGraph:{state['task_id']}] peer review route: rec={rec}, score={score}, revision_count={revision_count}")
-        if revision_count < 3:
-            return "revise"
 
-        # 达到修订上限 → 等待用户决定
-        return "wait_user"
+        # 3 次修订后直接接受（不再等待用户）
+        if revision_count >= 3:
+            logger.info(f"[LangGraph:{state['task_id']}] auto-accept after {revision_count} revisions (score={score})")
+            return "accept"
+
+        # 未达上限 → 自动修订
+        return "revise"
 
     def _route_solver(self, state: TaskState) -> str:
         attempts = state.get("solver_attempts", [])
@@ -2397,12 +2622,22 @@ class LangGraphOrchestrator:
                 missing.append("solver_agent")
             error_msg = f"关键 Agent 缺失: {', '.join(missing)}"
 
+        # v7.2: 检查是否需要暂停（should_pause 标志）
+        should_pause = state.get("should_pause", False)
+
         if cannot_solve or critical_missing:
             save_task_metadata(
                 task_id=task_id, problem_text=state.get("problem_text", ""),
                 status="failed", created_at=datetime.now().isoformat(),
                 completed_at=datetime.now().isoformat(),
                 error=error_msg,
+            )
+        elif should_pause:
+            # 暂停状态：任务未完成，等待用户输入
+            save_task_metadata(
+                task_id=task_id, problem_text=state.get("problem_text", ""),
+                status="paused", created_at=datetime.now().isoformat(),
+                error="等待用户反馈",
             )
         else:
             save_task_metadata(

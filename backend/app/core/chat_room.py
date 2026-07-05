@@ -259,10 +259,16 @@ class ChatRoom:
         return [m for m in self._user_messages if m.timestamp > since]
 
     def has_user_input(self) -> bool:
-        """检查是否有用户输入（用于自动迭代判断）"""
-        return len(self._user_messages) > 0 and (
-            self._user_last_spoke_at is not None
-            and (self._waiting_for_user or True)
+        """检查是否有用户输入（用于自动迭代判断）。
+
+        v7.2 修复：只在系统正在等待用户时才算"有用户输入"。
+        之前 or True 导致任何历史消息都被视为有效输入，
+        导致 peer_review 永远路由到 wait_user。
+        """
+        return (
+            self._waiting_for_user  # 只在等待用户时才检查
+            and len(self._user_messages) > 0
+            and self._user_last_spoke_at is not None
         )
 
     def set_waiting_for_user(self, waiting: bool = True) -> None:

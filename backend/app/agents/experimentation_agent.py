@@ -257,18 +257,17 @@ class ExperimentationAgent(BaseAgent):
             logger.warning(f"[ExperimentationAgent] 实验执行失败: {exc}")
             return False, None
 
-    def _try_smoke_execute(self, plan: Dict[str, Any]) -> bool:
-        """已废弃：原有冒烟执行 stub，保留以兼容旧调用。"""
-        return False
-
     @staticmethod
     def _empty_plan() -> Dict[str, Any]:
+        """返回空实验计划 — 表示 LLM 调用失败，下游应中止而非静默跳过。"""
         return {
             "baselines": [],
             "datasets": [],
             "metrics": [],
-            "hardware_budget": {"feasible": False, "note": "no LLM call made"},
+            "hardware_budget": {"feasible": False, "note": "LLM call failed - experiment plan cannot be generated"},
             "ablation_plan": [],
             "splits": {},
-            "risks": [],
+            "risks": ["实验计划生成失败：LLM 调用未返回有效结果"],
+            "_plan_generation_failed": True,
+            "_error": "No valid experiment plan could be generated from LLM. Task should be retried or escalated.",
         }

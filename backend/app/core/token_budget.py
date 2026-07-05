@@ -25,14 +25,17 @@ MODEL_CONTEXT_WINDOWS = {
 
 
 # 默认预算分配（百分比）
+# v7.1: 增加 react_history 到 15%，减少 user_query 到 20%
+# 复杂任务的 ReAct 循环需要更多空间存放 tool call 历史
 DEFAULT_BUDGET_ALLOCATION = {
     "system_prompt": 0.18,
-    "user_query": 0.25,
+    "user_query": 0.20,
     "knowledge_context": 0.12,
-    "memory_context": 0.12,
-    "agent_profile": 0.08,
-    "react_history": 0.08,
-    "user_feedback": 0.17,  # Human-in-the-loop 用户反馈
+    "memory_context": 0.10,
+    "agent_profile": 0.05,
+    "react_history": 0.15,  # 从 0.08 增加到 0.15，支持复杂 ReAct 任务
+    "user_feedback": 0.15,  # Human-in-the-loop 用户反馈
+    "summary_buffer": 0.05,  # 新增：压缩摘要缓冲区
 }
 
 

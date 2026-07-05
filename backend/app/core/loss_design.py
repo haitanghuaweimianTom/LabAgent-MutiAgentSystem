@@ -441,12 +441,193 @@ class LossDesignAgent:
         }
 
     def _default_evaluator(self, loss_tree: LossNode) -> Dict[str, Any]:
-        """默认评估器：基于表达式复杂度估计。"""
+        """默认评估器：生成损失函数代码并尝试实际训练评估。
+
+        生成包含自定义损失函数的训练脚本，写入临时文件，通过 subprocess 执行。
+        如果训练成功，返回真实验证损失；如果失败，回退到表达式复杂度估计。
+        """
+        import subprocess
+        import sys
+        import tempfile
+        import os
+
         depth = loss_tree.depth()
         n_nodes = len(loss_tree.children) + 1
 
-        # 简单启发式：适中复杂度的损失函数得分高
-        # 太简单（depth=1）得分低，太复杂（depth>5）也得分低
+        # 生成 PyTorch 损失函数代码
+        pytorch_code = generate_loss_function_code(loss_tree, task_type="classification")
+
+        # 构建完整训练评估脚本
+        eval_script = f'''"""Auto-generated loss function evaluation script."""
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torchvision
+import torchvision.transforms as transforms
+from torch.utils.data import DataLoader
+import json
+import sys
+
+# ========== Custom Loss Function ==========
+{pytorch_code}
+
+# ========== Evaluation Script ==========
+def evaluate_loss_function(epochs=3, batch_size=64, lr=0.001, device='cuda'):
+    """用 CIFAR-10 评估自定义损失函数。"""
+    transform = transforms.Compose([
+        transforms.RandomCrop(32, padding=4),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2470, 0.2435, 0.2616)),
+    ])
+    test_transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2470, 0.2435, 0.2616)),
+    ])
+
+    trainset = torchvision.datasets.CIFAR10(root='./data', train=True, download=True, transform=transform)
+    trainloader = DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=2)
+    testset = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=test_transform)
+    testloader = DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2)
+
+    device = torch.device(device if torch.cuda.is_available() else 'cpu')
+
+    # 简单 CNN 模型
+    model = nn.Sequential(
+        nn.Conv2d(3, 32, 3, padding=1), nn.ReLU(), nn.MaxPool2d(2),
+        nn.Conv2d(32, 64, 3, padding=1), nn.ReLU(), nn.MaxPool2d(2),
+        nn.Conv2d(64, 128, 3, padding=1), nn.ReLU(), nn.AdaptiveAvgPool2d(1),
+    ).to(device)
+    classifier = nn.Linear(128, 10).to(device)
+
+    # 使用自定义损失函数
+    try:
+        criterion = CustomLoss()
+    except Exception as e:
+        print(f"EVAL_ERROR: {{e}}", file=sys.stderr)
+        sys.exit(1)
+
+    optimizer = torch.optim.Adam(
+        list(model.parameters()) + list(classifier.parameters()),
+        lr=lr
+    )
+
+    best_val_loss = float('inf')
+    for epoch in range(epochs):
+        # Training
+        model.train()
+        train_loss = 0.0
+        for inputs, labels in trainloader:
+            inputs, labels = inputs.to(device), labels.to(device)
+            optimizer.zero_grad()
+            features = model(inputs)
+            outputs = classifier(features.view(features.size(0), -1))
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
+            train_loss += loss.item()
+
+        # Validation
+        model.eval()
+        val_loss = 0.0
+        correct = 0
+        total = 0
+        with torch.no_grad():
+            for inputs, labels in testloader:
+                inputs, labels = inputs.to(device), labels.to(device)
+                features = model(inputs)
+                outputs = classifier(features.view(features.size(0), -1))
+                loss = criterion(outputs, labels)
+                val_loss += loss.item()
+                _, predicted = outputs.max(1)
+                total += labels.size(0)
+                correct += predicted.eq(labels).sum().item()
+
+        avg_val_loss = val_loss / len(testloader)
+        accuracy = 100.0 * correct / total
+        best_val_loss = min(best_val_loss, avg_val_loss)
+
+        print(json.dumps({{
+            "epoch": epoch + 1,
+            "val_loss": round(avg_val_loss, 4),
+            "accuracy": round(accuracy, 2),
+        }}))
+
+    return {{"best_val_loss": round(best_val_loss, 4), "accuracy": round(accuracy, 2)}}
+
+if __name__ == "__main__":
+    try:
+        result = evaluate_loss_function(epochs=3, batch_size=64)
+        print("EVAL_RESULT:" + json.dumps(result))
+    except Exception as e:
+        print(f"EVAL_ERROR: {{e}}", file=sys.stderr)
+        sys.exit(1)
+'''
+
+        # 执行评估
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode='w', suffix='.py', delete=False, dir='/tmp'
+            ) as f:
+                f.write(eval_script)
+                script_path = f.name
+
+            result = subprocess.run(
+                [sys.executable, script_path],
+                capture_output=True,
+                text=True,
+                timeout=300,
+                env={**os.environ, 'PYTHONPATH': '/tmp'},
+            )
+
+            stdout = result.stdout
+            best_val_loss = float('inf')
+            accuracy = 0.0
+
+            for line in stdout.splitlines():
+                if line.startswith("EVAL_RESULT:"):
+                    try:
+                        eval_data = json.loads(line[len("EVAL_RESULT:"):])
+                        best_val_loss = eval_data.get("best_val_loss", float('inf'))
+                        accuracy = eval_data.get("accuracy", 0.0)
+                    except json.JSONDecodeError:
+                        pass
+
+            if best_val_loss < float('inf'):
+                # 训练成功：基于验证损失计算 fitness
+                # 归一化到 [0, 1]，val_loss 越低越好
+                # CIFAR-10 上 crossentropy 通常在 0.3-1.5 之间
+                fitness = max(0.0, 1.0 - best_val_loss / 2.0)
+                logger.info(
+                    f"Loss evaluator: val_loss={best_val_loss:.4f}, "
+                    f"accuracy={accuracy:.2f}%, fitness={fitness:.3f}"
+                )
+                return {
+                    "fitness": min(fitness, 1.0),
+                    "metrics": {
+                        "val_loss": best_val_loss,
+                        "accuracy": accuracy,
+                        "depth": depth,
+                        "n_nodes": n_nodes,
+                        "trained": True,
+                    },
+                }
+            else:
+                logger.warning("Loss evaluator: training produced no valid result, falling back to estimation")
+
+        except subprocess.TimeoutExpired:
+            logger.warning("Loss evaluator: training timed out (300s), falling back to estimation")
+        except FileNotFoundError:
+            logger.warning("Loss evaluator: Python not found, falling back to estimation")
+        except Exception as e:
+            logger.warning(f"Loss evaluator: training failed ({e}), falling back to estimation")
+        finally:
+            try:
+                os.unlink(script_path)
+            except Exception:
+                pass
+
+        # 回退：基于表达式复杂度（原逻辑）
         if depth <= 1:
             fitness = 0.3
         elif depth <= 3:
@@ -456,13 +637,12 @@ class LossDesignAgent:
         else:
             fitness = 0.4
 
-        # 加权组合器加分（因为更灵活）
         if loss_tree.primitive.name == "weighted_sum":
             fitness += 0.1
 
         return {
             "fitness": min(fitness, 1.0),
-            "metrics": {"depth": depth, "n_nodes": n_nodes},
+            "metrics": {"depth": depth, "n_nodes": n_nodes, "trained": False},
         }
 
 

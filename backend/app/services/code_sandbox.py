@@ -234,10 +234,31 @@ class CodeSandbox:
         if env:
             merged_env.update(env)
 
-        # 若不允许多网络，可设置 HTTP_PROXY 等（此处仅作占位，实际阻断需 iptables/nftables）
+        # 网络隔离：优先使用 Linux network namespace，回退到 proxy env vars
+        use_network_namespace = False
         if not self.config.network_allowed:
-            merged_env["HTTP_PROXY"] = "http://127.0.0.1:0"
-            merged_env["HTTPS_PROXY"] = "http://127.0.0.1:0"
+            # 尝试使用 unshare 创建网络 namespace（真实隔离）
+            try:
+                import shutil
+                if shutil.which("unshare"):
+                    # unshare --net 会创建一个新的网络 namespace，与宿主机网络隔离
+                    # 前置到命令前：unshare --net <original_command>
+                    unshare_path = shutil.which("unshare")
+                    command = [unshare_path, "--net"] + command
+                    use_network_namespace = True
+                    logger.debug("Using network namespace for network isolation")
+            except Exception as e:
+                logger.debug(f"Network namespace not available: {e}")
+
+            if not use_network_namespace:
+                # 回退到 proxy env vars（有限保护）
+                logger.warning(
+                    "Network namespace unavailable; using proxy env vars (limited protection). "
+                    "Install 'util-linux' for real network isolation."
+                )
+                merged_env["HTTP_PROXY"] = "http://127.0.0.1:0"
+                merged_env["HTTPS_PROXY"] = "http://127.0.0.1:0"
+                merged_env["NO_PROXY"] = "*"
 
         max_bytes = self.config.max_memory_mb * 1024 * 1024
 

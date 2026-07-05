@@ -599,25 +599,111 @@ class NASAgent:
         }
 
     def _default_evaluator(self, genome: NetworkSpec) -> Dict[str, Any]:
-        """默认评估器：快速评估架构（通过参数量估计，不实际训练）。
+        """默认评估器：生成 PyTorch 代码并尝试实际训练评估。
 
-        用于快速筛选，实际训练应由外部 evaluator 提供。
+        生成完整的训练脚本，写入临时文件，通过 subprocess 执行。
+        如果训练成功，返回真实准确率；如果失败，回退到参数量估算。
         """
-        # 基于架构复杂度估计得分（参数量越少越好，但要有一定复杂度）
+        import subprocess
+        import sys
+        import tempfile
+        import os
+
         estimated_params = (
-            genome.num_cells * genome.init_channels * genome.init_channels * 9 * 4  # 粗略估计
+            genome.num_cells * genome.init_channels * genome.init_channels * 9 * 4
         )
-        # 简单启发式：参数量适中得分高
+
+        # 生成完整可运行的 PyTorch 训练脚本
+        pytorch_code = generate_pytorch_model(genome, num_classes=10)
+
+        # 追加结果输出（JSON 格式，便于解析）
+        eval_script = pytorch_code + '''
+
+if __name__ == "__main__":
+    import json, sys
+    try:
+        result = train_nas_model(epochs=3, batch_size=64, lr=0.025, device='cuda')
+        print("EVAL_RESULT:" + json.dumps(result))
+    except Exception as e:
+        print("EVAL_ERROR:" + str(e), file=sys.stderr)
+        sys.exit(1)
+'''
+
+        # 写入临时文件并执行
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode='w', suffix='.py', delete=False, dir='/tmp'
+            ) as f:
+                f.write(eval_script)
+                script_path = f.name
+
+            # 执行训练脚本（3 epochs 快速评估，超时 300 秒）
+            result = subprocess.run(
+                [sys.executable, script_path],
+                capture_output=True,
+                text=True,
+                timeout=300,
+                env={**os.environ, 'PYTHONPATH': '/tmp'},
+            )
+
+            # 解析输出
+            stdout = result.stdout
+            best_acc = 0.0
+            num_params = estimated_params
+
+            for line in stdout.splitlines():
+                if line.startswith("EVAL_RESULT:"):
+                    try:
+                        eval_data = json.loads(line[len("EVAL_RESULT:"):])
+                        best_acc = eval_data.get("best_accuracy", 0.0)
+                        num_params = eval_data.get("num_params", estimated_params)
+                    except json.JSONDecodeError:
+                        pass
+
+            if best_acc > 0:
+                # 训练成功：基于真实准确率计算 fitness
+                # 归一化到 [0, 1]，CIFAR-10 上 90%+ 算优秀
+                fitness = min(best_acc / 100.0, 1.0)
+                logger.info(
+                    f"NAS evaluator: trained model achieved {best_acc}% accuracy, "
+                    f"fitness={fitness:.3f}, params={num_params}"
+                )
+                return {
+                    "fitness": fitness,
+                    "metrics": {
+                        "accuracy": best_acc,
+                        "num_params": num_params,
+                        "estimated_params": estimated_params,
+                        "trained": True,
+                    },
+                }
+            else:
+                logger.warning("NAS evaluator: training produced no valid accuracy, falling back to estimation")
+
+        except subprocess.TimeoutExpired:
+            logger.warning("NAS evaluator: training timed out (300s), falling back to estimation")
+        except FileNotFoundError:
+            logger.warning("NAS evaluator: Python not found, falling back to estimation")
+        except Exception as e:
+            logger.warning(f"NAS evaluator: training failed ({e}), falling back to estimation")
+        finally:
+            # 清理临时文件
+            try:
+                os.unlink(script_path)
+            except Exception:
+                pass
+
+        # 回退：基于参数量估算（原逻辑）
         if estimated_params > 5_000_000:
-            fitness = 0.3  # 太大，可能 OOM
+            fitness = 0.3
         elif estimated_params > 1_000_000:
-            fitness = 0.7  # 适中
+            fitness = 0.7
         else:
-            fitness = 0.5  # 较小
+            fitness = 0.5
 
         return {
             "fitness": fitness,
-            "metrics": {"estimated_params": estimated_params},
+            "metrics": {"estimated_params": estimated_params, "trained": False},
         }
 
     def _compare_with_baselines(
