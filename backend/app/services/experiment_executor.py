@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional
 from ..core.dataset_manager import DatasetManager, ProcessedDataset, get_dataset_manager
 from ..core.environment_manager import EnvironmentManager, get_environment_manager
 from ..core.paths import get_project_output_dir
-from .code_sandbox import CodeSandbox, SandboxConfig
+from ..core.sandbox import CodeSandbox, SandboxConfig
 from .experiment_result_aggregator import (
     AggregatedExperimentResult,
     ExperimentResultAggregator,

@@ -4,12 +4,15 @@
 - 隔离文件系统：代码只能读写工作区目录
 - 限制资源：CPU 时间、内存、文件描述符
 - 限制导入：阻止危险模块（os, sys, subprocess 等）
+- 静态代码扫描：拦截危险调用模式
+- 路径白名单：限制文件访问范围
 - 无需 Docker：使用 Linux namespace + resource limit
 
 架构（分层防御）：
   Layer 1: subprocess + resource limit（所有平台）
   Layer 2: Linux namespace 隔离（mount, net, pid）最佳 effort
   Layer 3: Python 导入限制（import hook）
+  Layer 4: 静态代码扫描（regex pattern matching）
 
 注意：这不是军事级沙箱，而是"实用级"隔离——防止 Agent 代码意外破坏系统。
 """
@@ -18,6 +21,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -58,6 +62,27 @@ DEFAULT_BLOCKED_MODULES = {
     "pty", "pwd", "grp", "spwd", "crypt",
 }
 
+# 默认危险代码模式（静态扫描）
+DEFAULT_DANGEROUS_PATTERNS: List[Dict[str, Any]] = [
+    {"pattern": re.compile(r"\bos\.system\s*\("), "reason": "os.system 调用"},
+    {"pattern": re.compile(r"\bos\.popen\s*\("), "reason": "os.popen 调用"},
+    {"pattern": re.compile(r"\bsubprocess\.call\s*\("), "reason": "subprocess.call 调用"},
+    {"pattern": re.compile(r"\bsubprocess\.run\s*\("), "reason": "subprocess.run 调用"},
+    {"pattern": re.compile(r"\bsubprocess\.Popen\s*\("), "reason": "subprocess.Popen 调用"},
+    {"pattern": re.compile(r"\beval\s*\("), "reason": "eval 调用"},
+    {"pattern": re.compile(r"\bexec\s*\("), "reason": "exec 调用"},
+    {"pattern": re.compile(r"\bcompile\s*\("), "reason": "compile 调用"},
+    {"pattern": re.compile(r"\b__import__\s*\("), "reason": "__import__ 调用"},
+    {"pattern": re.compile(r"\bimportlib"), "reason": "importlib 动态导入"},
+    {"pattern": re.compile(r"\bshutil\.rmtree\s*\("), "reason": "shutil.rmtree 递归删除"},
+    {"pattern": re.compile(r"\bopen\s*\([^)]*['\"]\s*\+\s*['\"][^)]*\)"), "reason": "可疑字符串拼接路径"},
+]
+
+# 默认允许的命令前缀（仅用于 run_command 模式）
+DEFAULT_ALLOWED_COMMAND_PREFIXES = [
+    "python", "python3", "pytest", "pip", "conda", "Rscript", "bash", "sh"
+]
+
 
 @dataclass
 class SandboxResult:
@@ -71,6 +96,7 @@ class SandboxResult:
     timeout_reached: bool = False
     memory_exceeded: bool = False
     safety_violations: List[str] = field(default_factory=list)
+    command: List[str] = field(default_factory=list)
     message: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
@@ -78,12 +104,13 @@ class SandboxResult:
             "success": self.success,
             "returncode": self.returncode,
             "stdout": self.stdout[:5000] if self.stdout else "",
-            "stderr": self.stderr[:3000] if self.stderr else "",
+            "stderr": self.stderr[:5000] if self.stderr else "",
             "duration_sec": self.duration_sec,
             "killed_by_sandbox": self.killed_by_sandbox,
             "timeout_reached": self.timeout_reached,
             "memory_exceeded": self.memory_exceeded,
             "safety_violations": self.safety_violations,
+            "command": self.command,
             "message": self.message,
         }
 
@@ -99,12 +126,22 @@ class SandboxConfig:
     blocked_modules: Optional[set] = None
     network_allowed: bool = False
     workspace_persist: bool = False   # 执行后是否保留工作区
+    # 静态扫描 + 路径白名单（来自 services/code_sandbox.py）
+    static_analysis_enabled: bool = True
+    allowed_paths: List[Path] = field(default_factory=list)
+    allowed_command_prefixes: List[str] = field(default_factory=lambda: DEFAULT_ALLOWED_COMMAND_PREFIXES.copy())
+    # 向后兼容：旧代码用 max_runtime_seconds
+    max_runtime_seconds: int = 0
 
     def __post_init__(self):
         if self.allowed_modules is None:
             self.allowed_modules = DEFAULT_ALLOWED_MODULES.copy()
         if self.blocked_modules is None:
             self.blocked_modules = DEFAULT_BLOCKED_MODULES.copy()
+        self.allowed_paths = [Path(p).expanduser().resolve() for p in self.allowed_paths if p]
+        # 向后兼容：max_runtime_seconds -> max_cpu_time
+        if self.max_runtime_seconds > 0 and self.max_cpu_time == 60:
+            self.max_cpu_time = self.max_runtime_seconds
 
 
 class CodeSandbox:
@@ -179,6 +216,118 @@ class CodeSandbox:
         finally:
             if not self.config.workspace_persist:
                 self._cleanup_workspace(workspace)
+
+    def run_file(
+        self,
+        python_file: Path,
+        args: Optional[List[str]] = None,
+        cwd: Optional[Path] = None,
+        env: Optional[Dict[str, str]] = None,
+    ) -> SandboxResult:
+        """执行单个 Python 文件（带静态扫描和路径校验）。"""
+        script = Path(python_file).expanduser().resolve()
+        if not script.exists():
+            return SandboxResult(
+                success=False, returncode=-1,
+                message=f"脚本不存在: {script}",
+            )
+
+        # 静态代码扫描
+        if self.config.static_analysis_enabled:
+            violations = self._scan_code(script)
+            if violations:
+                logger.warning(f"[Sandbox] 静态扫描发现 {len(violations)} 处风险: {violations}")
+                return SandboxResult(
+                    success=False, returncode=-1,
+                    safety_violations=violations,
+                    message="静态安全扫描未通过，拒绝执行",
+                )
+
+        # 路径校验
+        if not self._is_path_allowed(script):
+            return SandboxResult(
+                success=False, returncode=-1,
+                message=f"脚本不在允许路径内: {script}",
+            )
+
+        python_exe = sys.executable
+        command = [python_exe, "-X", "utf8", str(script)] + (args or [])
+        result = self._run_subprocess(command, cwd=cwd or script.parent, env=env)
+        result.command = command
+        return result
+
+    def run_command(
+        self,
+        command: List[str],
+        cwd: Optional[Path] = None,
+        env: Optional[Dict[str, str]] = None,
+    ) -> SandboxResult:
+        """执行外部命令（仅允许白名单前缀）。"""
+        if not command:
+            return SandboxResult(success=False, message="命令为空")
+
+        # 命令前缀校验
+        first = command[0]
+        basename = os.path.basename(first)
+        allowed = any(
+            basename.startswith(prefix) or first.endswith(prefix)
+            for prefix in self.config.allowed_command_prefixes
+        )
+        if not allowed:
+            return SandboxResult(
+                success=False, message=f"命令前缀不在白名单: {first}",
+            )
+
+        # 校验工作目录
+        if cwd and not self._is_path_allowed(cwd):
+            return SandboxResult(
+                success=False, message=f"工作目录不在允许路径内: {cwd}",
+            )
+
+        result = self._run_subprocess(command, cwd=cwd, env=env)
+        result.command = command
+        return result
+
+    # ------------------------------------------------------------------
+    # 静态代码扫描
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def scan_code_text(cls, code: str, extra_patterns: Optional[List[Dict[str, Any]]] = None) -> List[str]:
+        """扫描代码文本，返回违规说明列表。"""
+        patterns = DEFAULT_DANGEROUS_PATTERNS + (extra_patterns or [])
+        violations: List[str] = []
+        for i, line in enumerate(code.splitlines(), 1):
+            for item in patterns:
+                if item["pattern"].search(line):
+                    violations.append(f"第 {i} 行: {item['reason']}")
+                    break
+        return violations
+
+    def _scan_code(self, script: Path) -> List[str]:
+        """扫描脚本文件。"""
+        try:
+            code = script.read_text(encoding="utf-8", errors="replace")
+        except Exception as e:
+            return [f"无法读取脚本进行安全扫描: {e}"]
+        return self.scan_code_text(code)
+
+    # ------------------------------------------------------------------
+    # 路径控制
+    # ------------------------------------------------------------------
+
+    def _is_path_allowed(self, path: Path) -> bool:
+        """检查路径是否在白名单内。"""
+        if not self.config.allowed_paths:
+            return True
+        target = Path(path).expanduser().resolve()
+        for allowed in self.config.allowed_paths:
+            try:
+                target.relative_to(allowed)
+                return True
+            except ValueError:
+                continue
+        return False
 
     # ------------------------------------------------------------------
     # 工作区管理
@@ -359,9 +508,6 @@ class CodeSandbox:
                 try:
                     import ctypes
                     libc = ctypes.CDLL("libc.so.6", use_errno=True)
-                    # CLONE_NEWNS = mount namespace (文件系统隔离)
-                    # CLONE_NEWPID = pid namespace
-                    # CLONE_NEWNET = 网络隔离
                     CLONE_NEWNS = 0x00020000
                     CLONE_NEWPID = 0x20000000
                     CLONE_NEWNET = 0x40000000
@@ -374,6 +520,106 @@ class CodeSandbox:
                     pass
 
         return _preexec
+
+    # ------------------------------------------------------------------
+    # 通用子进程执行（run_file / run_command 共用）
+    # ------------------------------------------------------------------
+
+    def _run_subprocess(
+        self,
+        command: List[str],
+        cwd: Optional[Path] = None,
+        env: Optional[Dict[str, str]] = None,
+    ) -> SandboxResult:
+        """运行子进程并施加资源限制。"""
+        work_dir = Path(cwd).expanduser().resolve() if cwd else Path(tempfile.gettempdir())
+        merged_env = os.environ.copy()
+        merged_env["PYTHONDONTWRITEBYTECODE"] = "1"
+        merged_env["MPLBACKEND"] = "Agg"
+        if env:
+            merged_env.update(env)
+
+        # 网络隔离
+        use_network_namespace = False
+        if not self.config.network_allowed:
+            try:
+                unshare_path = shutil.which("unshare")
+                if unshare_path:
+                    test_proc = subprocess.run(
+                        [unshare_path, "--net", "true"],
+                        capture_output=True, timeout=5,
+                    )
+                    if test_proc.returncode == 0:
+                        command = [unshare_path, "--net"] + command
+                        use_network_namespace = True
+            except Exception:
+                pass
+            if not use_network_namespace:
+                merged_env["HTTP_PROXY"] = "http://127.0.0.1:0"
+                merged_env["HTTPS_PROXY"] = "http://127.0.0.1:0"
+                merged_env["NO_PROXY"] = "*"
+
+        max_mem = self.config.max_memory_mb * 1024 * 1024
+
+        def preexec_fn():
+            import resource as _resource
+            try:
+                _resource.setrlimit(_resource.RLIMIT_AS, (max_mem, max_mem))
+                _resource.setrlimit(
+                    _resource.RLIMIT_CPU,
+                    (self.config.max_cpu_time + 60, self.config.max_cpu_time + 60),
+                )
+            except Exception:
+                pass
+
+        start = time.time()
+        try:
+            kwargs: Dict[str, Any] = {
+                "capture_output": True,
+                "text": True,
+                "cwd": str(work_dir),
+                "env": merged_env,
+                "timeout": self.config.max_cpu_time,
+            }
+            if os.name == "posix":
+                kwargs["preexec_fn"] = preexec_fn
+
+            logger.info(f"[Sandbox] 执行: {' '.join(command)}")
+            proc = subprocess.run(command, **kwargs)
+            duration = time.time() - start
+
+            stdout = proc.stdout or ""
+            stderr = proc.stderr or ""
+            if len(stdout) > self.config.max_output_size:
+                stdout = stdout[:self.config.max_output_size] + "\n[输出已截断]"
+
+            return SandboxResult(
+                success=proc.returncode == 0,
+                returncode=proc.returncode,
+                stdout=stdout,
+                stderr=stderr,
+                duration_sec=round(duration, 2),
+                command=command,
+                message="执行完成" if proc.returncode == 0 else f"进程退出码 {proc.returncode}",
+            )
+        except subprocess.TimeoutExpired as e:
+            duration = time.time() - start
+            logger.error(f"[Sandbox] 执行超时 ({self.config.max_cpu_time}s)")
+            return SandboxResult(
+                success=False, returncode=-2,
+                stdout=e.stdout or "", stderr=e.stderr or "",
+                timeout_reached=True, killed_by_sandbox=True,
+                duration_sec=round(duration, 2), command=command,
+                message=f"执行超时（{self.config.max_cpu_time}s）",
+            )
+        except Exception as e:
+            duration = time.time() - start
+            logger.error(f"[Sandbox] 执行异常: {e}")
+            return SandboxResult(
+                success=False, returncode=-3,
+                duration_sec=round(duration, 2), command=command,
+                message=f"执行异常: {e}",
+            )
 
     # ------------------------------------------------------------------
     # 能力检测

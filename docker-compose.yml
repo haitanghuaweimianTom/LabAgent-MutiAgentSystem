@@ -12,7 +12,7 @@ services:
   # 后端API服务
   backend:
     build:
-      context: ./backend
+      context: .
       dockerfile: Dockerfile
     container_name: math_agent_backend
     ports:

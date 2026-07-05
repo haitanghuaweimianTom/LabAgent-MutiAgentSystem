@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from app.services.code_sandbox import CodeSandbox, SandboxConfig
+from app.core.sandbox import CodeSandbox, SandboxConfig
 from app.services.experiment_result_aggregator import ExperimentResultAggregator
 from app.services.experiment_runner import ExperimentBatchResult, ExperimentRunResult, ExperimentRunner
 
@@ -169,7 +169,7 @@ def test_runner_run_experiment_success(tmp_path):
 def test_runner_extracts_metrics():
     """指标提取应解析 JSON 行。"""
     runner = ExperimentRunner()
-    from app.services.code_sandbox import SandboxResult
+    from app.core.sandbox import SandboxResult
     sandbox_result = SandboxResult(
         success=True,
         returncode=0,

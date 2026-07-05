@@ -4,11 +4,15 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Optional
 
+from ...services.rate_limiter import AsyncTokenBucket
 from .adapters import import_all_adapters  # noqa: F401; registers adapters
+from .cache import LLMCache
 from .registry import get_registry
 from .types import LLMRequest, NormalizedResponse
 
 logger = logging.getLogger(__name__)
+
+_DEFAULT_RATE_LIMITER = AsyncTokenBucket(rate=5.0)
 
 
 class UnifiedLLMClient:
@@ -17,6 +21,10 @@ class UnifiedLLMClient:
     Accepts a provider configuration dict (from provider_config) and
     delegates to the registered adapter for that provider type.
     """
+
+    def __init__(self, rate_limiter: Optional[AsyncTokenBucket] = None):
+        self._rate_limiter = rate_limiter or _DEFAULT_RATE_LIMITER
+        self._cache = LLMCache()
 
     async def chat_completion(
         self,
@@ -39,6 +47,17 @@ class UnifiedLLMClient:
             meta = provider.get("meta", {}) or {}
             provider_type = meta.get("api_format", "openai_compatible")
 
+        # Cache lookup — skip when tools are present (non-deterministic output).
+        use_cache = not tools
+        if use_cache:
+            cached = self._cache.get(provider, messages, model)
+            if cached is not None:
+                logger.debug("LLM cache hit")
+                return cached
+
+        # Rate limit before adapter call.
+        await self._rate_limiter.acquire()
+
         adapter_cls = get_registry().get(provider_type)
         adapter = adapter_cls()
 
@@ -55,9 +74,13 @@ class UnifiedLLMClient:
 
         response = await adapter.chat_completion(request)
         if isinstance(response, str):
-            return NormalizedResponse.from_text(response)
-        if not isinstance(response, dict):
-            return NormalizedResponse.from_text(str(response))
+            response = NormalizedResponse.from_text(response)
+        elif not isinstance(response, dict):
+            response = NormalizedResponse.from_text(str(response))
+
+        if use_cache:
+            self._cache.put(provider, messages, model, response)
+
         return response
 
 

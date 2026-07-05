@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .code_sandbox import CodeSandbox, SandboxConfig, SandboxResult
+from ..core.sandbox import CodeSandbox, SandboxConfig, SandboxResult
 
 logger = logging.getLogger(__name__)
 
