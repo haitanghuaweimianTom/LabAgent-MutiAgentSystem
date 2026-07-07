@@ -28,6 +28,7 @@ import re
 from typing import Any, Dict, List, Optional
 
 from .base import BaseAgent, AgentFactory
+from ..core.security import wrap_user_content
 
 logger = logging.getLogger(__name__)
 
@@ -165,7 +166,7 @@ class ExperimentationAgent(BaseAgent):
         sub_problems: List[Dict[str, Any]],
         modeling_result: Dict[str, Any],
     ) -> str:
-        parts: List[str] = ["【问题描述】", problem_text.strip()[:2000]]
+        parts: List[str] = ["【问题描述】", wrap_user_content(problem_text.strip()[:2000], "problem")]
         if sub_problems:
             parts.append("\n【子问题】")
             for sp in sub_problems[:5]:

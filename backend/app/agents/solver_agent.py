@@ -34,6 +34,7 @@ from ..services.code_manifest import (
 )
 from ..services.result_validator import get_result_validator
 from .base import BaseAgent, AgentFactory
+from ..core.security import wrap_user_content
 
 logger = logging.getLogger(__name__)
 
@@ -1186,10 +1187,11 @@ class SolverAgent(BaseAgent):
         file_path = os.path.join(code_dir, f"solver_sub{sp_id}.py")
 
         # ===== 构建委托给 Claude CLI 的完整任务描述 =====
+        wrapped_context = wrap_user_content(problem_context, "problem")
         task_description = f"""请为以下数学建模子问题完成【全自动编程+执行】任务。
 
 ## 任务描述
-{problem_context}
+{wrapped_context}
 
 ## 参考初始代码（你完全可以重写）
 ```python

@@ -12,6 +12,7 @@ import json
 import re
 from typing import Any, Dict, List, Tuple
 from .base import BaseAgent, AgentFactory
+from ..core.security import wrap_user_content
 
 logger = logging.getLogger(__name__)
 
@@ -315,9 +316,10 @@ class AnalyzerAgent(BaseAgent):
         logger.info(f"AnalyzerAgent: 分析问题 (检测到问题标记: {unique_markers}) {problem_text[:80]}...")
 
         # 调用LLM分析
+        wrapped_problem = wrap_user_content(problem_text, "problem")
         messages = [
             {"role": "system", "content": self.get_system_prompt()},
-            {"role": "user", "content": f"请分析以下数学建模竞赛赛题，识别所有子问题：\n\n{problem_text}\n\n{marker_hint}"},
+            {"role": "user", "content": f"请分析以下数学建模竞赛赛题，识别所有子问题：\n\n{wrapped_problem}\n\n{marker_hint}"},
         ]
 
         try:

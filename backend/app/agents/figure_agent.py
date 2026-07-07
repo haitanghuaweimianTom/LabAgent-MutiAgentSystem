@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from .base import BaseAgent, AgentFactory
+from ..core.security import wrap_user_content
 
 logger = logging.getLogger(__name__)
 
@@ -393,8 +394,9 @@ class FigureAgent(BaseAgent):
         # 构建数据描述
         data_desc = self._describe_data(data)
 
+        wrapped_problem = wrap_user_content(problem_text[:2000], "problem")
         prompt = f"""【论文/问题描述】
-{problem_text[:2000]}
+{wrapped_problem}
 
 【已有数据描述】
 {data_desc}

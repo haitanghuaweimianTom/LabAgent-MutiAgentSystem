@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from .base import BaseAgent, AgentFactory
+from ..core.security import wrap_user_content
 
 logger = logging.getLogger(__name__)
 
@@ -328,7 +329,8 @@ print('\\n分析完成')
             # 通知协调者和建模师
             room = context.get("chat_room")
             if room:
-                room.post("data_agent", f"📊 数据分析完成！分析了 {len(results)} 个文件。", "broadcast")
+                summary_text = wrap_user_content(f"数据分析完成！分析了 {len(results)} 个文件。", "analysis_result")
+                room.post("data_agent", summary_text, "broadcast")
                 for r in results:
                     room.post("data_agent", f"  - {r.get('file_name', '未知')}: {r.get('shape', '?')}", "broadcast")
 

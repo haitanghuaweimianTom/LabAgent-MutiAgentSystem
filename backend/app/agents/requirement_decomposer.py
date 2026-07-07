@@ -9,6 +9,7 @@ import os
 from typing import Any, Dict, Optional
 
 from .base import BaseAgent, AgentFactory
+from ..core.security import wrap_user_content
 from ..core.paths import get_project_output_dir
 
 logger = logging.getLogger(__name__)
@@ -121,7 +122,7 @@ class RequirementDecomposerAgent(BaseAgent):
 
         user_prompt = (
             f"请分析以下数学建模问题，并将其分解为结构化研究计划：\n\n"
-            f"【问题描述】\n{truncated}"
+            f"【问题描述】\n{wrap_user_content(truncated, 'problem')}"
         )
 
         messages = [

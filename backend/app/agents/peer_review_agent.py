@@ -21,6 +21,7 @@ import re
 from typing import Any, Dict, List, Optional
 
 from .base import BaseAgent, AgentFactory
+from ..core.security import wrap_user_content
 from ..core.paper_templates import load_template as _load_template_from_registry
 
 logger = logging.getLogger(__name__)
@@ -182,7 +183,7 @@ class PeerReviewAgent(BaseAgent):
         ]
         if latex_code:
             parts.append("【LaTeX 源码（节选，前 4000 字）】")
-            parts.append(latex_code[:4000])
+            parts.append(wrap_user_content(latex_code[:4000], "latex_code"))
             parts.append("")
         if chapter_summaries:
             parts.append("【章节摘要】")

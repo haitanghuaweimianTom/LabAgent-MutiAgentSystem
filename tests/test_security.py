@@ -231,6 +231,49 @@ class TestBaseAgentUsesWrapUserContent:
         assert "{user_message}" not in prompt_section
 
 
+# ── Task T6: Prompt injection defense in all 14 agent execute() methods ──
+
+@pytest.mark.parametrize("agent_file", [
+    "analyzer_agent.py",
+    "modeler_agent.py",
+    "solver_agent.py",
+    "writer_agent.py",
+    "research_agent.py",
+    "data_agent.py",
+    "algorithm_engineer_agent.py",
+    "financial_analyst_agent.py",
+    "experimentation_agent.py",
+    "figure_agent.py",
+    "innovation_agent.py",
+    "summary_agent.py",
+    "requirement_decomposer.py",
+    "peer_review_agent.py",
+])
+class TestAgentPromptInjectionDefense:
+    """Verify that every agent imports and uses wrap_user_content for prompt injection defense."""
+
+    def _read_agent(self, agent_file: str) -> str:
+        agent_path = Path(__file__).parent.parent / "backend" / "app" / "agents" / agent_file
+        return agent_path.read_text()
+
+    def test_imports_wrap_user_content(self, agent_file: str):
+        src = self._read_agent(agent_file)
+        assert "from ..core.security import wrap_user_content" in src, (
+            f"{agent_file} must import wrap_user_content from ..core.security"
+        )
+
+    def test_uses_wrap_user_content(self, agent_file: str):
+        src = self._read_agent(agent_file)
+        assert "wrap_user_content" in src, (
+            f"{agent_file} must call wrap_user_content to defend against prompt injection"
+        )
+        # Must have at least one actual call (not just the import line)
+        call_count = src.count("wrap_user_content(")
+        assert call_count >= 1, (
+            f"{agent_file} should have at least 1 call to wrap_user_content, found {call_count}"
+        )
+
+
 # ── Task T4: Path traversal guards on delete endpoints ──────────────
 
 

@@ -11,6 +11,7 @@ import json
 import logging
 from typing import Any, Dict, List
 from .base import BaseAgent, AgentFactory
+from ..core.security import wrap_user_content
 
 logger = logging.getLogger(__name__)
 
@@ -273,10 +274,11 @@ class ModelerAgent(BaseAgent):
                 vars_str = ", ".join([v.get("name", "") for v in prev_vars[:5]])
                 prev_model_summary += f"- {prev_sp_name}（{prev_model_name}）:\n  目标函数: {prev_obj[:100]}\n  决策变量: {vars_str}\n"
 
-            prompt = f"""你是一个专业的数学建模专家。请为以下数学建模问题的第{i+1}个子问题建立精确的数学模型。
+            wrapped_problem = wrap_user_content(problem_text, "problem")
+        prompt = f"""你是一个专业的数学建模专家。请为以下数学建模问题的第{i+1}个子问题建立精确的数学模型。
 
 【问题背景】
-{problem_text}
+{wrapped_problem}
 
 【当前子问题】
 名称：{sp_name}
@@ -353,7 +355,7 @@ class ModelerAgent(BaseAgent):
         prompt = f"""请为以下数学建模问题建立精确的数学模型：
 
 【问题背景】
-{problem_text}
+{wrap_user_content(problem_text, 'problem')}
 
 【子问题信息】
 名称：{sub_problem.get('name', f'子问题{sub_idx+1}')}
@@ -413,7 +415,7 @@ class ModelerAgent(BaseAgent):
         prompt = f"""你是一个专业的数学建模专家。请为以下数学建模问题的所有子问题一次性建立完整的数学模型。
 
 【问题背景】
-{problem_text}
+{wrap_user_content(problem_text, 'problem')}
 
 【已识别的子问题】
 {sp_summary}
@@ -596,7 +598,7 @@ class ModelerAgent(BaseAgent):
         task_description = f"""请为以下数学建模问题生成数据处理和模型验证代码。
 
 ## 问题背景
-{problem_text}
+{wrap_user_content(problem_text, 'problem')}
 
 ## 模型信息
 - 模型类型：{model_type}

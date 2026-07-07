@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from .base import BaseAgent, AgentFactory
+from ..core.security import wrap_user_content
 from ..core.paper_templates import load_template as _load_template_from_registry
 
 logger = logging.getLogger(__name__)
@@ -951,6 +952,7 @@ class WriterAgent(BaseAgent):
 
     async def execute(self, task_input: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
         problem_text = task_input.get("problem_text", context.get("problem_text", ""))
+        wrapped_problem = wrap_user_content(problem_text, "problem")
         all_results = context.get("results", {})
         section_results = context.get("section_results", [])
         sub_problems = context.get("sub_problems", [])
@@ -1077,7 +1079,7 @@ class WriterAgent(BaseAgent):
                 chapter_index=idx,
                 chapters=chapters,
                 chapter_plan=chapter_plan,
-                problem_text=problem_text,
+                problem_text=wrapped_problem,
                 outline=outline,
                 section_results=section_results,
                 sub_problems=sub_problems,

@@ -18,6 +18,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from .base import BaseAgent, AgentFactory
+from ..core.security import wrap_user_content
 
 logger = logging.getLogger(__name__)
 
@@ -156,8 +157,9 @@ class FinancialAnalystAgent(BaseAgent):
             desc = (m.get("description") or "")[:130]
             method_summaries.append(f"- {name}: {desc}")
 
+        wrapped_problem = wrap_user_content(problem_text, "problem")
         return f"""## 金融分析问题
-{problem_text}
+{wrapped_problem}
 
 ## 问题分析结果
 ```json

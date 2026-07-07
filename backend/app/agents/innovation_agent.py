@@ -11,6 +11,7 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 from .base import BaseAgent, AgentFactory
+from ..core.security import wrap_user_content
 from ..core.paths import get_project_output_dir
 
 logger = logging.getLogger(__name__)
@@ -167,7 +168,7 @@ class InnovationAgent(BaseAgent):
 
         # 问题背景
         if problem_text:
-            parts.append(f"【问题背景】\n{problem_text[:500]}\n")
+            parts.append(f"【问题背景】\n{wrap_user_content(problem_text[:500], 'problem')}\n")
 
         if problem_type:
             parts.append(f"【问题类型】{problem_type}\n")

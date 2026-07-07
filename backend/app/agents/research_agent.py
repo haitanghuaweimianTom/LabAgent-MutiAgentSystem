@@ -9,6 +9,7 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 from .base import BaseAgent, AgentFactory
+from ..core.security import wrap_user_content
 from ..core.paper_reader import PaperReadingPipeline, PaperReadingConfig
 
 logger = logging.getLogger(__name__)
@@ -625,7 +626,8 @@ class ResearchAgent(BaseAgent):
 
         # 步骤2：构建用户 prompt
         system_prompt = self.get_system_prompt(action)
-        user_content = f"请搜索以下问题的相关资料：{query}\n\n背景：{context.get('problem_text', '')[:300]}"
+        wrapped_query = wrap_user_content(query, "problem")
+        user_content = f"请搜索以下问题的相关资料：{wrapped_query}\n\n背景：{wrap_user_content(context.get('problem_text', '')[:300], 'problem')}"
 
         if verified_papers:
             papers_json = json.dumps(verified_papers, ensure_ascii=False, indent=2)

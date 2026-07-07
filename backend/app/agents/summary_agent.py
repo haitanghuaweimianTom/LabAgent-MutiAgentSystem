@@ -3,6 +3,7 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 from .base import BaseAgent, AgentFactory
+from ..core.security import wrap_user_content
 
 logger = logging.getLogger(__name__)
 
@@ -127,11 +128,12 @@ class SummaryAgent(BaseAgent):
         # 构建用户 prompt
         summaries_text = json.dumps(agent_summaries, ensure_ascii=False, indent=2)
         problem_text = context.get("problem_text", "")[:500]
+        wrapped_problem = wrap_user_content(problem_text, "problem")
         template = context.get("template", "math_modeling")
 
         user_prompt = f"""任务ID: {task_id}
 问题模板: {template}
-问题描述: {problem_text}
+问题描述: {wrapped_problem}
 
 各Agent执行结果摘要:
 {summaries_text[:6000]}

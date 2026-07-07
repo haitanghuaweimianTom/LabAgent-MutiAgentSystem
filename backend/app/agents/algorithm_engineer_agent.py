@@ -20,6 +20,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from .base import BaseAgent, AgentFactory
+from ..core.security import wrap_user_content
 
 logger = logging.getLogger(__name__)
 
@@ -247,8 +248,9 @@ class AlgorithmEngineerAgent(BaseAgent):
             "输出需包含可直接运行的代码提示与工程细节。"
         )
 
+        wrapped_problem = wrap_user_content(problem_text, "problem")
         return f"""## 研究问题
-{problem_text}
+{wrapped_problem}
 
 ## 论文模板
 {template}
