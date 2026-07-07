@@ -256,23 +256,19 @@ class KnowledgeManager:
         return kb
 
     def _rebuild_kb_vectors(self, base: KnowledgeBaseConfig, kb: Any) -> None:
-        """重建知识库的向量索引"""
+        """重建知识库的向量索引（批量添加以确保 TF-IDF 词汇表完整）"""
         kb.clear()
+        pairs = []
         for item in base.items:
             text = self._extract_text(item)
             if not text:
                 continue
-            try:
-                doc_id = f"{item.id}_{item.updated_at}"
-                kb.add_document(
-                    title=item.metadata.get("original_title", item.id),
-                    content=text,
-                    doc_id=doc_id,
-                    source=item.source,
-                    metadata={"item_id": item.id, **item.metadata},
-                )
-            except Exception as e:
-                logger.debug(f"[KnowledgeManager] 添加文档到向量库失败: {e}")
+            title = item.metadata.get("title", item.id)
+            pairs.append((title, text))
+
+        if pairs:
+            kb.add_documents_batch(pairs)
+            logger.info(f"[KnowledgeManager] 向量索引重建完成: {len(pairs)} 个文档")
 
     def _extract_text(self, item: KnowledgeItem) -> str:
         """从 item 中提取可索引的文本"""

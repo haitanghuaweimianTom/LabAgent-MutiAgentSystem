@@ -86,6 +86,28 @@ class KnowledgeBase:
             ids.append(doc_id)
         return ids
 
+    def add_documents_batch(self, title_content_pairs: List[Tuple[str, str]]) -> None:
+        """批量添加文档并一次性拟合 TF-IDF（避免逐条 fit 导致词汇表不完整）"""
+        all_chunks = []
+        for title, content in title_content_pairs:
+            doc = Document(id=f"batch_{len(self._documents)}", title=title, content=content)
+            chunks = self.chunker.chunk(doc)
+            all_chunks.extend(chunks)
+            self._documents[doc.id] = doc
+
+        if all_chunks:
+            # 一次性拟合 + 编码所有文档
+            texts = [c.content for c in all_chunks]
+            self.embedding_model._fitted = False  # 强制重新 fit
+            vectors = self.embedding_model.embed(texts)
+            self.vector_store.documents.extend(all_chunks)
+            if self.vector_store.vectors is None:
+                self.vector_store.vectors = vectors
+            else:
+                import numpy as np
+                self.vector_store.vectors = np.vstack([self.vector_store.vectors, vectors])
+            print(f"[KnowledgeBase] 批量添加 {len(title_content_pairs)} 个文档 ({len(all_chunks)} 个片段)")
+
     def query(
         self,
         query_text: str,
