@@ -2428,18 +2428,32 @@ print(json.dumps({{"accuracy": round(acc, 4)}}))
         }
 
     async def _node_wait_user(self, state: TaskState) -> TaskState:
-        """v7.2: 全自动模式 — 不再暂停，直接继续。
-
-        保留此节点以兼容旧流程，但不再设置 should_pause。
-        用户仍可通过聊天框发送反馈，系统会记录但不暂停。
-        """
+        """检查用户输入，有则注入 context 继续执行"""
         task_id = state["task_id"]
         room = get_chat_room(task_id)
-        if room:
-            room.set_waiting_for_user(False)  # 不再等待
-            room.post("coordinator", "📝 收到反馈，继续自动迭代...", "broadcast")
 
-        logger.info(f"[LangGraph:{task_id}] wait_user: 全自动模式，继续执行")
+        if room:
+            # 检查是否有新用户消息
+            last_check = state.get("last_input_check", 0)
+            user_msgs = room.get_user_messages_since(since=last_check)
+
+            if user_msgs:
+                new_msgs = [{"sender": m.sender, "content": m.content, "timestamp": m.timestamp.isoformat()} for m in user_msgs]
+                all_msgs = state.get("user_messages", [])
+                all_msgs.extend(new_msgs)
+                room.post("coordinator", f"📝 收到 {len(new_msgs)} 条用户反馈，继续执行并调整...", "broadcast")
+
+                return {
+                    **state,
+                    "user_messages": all_msgs,
+                    "last_input_check": time.time(),
+                    "current_step": "processing_user_feedback",
+                    "should_pause": False,
+                }
+
+            # 无用户消息，直接继续
+            room.post("coordinator", "🔄 继续自动执行...", "broadcast")
+
         return {**state, "current_step": "auto_continuing", "should_pause": False}
 
     # ------------------------------------------------------------------
