@@ -86,11 +86,12 @@ class KnowledgeBase:
             ids.append(doc_id)
         return ids
 
-    def add_documents_batch(self, title_content_pairs: List[Tuple[str, str]]) -> None:
+    def add_documents_batch(self, title_content_pairs: List[Tuple[str, str]], meta_list: Optional[List[Dict]] = None) -> None:
         """批量添加文档并一次性拟合 TF-IDF（避免逐条 fit 导致词汇表不完整）"""
         all_chunks = []
-        for title, content in title_content_pairs:
-            doc = Document(id=f"batch_{len(self._documents)}", title=title, content=content)
+        for i, (title, content) in enumerate(title_content_pairs):
+            meta = meta_list[i] if meta_list and i < len(meta_list) else {}
+            doc = Document(id=f"batch_{i}", title=title, content=content, metadata=meta)
             chunks = self.chunker.chunk(doc)
             all_chunks.extend(chunks)
             self._documents[doc.id] = doc

@@ -65,7 +65,7 @@ export interface Paper {
   };
 }
 
-const apiBase = () => window.__API_BASE__ || 'http://localhost:8000/api/v1';
+import { apiBase } from '@/lib/api';
 
 interface AppState {
   projects: Project[];

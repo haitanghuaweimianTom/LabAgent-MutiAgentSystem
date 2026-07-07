@@ -108,6 +108,19 @@ class ChatRoom:
         # 异步通知所有 SSE 订阅者
         self._notify_subscribers(msg)
 
+        # 广播到 EventBus（供前端实时监听）
+        try:
+            from ..core.event_bus import get_event_bus
+            get_event_bus().broadcast_chat_message(
+                task_id=self.task_id,
+                sender=sender,
+                content=content,
+                sender_label=sender_label,
+                msg_type=msg_type,
+            )
+        except Exception:
+            pass  # EventBus 不影响聊天室核心功能
+
         return msg
 
     def _notify_subscribers(self, msg: Message) -> None:

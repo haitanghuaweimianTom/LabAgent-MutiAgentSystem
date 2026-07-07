@@ -91,26 +91,35 @@ _TOP_VENUE_KEYWORDS = [
 ]
 
 
-def scan_task_downloads(task_dir: str) -> List[Dict[str, Any]]:
-    """扫描 task_dir/downloads/ 和 task_dir/ 发现资源文件。
+def scan_task_downloads(task_dir: str, extra_scan_dirs: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+    """扫描 task_dir 及额外目录发现资源文件。
+
+    扫描范围：
+    - task_dir/downloads/ 子目录
+    - task_dir/ 根目录
+    - extra_scan_dirs 中的每个目录（如全局参考文献目录、项目 reading 目录）
 
     Returns:
         [{"path": str, "filename": str, "ext": str, "size": int}, ...]
     """
-    task_path = Path(task_dir)
-    if not task_path.is_dir():
-        logger.warning(f"[knowledge_organizer] task_dir 不存在: {task_dir}")
-        return []
-
     resources: List[Dict[str, Any]] = []
     scanned_paths: set = set()
 
-    # 扫描目录列表：downloads/ 子目录 + task 根目录
+    # 构建扫描目录列表
     scan_dirs: List[Path] = []
-    downloads_dir = task_path / "downloads"
-    if downloads_dir.is_dir():
-        scan_dirs.append(downloads_dir)
-    scan_dirs.append(task_path)
+    task_path = Path(task_dir)
+    if task_path.is_dir():
+        downloads_dir = task_path / "downloads"
+        if downloads_dir.is_dir():
+            scan_dirs.append(downloads_dir)
+        scan_dirs.append(task_path)
+
+    # 添加额外扫描目录
+    if extra_scan_dirs:
+        for d in extra_scan_dirs:
+            p = Path(d)
+            if p.is_dir():
+                scan_dirs.append(p)
 
     for scan_dir in scan_dirs:
         for fpath in scan_dir.iterdir():
@@ -316,8 +325,16 @@ def run_full_organization(
     task_dir: str,
     knowledge_manager: Any,
     base_id: str = "global",
+    extra_scan_dirs: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """端到端流水线：scan → categorize → organize → index。
+
+    Args:
+        task_id: 任务标识
+        task_dir: 任务输出目录
+        knowledge_manager: KnowledgeManager 实例
+        base_id: 注册到哪个知识库
+        extra_scan_dirs: 额外的扫描目录列表（如全局参考文献目录、项目 reading 目录）
 
     Returns:
         {"index": dict, "organized": list, "errors": list}
@@ -325,8 +342,8 @@ def run_full_organization(
     logger.info(f"[knowledge_organizer] 开始整理 task={task_id}, dir={task_dir}")
     errors: List[str] = []
 
-    # 1. 扫描
-    resources = scan_task_downloads(task_dir)
+    # 1. 扫描（task_dir + 额外目录）
+    resources = scan_task_downloads(task_dir, extra_scan_dirs=extra_scan_dirs)
     if not resources:
         logger.info(f"[knowledge_organizer] 无资源可整理: {task_id}")
         return {"index": generate_index(task_id, []), "organized": [], "errors": []}

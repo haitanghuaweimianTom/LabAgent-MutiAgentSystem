@@ -172,6 +172,28 @@ class TaskEventBus:
             message=message or "任务失败",
         ))
 
+    def broadcast_chat_message(
+        self,
+        task_id: str,
+        sender: str,
+        content: str,
+        sender_label: str = "",
+        msg_type: str = "text",
+    ):
+        """广播聊天消息事件（Agent 讨论/系统消息）"""
+        self.publish(TaskEvent(
+            task_id=task_id,
+            event_type="chat_message",
+            data={
+                "sender": sender,
+                "sender_label": sender_label or sender,
+                "content": content,
+                "msg_type": msg_type,
+                "timestamp": time.time(),
+            },
+            message=f"[{sender_label or sender}] {content[:100]}",
+        ))
+
     def cleanup(self, task_id: str):
         """清理任务的所有订阅者和历史。"""
         self._subscribers.pop(task_id, None)

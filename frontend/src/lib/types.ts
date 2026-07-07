@@ -7,18 +7,6 @@ export interface Message {
   timestamp: string;
 }
 
-export type TabType =
-  | 'dashboard'
-  | 'generate'
-  | 'files'
-  | 'pdf'
-  | 'history'
-  | 'agents'
-  | 'workflows'
-  | 'memory'
-  | 'environment'
-  | 'settings';
-
 export type TaskStatus =
   | 'idle'
   | 'running'
@@ -28,4 +16,9 @@ export type TaskStatus =
   | 'paused'
   | 'phase1'
   | 'phase2'
-  | 'retrying';
+  | 'retrying'
+  | 'pending'
+  | 'preflight_running'
+  | 'self_collecting_data'
+  | 'iterating_solver'
+  | 'cannot_solve';

@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { apiBase } from '@/lib/api';
+import { useTheme } from '@/hooks/useTheme';
 
 interface ProviderModel {
   name: string;
@@ -31,8 +33,6 @@ interface AgentInfo {
   provider_model: string;
   provider_name: string;
 }
-
-const apiBase = () => window.__API_BASE__ || 'http://localhost:8000/api/v1';
 
 const AGENT_COLORS: Record<string, string> = {
   coordinator: '#e74c3c',
@@ -71,6 +71,8 @@ const AGENT_ICONS: Record<string, string> = {
 };
 
 export default function AgentManager() {
+  const { theme } = useTheme();
+  const dark = theme === 'dark';
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [providers, setProviders] = useState<CustomProvider[]>([]);
   const [loading, setLoading] = useState(true);
@@ -183,14 +185,14 @@ export default function AgentManager() {
 
   const getProvider = (providerId: string) => providers.find(p => p.id === providerId);
 
-  if (loading) return <div style={{ color: '#aaa', textAlign: 'center', padding: '2rem' }}>加载中...</div>;
+  if (loading) return <div style={{ color: dark ? '#cbd5e1' : '#aaa', textAlign: 'center', padding: '2rem' }}>加载中...</div>;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       {/* Header */}
       <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 14, padding: '1.5rem' }}>
         <span style={{ fontSize: '1.1rem', color: '#fff', fontWeight: 600 }}>🤖 Agent 团队模型配置</span>
-        <div style={{ color: '#888', fontSize: '0.8rem', marginTop: '0.3rem' }}>
+        <div style={{ color: dark ? '#94a3b8' : '#888', fontSize: '0.8rem', marginTop: '0.3rem' }}>
           为每个 Agent 从可用 Provider 中选择模型，支持单独测试每个模型是否可用
         </div>
         {providers.length === 0 && (
@@ -215,15 +217,15 @@ export default function AgentManager() {
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.6rem' }}>
                 <span style={{ fontSize: '1.3rem' }}>{icon}</span>
                 <span style={{ color: '#fff', fontWeight: 600, fontSize: '1rem' }}>{agent.label}</span>
-                <span style={{ color: '#888', fontSize: '0.75rem' }}>{agent.name}</span>
+                <span style={{ color: dark ? '#94a3b8' : '#888', fontSize: '0.75rem' }}>{agent.name}</span>
               </div>
-              <div style={{ color: '#aaa', fontSize: '0.82rem', marginBottom: '0.8rem' }}>{agent.description}</div>
+              <div style={{ color: dark ? '#cbd5e1' : '#aaa', fontSize: '0.82rem', marginBottom: '0.8rem' }}>{agent.description}</div>
 
               {isEditing ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
                   {/* Provider selector */}
                   <div>
-                    <div style={{ color: '#888', fontSize: '0.78rem', marginBottom: '0.3rem' }}>Provider</div>
+                    <div style={{ color: dark ? '#94a3b8' : '#888', fontSize: '0.78rem', marginBottom: '0.3rem' }}>Provider</div>
                     <select
                       value={editProviderId}
                       onChange={e => {
@@ -247,7 +249,7 @@ export default function AgentManager() {
 
                   {/* Model selector */}
                   <div>
-                    <div style={{ color: '#888', fontSize: '0.78rem', marginBottom: '0.3rem' }}>模型</div>
+                    <div style={{ color: dark ? '#94a3b8' : '#888', fontSize: '0.78rem', marginBottom: '0.3rem' }}>模型</div>
                     {providerModels.length > 0 ? (
                       <select
                         value={editModelName}
@@ -291,7 +293,7 @@ export default function AgentManager() {
                     <button onClick={() => handleSave(agent.name)} style={{ padding: '0.4rem 0.8rem', background: 'rgba(46,204,113,0.15)', border: '1px solid rgba(46,204,113,0.3)', borderRadius: 6, color: '#2ecc71', fontSize: '0.78rem', cursor: 'pointer', fontWeight: 600 }}>
                       💾 保存
                     </button>
-                    <button onClick={() => setEditingAgent(null)} style={{ padding: '0.4rem 0.8rem', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, color: '#aaa', fontSize: '0.78rem', cursor: 'pointer' }}>
+                    <button onClick={() => setEditingAgent(null)} style={{ padding: '0.4rem 0.8rem', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, color: dark ? '#cbd5e1' : '#aaa', fontSize: '0.78rem', cursor: 'pointer' }}>
                       取消
                     </button>
                   </div>
@@ -300,13 +302,13 @@ export default function AgentManager() {
                 <div>
                   {/* Current config display */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                    <span style={{ color: '#888', fontSize: '0.78rem' }}>当前:</span>
+                    <span style={{ color: dark ? '#94a3b8' : '#888', fontSize: '0.78rem' }}>当前:</span>
                     {agent.provider_id ? (
                       <code style={{ color: color, fontSize: '0.82rem', background: 'rgba(0,0,0,0.2)', padding: '0.2rem 0.4rem', borderRadius: 4 }}>
                         {agent.provider_name}/{currentModelName}
                       </code>
                     ) : (
-                      <code style={{ color: '#888', fontSize: '0.82rem' }}>{agent.model}</code>
+                      <code style={{ color: dark ? '#94a3b8' : '#888', fontSize: '0.82rem' }}>{agent.model}</code>
                     )}
                     <button onClick={() => startEdit(agent)} style={{ padding: '0.3rem 0.5rem', background: 'rgba(52,152,219,0.15)', border: '1px solid rgba(52,152,219,0.3)', borderRadius: 6, color: '#3498db', fontSize: '0.7rem', cursor: 'pointer' }}>
                       修改

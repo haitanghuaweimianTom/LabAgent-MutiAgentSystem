@@ -259,15 +259,28 @@ class KnowledgeManager:
         """重建知识库的向量索引（批量添加以确保 TF-IDF 词汇表完整）"""
         kb.clear()
         pairs = []
+        meta_list = []
         for item in base.items:
-            text = self._extract_text(item)
+            # PDF 文件用按页提取
+            if isinstance(item.content, FileMetadata) and item.content.path and item.content.path.endswith(".pdf"):
+                text = self._extract_pdf_text_with_pages(item.content.path)
+            else:
+                text = self._extract_text(item)
             if not text:
                 continue
             title = item.metadata.get("title", item.id)
             pairs.append((title, text))
+            meta_list.append({
+                "item_id": item.id,
+                "file_path": item.content.path if isinstance(item.content, FileMetadata) else "",
+                "domain": item.metadata.get("domain", ""),
+                "year": item.metadata.get("year", ""),
+                "method": item.metadata.get("method", ""),
+                **item.metadata,
+            })
 
         if pairs:
-            kb.add_documents_batch(pairs)
+            kb.add_documents_batch(pairs, meta_list=meta_list)
             logger.info(f"[KnowledgeManager] 向量索引重建完成: {len(pairs)} 个文档")
 
     def _extract_text(self, item: KnowledgeItem) -> str:
@@ -292,6 +305,26 @@ class KnowledgeManager:
         elif item.type in ("note", "url", "sitemap", "directory"):
             return str(item.content)
         return ""
+
+    @staticmethod
+    def _extract_pdf_text_with_pages(pdf_path: str, max_chars: int = 3000) -> str:
+        """提取 PDF 文本，按页分割并标记页码。"""
+        try:
+            import fitz
+            doc = fitz.open(pdf_path)
+            pages = []
+            total = 0
+            for i in range(min(len(doc), 10)):
+                text = doc[i].get_text().strip()
+                if text:
+                    pages.append(f"[PAGE {i+1}]\n{text}")
+                    total += len(text)
+                if total > max_chars:
+                    break
+            doc.close()
+            return "\n\n".join(pages)
+        except Exception:
+            return ""
 
     # ===== 公开 API =====
 
@@ -550,19 +583,28 @@ class KnowledgeManager:
 
     def search(self, base_id: str, query: str, top_k: int = 5, min_score: float = 0.0) -> List[Dict[str, Any]]:
         """在指定知识库中搜索"""
+        import re
         kb = self._get_kb_instance(base_id)
         results = kb.query(query, top_k=top_k, min_score=min_score)
-        return [
-            {
+        output = []
+        for doc, score in results:
+            meta = doc.metadata or {}
+            # 从内容中提取页码标记 [PAGE N]
+            page_match = re.search(r"\[PAGE (\d+)\]", doc.content)
+            page = int(page_match.group(1)) if page_match else None
+            # 清理内容中的页码标记
+            clean_content = re.sub(r"\[PAGE \d+\]\n?", "", doc.content).strip()
+            output.append({
                 "id": doc.id,
                 "title": doc.title,
-                "content": doc.content,
+                "content": clean_content,
                 "source": doc.source,
                 "score": round(score, 4),
-                "metadata": doc.metadata or {},
-            }
-            for doc, score in results
-        ]
+                "page": page,
+                "file_path": meta.get("file_path", ""),
+                "metadata": meta,
+            })
+        return output
 
     def query_context(self, base_id: str, query: str, top_k: int = 3, max_chars: int = 1500) -> str:
         """查询并返回格式化上下文"""

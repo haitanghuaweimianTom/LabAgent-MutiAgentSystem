@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { apiBase } from '@/lib/api';
 
 // =============================================================
 // v5.4.0 深色模式样式常量（替代原 inline 浅色样式）
@@ -113,8 +114,6 @@ interface ActiveEnv {
   name: string | null;
   backend: string | null;
 }
-
-const apiBase = () => window.__API_BASE__ || '/api/v1';
 
 export default function EnvironmentManager() {
   const [envs, setEnvs] = useState<EnvironmentInfo[]>([]);

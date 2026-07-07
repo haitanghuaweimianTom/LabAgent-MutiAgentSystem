@@ -1,8 +1,10 @@
 'use client';
 
 import { useRef, useEffect, useState } from 'react';
-import styles from './AgentChat.module.css';
 import StageProgress from './StageProgress';
+import { apiBase } from '@/lib/api';
+import { TEAM_COLORS, TEAM_LABELS } from '@/lib/constants';
+import { cn } from '@/lib/utils';
 
 interface Message {
   id: string;
@@ -29,45 +31,17 @@ interface AgentChatProps {
   onUserSend?: (content: string) => void;
 }
 
-const TEAM_COLORS: Record<string, string> = {
-  coordinator: '#e74c3c',
-  research_agent: '#3498db',
-  data_agent: '#9b59b6',
-  analyzer_agent: '#f39c12',
-  modeler_agent: '#27ae60',
-  algorithm_engineer_agent: '#16a085',
-  financial_analyst_agent: '#d4ac0d',
-  solver_agent: '#e67e22',
-  writer_agent: '#1abc9c',
-  peer_review_agent: '#8e44ad',
-  experimentation_agent: '#2c3e50',
-  figure_agent: '#e84393',
-  requirement_decomposer: '#00b894',
-  innovation_agent: '#6c5ce7',
-  summary_agent: '#fdcb6e',
-  system: '#95a5a6',
-  user: '#3498db',
-};
+// SSE event shape for chat_message
+interface SSEChatMessage {
+  type: 'chat_message';
+  sender: string;
+  sender_label: string;
+  content: string;
+  msg_type: string;
+  timestamp: string;
+}
 
-const TEAM_LABELS: Record<string, string> = {
-  coordinator: '协调者',
-  research_agent: '研究员',
-  data_agent: '数据分析师',
-  analyzer_agent: '分析师',
-  modeler_agent: '建模师',
-  algorithm_engineer_agent: '算法工程师',
-  financial_analyst_agent: '金融分析师',
-  solver_agent: '求解器',
-  writer_agent: '写作专家',
-  peer_review_agent: '审稿人',
-  experimentation_agent: '实验设计专家',
-  figure_agent: '科研绘图师',
-  requirement_decomposer: '需求分解器',
-  innovation_agent: '创新发现专家',
-  summary_agent: '总结专家',
-  system: '系统',
-  user: '你',
-};
+
 
 function formatTime(iso: string) {
   if (!iso) return '';
@@ -93,7 +67,6 @@ function deriveStages(status: string, progress: number, currentStep: string, wor
     stages[0].progress = Math.min(progress * 2, 100);
 
     if (!skipModeling) {
-      // 标准流程：分析 → 建模 → 写作 → 评议
       if (currentStep?.includes('建模') || currentStep?.includes('求解') || currentStep?.includes('model') || currentStep?.includes('solve')) {
         stages[0].status = 'completed';
         stages[0].progress = 100;
@@ -114,7 +87,6 @@ function deriveStages(status: string, progress: number, currentStep: string, wor
         stages[3].progress = Math.min((progress - 80) * 5, 100);
       }
     } else {
-      // 调研/综述流程：分析 → 写作 → 评议（跳过建模）
       if (currentStep?.includes('论文') || currentStep?.includes('write')) {
         stages[0].status = 'completed';
         stages[1].status = 'skipped';
@@ -153,9 +125,36 @@ export default function AgentChat({
   const [sending, setSending] = useState(false);
   const isNearBottomRef = useRef(true);
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const [sseMessages, setSseMessages] = useState<Message[]>([]);
   const stages = deriveStages(taskStatus, progress, currentStep || '', workflowType);
 
-  // 检测滚动位置：距离底部 < 80px 视为”在底部”
+  // Merge prop messages with SSE messages (SSE messages appended after initial load)
+  const allMessages = [...messages, ...sseMessages];
+
+  // SSE connection for real-time chat messages
+  useEffect(() => {
+    if (!taskId) return;
+    const es = new EventSource(apiBase() + '/tasks/' + taskId + '/stream');
+    es.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'chat_message') {
+          const msg: Message = {
+            id: `sse-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            sender: data.sender,
+            sender_label: data.sender_label,
+            content: data.content,
+            type: data.msg_type || 'discussion',
+            timestamp: data.timestamp,
+          };
+          setSseMessages(prev => [...prev, msg]);
+        }
+      } catch {}
+    };
+    es.onerror = () => { /* reconnect handled by EventSource */ };
+    return () => es.close();
+  }, [taskId]);
+
   const checkScrollPosition = () => {
     const el = messagesContainerRef.current;
     if (!el) return;
@@ -166,7 +165,6 @@ export default function AgentChat({
     setShowScrollButton(!nearBottom);
   };
 
-  // 滚动到底部（用户点击按钮或发送消息时）
   const scrollToBottom = (behavior: ScrollBehavior = 'instant') => {
     messagesEndRef.current?.scrollIntoView({ behavior });
     isNearBottomRef.current = true;
@@ -181,11 +179,10 @@ export default function AgentChat({
   }, []);
 
   useEffect(() => {
-    // 只有用户当前在底部时才自动跟随新消息（用 ref 避免 stale 闭包）
     if (isNearBottomRef.current) {
       scrollToBottom('instant');
     }
-  }, [messages]);
+  }, [allMessages]);
 
   const isRunning = taskStatus === 'running' || taskStatus === 'phase1' || taskStatus === 'phase2';
   const isWaiting = currentStep?.includes('waiting') || currentStep?.includes('等待');
@@ -195,7 +192,6 @@ export default function AgentChat({
     if (!content || !taskId) return;
     setSending(true);
     try {
-      const apiBase = () => (typeof window !== 'undefined' && (window as any).__API_BASE__) || 'http://localhost:8000/api/v1';
       await fetch(`${apiBase()}/tasks/${taskId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -203,7 +199,6 @@ export default function AgentChat({
       });
       setUserInput('');
       onUserSend?.(content);
-      // 发送后自动回到底部
       scrollToBottom('instant');
     } catch (e) {
       console.error('发送消息失败:', e);
@@ -220,63 +215,77 @@ export default function AgentChat({
   };
 
   return (
-    <div className={styles.container}>
+    <div className="flex flex-col gap-4">
       <StageProgress stages={stages} currentStep={currentStep} />
 
-      <div className={styles.chatCard}>
-        <div className={styles.chatHeader}>
-          <div className={styles.chatTitleRow}>
-            <span className={styles.chatTitle}>💬 Agent 团队实时讨论</span>
-            <div className={styles.teamBadges}>
+      <div className="bg-[#1E293B] border border-[#334155] rounded-[14px] p-[1.2rem] flex flex-col gap-[0.8rem]">
+        <div className="flex justify-between items-center flex-wrap gap-2">
+          <div className="flex items-center gap-[0.8rem] flex-wrap">
+            <span className="text-[1.1rem] text-[#F8FAFC] font-semibold">💬 Agent 团队实时讨论</span>
+            <div className="flex gap-[0.3rem] flex-wrap">
               {Object.entries(TEAM_LABELS).filter(([k]) => k !== 'system').map(([k, v]) => (
-                <span key={k} className={styles.badge} style={{ background: TEAM_COLORS[k] }}>{v}</span>
+                <span key={k} className="px-[0.5rem] py-[0.2rem] rounded-[10px] text-[0.8125rem] text-[#F8FAFC] font-semibold whitespace-nowrap" style={{ background: TEAM_COLORS[k] }}>{v}</span>
               ))}
             </div>
           </div>
-          <div className={styles.chatActions}>
+          <div className="flex gap-[0.4rem]">
             {isRunning && !paused && (
               <>
-                <button className={styles.pauseBtn} onClick={onPause}>⏸ 暂停</button>
+                <button className="py-[0.35rem] px-[0.8rem] bg-[rgba(243,156,18,0.3)] border border-[rgba(243,156,18,0.5)] rounded-[6px] text-[#f39c12] text-[0.875rem] cursor-pointer transition-all duration-200 hover:bg-[rgba(243,156,18,0.5)]" onClick={onPause}>⏸ 暂停</button>
                 {onCancel && (
-                  <button className={styles.cancelBtn} onClick={onCancel} disabled={cancelling}>
+                  <button className="py-[0.35rem] px-[0.8rem] bg-[rgba(248,113,113,0.15)] border border-[rgba(248,113,113,0.15)] rounded-[6px] text-[#e74c3c] text-[0.875rem] cursor-pointer transition-all duration-200 hover:bg-[rgba(248,113,113,0.15)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={onCancel} disabled={cancelling}>
                     {cancelling ? '取消中...' : '⏹ 取消'}
                   </button>
                 )}
               </>
             )}
             {paused && (
-              <button className={styles.resumeBtn} onClick={onResume} disabled={resuming}>
+              <button className="py-[0.35rem] px-[0.8rem] bg-[rgba(74,222,128,0.15)] border border-[rgba(74,222,128,0.15)] rounded-[6px] text-[#2ecc71] text-[0.875rem] cursor-pointer transition-all duration-200 hover:bg-[rgba(74,222,128,0.15)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={onResume} disabled={resuming}>
                 {resuming ? '继续中...' : '▶ 继续执行'}
               </button>
             )}
           </div>
         </div>
 
-        <div className={styles.messages} ref={messagesContainerRef}>
-          {messages.length === 0 && (
-            <div className={styles.emptyState}>提交问题后，各 Agent 将在此展开协作讨论</div>
+        <div className="h-[480px] overflow-y-auto p-[0.8rem] bg-[rgba(0,0,0,0.2)] rounded-[8px] relative" ref={messagesContainerRef}>
+          {allMessages.length === 0 && (
+            <div className="text-center p-[3rem] text-[#475569] text-[0.9375rem]">提交问题后，各 Agent 将在此展开协作讨论</div>
           )}
-          {messages.map(msg => (
+          {allMessages.map(msg => (
             <div
               key={msg.id}
-              className={msg.type === 'result' ? styles.msgResult : msg.type === 'user_input' ? styles.msgUser : msg.type === 'discussion' ? styles.msgDiscuss : styles.msg}
+              className={cn(
+                'p-[0.7rem_0.9rem] mb-[0.5rem] rounded-[8px]',
+                msg.type === 'result'
+                  ? 'p-[0.8rem] mb-[0.6rem] rounded-[10px] bg-[rgba(45,212,191,0.15)] border border-[rgba(45,212,191,0.15)]'
+                  : msg.type === 'user_input'
+                    ? 'bg-[rgba(45,212,191,0.15)] border-l-[3px] border-[#3498db]'
+                    : msg.type === 'discussion'
+                      ? 'bg-[rgba(142,68,173,0.05)] border-l-[3px] border-[#8e44ad]'
+                      : 'bg-[#1E293B] border-l-[3px] border-[#666]'
+              )}
               style={{ borderLeftColor: TEAM_COLORS[msg.sender] || '#666' }}
             >
-              <div className={styles.msgHeader}>
+              <div className="flex justify-between mb-[0.5rem] text-[0.82rem] items-center">
                 <span style={{ color: TEAM_COLORS[msg.sender] || '#666', fontWeight: 600 }}>
                   {msg.sender === 'user' ? '👤 ' : ''}{msg.sender_label}
                 </span>
-                {msg.type === 'result' && <span className={styles.resultBadge}>📋 详细结果</span>}
-                {msg.type === 'discussion' && <span className={styles.discussBadge}>💬 讨论</span>}
-                {msg.type === 'user_input' && <span className={styles.userBadge}>👤 用户</span>}
-                <span className={styles.msgTime}>{formatTime(msg.timestamp)}</span>
+                {msg.type === 'result' && <span className="text-[0.8125rem] px-[0.5rem] py-[0.1rem] bg-[rgba(45,212,191,0.15)] text-[#3498db] rounded-[10px] font-semibold">📋 详细结果</span>}
+                {msg.type === 'discussion' && <span className="text-[0.8125rem] px-[0.5rem] py-[0.1rem] bg-[rgba(142,68,173,0.2)] text-[#8e44ad] rounded-[10px] font-semibold">💬 讨论</span>}
+                {msg.type === 'user_input' && <span className="text-[0.8125rem] px-[0.5rem] py-[0.1rem] bg-[rgba(45,212,191,0.15)] text-[#3498db] rounded-[10px] font-semibold">👤 用户</span>}
+                <span className="text-[#475569] text-[0.875rem]">{formatTime(msg.timestamp)}</span>
               </div>
-              <div className={msg.type === 'result' ? styles.msgContentResult : styles.msgContent}>
+              <div className={cn(
+                'whitespace-pre-wrap text-[#CBD5E1]',
+                msg.type === 'result'
+                  ? 'text-[0.9375rem] leading-[1.7] font-[\'Courier_New\',monospace]'
+                  : 'text-[0.88rem] leading-[1.6]'
+              )}>
                 {msg.content.split('\n').map((line, i) => {
                   if (line.startsWith('```')) return null;
-                  if (line.startsWith('- ')) return <div key={i} className={styles.listItem}>{line.slice(2)}</div>;
-                  if (line.startsWith('**') && line.endsWith('**')) return <div key={i} className={styles.boldLine}>{line.slice(2, -2)}</div>;
-                  return <div key={i}>{line || ' '}</div>;
+                  if (line.startsWith('- ')) return <div key={i} className="pl-[0.5rem] text-[#94A3B8]">{line.slice(2)}</div>;
+                  if (line.startsWith('**') && line.endsWith('**')) return <div key={i} className="font-bold text-[#F8FAFC] mt-[0.3rem]">{line.slice(2, -2)}</div>;
+                  return <div key={i}>{line || ' '}</div>;
                 })}
               </div>
             </div>
@@ -284,7 +293,7 @@ export default function AgentChat({
           <div ref={messagesEndRef} />
           {showScrollButton && (
             <button
-              className={styles.scrollToBottomBtn}
+              className="sticky bottom-[0.8rem] left-1/2 -translate-x-1/2 py-[0.4rem] px-[0.9rem] bg-[rgba(45,212,191,0.15)] border-none rounded-[20px] text-[#F8FAFC] text-[0.875rem] font-semibold cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.3)] transition-all duration-200 hover:translate-y-[-1px] z-10"
               onClick={() => scrollToBottom('instant')}
               title="回到最新消息"
             >
@@ -293,11 +302,10 @@ export default function AgentChat({
           )}
         </div>
 
-        {/* 用户输入区域 */}
-        <div className={styles.inputArea}>
-          <div className={styles.inputRow}>
+        <div className="mt-[0.5rem] pt-[0.5rem] border-t border-[#334155]">
+          <div className="flex gap-2 items-end">
             <textarea
-              className={styles.inputBox}
+              className="flex-1 py-[0.6rem] px-[0.8rem] bg-[rgba(0,0,0,0.3)] border border-[#475569] rounded-[8px] text-[#e0e0e0] text-[0.9375rem] resize-none font-[inherit] leading-[1.5] focus:outline-none focus:border-[rgba(45,212,191,0.15)] focus:shadow-[0_0_0_2px_rgba(45,212,191,0.15)] placeholder:text-[#475569]"
               placeholder={isWaiting ? 'Agent 正在等待您的反馈，请输入意见...' : '参与讨论：输入您的想法、建议或修正方向...'}
               value={userInput}
               onChange={e => setUserInput(e.target.value)}
@@ -306,14 +314,14 @@ export default function AgentChat({
               disabled={sending}
             />
             <button
-              className={styles.sendBtn}
+              className="py-[0.6rem] px-4 bg-[#2DD4BF] text-[#F8FAFC] border-none rounded-[8px] text-[0.9375rem] font-semibold cursor-pointer transition-all duration-200 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={handleSend}
               disabled={!userInput.trim() || sending}
             >
               {sending ? '...' : '发送'}
             </button>
           </div>
-          <div className={styles.inputHint}>
+          <div className="mt-[0.3rem] text-[0.72rem] text-[#475569] text-center">
             Enter 发送 · Shift+Enter 换行 · 您的消息会实时出现在 Agent 讨论中
           </div>
         </div>

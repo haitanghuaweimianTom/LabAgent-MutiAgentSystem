@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { apiBase } from '@/lib/api';
 
 interface DiscussionMessage {
   id: string;
@@ -45,10 +46,6 @@ interface DiscussionPanelProps {
   taskId: string;
   onClose?: () => void;
 }
-
-const apiBase = () =>
-  (typeof window !== 'undefined' && (window as any).__API_BASE__) ||
-  'http://localhost:8000/api/v1';
 
 function hashString(str: string): number {
   let hash = 0;
@@ -126,9 +123,42 @@ export default function DiscussionPanel({ taskId, onClose }: DiscussionPanelProp
 
   useEffect(() => {
     fetchDiscussion();
-    const timer = setInterval(fetchDiscussion, 5000);
-    return () => clearInterval(timer);
   }, [fetchDiscussion]);
+
+  // SSE connection for real-time chat messages
+  useEffect(() => {
+    if (!taskId) return;
+    const es = new EventSource(apiBase() + '/tasks/' + taskId + '/stream');
+    es.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'chat_message') {
+          const newMsg: DiscussionMessage = {
+            id: `sse-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            sender: data.sender,
+            sender_label: data.sender_label,
+            content: data.content,
+            type: (data.msg_type as DiscussionMessage['type']) || 'agent',
+            timestamp: data.timestamp,
+          };
+          setState(prev => {
+            if (!prev) return prev;
+            const rounds = [...prev.rounds];
+            if (rounds.length === 0) {
+              rounds.push({ round_number: 1, topic: prev.topic, messages: [newMsg], votes: [], status: 'active' });
+            } else {
+              const last = { ...rounds[rounds.length - 1] };
+              last.messages = [...last.messages, newMsg];
+              rounds[rounds.length - 1] = last;
+            }
+            return { ...prev, rounds, updated_at: new Date().toISOString() };
+          });
+        }
+      } catch {}
+    };
+    es.onerror = () => { /* reconnect handled by EventSource */ };
+    return () => es.close();
+  }, [taskId]);
 
   useEffect(() => {
     if (isNearBottomRef.current) {

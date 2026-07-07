@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import styles from './ProblemInput.module.css';
+import { cn } from '@/lib/utils';
 import { useAppStore } from '../store/useAppStore';
 import { TemplateSelector, TEMPLATE_OPTIONS } from './TemplateSelector';
+import { apiBase } from '@/lib/api';
 
 const WORKFLOWS = [
   { id: 'standard', name: '标准流程', desc: '分析→数据→文献→建模→求解→论文→评议（推荐）' },
@@ -13,8 +14,6 @@ const WORKFLOWS = [
   { id: 'research_paper', name: 'CCF-A 论文', desc: '完整科研流程：实验设计→建模→求解→论文→同行评议→修订' },
 ];
 
-// Phase 6: 8 模板统一管理（4 旧 + 4 新 CCF-A 目标）。
-// 旧 hardcoded 4 模板已被 TemplateSelector 组件替代。
 const TEMPLATES = TEMPLATE_OPTIONS;
 
 interface ProblemInputProps {
@@ -25,8 +24,8 @@ interface ProblemInputProps {
     template: string;
     mode: string;
     useCritique: boolean;
-    knowledgeBaseId: string | null;          // 旧，向后兼容（单 KB）
-    knowledgeBaseIds: string[];              // v5.4.0: 多 KB
+    knowledgeBaseId: string | null;
+    knowledgeBaseIds: string[];
     dataSource: 'upload' | 'self_collect' | 'upload_and_collect';
     problemType: string;
     dataFiles: string[];
@@ -58,7 +57,6 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
   const [showNewProject, setShowNewProject] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // v5.4.0: Knowledge base 多选
   const knowledgeBases = useAppStore((s) => s.knowledgeBases);
   const setKnowledgeBases = useAppStore((s) => s.setKnowledgeBases);
   const selectedKBIdsRaw = useAppStore((s) => s.selectedKBIds);
@@ -67,12 +65,8 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
   const selectedKBIds: Set<string> = selectedKBIdsRaw instanceof Set
     ? selectedKBIdsRaw
     : new Set(Array.isArray(selectedKBIdsRaw) ? selectedKBIdsRaw : []);
-  // 兼容旧字段：仍保留单 KB 引用，便于单选向后兼容
   const [legacyKBId, setLegacyKBId] = useState<string | null>(null);
 
-  const apiBase = () => window.__API_BASE__ || 'http://localhost:8000/api/v1';
-
-  // 加载项目列表和知识库列表
   useEffect(() => {
     loadProjects();
     loadKnowledgeBases();
@@ -126,7 +120,6 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
     if (!problemText.trim()) { alert('请输入问题描述'); return; }
     const finalProjectName = projectName.trim() || activeProject?.name || '未命名项目';
     const dataFiles = selectedFiles.size > 0 ? Array.from(selectedFiles) : [];
-    // v5.4.0: 多 KB 列表优先；空则降级到单 KB 字段
     const kbIds = selectedKBIds instanceof Set ? Array.from(selectedKBIds) : [];
     onSubmit({
       problemText,
@@ -135,7 +128,7 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
       template,
       mode: 'sequential',
       useCritique,
-      knowledgeBaseId: kbIds.length === 1 ? kbIds[0] : legacyKBId,  // 单选兼容旧字段
+      knowledgeBaseId: kbIds.length === 1 ? kbIds[0] : legacyKBId,
       knowledgeBaseIds: kbIds,
       dataSource,
       problemType,
@@ -149,12 +142,12 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
   const currentWorkflowName = WORKFLOWS.find((w) => w.id === workflow)?.name || workflow;
 
   return (
-    <div className={styles.container}>
-      <div className={styles.section}>
-        <div className={styles.sectionTitle}>📝 研究问题输入</div>
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.5rem' }}>
+    <div className="flex flex-col gap-4">
+      <div className="bg-[#1E293B] border border-[#334155] rounded-[14px] p-[1.2rem]">
+        <div className="text-[1rem] text-[#F8FAFC] font-semibold mb-[0.8rem]">📝 研究问题输入</div>
+        <div className="flex gap-2 items-center mb-2">
           <select
-            style={{ flex: 1, padding: '0.5rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: '#e0e0e0', fontSize: '0.9rem' }}
+            className="flex-1 p-2 bg-black/30 border border-white/15 rounded-[8px] text-[#e0e0e0] text-[0.9rem]"
             value={activeProjectId || ''}
             onChange={e => {
               const id = e.target.value;
@@ -178,74 +171,53 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
                 await deleteProject(activeProjectId);
                 setProjectName('');
               }}
-              style={{
-                padding: '0.4rem 0.6rem',
-                background: 'rgba(231,76,60,0.15)',
-                border: '1px solid rgba(231,76,60,0.3)',
-                borderRadius: 6,
-                color: '#e74c3c',
-                cursor: 'pointer',
-                fontSize: '0.8rem',
-              }}
+              className="py-[0.4rem] px-[0.6rem] bg-[rgba(231,76,60,0.15)] border border-[rgba(231,76,60,0.3)] rounded-[6px] text-[#e74c3c] cursor-pointer text-[0.8rem]"
             >
               🗑️ 删除
             </button>
           )}
           {showNewProject && (
-            <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
+            <div className="flex gap-[0.3rem] items-center">
               <input
-                style={{ padding: '0.5rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: '#e0e0e0', fontSize: '0.9rem', width: 140 }}
+                className="p-2 bg-black/30 border border-white/15 rounded-[8px] text-[#e0e0e0] text-[0.9rem] w-[140px]"
                 placeholder="项目名称"
                 value={newProjectName}
                 onChange={e => setNewProjectName(e.target.value)}
                 maxLength={60}
               />
-              <button onClick={handleCreateProject} style={{ padding: '0.4rem 0.6rem', background: 'linear-gradient(135deg, #2ecc71, #27ae60)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: '0.8rem' }}>创建</button>
-              <button onClick={() => setShowNewProject(false)} style={{ padding: '0.4rem 0.6rem', background: 'rgba(231,76,60,0.15)', border: '1px solid rgba(231,76,60,0.3)', borderRadius: 6, color: '#e74c3c', cursor: 'pointer', fontSize: '0.8rem' }}>取消</button>
+              <button onClick={handleCreateProject} className="py-[0.4rem] px-[0.6rem] bg-gradient-to-br from-[#2ecc71] to-[#27ae60] text-white border-none rounded-[6px] cursor-pointer text-[0.8rem]">创建</button>
+              <button onClick={() => setShowNewProject(false)} className="py-[0.4rem] px-[0.6rem] bg-[rgba(231,76,60,0.15)] border border-[rgba(231,76,60,0.3)] rounded-[6px] text-[#e74c3c] cursor-pointer text-[0.8rem]">取消</button>
             </div>
           )}
         </div>
         <input
-          className={styles.projectInput}
+          className="w-full py-[0.7rem] px-4 mb-[0.6rem] bg-black/30 border border-[#334155] rounded-[8px] text-[#e0e0e0] text-[0.95rem]"
           placeholder="输入项目名称（如：多智能体记忆机制研究 / 供应链优化 / CCF-A 论文）"
           value={projectName}
           onChange={e => setProjectName(e.target.value)}
           maxLength={60}
         />
-        <div style={{ marginTop: '0.5rem' }}>
-          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.4rem' }}>
-            <span style={{ color: '#94A3B8', fontSize: '0.85rem' }}>
+        <div className="mt-2">
+          <div className="flex gap-2 items-center mb-[0.4rem]">
+            <span className="text-[#94A3B8] text-[0.85rem]">
               📚 关联知识库（v5.4.0：可多选）
             </span>
             {selectedKBIds.size > 0 && (
               <button
                 type="button"
                 onClick={clearKBSelection}
-                style={{
-                  padding: '0.2rem 0.6rem',
-                  background: 'transparent',
-                  color: '#64748B',
-                  border: '1px solid #334155',
-                  borderRadius: 6,
-                  fontSize: '0.78rem',
-                  cursor: 'pointer',
-                }}
+                className="py-[0.2rem] px-[0.6rem] bg-transparent text-[#64748B] border border-[#334155] rounded-[6px] text-[0.78rem] cursor-pointer"
               >
                 清空
               </button>
             )}
           </div>
           {knowledgeBases.length === 0 ? (
-            <div style={{
-              padding: '0.5rem',
-              color: '#64748B',
-              fontSize: '0.85rem',
-              fontStyle: 'italic',
-            }}>
+            <div className="p-2 text-[#64748B] text-[0.85rem] italic">
               暂无知识库；留空将自动使用项目私有 + 全局公共 KB
             </div>
           ) : (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+            <div className="flex flex-wrap gap-[0.4rem]">
               {knowledgeBases.map((kb) => {
                 const selected = selectedKBIds.has(kb.id);
                 const isProject = (kb as any).scope === 'project';
@@ -255,21 +227,12 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
                     type="button"
                     onClick={() => toggleKBSelection(kb.id)}
                     title={(kb as any).description || kb.name}
-                    style={{
-                      padding: '0.35rem 0.75rem',
-                      background: selected
-                        ? (isProject ? '#8B5CF6' : '#2DD4BF')
-                        : 'rgba(0,0,0,0.3)',
-                      color: selected ? '#0F172A' : '#CBD5E1',
-                      border: `1px solid ${selected
-                        ? (isProject ? '#A78BFA' : '#5EEAD4')
-                        : 'rgba(255,255,255,0.15)'}`,
-                      borderRadius: 16,
-                      cursor: 'pointer',
-                      fontSize: '0.85rem',
-                      fontWeight: selected ? 600 : 400,
-                      transition: 'all 0.15s',
-                    }}
+                    className={cn(
+                      'py-[0.35rem] px-[0.75rem] border rounded-[16px] cursor-pointer text-[0.85rem] transition-all duration-150',
+                      selected
+                        ? (isProject ? 'bg-[#8B5CF6] text-[#0F172A] border-[#A78BFA] font-semibold' : 'bg-[#2DD4BF] text-[#0F172A] border-[#5EEAD4] font-semibold')
+                        : 'bg-black/30 text-[#CBD5E1] border-white/15 font-normal'
+                    )}
                   >
                     {isProject ? '📁' : '🌐'} {kb.name}
                     {selected && ' ✓'}
@@ -278,30 +241,30 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
               })}
             </div>
           )}
-          <div style={{ marginTop: '0.3rem', color: '#64748B', fontSize: '0.75rem' }}>
+          <div className="mt-[0.3rem] text-[#64748B] text-[0.75rem]">
             不选 = 自动注入「项目私有 + 全局公共」KB；勾选 = 仅使用勾选的 KB
           </div>
         </div>
-        <div className={styles.ocrRow}>
-          <label className={styles.ocrBtn}>
+        <div className="flex items-center gap-4 mb-[0.8rem]">
+          <label className="inline-flex items-center gap-2 py-[0.6rem] px-[1.2rem] bg-[#F87171] text-[#F8FAFC] rounded-[8px] cursor-pointer text-[0.9375rem] font-semibold hover:-translate-y-[1px] transition-transform duration-200 disabled:opacity-60 disabled:cursor-not-allowed">
             {ocrLoading ? '识别中...' : '📷 上传问题图片 / PDF（OCR 提取文本）'}
-            <input type="file" accept="image/*,.pdf" onChange={handleOcrUpload} style={{ display: 'none' }} disabled={ocrLoading} />
+            <input type="file" accept="image/*,.pdf" onChange={handleOcrUpload} className="hidden" disabled={ocrLoading} />
           </label>
-          <span className={styles.hint}>支持 JPG / PNG / PDF，自动提取文本</span>
+          <span className="text-[#94A3B8] text-[0.9375rem]">支持 JPG / PNG / PDF，自动提取文本</span>
         </div>
         <textarea
-          className={styles.textarea}
+          className="w-full p-4 bg-black/30 border border-[#334155] rounded-[8px] text-[#e0e0e0] text-[0.95rem] font-[inherit] resize-y leading-relaxed focus:outline-none focus:border-[#3498db] placeholder:text-[#475569]"
           placeholder={'请描述您的研究问题，包括：\n1. 研究背景与目标\n2. 具体要求（优化/预测/评价/分类/仿真等）\n3. 数据情况（如有数据文件，请先到「数据」标签上传；无数据可选"系统自动搜集"）\n4. 约束条件或特殊要求\n5. 目标投稿会议/期刊（可选，系统会自动推荐模板）'}
           value={problemText}
           onChange={e => setProblemText(e.target.value)}
           rows={10}
         />
 
-        <div style={{ marginTop: '0.8rem', display: 'grid', gap: '0.6rem', gridTemplateColumns: '1fr 1fr' }}>
+        <div className="mt-[0.8rem] grid gap-[0.6rem] grid-cols-2">
           <div>
-            <div className={styles.optionLabel}>问题类型</div>
+            <div className="text-[0.9375rem] text-[#94A3B8] font-semibold mb-2">问题类型</div>
             <select
-              style={{ width: '100%', padding: '0.5rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: '#e0e0e0', fontSize: '0.9rem' }}
+              className="w-full p-2 bg-black/30 border border-white/15 rounded-[8px] text-[#e0e0e0] text-[0.9rem]"
               value={problemType}
               onChange={e => setProblemType(e.target.value)}
             >
@@ -317,12 +280,11 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
               <option value="综合">综合</option>
             </select>
           </div>
-          {/* 文献综述/调研类模板不需要数据来源选项 */}
           {currentTemplate?.domain !== 'research_survey' && (
             <div>
-              <div className={styles.optionLabel}>数据来源</div>
+              <div className="text-[0.9375rem] text-[#94A3B8] font-semibold mb-2">数据来源</div>
               <select
-                style={{ width: '100%', padding: '0.5rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: '#e0e0e0', fontSize: '0.9rem' }}
+                className="w-full p-2 bg-black/30 border border-white/15 rounded-[8px] text-[#e0e0e0] text-[0.9rem]"
                 value={dataSource}
                 onChange={e => setDataSource(e.target.value as any)}
               >
@@ -335,37 +297,28 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
         </div>
 
         {dataSource !== 'self_collect' && currentTemplate?.domain !== 'research_survey' && (
-          <div style={{ marginTop: '0.5rem', color: '#aaa', fontSize: '0.8rem' }}>
+          <div className="mt-2 text-[#aaa] text-[0.8rem]">
             已勾选 {selectedFiles.size} 个数据文件（请到「数据」标签上传并勾选）
           </div>
         )}
       </div>
 
-      <div className={styles.section}>
-        <div className={styles.sectionTitle}>⚙️ 工作流与模板</div>
+      <div className="bg-[#1E293B] border border-[#334155] rounded-[14px] p-[1.2rem]">
+        <div className="text-[1rem] text-[#F8FAFC] font-semibold mb-[0.8rem]">⚙️ 工作流与模板</div>
 
-        <div className={styles.optionGroup}>
-          <div className={styles.optionLabel}>
+        <div className="mb-4">
+          <div className="text-[0.9375rem] text-[#94A3B8] font-semibold mb-2">
             工作流模式（已由所选模板自动绑定：{currentWorkflowName}）
           </div>
-          <div
-            style={{
-              padding: '0.75rem',
-              background: 'rgba(37,99,235,0.1)',
-              border: '1px solid rgba(37,99,235,0.3)',
-              borderRadius: 8,
-              color: '#93c5fd',
-              fontSize: '0.85rem',
-            }}
-          >
+          <div className="p-[0.75rem] bg-[rgba(37,99,235,0.1)] border border-[rgba(37,99,235,0.3)] rounded-[8px] text-[#93c5fd] text-[0.85rem]">
             {currentTemplate
               ? `「${currentTemplate.name}」模板采用「${currentWorkflowName}」工作流：${WORKFLOWS.find((w) => w.id === workflow)?.desc}`
               : `当前工作流：${currentWorkflowName}`}
           </div>
         </div>
 
-        <div className={styles.optionGroup}>
-          <div className={styles.optionLabel}>论文模板（{TEMPLATES.length} 选 1）</div>
+        <div className="mb-4">
+          <div className="text-[0.9375rem] text-[#94A3B8] font-semibold mb-2">论文模板（{TEMPLATES.length} 选 1）</div>
           <TemplateSelector
             value={template}
             onChange={(t) => {
@@ -382,28 +335,34 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
           />
         </div>
 
-        <div className={styles.optionGroup}>
-          <label className={styles.toggle}>
-            <input type="checkbox" checked={useCritique} onChange={e => setUseCritique(e.target.checked)} />
-            <span className={styles.toggleTrack}>
-              <span className={styles.toggleThumb} />
+        <div className="mb-4">
+          <label className="flex items-center gap-[0.6rem] cursor-pointer">
+            <input type="checkbox" checked={useCritique} onChange={e => setUseCritique(e.target.checked)} className="hidden peer" />
+            <span className={cn(
+              'w-[36px] h-[20px] rounded-[10px] relative transition-colors duration-200 shrink-0',
+              useCritique ? 'bg-[rgba(74,222,128,0.15)]' : 'bg-[#334155]'
+            )}>
+              <span className={cn(
+                'w-4 h-4 bg-white rounded-full absolute top-[2px] left-[2px] transition-transform duration-200',
+                useCritique && 'translate-x-4'
+              )} />
             </span>
-            <span className={styles.toggleLabel}>启用自评质量循环（Writer 自评 + 自动重写，推荐开启）</span>
+            <span className="text-[0.9375rem] text-[#CBD5E1]">启用自评质量循环（Writer 自评 + 自动重写，推荐开启）</span>
           </label>
         </div>
       </div>
 
       {isRunning && (
-        <div className={styles.progressSection}>
-          <div className={styles.progressBar}>
-            <div className={styles.progressFill} style={{ width: progress + '%' }} />
+        <div className="bg-black/20 rounded-[8px] py-[0.8rem] px-4">
+          <div className="h-[6px] bg-[#334155] rounded-[3px] overflow-hidden mb-[0.4rem]">
+            <div className="h-full bg-gradient-to-r from-[#3498db] to-[#2ecc71] rounded-[3px] transition-[width] duration-300 ease-in-out" style={{ width: progress + '%' }} />
           </div>
-          <div className={styles.progressText}>{progress}% · 生成中...</div>
+          <div className="text-[0.875rem] text-[#3498db] font-semibold text-center">{progress}% · 生成中...</div>
         </div>
       )}
 
-      <div className={styles.btnRow}>
-        <button className={styles.submitBtn} onClick={handleSubmit} disabled={submitting || !problemText.trim() || isRunning}>
+      <div className="flex gap-[0.8rem]">
+        <button className="flex-1 py-[0.9rem] px-8 bg-[#2DD4BF] text-[#F8FAFC] border-none rounded-[10px] text-[1rem] font-semibold cursor-pointer hover:-translate-y-[0.5px] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleSubmit} disabled={submitting || !problemText.trim() || isRunning}>
           {submitting ? '🚀 启动中...' : isRunning ? `🔄 生成中 ${progress}%` : '🚀 启动多智能体协作生成'}
         </button>
       </div>
