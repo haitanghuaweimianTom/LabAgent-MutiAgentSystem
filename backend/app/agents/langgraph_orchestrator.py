@@ -700,6 +700,38 @@ class LangGraphOrchestrator:
         return False
 
     # ------------------------------------------------------------------
+    # HITL: 用户输入检查
+    # ------------------------------------------------------------------
+    async def _check_user_input(self, state: TaskState) -> TaskState:
+        """每个节点完成后调用 — 检查用户输入并注入 context"""
+        task_id = state["task_id"]
+        room = get_chat_room(task_id)
+        if not room:
+            return state
+
+        last_check = state.get("last_input_check", 0)
+        user_msgs = room.get_user_messages_since(since=last_check)
+
+        if not user_msgs:
+            return state
+
+        # 转换为 dict 格式
+        new_msgs = [{"sender": m.sender, "content": m.content, "timestamp": m.timestamp.isoformat()} for m in user_msgs]
+
+        # 记录到 state
+        all_msgs = state.get("user_messages", [])
+        all_msgs.extend(new_msgs)
+
+        # 通知用户已收到
+        room.post("coordinator", f"📝 已收到 {len(new_msgs)} 条用户反馈，正在调整...", "broadcast")
+
+        return {
+            **state,
+            "user_messages": all_msgs,
+            "last_input_check": time.time(),
+        }
+
+    # ------------------------------------------------------------------
     # 条件路由（改造后）
     # ------------------------------------------------------------------
     def _route_after_research_or_data(self, state: TaskState) -> str:
@@ -867,6 +899,7 @@ class LangGraphOrchestrator:
         """
         import asyncio
 
+        state = await self._check_user_input(state)
         task_id = state["task_id"]
         bus = get_event_bus()
         bus.emit_phase_change(task_id, "parallel_analysis", "并行分析阶段：data + research + innovation 同时执行")
@@ -1253,6 +1286,8 @@ class LangGraphOrchestrator:
 
     async def _node_analyzer(self, state: TaskState) -> TaskState:
         """调用 analyzer_agent，更新进度与黑板。"""
+        state = await self._check_user_input(state)
+
         agent = self.agents.get("analyzer_agent")
         if not agent:
             return {**state, "current_step": "analyzer_missing"}
@@ -1397,6 +1432,8 @@ class LangGraphOrchestrator:
 
     async def _node_modeler(self, state: TaskState) -> TaskState:
         """逐个子问题建模：每个子问题独立建模，前序结果递进传递给后序。"""
+        state = await self._check_user_input(state)
+
         agent = self.agents.get("modeler_agent")
         if not agent:
             return {**state, "current_step": "modeler_missing"}
@@ -1469,6 +1506,8 @@ class LangGraphOrchestrator:
         保存原始丰富输出到 results["algorithm_engineer_agent"]；
         调用归一化方法得到标准 sub_problem_models，保存到 results["modeler_agent"]（兼容 solver/writer）。
         """
+        state = await self._check_user_input(state)
+
         agent = self.agents.get("algorithm_engineer_agent")
         if not agent:
             return {**state, "current_step": "algorithm_engineer_missing"}
@@ -1518,6 +1557,8 @@ class LangGraphOrchestrator:
         保存原始丰富输出到 results["financial_analyst_agent"]；
         调用归一化方法得到标准 sub_problem_models，保存到 results["modeler_agent"]（兼容 solver/writer）。
         """
+        state = await self._check_user_input(state)
+
         agent = self.agents.get("financial_analyst_agent")
         if not agent:
             return {**state, "current_step": "financial_analyst_missing"}
@@ -1571,6 +1612,8 @@ class LangGraphOrchestrator:
         4. 仍失败则多 Agent 投票决定 retry / collect_data / abort
         5. v6.0: 成功后可选进入代码自动演化循环，迭代改进代码
         """
+        state = await self._check_user_input(state)
+
         agent = self.agents.get("solver_agent")
         if not agent:
             return {**state, "current_step": "solver_missing"}
@@ -1810,6 +1853,8 @@ class LangGraphOrchestrator:
 
     async def _node_writer(self, state: TaskState) -> TaskState:
         """调用 writer_agent 生成论文。"""
+        state = await self._check_user_input(state)
+
         agent = self.agents.get("writer_agent")
         if not agent:
             return {**state, "current_step": "writer_missing"}
