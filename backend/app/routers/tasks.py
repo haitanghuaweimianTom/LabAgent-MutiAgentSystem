@@ -328,19 +328,21 @@ async def submit_task(req: TaskCreateRequest):
             except Exception as e:
                 logger.warning(f"Task {task_id}: 自主搜集数据异常: {e}")
 
-    # 6. 仍然缺失数据 → 仅在用户明确需要数据时才拦截
-    # deep_research / self_collect / quick / standard 工作流允许无数据运行
+    # 6. 仍然缺失数据 → 拦截并给出明确提示
+    # deep_research 工作流自主搜索不拦截；其他工作流无数据则拦截
     final_workflow_check = workflow_type or preflight_report.recommended_workflow
-    needs_data = final_workflow_check in ("research_paper",) and req.data_source != "self_collect"
-    if preflight_report.data_adequacy == DataAdequacy.MISSING and not data_files and needs_data:
-        logger.warning(f"Task {task_id}: 无数据且工作流需要数据，要求用户上传")
+    if preflight_report.data_adequacy == DataAdequacy.MISSING and not data_files and final_workflow_check != "deep_research":
+        error_msg = "缺少数据，请上传数据文件"
+        if req.data_source == "self_collect":
+            error_msg = "自主搜集未获取到有效数据（arXiv 论文多为 HTML），请上传数据文件或更换数据来源"
+        logger.warning(f"Task {task_id}: {error_msg}")
         save_task_metadata(
             task_id=task_id,
             problem_text=req.problem_text,
             status=TaskStatus.CANNOT_SOLVE,
             created_at=created_at,
             completed_at=datetime.now().isoformat(),
-            error="缺少数据，请上传数据文件或允许系统自主搜集",
+            error=error_msg,
             preflight_report=preflight_report.to_dict(),
             data_schemas=preflight_report.data_schemas,
             auto_decision_path="user_provided",
@@ -350,7 +352,7 @@ async def submit_task(req: TaskCreateRequest):
         raise HTTPException(
             status_code=422,
             detail={
-                "message": "缺少数据，请上传数据文件",
+                "message": error_msg,
                 "preflight_report": preflight_report.to_dict(),
             },
         )

@@ -43,6 +43,16 @@ _REJECT_CONTENT_TYPES = {
     "application/javascript",
 }
 
+
+def _normalize_url(url: str) -> str:
+    """标准化 URL：arXiv /abs/ → /pdf/"""
+    import re
+    # arXiv: /abs/NNNN.NNNNN → /pdf/NNNN.NNNNN
+    m = re.match(r'(https?://arxiv\.org/abs/)(\d+\.\d+(?:v\d+)?)', url)
+    if m:
+        return f"https://arxiv.org/pdf/{m.group(2)}.pdf"
+    return url
+
 # 扩展名白名单（最终落盘用）
 _EXT_BY_CONTENT_TYPE = {
     "text/csv": ".csv",
@@ -100,6 +110,7 @@ async def _fetch_one(
     timeout_sec: int,
 ) -> DownloadResult:
     """下载单个 URL，带去重 + 大小限制 + Content-Type 校验"""
+    url = _normalize_url(url)
     started = time.time()
     result = DownloadResult(
         url=url,
