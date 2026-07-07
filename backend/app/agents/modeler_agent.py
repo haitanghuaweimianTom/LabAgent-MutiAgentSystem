@@ -297,44 +297,44 @@ class ModelerAgent(BaseAgent):
 - 前序结果用"前序结果X"表示，具体数值在求解阶段代入
 - 建立完整、可操作的数学模型"""
 
-            messages = [
-                {"role": "system", "content": self.get_system_prompt()},
-                {"role": "user", "content": prompt},
-            ]
+        messages = [
+            {"role": "system", "content": self.get_system_prompt()},
+            {"role": "user", "content": prompt},
+        ]
 
-            model_result = None
-            # 重试最多 2 次
-            for attempt in range(2):
-                try:
-                    response = await self.call_llm(messages=messages, temperature=0.3)
-                    content = response.get("choices", [{}])[0].get("message", {}).get("content", "")
-                    model_result = self.extract_json(content)
-                    if model_result:
-                        break
-                except Exception as e:
-                    logger.warning(f"ModelerAgent 逐个建模LLM失败 (attempt {attempt+1}): {e}")
-                    if attempt < 1:
-                        import asyncio
-                        await asyncio.sleep(2)
+        model_result = None
+        # 重试最多 2 次
+        for attempt in range(2):
+            try:
+                response = await self.call_llm(messages=messages, temperature=0.3)
+                content = response.get("choices", [{}])[0].get("message", {}).get("content", "")
+                model_result = self.extract_json(content)
+                if model_result:
+                    break
+            except Exception as e:
+                logger.warning(f"ModelerAgent 逐个建模LLM失败 (attempt {attempt+1}): {e}")
+                if attempt < 1:
+                    import asyncio
+                    await asyncio.sleep(2)
 
-            if not model_result:
-                # 兜底模板：标记为降级模式，非真实建模结果
-                model_result = self._smart_template_fallback(sp, suggested, sp_type)
-                model_result["_degraded_mode"] = True
-                model_result["_degraded_reason"] = "LLM 调用失败（含重试），使用模板兜底"
+        if not model_result:
+            # 兜底模板：标记为降级模式，非真实建模结果
+            model_result = self._smart_template_fallback(sp, suggested, sp_type)
+            model_result["_degraded_mode"] = True
+            model_result["_degraded_reason"] = "LLM 调用失败（含重试），使用模板兜底"
 
-            model_result["sub_problem_id"] = sp_id
-            model_result["sub_problem_name"] = sp_name
-            model_result["sub_problem_desc"] = sp_desc
+        model_result["sub_problem_id"] = sp_id
+        model_result["sub_problem_name"] = sp_name
+        model_result["sub_problem_desc"] = sp_desc
 
-            # 在模型中记录前序依赖
-            if prev_model_summary:
-                model_result["depends_on"] = [pm.get("sub_problem_id") for pm in previous_models]
-                model_result["dependency_note"] = f"该模型依赖前序{len(previous_models)}个子问题的结果"
+        # 在模型中记录前序依赖
+        if prev_model_summary:
+            model_result["depends_on"] = [pm.get("sub_problem_id") for pm in previous_models]
+            model_result["dependency_note"] = f"该模型依赖前序{len(previous_models)}个子问题的结果"
 
-            all_models.append(model_result)
-            previous_models.append(model_result)
-            logger.info(f"ModelerAgent: 逐个建模完成 {i+1}/{len(sub_problems)} - {sp_name}，依赖前{len(previous_models)-1}个子问题")
+        all_models.append(model_result)
+        previous_models.append(model_result)
+        logger.info(f"ModelerAgent: 逐个建模完成 {i+1}/{len(sub_problems)} - {sp_name}，依赖前{len(previous_models)-1}个子问题")
 
         return {
             "sub_problem_models": all_models,
