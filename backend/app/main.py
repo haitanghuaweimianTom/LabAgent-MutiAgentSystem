@@ -1,4 +1,11 @@
 """数学建模多Agent系统 - FastAPI入口"""
+import os
+# 清除 SOCKS 代理环境变量（httpx 不支持 socks:// 协议）
+for _var in ("ALL_PROXY", "all_proxy", "HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"):
+    _val = os.environ.get(_var, "")
+    if _val and "socks" in _val.lower():
+        del os.environ[_var]
+
 import logging
 import time
 from contextlib import asynccontextmanager
@@ -137,7 +144,7 @@ settings = get_settings()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origins,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -159,7 +166,7 @@ app.include_router(discussion_router, prefix="/api/v1")
 
 @app.get("/")
 async def root():
-    return {"name": "数学建模多Agent系统", "version": "3.0.0", "status": "running", "docs": "/docs"}
+    return {"name": "数学建模多Agent系统", "version": "7.3.0", "status": "running", "docs": "/docs"}
 
 
 @app.get("/health")
