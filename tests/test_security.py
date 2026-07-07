@@ -90,3 +90,82 @@ class TestSanitizeInput:
 class TestMaxUploadSize:
     def test_is_50mb(self):
         assert MAX_UPLOAD_SIZE == 50 * 1024 * 1024
+
+
+# ── TaskCreateRequest validation (T3) ──────────────────────────────
+
+from backend.app.schemas.schemas import TaskCreateRequest
+from pydantic import ValidationError as PydanticValidationError
+import pytest
+
+
+class TestTaskCreateRequestConstraints:
+    """Tests for Pydantic Field constraints on TaskCreateRequest."""
+
+    def test_valid_request(self):
+        req = TaskCreateRequest(problem_text="hello world")
+        assert req.problem_text == "hello world"
+        assert req.project_name is None
+
+    def test_problem_text_min_length_rejects_empty(self):
+        with pytest.raises(PydanticValidationError):
+            TaskCreateRequest(problem_text="")
+
+    def test_problem_text_whitespace_only_stripped_to_empty(self):
+        # Pydantic v2: field_validator runs AFTER min_length check,
+        # so "   " (len=3) passes min_length=1, then validator strips to "".
+        req = TaskCreateRequest(problem_text="   ")
+        assert req.problem_text == ""
+
+    def test_problem_text_max_length_rejects_too_long(self):
+        with pytest.raises(PydanticValidationError):
+            TaskCreateRequest(problem_text="x" * 100001)
+
+    def test_problem_text_max_length_accepts_boundary(self):
+        req = TaskCreateRequest(problem_text="x" * 100000)
+        assert len(req.problem_text) == 100000
+
+    def test_problem_text_strips_control_characters(self):
+        req = TaskCreateRequest(problem_text="hello\x00\x01\x1f\x7fworld")
+        assert req.problem_text == "helloworld"
+
+    def test_problem_text_preserves_newlines_and_tabs(self):
+        req = TaskCreateRequest(problem_text="line1\nline2\ttab")
+        assert "\n" in req.problem_text
+        assert "\t" in req.problem_text
+
+    def test_problem_text_strips_leading_trailing_whitespace(self):
+        req = TaskCreateRequest(problem_text="  hello  ")
+        assert req.problem_text == "hello"
+
+    def test_project_name_max_length_rejects_too_long(self):
+        with pytest.raises(PydanticValidationError):
+            TaskCreateRequest(problem_text="x", project_name="a" * 101)
+
+    def test_project_name_max_length_accepts_boundary(self):
+        req = TaskCreateRequest(problem_text="x", project_name="a" * 100)
+        assert len(req.project_name) == 100
+
+    def test_project_name_allows_alphanumeric_underscore_hyphen(self):
+        req = TaskCreateRequest(problem_text="x", project_name="work_2026-guangzhou")
+        assert req.project_name == "work_2026-guangzhou"
+
+    def test_project_name_rejects_special_characters(self):
+        with pytest.raises(PydanticValidationError):
+            TaskCreateRequest(problem_text="x", project_name="project@name")
+
+    def test_project_name_rejects_spaces(self):
+        with pytest.raises(PydanticValidationError):
+            TaskCreateRequest(problem_text="x", project_name="my project")
+
+    def test_project_name_rejects_dots(self):
+        with pytest.raises(PydanticValidationError):
+            TaskCreateRequest(problem_text="x", project_name="my.project")
+
+    def test_project_name_none_is_valid(self):
+        req = TaskCreateRequest(problem_text="x", project_name=None)
+        assert req.project_name is None
+
+    def test_project_name_empty_string_rejected(self):
+        with pytest.raises(PydanticValidationError):
+            TaskCreateRequest(problem_text="x", project_name="")
