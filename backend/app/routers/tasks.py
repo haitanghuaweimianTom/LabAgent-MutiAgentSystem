@@ -328,11 +328,12 @@ async def submit_task(req: TaskCreateRequest):
             except Exception as e:
                 logger.warning(f"Task {task_id}: 自主搜集数据异常: {e}")
 
-    # 6. 仍然缺失数据 → 422 要求上传
-    # 但 deep_research 工作流自主搜索数据，不拦截；用户选了 self_collect 也尊重
+    # 6. 仍然缺失数据 → 仅在用户明确需要数据时才拦截
+    # deep_research / self_collect / quick / standard 工作流允许无数据运行
     final_workflow_check = workflow_type or preflight_report.recommended_workflow
-    if preflight_report.data_adequacy == DataAdequacy.MISSING and not data_files and final_workflow_check != "deep_research":
-        logger.warning(f"Task {task_id}: 无数据且无法自主搜集，要求用户上传")
+    needs_data = final_workflow_check in ("research_paper",) and req.data_source != "self_collect"
+    if preflight_report.data_adequacy == DataAdequacy.MISSING and not data_files and needs_data:
+        logger.warning(f"Task {task_id}: 无数据且工作流需要数据，要求用户上传")
         save_task_metadata(
             task_id=task_id,
             problem_text=req.problem_text,
