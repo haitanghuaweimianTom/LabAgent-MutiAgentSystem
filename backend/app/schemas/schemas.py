@@ -88,9 +88,12 @@ class TaskCreateRequest(BaseModel):
     def validate_project_name(cls, v: Optional[str]) -> Optional[str]:
         if v is None:
             return v
-        if not re.match(r'^[a-zA-Z0-9_-]+$', v):
-            raise ValueError("Project name must contain only alphanumeric characters, underscores, and hyphens")
-        return v
+        # 允许中英文、数字、下划线、连字符、空格
+        if not re.match(r'^[\w\u4e00-\u9fff\s-]+$', v):
+            raise ValueError("Project name contains invalid characters")
+        # 清理路径穿越字符
+        v = v.replace('..', '').replace('/', '').replace('\\', '')
+        return v.strip()[:100]
 
     def get_effective_kb_ids(self) -> List[str]:
         """v5.3.0: 解析实际使用的 KB 列表。
