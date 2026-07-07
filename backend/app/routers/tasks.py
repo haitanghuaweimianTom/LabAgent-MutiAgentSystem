@@ -252,8 +252,10 @@ async def submit_task(req: TaskCreateRequest):
         )
         raise HTTPException(status_code=500, detail=f"preflight 决策失败: {e}")
 
-    # 4. 数据不匹配 → 立即 422
-    if preflight_report.data_mismatch_warning:
+    # 4. 数据不匹配 → 仅当有数据文件时才拦截（无数据时不拦截）
+    # quick/standard 工作流即使有数据不匹配警告也继续执行
+    effective_wf = workflow_type or preflight_report.recommended_workflow
+    if preflight_report.data_mismatch_warning and data_files and effective_wf not in ("quick", "standard", "code_focused", "deep_research"):
         logger.warning(f"Task {task_id}: 数据不匹配 - {preflight_report.data_mismatch_warning}")
         save_task_metadata(
             task_id=task_id,
