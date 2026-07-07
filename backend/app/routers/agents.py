@@ -240,7 +240,7 @@ async def test_agent_model(agent_name: str, body: Dict[str, Any] = None) -> Dict
                     "content-type": "application/json",
                 }
             payload = {"model": model_name, "max_tokens": 10, "messages": [{"role": "user", "content": "Hi"}]}
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=30.0, proxy=None) as client:
                 response = await client.post(f"{api_host}/v1/messages", headers=headers, json=payload)
                 response.raise_for_status()
                 result = response.json()
@@ -249,7 +249,7 @@ async def test_agent_model(agent_name: str, body: Dict[str, Any] = None) -> Dict
 
         elif api_format == "ollama_chat":
             payload = {"model": model_name, "messages": [{"role": "user", "content": "Hi"}], "stream": False}
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=30.0, proxy=None) as client:
                 response = await client.post(f"{api_host}/api/chat", json=payload)
                 response.raise_for_status()
                 result = response.json()
@@ -259,7 +259,7 @@ async def test_agent_model(agent_name: str, body: Dict[str, Any] = None) -> Dict
         else:
             headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
             payload = {"model": model_name, "messages": [{"role": "user", "content": "Say hi"}], "max_tokens": 10}
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=30.0, proxy=None) as client:
                 response = await client.post(f"{api_host}/chat/completions", headers=headers, json=payload)
                 response.raise_for_status()
                 result = response.json()

@@ -93,7 +93,7 @@ class BaseAdapter(ABC):
         limits = httpx.Limits(max_connections=50, max_keepalive_connections=20)
 
         async def _post(t: float) -> httpx.Response:
-            async with httpx.AsyncClient(timeout=t, limits=limits) as client:
+            async with httpx.AsyncClient(timeout=t, limits=limits, proxy=None) as client:
                 return await client.post(url, headers=headers, content=body)
 
         try:

@@ -1,7 +1,9 @@
 """Provider 管理路由 — CC Switch 风格"""
 import httpx
+import ipaddress
 import logging
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -254,6 +256,24 @@ async def remove_model(provider_id: str, model_name: str):
         raise HTTPException(status_code=404, detail=str(e))
 
 
+def _validate_api_host(url: str) -> str:
+    """验证 api_host 防止 SSRF：仅允许 http/https，阻止内网 IP。"""
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise HTTPException(status_code=400, detail="api_host 仅支持 http/https 协议")
+    hostname = parsed.hostname
+    if not hostname:
+        raise HTTPException(status_code=400, detail="api_host 缺少有效主机名")
+    try:
+        ip = ipaddress.ip_address(hostname)
+        if ip.is_private or ip.is_loopback or ip.is_reserved or ip.is_link_local:
+            raise HTTPException(status_code=400, detail="api_host 不允许访问内网/本地地址")
+    except ValueError:
+        if hostname in ("localhost", "127.0.0.1", "0.0.0.0", "::1"):
+            raise HTTPException(status_code=400, detail="api_host 不允许访问本地地址")
+    return url
+
+
 @router.post("/{provider_id}/test")
 async def test_provider(provider_id: str, body: Optional[Dict[str, Any]] = None):
     """测试 Provider 连接"""
@@ -273,6 +293,7 @@ async def test_provider(provider_id: str, body: Optional[Dict[str, Any]] = None)
 
     if not api_host:
         raise HTTPException(status_code=400, detail="api_host 不能为空")
+    _validate_api_host(api_host)
 
     try:
         if api_format == "anthropic":
@@ -292,7 +313,7 @@ async def test_provider(provider_id: str, body: Optional[Dict[str, Any]] = None)
                     "content-type": "application/json",
                 }
             payload = {"model": model or "claude-3-haiku-20240307", "max_tokens": 10, "messages": [{"role": "user", "content": "Hi"}]}
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=30.0, proxy=None) as client:
                 response = await client.post(f"{api_host}/v1/messages", headers=headers, json=payload)
                 response.raise_for_status()
                 result = response.json()
@@ -306,7 +327,7 @@ async def test_provider(provider_id: str, body: Optional[Dict[str, Any]] = None)
                 "Content-Type": "application/json",
             }
             payload = {"model": model, "messages": [{"role": "user", "content": "Say hi"}], "max_tokens": 10}
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=30.0, proxy=None) as client:
                 response = await client.post(f"{api_host}/chat/completions", headers=headers, json=payload)
                 response.raise_for_status()
                 result = response.json()
@@ -315,7 +336,7 @@ async def test_provider(provider_id: str, body: Optional[Dict[str, Any]] = None)
 
         elif api_format == "ollama_chat":
             payload = {"model": model or "qwen2.5:latest", "messages": [{"role": "user", "content": "Hi"}], "stream": False}
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=30.0, proxy=None) as client:
                 response = await client.post(f"{api_host}/api/chat", json=payload)
                 response.raise_for_status()
                 result = response.json()
@@ -325,7 +346,7 @@ async def test_provider(provider_id: str, body: Optional[Dict[str, Any]] = None)
         else:  # openai_chat, openai_responses, gemini_native
             headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
             payload = {"model": model, "messages": [{"role": "user", "content": "Say hi, just these two words"}], "max_tokens": 10}
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=30.0, proxy=None) as client:
                 response = await client.post(f"{api_host}/chat/completions", headers=headers, json=payload)
                 response.raise_for_status()
                 result = response.json()
