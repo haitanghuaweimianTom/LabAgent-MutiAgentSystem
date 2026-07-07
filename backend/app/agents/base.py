@@ -20,6 +20,7 @@ import httpx
 from ..core.token_budget import get_token_budget_manager
 from ..core.agent_memory import get_agent_profile
 from ..core.llm import get_unified_llm_client
+from ..core.security import wrap_user_content
 
 
 class ToolDef(TypedDict):
@@ -1147,10 +1148,12 @@ class BaseAgent(ABC):
 
         # 构建响应提示
         system_prompt = self.get_system_prompt()
+        wrapped_message = wrap_user_content(user_message, "user_message")
+
         prompt = f"""用户向你发送了一条消息，请根据你的专业角色回复。
 
 【你的角色】{self.name}
-【用户消息】{user_message}
+【用户消息】{wrapped_message}
 【用户意图】{intent}
 """
         if feedback:

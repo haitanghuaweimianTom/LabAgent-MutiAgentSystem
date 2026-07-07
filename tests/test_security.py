@@ -202,6 +202,38 @@ class TestUploadSizeEnforcement:
 # ── Task T4: Path traversal guards on delete endpoints ──────────────
 
 
+# ── Task T5: Prompt injection defense in BaseAgent ──────────────────
+
+
+class TestBaseAgentUsesWrapUserContent:
+    """Verify that BaseAgent.respond_to_user wraps user messages for injection defense."""
+
+    def _read_base(self) -> str:
+        base_path = Path(__file__).parent.parent / "backend" / "app" / "agents" / "base.py"
+        return base_path.read_text()
+
+    def test_base_imports_wrap_user_content(self):
+        src = self._read_base()
+        assert "from ..core.security import wrap_user_content" in src
+
+    def test_respond_to_user_calls_wrap(self):
+        src = self._read_base()
+        assert "wrap_user_content" in src
+        # Verify the wrapped_message variable is used in the prompt
+        assert "wrapped_message = wrap_user_content(user_message" in src
+
+    def test_respond_to_user_prompt_uses_wrapped_message(self):
+        src = self._read_base()
+        # The prompt string should use {wrapped_message}, not {user_message}
+        assert "{wrapped_message}" in src
+        # Ensure user_message is no longer directly interpolated in the prompt template
+        prompt_section = src[src.index("构建响应提示"):src.index("构建响应提示") + 800]
+        assert "{user_message}" not in prompt_section
+
+
+# ── Task T4: Path traversal guards on delete endpoints ──────────────
+
+
 class TestPathTraversalGuardsInRouters:
     """Verify that validate_path_within is called in all file-delete / file-access endpoints."""
 
