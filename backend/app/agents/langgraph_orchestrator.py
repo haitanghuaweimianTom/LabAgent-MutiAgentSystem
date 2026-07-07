@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List, Optional, TypedDict
@@ -67,6 +68,8 @@ class TaskState(TypedDict, total=False):
     innovation_analysis: Optional[Dict[str, Any]]  # 创新发现分析
     experiment_iterations: int  # 实验迭代次数
     task_summary: Optional[Dict[str, Any]]  # 任务总结报告
+    user_messages: List[Dict[str, Any]]  # 用户在执行期间输入的消息
+    last_input_check: float  # 上次检查用户消息的时间戳
 
 
 @dataclass
@@ -401,6 +404,8 @@ class LangGraphOrchestrator:
             "should_pause": False,
             "revision_count": 0,
             "use_critique": use_critique,
+            "user_messages": [],
+            "last_input_check": time.time(),
         }
 
         # 检查是否可以从 checkpoint 恢复（断点续传）
