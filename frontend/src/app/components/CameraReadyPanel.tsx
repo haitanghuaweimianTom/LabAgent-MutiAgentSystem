@@ -12,6 +12,7 @@
  */
 
 import React, { useState, useCallback } from 'react';
+import { useTheme } from '@/hooks/useTheme';
 
 interface CameraReadyResponse {
   output_dir: string;
@@ -36,6 +37,8 @@ export function CameraReadyPanel({ taskId, templateId, apiBase }: CameraReadyPan
   const [status, setStatus] = useState<CameraReadyResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { theme } = useTheme();
+  const dark = theme === 'dark';
 
   const build = useCallback(async () => {
     setLoading(true);
@@ -65,10 +68,13 @@ export function CameraReadyPanel({ taskId, templateId, apiBase }: CameraReadyPan
 
   return (
     <div style={{
-      padding: 16, border: '1px solid #e5e7eb', borderRadius: 8, background: '#f9fafb',
+      padding: 16,
+      border: `1px solid ${dark ? '#475569' : '#e5e7eb'}`,
+      borderRadius: 8,
+      background: dark ? '#1e293b' : '#f9fafb',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-        <h3 style={{ margin: 0, fontSize: 16 }}>📦 Camera-Ready 打包</h3>
+        <h3 style={{ margin: 0, fontSize: 16, color: dark ? '#f1f5f9' : '#111827' }}>📦 Camera-Ready 打包</h3>
         <button
           type="button"
           onClick={build}
@@ -85,7 +91,11 @@ export function CameraReadyPanel({ taskId, templateId, apiBase }: CameraReadyPan
       </div>
 
       {error && (
-        <div style={{ padding: 10, marginBottom: 12, background: '#fee2e2', color: '#991b1b', borderRadius: 6, fontSize: 13 }}>
+        <div style={{
+          padding: 10, marginBottom: 12, borderRadius: 6, fontSize: 13,
+          background: dark ? '#7f1d1d' : '#fee2e2',
+          color: dark ? '#fca5a5' : '#991b1b',
+        }}>
           ⚠ {error}
         </div>
       )}
@@ -93,17 +103,17 @@ export function CameraReadyPanel({ taskId, templateId, apiBase }: CameraReadyPan
       {status && (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 12 }}>
-            <Metric label="图表" value={status.artifact_summary.figures} />
-            <Metric label="代码" value={status.artifact_summary.code_files} />
-            <Metric label="引用" value={status.artifact_summary.bib_entries} />
-            <Metric label="章节" value={status.artifact_summary.chapters} />
+            <Metric label="图表" value={status.artifact_summary.figures} dark={dark} />
+            <Metric label="代码" value={status.artifact_summary.code_files} dark={dark} />
+            <Metric label="引用" value={status.artifact_summary.bib_entries} dark={dark} />
+            <Metric label="章节" value={status.artifact_summary.chapters} dark={dark} />
           </div>
 
           {status.skipped_reasons.length > 0 && (
             <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>缺失记录：</div>
+              <div style={{ fontSize: 12, color: dark ? '#94a3b8' : '#6b7280', marginBottom: 4 }}>缺失记录：</div>
               {status.skipped_reasons.map((r, i) => (
-                <div key={i} style={{ fontSize: 12, color: '#b45309', padding: '2px 0' }}>
+                <div key={i} style={{ fontSize: 12, color: dark ? '#fbbf24' : '#b45309', padding: '2px 0' }}>
                   • {r}
                 </div>
               ))}
@@ -126,8 +136,12 @@ export function CameraReadyPanel({ taskId, templateId, apiBase }: CameraReadyPan
           )}
 
           <details style={{ marginTop: 12, fontSize: 12 }}>
-            <summary style={{ cursor: 'pointer', color: '#6b7280' }}>产物目录</summary>
-            <code style={{ display: 'block', padding: 8, marginTop: 4, background: '#f3f4f6', borderRadius: 4 }}>
+            <summary style={{ cursor: 'pointer', color: dark ? '#94a3b8' : '#6b7280' }}>产物目录</summary>
+            <code style={{
+              display: 'block', padding: 8, marginTop: 4, borderRadius: 4,
+              background: dark ? '#0f172a' : '#f3f4f6',
+              color: dark ? '#94a3b8' : '#374151',
+            }}>
               {status.output_dir}
             </code>
           </details>
@@ -137,14 +151,15 @@ export function CameraReadyPanel({ taskId, templateId, apiBase }: CameraReadyPan
   );
 }
 
-function Metric({ label, value }: { label: string; value: number }) {
+function Metric({ label, value, dark }: { label: string; value: number; dark: boolean }) {
   return (
     <div style={{
-      padding: 10, background: 'white', borderRadius: 6,
-      border: '1px solid #e5e7eb', textAlign: 'center',
+      padding: 10, borderRadius: 6, textAlign: 'center',
+      background: dark ? '#0f172a' : 'white',
+      border: `1px solid ${dark ? '#475569' : '#e5e7eb'}`,
     }}>
-      <div style={{ fontSize: 24, fontWeight: 600, color: '#1f2937' }}>{value}</div>
-      <div style={{ fontSize: 12, color: '#6b7280' }}>{label}</div>
+      <div style={{ fontSize: 24, fontWeight: 600, color: dark ? '#f1f5f9' : '#1f2937' }}>{value}</div>
+      <div style={{ fontSize: 12, color: dark ? '#94a3b8' : '#6b7280' }}>{label}</div>
     </div>
   );
 }

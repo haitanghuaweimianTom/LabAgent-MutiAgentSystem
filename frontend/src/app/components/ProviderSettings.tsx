@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-
-const apiBase = () => window.__API_BASE__ || 'http://localhost:8000/api/v1';
+import { apiBase } from '@/lib/api';
+import { useTheme } from '@/hooks/useTheme';
 
 // API 格式和认证字段从后端动态加载
 interface ApiFormat { id: string; label: string; desc: string; }
@@ -57,6 +57,8 @@ interface Preset {
 }
 
 export default function ProviderSettings() {
+  const { theme } = useTheme();
+  const dark = theme === 'dark';
   const [providers, setProviders] = useState<CustomProvider[]>([]);
   const [presets, setPresets] = useState<Preset[]>([]);
   const [presetsByCategory, setPresetsByCategory] = useState<Record<string, Preset[]>>({});
@@ -359,7 +361,7 @@ export default function ProviderSettings() {
     } catch {}
   };
 
-  if (loading) return <div style={{ color: '#aaa', textAlign: 'center', padding: '2rem' }}>加载中...</div>;
+  if (loading) return <div style={{ color: dark ? '#cbd5e1' : '#aaa', textAlign: 'center', padding: '2rem' }}>加载中...</div>;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
@@ -368,7 +370,7 @@ export default function ProviderSettings() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
           <div>
             <span style={{ fontSize: '1.1rem', color: '#fff', fontWeight: 600 }}>🔌 多 Provider 配置</span>
-            <div style={{ color: '#888', fontSize: '0.8rem', marginTop: '0.3rem' }}>
+            <div style={{ color: dark ? '#94a3b8' : '#888', fontSize: '0.8rem', marginTop: '0.3rem' }}>
               CC Switch 风格：支持导入内置预设，自定义 API 格式（OpenAI/Anthropic/Ollama 等）
             </div>
           </div>
@@ -407,7 +409,7 @@ export default function ProviderSettings() {
                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#888', display: 'inline-block' }} />
               )}
             </div>
-            <div style={{ color: '#888', fontSize: '0.8rem', lineHeight: 1.5 }}>
+            <div style={{ color: dark ? '#94a3b8' : '#888', fontSize: '0.8rem', lineHeight: 1.5 }}>
               {ccswitchStatus?.installed ? (
                 <>
                   已检测到 cc-switch
@@ -460,8 +462,8 @@ export default function ProviderSettings() {
           </div>
         </div>
         {!ccswitchStatus?.installed && (
-          <div style={{ marginTop: '1rem', padding: '0.75rem', background: 'rgba(0,0,0,0.2)', borderRadius: 8, fontSize: '0.8rem', color: '#888', lineHeight: 1.6 }}>
-            <strong style={{ color: '#aaa' }}>安装 cc-switch：</strong><br />
+          <div style={{ marginTop: '1rem', padding: '0.75rem', background: 'rgba(0,0,0,0.2)', borderRadius: 8, fontSize: '0.8rem', color: dark ? '#94a3b8' : '#888', lineHeight: 1.6 }}>
+            <strong style={{ color: dark ? '#cbd5e1' : '#aaa' }}>安装 cc-switch：</strong><br />
             cc-switch 是一个跨平台 CLI 工具，用于统一管理多个 LLM Provider 配置。<br />
             安装后系统会自动检测并同步您的 Provider 设置，无需手动配置。<br />
             <code style={{ background: 'rgba(0,0,0,0.3)', padding: '0.2rem 0.4rem', borderRadius: 4, color: '#e0e0e0' }}>
@@ -475,7 +477,7 @@ export default function ProviderSettings() {
       {showJsonImport && (
         <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(241,196,15,0.2)', borderRadius: 14, padding: '1.5rem' }}>
           <span style={{ fontSize: '1rem', color: '#f1c40f', fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>📋 粘贴 CC Switch JSON</span>
-          <p style={{ color: '#888', fontSize: '0.8rem', marginBottom: '1rem', lineHeight: 1.5 }}>
+          <p style={{ color: dark ? '#94a3b8' : '#888', fontSize: '0.8rem', marginBottom: '1rem', lineHeight: 1.5 }}>
             支持 CC Switch 配置 JSON，系统自动提取 API 地址、Key 和模型名称并创建 Provider。
           </p>
           <textarea
@@ -492,7 +494,7 @@ export default function ProviderSettings() {
             <button onClick={handleJsonImport} disabled={importingJson} style={{ padding: '0.6rem 1.5rem', background: 'linear-gradient(135deg, #f1c40f, #e67e22)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>
               {importingJson ? '导入中...' : '确认导入'}
             </button>
-            <button onClick={() => { setShowJsonImport(false); setJsonText(''); }} style={{ padding: '0.6rem 1.5rem', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: '#aaa', cursor: 'pointer' }}>
+            <button onClick={() => { setShowJsonImport(false); setJsonText(''); }} style={{ padding: '0.6rem 1.5rem', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: dark ? '#cbd5e1' : '#aaa', cursor: 'pointer' }}>
               取消
             </button>
           </div>
@@ -522,7 +524,7 @@ export default function ProviderSettings() {
                       background: 'rgba(0,0,0,0.2)',
                       border: '1px solid rgba(255,255,255,0.1)',
                       borderRadius: 8,
-                      color: '#ddd',
+                      color: dark ? '#e2e8f0' : '#ddd',
                       cursor: 'pointer',
                       textAlign: 'left',
                       display: 'flex',
@@ -534,8 +536,8 @@ export default function ProviderSettings() {
                     onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)')}
                   >
                     <span style={{ color: '#fff', fontWeight: 600, fontSize: '0.9rem' }}>{p.icon} {p.name}</span>
-                    <span style={{ color: '#888', fontSize: '0.75rem' }}>{p.api_host}</span>
-                    <span style={{ color: '#666', fontSize: '0.7rem' }}>
+                    <span style={{ color: dark ? '#94a3b8' : '#888', fontSize: '0.75rem' }}>{p.api_host}</span>
+                    <span style={{ color: dark ? '#94a3b8' : '#666', fontSize: '0.7rem' }}>
                       {p.meta?.api_format || 'openai_chat'} · {p.models.map(m => m.name).join(', ')}
                     </span>
                   </button>
@@ -553,7 +555,7 @@ export default function ProviderSettings() {
 
           {/* API format selector */}
           <div style={{ marginBottom: '1rem' }}>
-            <div style={{ color: '#ddd', fontSize: '0.85rem', marginBottom: '0.5rem' }}>API 格式</div>
+            <div style={{ color: dark ? '#e2e8f0' : '#ddd', fontSize: '0.85rem', marginBottom: '0.5rem' }}>API 格式</div>
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
               {(apiFormats.length > 0 ? apiFormats : [
                 { id: 'openai_chat', label: 'OpenAI Chat', desc: '/chat/completions' },
@@ -590,7 +592,7 @@ export default function ProviderSettings() {
 
           {/* Auth field selector */}
           <div style={{ marginBottom: '1rem' }}>
-            <div style={{ color: '#ddd', fontSize: '0.85rem', marginBottom: '0.5rem' }}>认证方式</div>
+            <div style={{ color: dark ? '#e2e8f0' : '#ddd', fontSize: '0.85rem', marginBottom: '0.5rem' }}>认证方式</div>
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
               {(authFields.length > 0 ? authFields : [
                 { id: 'bearer_token', label: 'Bearer Token', desc: 'Authorization: Bearer <key>' },
@@ -614,7 +616,7 @@ export default function ProviderSettings() {
                 </button>
               ))}
             </div>
-            <div style={{ color: '#666', fontSize: '0.75rem', marginTop: '0.3rem' }}>
+            <div style={{ color: dark ? '#94a3b8' : '#666', fontSize: '0.75rem', marginTop: '0.3rem' }}>
               {(authFields.length > 0 ? authFields : [
                 { id: 'bearer_token', label: 'Bearer Token', desc: 'Authorization: Bearer <key>' },
                 { id: 'x_api_key', label: 'x-api-key', desc: 'Anthropic 原生: x-api-key: <key>' },
@@ -654,7 +656,7 @@ export default function ProviderSettings() {
             <button onClick={handleAdd} disabled={adding} style={{ padding: '0.6rem 1.5rem', background: 'linear-gradient(135deg, #2ecc71, #27ae60)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>
               {adding ? '添加中...' : '确认添加'}
             </button>
-            <button onClick={() => { setShowAdd(false); setAddForm({ name: '', type: 'openai', api_key: '', api_host: '', model: '', api_format: 'openai_chat', auth_field: 'bearer_token' }); }} style={{ padding: '0.6rem 1.5rem', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: '#aaa', cursor: 'pointer' }}>
+            <button onClick={() => { setShowAdd(false); setAddForm({ name: '', type: 'openai', api_key: '', api_host: '', model: '', api_format: 'openai_chat', auth_field: 'bearer_token' }); }} style={{ padding: '0.6rem 1.5rem', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: dark ? '#cbd5e1' : '#aaa', cursor: 'pointer' }}>
               取消
             </button>
           </div>
@@ -665,7 +667,7 @@ export default function ProviderSettings() {
       {providers.length === 0 && !showAdd && (
         <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 14, padding: '3rem', textAlign: 'center' }}>
           <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🔌</div>
-          <div style={{ color: '#888', fontSize: '0.9rem' }}>暂无自定义 Provider，请点击「内置预设」快速导入，或「添加 Provider」手动配置</div>
+          <div style={{ color: dark ? '#94a3b8' : '#888', fontSize: '0.9rem' }}>暂无自定义 Provider，请点击「内置预设」快速导入，或「添加 Provider」手动配置</div>
         </div>
       )}
 
@@ -700,7 +702,7 @@ export default function ProviderSettings() {
                       {CATEGORY_LABELS[provider.category || 'custom'] || '自定义'}
                     </span>
                   </div>
-                  <div style={{ color: '#888', fontSize: '0.8rem' }}>
+                  <div style={{ color: dark ? '#94a3b8' : '#888', fontSize: '0.8rem' }}>
                     {apiFormat} · {provider.api_host}
                   </div>
                 </div>
@@ -722,15 +724,15 @@ export default function ProviderSettings() {
 
             {/* API Key */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.8rem', padding: '0.5rem', background: 'rgba(0,0,0,0.15)', borderRadius: 6 }}>
-              <span style={{ color: '#888', fontSize: '0.8rem', minWidth: 60 }}>API Key</span>
-              <code style={{ color: '#aaa', fontSize: '0.85rem', fontFamily: 'monospace' }}>
+              <span style={{ color: dark ? '#94a3b8' : '#888', fontSize: '0.8rem', minWidth: 60 }}>API Key</span>
+              <code style={{ color: dark ? '#cbd5e1' : '#aaa', fontSize: '0.85rem', fontFamily: 'monospace' }}>
                 {provider.api_key ? `${provider.api_key.slice(0, 8)}${'•'.repeat(20)}` : '(使用环境变量)'}
               </code>
             </div>
 
             {/* Models */}
             <div>
-              <div style={{ color: '#ddd', fontSize: '0.85rem', marginBottom: '0.5rem' }}>模型</div>
+              <div style={{ color: dark ? '#e2e8f0' : '#ddd', fontSize: '0.85rem', marginBottom: '0.5rem' }}>模型</div>
               <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
                 {(provider.models || []).map(m => (
                   <span
@@ -751,7 +753,7 @@ export default function ProviderSettings() {
                     <button onClick={() => handleRemoveModel(provider.id, m.name)} style={{ background: 'none', border: 'none', color: '#e74c3c', cursor: 'pointer', padding: 0, fontSize: '0.7rem' }}>✕</button>
                   </span>
                 ))}
-                {(!provider.models || provider.models.length === 0) && <span style={{ color: '#666', fontSize: '0.8rem' }}>暂无模型，请添加模型</span>}
+                {(!provider.models || provider.models.length === 0) && <span style={{ color: dark ? '#94a3b8' : '#666', fontSize: '0.8rem' }}>暂无模型，请添加模型</span>}
               </div>
               <div style={{ display: 'flex', gap: '0.4rem' }}>
                 <input

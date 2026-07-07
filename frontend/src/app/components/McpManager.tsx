@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useTheme } from '@/hooks/useTheme';
+import { apiBase } from '@/lib/api';
 
 interface MCPServer {
   name: string;
@@ -23,8 +25,6 @@ interface MCPTool {
   server: string;
   description: string;
 }
-
-const apiBase = () => (typeof window !== 'undefined' && window.__API_BASE__) || 'http://localhost:8000/api/v1';
 
 const TRANSPORT_TYPES = [
   { id: 'stdio', label: 'STDIO', desc: '本地进程通信' },
@@ -89,6 +89,8 @@ export default function McpManager() {
   const [tools, setTools] = useState<MCPTool[]>([]);
   const [agentToolsMap, setAgentToolsMap] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(true);
+  const { theme } = useTheme();
+  const dark = theme === 'dark';
   const [msg, setMsg] = useState('');
   const [savingAgent, setSavingAgent] = useState<string | null>(null);
 
@@ -300,7 +302,7 @@ export default function McpManager() {
     return MCP_SERVERS.filter(s => s.tools.some(t => agentTools.includes(t))).map(s => s.id);
   };
 
-  if (loading) return <div style={{ color: '#aaa', textAlign: 'center', padding: '2rem' }}>加载中...</div>;
+  if (loading) return <div style={{ color: dark ? '#cbd5e1' : '#aaa', textAlign: 'center', padding: '2rem' }}>加载中...</div>;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
@@ -363,7 +365,7 @@ export default function McpManager() {
                 <button onClick={handleJsonImport} disabled={importingJson} style={{ padding: '0.5rem 1.2rem', background: 'linear-gradient(135deg, #f1c40f, #e67e22)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>
                   {importingJson ? '导入中...' : '确认导入'}
                 </button>
-                <button onClick={() => { setShowJsonImport(false); setJsonText(''); }} style={{ padding: '0.5rem 1.2rem', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: '#aaa', cursor: 'pointer' }}>
+                <button onClick={() => { setShowJsonImport(false); setJsonText(''); }} style={{ padding: '0.5rem 1.2rem', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: dark ? '#cbd5e1' : '#aaa', cursor: 'pointer' }}>
                   取消
                 </button>
               </div>
@@ -373,7 +375,7 @@ export default function McpManager() {
           {showAddServer && (
             <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: 8, padding: '1rem', marginBottom: '1rem' }}>
               <div style={{ marginBottom: '0.8rem' }}>
-                <div style={{ color: '#ddd', fontSize: '0.85rem', marginBottom: '0.5rem' }}>传输类型</div>
+                <div style={{ color: dark ? '#e2e8f0' : '#ddd', fontSize: '0.85rem', marginBottom: '0.5rem' }}>传输类型</div>
                 <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                   {TRANSPORT_TYPES.map(tt => (
                     <button
@@ -408,7 +410,7 @@ export default function McpManager() {
             </div>
           )}
 
-          {servers.length === 0 && <div style={{ color: '#666', textAlign: 'center' }}>暂无 MCP 服务器</div>}
+          {servers.length === 0 && <div style={{ color: dark ? '#94a3b8' : '#666', textAlign: 'center' }}>暂无 MCP 服务器</div>}
           {servers.map(srv => {
             const sType = srv.server_type || 'stdio';
             const isHttp = sType !== 'stdio';
@@ -427,9 +429,9 @@ export default function McpManager() {
                 </div>
                 <div style={{ marginTop: '0.4rem', marginLeft: '1.2rem' }}>
                   {isHttp ? (
-                    <code style={{ color: '#aaa', fontSize: '0.8rem' }}>{srv.url}</code>
+                    <code style={{ color: dark ? '#cbd5e1' : '#aaa', fontSize: '0.8rem' }}>{srv.url}</code>
                   ) : (
-                    <code style={{ color: '#aaa', fontSize: '0.8rem' }}>{srv.command} {(srv.args || []).join(' ')}</code>
+                    <code style={{ color: dark ? '#cbd5e1' : '#aaa', fontSize: '0.8rem' }}>{srv.command} {(srv.args || []).join(' ')}</code>
                   )}
                 </div>
                 {(srv.tags && srv.tags.length > 0) && (
@@ -440,11 +442,11 @@ export default function McpManager() {
                   </div>
                 )}
                 {(srv.disabled_tools && srv.disabled_tools.length > 0) && (
-                  <div style={{ marginTop: '0.4rem', marginLeft: '1.2rem', color: '#888', fontSize: '0.75rem' }}>
+                  <div style={{ marginTop: '0.4rem', marginLeft: '1.2rem', color: dark ? '#94a3b8' : '#888', fontSize: '0.75rem' }}>
                     禁用工具: {srv.disabled_tools.join(', ')}
                   </div>
                 )}
-                <span style={{ color: '#888', fontSize: '0.85rem', flex: 1, display: 'block', marginTop: '0.3rem' }}>{srv.description}</span>
+                <span style={{ color: dark ? '#94a3b8' : '#888', fontSize: '0.85rem', flex: 1, display: 'block', marginTop: '0.3rem' }}>{srv.description}</span>
                 <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.4rem', marginLeft: '1.2rem' }}>
                   <button onClick={() => handleToggleServer(srv.name, srv.enabled)} style={{ padding: '0.3rem 0.6rem', background: srv.enabled ? 'rgba(231,76,60,0.15)' : 'rgba(46,204,113,0.15)', border: `1px solid ${srv.enabled ? 'rgba(231,76,60,0.3)' : 'rgba(46,204,113,0.3)'}`, borderRadius: 6, color: srv.enabled ? '#e74c3c' : '#2ecc71', fontSize: '0.75rem', cursor: 'pointer' }}>
                     {srv.enabled ? '禁用' : '启用'}
@@ -478,13 +480,13 @@ export default function McpManager() {
             </div>
           )}
 
-          {tools.length === 0 && <div style={{ color: '#666', textAlign: 'center' }}>暂无 MCP 工具</div>}
+          {tools.length === 0 && <div style={{ color: dark ? '#94a3b8' : '#666', textAlign: 'center' }}>暂无 MCP 工具</div>}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '0.5rem' }}>
             {tools.map(tool => (
               <div key={tool.name} style={{ padding: '0.6rem', background: 'rgba(0,0,0,0.15)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8 }}>
                 <div style={{ color: '#fff', fontWeight: 600 }}>{tool.name}</div>
-                <div style={{ color: '#888', fontSize: '0.8rem' }}>服务器: {tool.server}</div>
-                <div style={{ color: '#aaa', fontSize: '0.85rem' }}>{tool.description}</div>
+                <div style={{ color: dark ? '#94a3b8' : '#888', fontSize: '0.8rem' }}>服务器: {tool.server}</div>
+                <div style={{ color: dark ? '#cbd5e1' : '#aaa', fontSize: '0.85rem' }}>{tool.description}</div>
               </div>
             ))}
           </div>
