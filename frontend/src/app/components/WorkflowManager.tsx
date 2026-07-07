@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { apiBase } from '@/lib/api';
+import { useTheme } from '@/hooks/useTheme';
 
 interface WorkflowStep {
   agent: string;
@@ -30,11 +32,11 @@ const AGENTS = [
   { id: 'figure_agent', label: '科研绘图师' },
 ];
 
-const apiBase = () => window.__API_BASE__ || 'http://localhost:8000/api/v1';
-
 export default function WorkflowManager() {
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [loading, setLoading] = useState(true);
+  const { theme } = useTheme();
+  const dark = theme === 'dark';
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -50,26 +52,44 @@ export default function WorkflowManager() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 14, padding: '1.5rem' }}>
+      <div style={{
+        background: dark ? '#1e293b' : 'rgba(255,255,255,0.05)',
+        border: `1px solid ${dark ? '#334155' : 'rgba(255,255,255,0.1)'}`,
+        borderRadius: 14, padding: '1.5rem'
+      }}>
         <div style={{ marginBottom: '1rem' }}>
-          <span style={{ fontSize: '1.1rem', color: '#fff', fontWeight: 600 }}>🔄 工作流</span>
-          <div style={{ marginTop: '0.5rem', color: '#aaa', fontSize: '0.8rem' }}>
+          <span style={{ fontSize: '1.1rem', color: dark ? '#f1f5f9' : '#fff', fontWeight: 600 }}>🔄 工作流</span>
+          <div style={{ marginTop: '0.5rem', color: dark ? '#94a3b8' : '#aaa', fontSize: '0.8rem' }}>
             工作流已由模板自动绑定，此处仅展示各模板对应的 Agent 执行路径。
           </div>
         </div>
 
         {workflows.map(wf => (
-          <div key={wf.name} style={{ padding: '1rem', marginBottom: '0.8rem', background: 'rgba(52,152,219,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8 }}>
+          <div key={wf.name} style={{
+            padding: '1rem', marginBottom: '0.8rem',
+            background: dark ? 'rgba(59,130,246,0.08)' : 'rgba(52,152,219,0.05)',
+            border: `1px solid ${dark ? '#475569' : 'rgba(255,255,255,0.08)'}`,
+            borderRadius: 8
+          }}>
             <div style={{ marginBottom: '0.5rem' }}>
-              <span style={{ color: '#fff', fontWeight: 600 }}>{wf.name}</span>
-              <span style={{ marginLeft: '0.5rem', padding: '0.2rem 0.4rem', borderRadius: 4, fontSize: '0.7rem', background: 'rgba(52,152,219,0.15)', color: '#3498db' }}>
+              <span style={{ color: dark ? '#f1f5f9' : '#fff', fontWeight: 600 }}>{wf.name}</span>
+              <span style={{
+                marginLeft: '0.5rem', padding: '0.2rem 0.4rem', borderRadius: 4, fontSize: '0.7rem',
+                background: dark ? '#1e3a5f' : 'rgba(52,152,219,0.15)',
+                color: dark ? '#93c5fd' : '#3498db',
+              }}>
                 预定义
               </span>
             </div>
-            <div style={{ color: '#aaa', fontSize: '0.85rem', marginBottom: '0.5rem' }}>{wf.description}</div>
+            <div style={{ color: dark ? '#94a3b8' : '#aaa', fontSize: '0.85rem', marginBottom: '0.5rem' }}>{wf.description}</div>
             <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
               {wf.steps.map((step, i) => (
-                <span key={i} style={{ padding: '0.2rem 0.5rem', background: 'rgba(0,0,0,0.2)', borderRadius: 12, color: '#ddd', fontSize: '0.75rem', border: '1px solid rgba(255,255,255,0.08)' }}>
+                <span key={i} style={{
+                  padding: '0.2rem 0.5rem',
+                  background: dark ? 'rgba(30,41,59,0.8)' : 'rgba(0,0,0,0.2)',
+                  borderRadius: 12, color: dark ? '#cbd5e1' : '#ddd', fontSize: '0.75rem',
+                  border: `1px solid ${dark ? '#475569' : 'rgba(255,255,255,0.08)'}`,
+                }}>
                   {i + 1}. {AGENTS.find(a => a.id === step.agent)?.label || step.agent}
                 </span>
               ))}

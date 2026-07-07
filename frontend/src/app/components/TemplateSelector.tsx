@@ -11,6 +11,7 @@
  */
 
 import React from 'react';
+import { useTheme } from '@/hooks/useTheme';
 
 export interface TemplateOption {
   id: string;
@@ -106,6 +107,9 @@ interface TemplateSelectorProps {
 }
 
 export function TemplateSelector({ value, onChange, showCcfABadge = true, disabled }: TemplateSelectorProps) {
+  const { theme } = useTheme();
+  const dark = theme === 'dark';
+
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
       {TEMPLATE_OPTIONS.map((tpl) => {
@@ -120,21 +124,27 @@ export function TemplateSelector({ value, onChange, showCcfABadge = true, disabl
             style={{
               padding: 12,
               textAlign: 'left',
-              border: selected ? '2px solid #2563eb' : '1px solid #d1d5db',
+              border: selected
+                ? '2px solid #3b82f6'
+                : dark ? '1px solid #475569' : '1px solid #d1d5db',
               borderRadius: 8,
-              background: selected ? '#eff6ff' : '#fff',
+              background: selected
+                ? dark ? 'rgba(59,130,246,0.15)' : '#eff6ff'
+                : dark ? '#1e293b' : '#fff',
               cursor: disabled ? 'not-allowed' : 'pointer',
               opacity: disabled ? 0.6 : 1,
               transition: 'all 0.15s',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-              <span style={{ fontWeight: 600, fontSize: 14 }}>{tpl.name}</span>
+              <span style={{ fontWeight: 600, fontSize: 14, color: dark ? '#f1f5f9' : '#111827' }}>{tpl.name}</span>
               <span style={{ display: 'flex', gap: 4 }}>
                 {tpl.recommended && (
                   <span style={{
                     fontSize: 10, padding: '2px 6px', borderRadius: 4,
-                    background: '#fef3c7', color: '#92400e', fontWeight: 600,
+                    background: dark ? '#78350f' : '#fef3c7',
+                    color: dark ? '#fde68a' : '#92400e',
+                    fontWeight: 600,
                   }}>
                     推荐
                   </span>
@@ -142,15 +152,17 @@ export function TemplateSelector({ value, onChange, showCcfABadge = true, disabl
                 {showCcfABadge && tpl.ccfA && (
                   <span style={{
                     fontSize: 10, padding: '2px 6px', borderRadius: 4,
-                    background: '#dbeafe', color: '#1e40af', fontWeight: 600,
+                    background: dark ? '#1e3a5f' : '#dbeafe',
+                    color: dark ? '#93c5fd' : '#1e40af',
+                    fontWeight: 600,
                   }}>
                     CCF-A
                   </span>
                 )}
               </span>
             </div>
-            <div style={{ fontSize: 12, color: '#6b7280', lineHeight: 1.5 }}>{tpl.desc}</div>
-            <div style={{ marginTop: 6, fontSize: 11, color: '#9ca3af' }}>
+            <div style={{ fontSize: 12, color: dark ? '#94a3b8' : '#6b7280', lineHeight: 1.5 }}>{tpl.desc}</div>
+            <div style={{ marginTop: 6, fontSize: 11, color: dark ? '#64748b' : '#9ca3af' }}>
               {tpl.chapters} 章节 · {tpl.domain}
             </div>
           </button>
