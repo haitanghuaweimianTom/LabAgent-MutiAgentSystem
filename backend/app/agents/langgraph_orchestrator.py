@@ -2577,6 +2577,16 @@ print(json.dumps({{"accuracy": round(acc, 4)}}))
             "task_summary": state.get("task_summary"),  # 任务总结（所有Agent可读）
         }
 
+        # 用户反馈注入
+        user_messages = state.get("user_messages", [])
+        user_feedback_text = ""
+        if user_messages:
+            latest = user_messages[-1]
+            user_feedback_text = f"\n\n【用户最新指令】\n{latest.get('content', '')}\n\n请根据用户指令调整你的方案。如果用户指令与当前步骤无关，在输出中说明并继续原计划。"
+
+        ctx["user_feedback_text"] = user_feedback_text
+        ctx["user_messages"] = user_messages
+
         # ===== 模板特定上下文 =====
         research_output = results.get("research_agent", {})
         analyzer_output = results.get("analyzer_agent", {})
