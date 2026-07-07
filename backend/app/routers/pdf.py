@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 
+from ..core.security import MAX_UPLOAD_SIZE, sanitize_filename
 from ..schemas.pdf import (
     PdfDownloadRequest,
     PdfParseRequest,
@@ -31,9 +32,15 @@ async def upload_pdf(
     file_bytes = await file.read()
     if not file_bytes:
         raise HTTPException(status_code=400, detail="文件为空")
+    if len(file_bytes) > MAX_UPLOAD_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large. Maximum size is {MAX_UPLOAD_SIZE // (1024*1024)}MB",
+        )
 
+    safe_name = sanitize_filename(file.filename)
     try:
-        info = await get_pdf_service().upload_pdf(file_bytes, file.filename, project_name)
+        info = await get_pdf_service().upload_pdf(file_bytes, safe_name, project_name)
         file_path = get_pdf_service().get_file_path(info.file_id, project_name)
         if file_path:
             try:

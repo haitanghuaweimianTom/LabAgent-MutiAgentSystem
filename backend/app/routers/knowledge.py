@@ -16,6 +16,7 @@ from ..core.knowledge_manager import (
     FileMetadata,
     KnowledgeBaseConfig,
 )
+from ..core.security import MAX_UPLOAD_SIZE, sanitize_filename
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/knowledge", tags=["知识库"])
@@ -471,9 +472,15 @@ async def upload_knowledge_file(
     content = await file.read()
     if not content:
         raise HTTPException(status_code=400, detail="文件为空")
+    if len(content) > MAX_UPLOAD_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large. Maximum size is {MAX_UPLOAD_SIZE // (1024*1024)}MB",
+        )
 
     # 保存文件
-    save_path = km.save_file(file.filename or "uploaded_file", content)
+    safe_name = sanitize_filename(file.filename or "uploaded_file")
+    save_path = km.save_file(safe_name, content)
 
     # 提取文本
     text = ""

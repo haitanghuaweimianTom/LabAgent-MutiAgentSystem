@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/data", tags=["数据管理"])
 
 from ..core.paths import get_data_dir, get_project_data_dir, get_project_data_subdir
+from ..core.security import MAX_UPLOAD_SIZE, sanitize_filename
 from ..services.data_directory import list_project_files
 
 DATA_DIR: Path = get_data_dir()  # 全局默认目录
@@ -49,14 +50,22 @@ async def upload_file(
     if not allowed(file.filename or ""):
         raise HTTPException(status_code=400, detail=f"不支持的文件类型: {get_extension(file.filename or '')}")
 
+    file_bytes = await file.read()
+    if len(file_bytes) > MAX_UPLOAD_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large. Maximum size is {MAX_UPLOAD_SIZE // (1024*1024)}MB",
+        )
+
+    safe_name = sanitize_filename(file.filename or "unnamed")
     target_dir = get_project_data_subdir(project_name, source=source)
     file_id = uuid4().hex[:8]
-    ext = get_extension(file.filename or "")
-    save_name = f"{file_id}_{file.filename or 'file'}{ext}"
+    ext = get_extension(safe_name)
+    save_name = f"{file_id}_{safe_name}{ext}"
     save_path = target_dir / save_name
 
     with open(save_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+        buffer.write(file_bytes)
 
     size = save_path.stat().st_size
     # 返回相对路径，避免绑定本机绝对路径
@@ -300,6 +309,11 @@ async def ocr_upload(file: UploadFile = File(...), domain: str = "general"):
     file_bytes = await file.read()
     if not file_bytes:
         raise HTTPException(status_code=400, detail="文件为空")
+    if len(file_bytes) > MAX_UPLOAD_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large. Maximum size is {MAX_UPLOAD_SIZE // (1024*1024)}MB",
+        )
 
     # 转换为 base64 图片
     try:

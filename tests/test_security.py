@@ -169,3 +169,31 @@ class TestTaskCreateRequestConstraints:
     def test_project_name_empty_string_rejected(self):
         with pytest.raises(PydanticValidationError):
             TaskCreateRequest(problem_text="x", project_name="")
+
+
+class TestUploadSizeEnforcement:
+    """Verify that upload size checks exist in all router files."""
+
+    def _read_router(self, name: str) -> str:
+        router_path = Path(__file__).parent.parent / "backend" / "app" / "routers" / name
+        return router_path.read_text()
+
+    def test_data_upload_has_size_check(self):
+        src = self._read_router("data.py")
+        assert "MAX_UPLOAD_SIZE" in src
+        assert "413" in src
+
+    def test_pdf_upload_has_size_check(self):
+        src = self._read_router("pdf.py")
+        assert "MAX_UPLOAD_SIZE" in src
+        assert "413" in src
+
+    def test_knowledge_upload_has_size_check(self):
+        src = self._read_router("knowledge.py")
+        assert "MAX_UPLOAD_SIZE" in src
+        assert "413" in src
+
+    def test_sanitize_filename_used_in_uploads(self):
+        for name in ("data.py", "pdf.py", "knowledge.py"):
+            src = self._read_router(name)
+            assert "sanitize_filename" in src
