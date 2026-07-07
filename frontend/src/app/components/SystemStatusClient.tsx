@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import styles from './SystemStatus.module.css';
+import { cn } from '@/lib/utils';
+import { apiBase } from '@/lib/api';
+import { useTheme } from '@/hooks/useTheme';
 
 interface ProviderInfo {
   id: string;
@@ -51,8 +53,6 @@ declare global {
   }
 }
 
-const apiBase = () => (typeof window !== 'undefined' && window.__API_BASE__) || 'http://localhost:8000/api/v1';
-
 function formatUptime(seconds: number): string {
   if (seconds < 60) return `${Math.floor(seconds)}秒`;
   if (seconds < 3600) return `${Math.floor(seconds / 60)}分钟`;
@@ -61,8 +61,6 @@ function formatUptime(seconds: number): string {
   return `${h}小时${m}分钟`;
 }
 
-// 外部存储：读取 window.__INITIAL_INFO__
-// 在 React 水合之前，script 标签已执行并设置 window.__INITIAL_INFO__
 const infoStore = {
   getSnapshot: (): SystemInfo | null => {
     if (typeof window === 'undefined') return null;
@@ -70,7 +68,6 @@ const infoStore = {
   },
   getServerSnapshot: (): SystemInfo | null => null,
   subscribe: (callback: () => void) => {
-    // 监听 window.__INITIAL_INFO__ 的变化（通过轮询）
     const interval = setInterval(() => {
       if (window.__INITIAL_INFO__) {
         callback();
@@ -81,27 +78,26 @@ const infoStore = {
   },
 };
 
-// 骨架屏 loading 状态 — 与最终内容布局一致，水合后无布局偏移
 function SystemStatusSkeleton() {
   return (
-    <div className={styles.container}>
-      <div className={styles.header}>
-        <span className={styles.title}>🖥️ 系统状态</span>
-        <span className={styles.version} style={{ background: '#1e293b', color: '#475569' }}>加载中...</span>
+    <div className="bg-card border border-border rounded-[14px] p-[1.2rem] mb-4">
+      <div className="flex justify-between items-center mb-4">
+        <span className="text-[1rem] text-foreground font-semibold">🖥️ 系统状态</span>
+        <span className="text-[0.875rem] text-muted-foreground bg-muted py-0.5 px-2 rounded-[6px]">加载中...</span>
       </div>
-      <div className={styles.grid}>
+      <div className="grid grid-cols-2 gap-[0.6rem] mb-4">
         {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className={styles.item} style={{ background: '#1e293b' }}>
-            <span className={styles.label} style={{ color: '#334155' }}>加载中</span>
-            <span className={styles.value} style={{ color: '#334155' }}>────</span>
+          <div key={i} className="flex flex-col gap-0.5 p-2 bg-muted/50 rounded-[8px]">
+            <span className="text-[0.72rem] text-muted-foreground font-semibold">加载中</span>
+            <span className="text-[0.9375rem] text-muted-foreground">────</span>
           </div>
         ))}
       </div>
-      <div className={styles.providersTitle} style={{ color: '#334155' }}>Provider 配置状态</div>
-      <div className={styles.providers}>
-        <div className={styles.provider} style={{ background: '#1e293b' }}>
-          <span className={styles.dot} style={{ background: '#334155' }} />
-          <span style={{ color: '#334155' }}>加载中...</span>
+      <div className="text-[0.9375rem] text-muted-foreground font-semibold mb-2">Provider 配置状态</div>
+      <div className="flex flex-col gap-[0.4rem]">
+        <div className="flex items-center gap-2 py-[0.4rem] px-[0.6rem] bg-muted/50 rounded-[6px] text-[0.82rem]">
+          <span className="w-2 h-2 rounded-full shrink-0 bg-muted-foreground" />
+          <span className="text-muted-foreground">加载中...</span>
         </div>
       </div>
     </div>
@@ -110,18 +106,19 @@ function SystemStatusSkeleton() {
 
 function SystemStatusError() {
   return (
-    <div className={styles.container}>
-      <div className={styles.error}>❌ 无法连接到后端</div>
-      <div className={styles.errorHint}>
-        请确认后端服务已启动：<code>python -m backend.app.main</code>
+    <div className="bg-card border border-border rounded-[14px] p-[1.2rem] mb-4">
+      <div className="text-center p-4 text-error text-[0.9375rem]">❌ 无法连接到后端</div>
+      <div className="text-center py-2 text-muted-foreground text-[0.82rem]">
+        请确认后端服务已启动：<code className="bg-muted py-[0.15rem] px-[0.4rem] rounded-[4px] text-success font-mono text-[0.78rem]">python -m backend.app.main</code>
       </div>
     </div>
   );
 }
 
-// 主内容组件
 function SystemStatusContent({ info }: { info: SystemInfo }) {
   const [uptime, setUptime] = useState('');
+  const { theme } = useTheme();
+  const dark = theme === 'dark';
 
   useEffect(() => {
     if (!info?.started_at) return;
@@ -138,97 +135,90 @@ function SystemStatusContent({ info }: { info: SystemInfo }) {
   const defaultProviderName = info.default_provider?.name || info.default_llm_backend || '未配置';
 
   return (
-    <div className={styles.container}>
-      <div className={styles.header}>
-        <span className={styles.title}>🖥️ 系统状态</span>
-        <span className={styles.version}>v{info.version}</span>
+    <div className="bg-card border border-border rounded-[14px] p-[1.2rem] mb-4">
+      <div className="flex justify-between items-center mb-4">
+        <span className="text-[1rem] text-foreground font-semibold">🖥️ 系统状态</span>
+        <span className="text-[0.875rem] text-muted-foreground bg-muted py-0.5 px-2 rounded-[6px]">v{info.version}</span>
       </div>
 
-      <div className={styles.grid}>
-        <div className={styles.item}>
-          <span className={styles.label}>默认模型</span>
-          <span className={styles.value}>{defaultModel}</span>
-          <span className={styles.valueSmall}>{defaultProviderName}</span>
+      <div className="grid grid-cols-2 gap-[0.6rem] mb-4">
+        <div className="flex flex-col gap-0.5 p-2 bg-muted/50 rounded-[8px]">
+          <span className="text-[0.72rem] text-muted-foreground font-semibold">默认模型</span>
+          <span className="text-[0.9375rem] text-foreground">{defaultModel}</span>
+          <span className="text-[0.875rem] text-muted-foreground break-all">{defaultProviderName}</span>
         </div>
-        <div className={styles.item}>
-          <span className={styles.label}>Agent 团队</span>
-          <span className={styles.value}>{info.agent_count} 个</span>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem', marginTop: '0.3rem' }}>
+        <div className="flex flex-col gap-0.5 p-2 bg-muted/50 rounded-[8px]">
+          <span className="text-[0.72rem] text-muted-foreground font-semibold">Agent 团队</span>
+          <span className="text-[0.9375rem] text-foreground">{info.agent_count} 个</span>
+          <div className="flex flex-wrap gap-1 mt-[0.3rem]">
             {info.agents?.map(a => (
-              <span key={a.id} title={a.description} style={{
-                fontSize: '0.7rem',
-                color: '#aaa',
-                background: 'rgba(255,255,255,0.06)',
-                padding: '0.15rem 0.4rem',
-                borderRadius: '4px',
-                cursor: 'default',
-              }}>
+              <span key={a.id} title={a.description} className="text-[0.7rem] text-muted-foreground bg-muted py-[0.15rem] px-[0.4rem] rounded-[4px] cursor-default">
                 {a.label}
               </span>
             ))}
           </div>
         </div>
-        <div className={styles.item}>
-          <span className={styles.label}>知识库</span>
-          <span className={styles.value}>{info.knowledge_base_count} 个</span>
+        <div className="flex flex-col gap-0.5 p-2 bg-muted/50 rounded-[8px]">
+          <span className="text-[0.72rem] text-muted-foreground font-semibold">知识库</span>
+          <span className="text-[0.9375rem] text-foreground">{info.knowledge_base_count} 个</span>
         </div>
-        <div className={styles.item}>
-          <span className={styles.label}>任务</span>
-          <span className={styles.value}>
+        <div className="flex flex-col gap-0.5 p-2 bg-muted/50 rounded-[8px]">
+          <span className="text-[0.72rem] text-muted-foreground font-semibold">任务</span>
+          <span className="text-[0.9375rem] text-foreground">
             {info.active_tasks > 0 ? (
-              <span style={{ color: '#4caf50' }}>{info.active_tasks} 运行中</span>
+              <span className="text-success">{info.active_tasks} 运行中</span>
             ) : (
               '空闲'
             )}
-            <span style={{ color: '#888', fontSize: '0.75rem', marginLeft: 4 }}>
+            <span className="text-muted-foreground text-[0.75rem] ml-1">
               / {info.total_tasks} 总计
             </span>
           </span>
         </div>
-        <div className={styles.item}>
-          <span className={styles.label}>运行时长</span>
-          <span className={styles.value}>{uptime || '-'}</span>
+        <div className="flex flex-col gap-0.5 p-2 bg-muted/50 rounded-[8px]">
+          <span className="text-[0.72rem] text-muted-foreground font-semibold">运行时长</span>
+          <span className="text-[0.9375rem] text-foreground">{uptime || '-'}</span>
         </div>
-        <div className={styles.item}>
-          <span className={styles.label}>后端连接</span>
-          <span className={styles.value} style={{ color: '#4caf50' }}>✅ 正常</span>
-          <span className={styles.valueSmall}>{apiBase()}</span>
+        <div className="flex flex-col gap-0.5 p-2 bg-muted/50 rounded-[8px]">
+          <span className="text-[0.72rem] text-muted-foreground font-semibold">后端连接</span>
+          <span className="text-[0.9375rem] text-success">✅ 正常</span>
+          <span className="text-[0.875rem] text-muted-foreground break-all">{apiBase()}</span>
         </div>
       </div>
 
-      <div className={styles.providersTitle}>Provider 配置状态</div>
+      <div className="text-[0.9375rem] text-muted-foreground font-semibold mb-2">Provider 配置状态</div>
       {info.providers.length === 0 ? (
-        <div className={styles.emptyHint}>暂无 Provider 配置，请前往「模型设置」添加</div>
+        <div className="text-muted-foreground text-[0.82rem] py-2">暂无 Provider 配置，请前往「模型设置」添加</div>
       ) : (
-        <div className={styles.providers}>
+        <div className="flex flex-col gap-[0.4rem]">
           {info.providers.map(p => (
-            <div key={p.id} className={styles.provider}>
-              <span className={`${styles.dot} ${p.available ? styles.dotOn : styles.dotOff}`} />
-              <span className={styles.providerName}>{p.name}</span>
-              <span className={styles.providerType}>{p.type}</span>
-              {p.model && <span className={styles.providerModel}>{p.model}</span>}
+            <div key={p.id} className="flex items-center gap-2 py-[0.4rem] px-[0.6rem] bg-muted/50 rounded-[6px] text-[0.82rem]">
+              <span className={cn('w-2 h-2 rounded-full shrink-0', p.available ? 'bg-success shadow-[0_0_6px_rgba(16,185,129,0.15)]' : 'bg-error shadow-[0_0_6px_rgba(239,68,68,0.15)]')} />
+              <span className="text-foreground font-medium min-w-[120px]">{p.name}</span>
+              <span className="text-muted-foreground text-[0.8125rem] bg-muted py-[0.1rem] px-[0.35rem] rounded-[4px]">{p.type}</span>
+              {p.model && <span className="text-muted-foreground text-[0.875rem] ml-auto">{p.model}</span>}
             </div>
           ))}
         </div>
       )}
 
-      <div className={styles.providersTitle}>工具链</div>
-      <div className={styles.providers}>
-        <div className={styles.provider}>
-          <span className={`${styles.dot} ${info.claude_code_available ? styles.dotOn : styles.dotOff}`} />
-          <span className={styles.providerName}>Claude Code CLI</span>
-          <span className={styles.providerDetail}>
+      <div className="text-[0.9375rem] text-muted-foreground font-semibold mb-2">工具链</div>
+      <div className="flex flex-col gap-[0.4rem]">
+        <div className="flex items-center gap-2 py-[0.4rem] px-[0.6rem] bg-muted/50 rounded-[6px] text-[0.82rem]">
+          <span className={cn('w-2 h-2 rounded-full shrink-0', info.claude_code_available ? 'bg-success shadow-[0_0_6px_rgba(16,185,129,0.15)]' : 'bg-error shadow-[0_0_6px_rgba(239,68,68,0.15)]')} />
+          <span className="text-foreground font-medium min-w-[120px]">Claude Code CLI</span>
+          <span className="text-muted-foreground text-[0.875rem]">
             {info.claude_code_available ? info.claude_code_path : '未安装'}
           </span>
         </div>
       </div>
 
-      <div className={styles.providersTitle}>CC Switch</div>
-      <div className={styles.providers}>
-        <div className={styles.provider}>
-          <span className={`${styles.dot} ${info.ccswitch_status?.installed ? styles.dotOn : styles.dotOff}`} />
-          <span className={styles.providerName}>CC Switch</span>
-          <span className={styles.providerDetail}>
+      <div className="text-[0.9375rem] text-muted-foreground font-semibold mb-2">CC Switch</div>
+      <div className="flex flex-col gap-[0.4rem]">
+        <div className="flex items-center gap-2 py-[0.4rem] px-[0.6rem] bg-muted/50 rounded-[6px] text-[0.82rem]">
+          <span className={cn('w-2 h-2 rounded-full shrink-0', info.ccswitch_status?.installed ? 'bg-success shadow-[0_0_6px_rgba(16,185,129,0.15)]' : 'bg-error shadow-[0_0_6px_rgba(239,68,68,0.15)]')} />
+          <span className="text-foreground font-medium min-w-[120px]">CC Switch</span>
+          <span className="text-muted-foreground text-[0.875rem]">
             {info.ccswitch_status?.installed
               ? (info.ccswitch_status?.current_provider || '已安装')
               : '未安装'}
@@ -239,12 +229,6 @@ function SystemStatusContent({ info }: { info: SystemInfo }) {
   );
 }
 
-// Client Component: 使用 useSyncExternalStore 读取 SSR 注入的数据
-// 架构说明：
-// 1. layout.tsx (Server Component) 在 SSR 阶段 fetch /info 并注入 window.__INITIAL_INFO__
-// 2. 浏览器解析 HTML 时，script 标签先执行，设置 window.__INITIAL_INFO__
-// 3. React 水合时，useSyncExternalStore 读取已存在的数据，立即渲染正确内容
-// 4. 如果后端未启动，显示骨架屏，客户端会自动重试
 export default function SystemStatusClient() {
   const info = useSyncExternalStore(
     infoStore.subscribe,
@@ -252,7 +236,6 @@ export default function SystemStatusClient() {
     infoStore.getServerSnapshot
   );
 
-  // 如果没有 SSR 数据，显示骨架屏（水合后会自动更新）
   if (!info) {
     return <SystemStatusSkeleton />;
   }
