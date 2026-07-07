@@ -197,3 +197,33 @@ class TestUploadSizeEnforcement:
         for name in ("data.py", "pdf.py", "knowledge.py"):
             src = self._read_router(name)
             assert "sanitize_filename" in src
+
+
+# ── Task T4: Path traversal guards on delete endpoints ──────────────
+
+
+class TestPathTraversalGuardsInRouters:
+    """Verify that validate_path_within is called in all file-delete / file-access endpoints."""
+
+    def _read_router(self, name: str) -> str:
+        router_path = Path(__file__).parent.parent / "backend" / "app" / "routers" / name
+        return router_path.read_text()
+
+    def test_data_router_imports_validate_path_within(self):
+        src = self._read_router("data.py")
+        assert "validate_path_within" in src
+
+    def test_projects_router_imports_validate_path_within(self):
+        src = self._read_router("projects.py")
+        assert "validate_path_within" in src
+
+    def test_delete_file_endpoint_has_guard(self):
+        src = self._read_router("data.py")
+        assert src.count("validate_path_within") >= 4, (
+            "Expected at least 4 validate_path_within calls in data.py "
+            "(analyze, delete file, delete output, delete output dir)"
+        )
+
+    def test_delete_project_force_has_guard(self):
+        src = self._read_router("projects.py")
+        assert "validate_path_within" in src

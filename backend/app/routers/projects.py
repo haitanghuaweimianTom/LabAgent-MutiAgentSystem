@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
+from ..core.security import validate_path_within
 from ..core.project_persistence import (
     list_projects,
     get_project,
@@ -84,6 +85,7 @@ async def del_project(
         if project_id == "_global":
             raise HTTPException(status_code=400, detail="Cannot delete global project")
         if target_dir.exists():
+            validate_path_within(target_dir, outputs_root)
             shutil.rmtree(target_dir)
             logger.info(f"强制删除项目目录: {target_dir}")
 

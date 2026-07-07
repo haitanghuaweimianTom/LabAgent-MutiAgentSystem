@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/data", tags=["数据管理"])
 
 from ..core.paths import get_data_dir, get_project_data_dir, get_project_data_subdir
-from ..core.security import MAX_UPLOAD_SIZE, sanitize_filename
+from ..core.security import MAX_UPLOAD_SIZE, sanitize_filename, validate_path_within
 from ..services.data_directory import list_project_files
 
 DATA_DIR: Path = get_data_dir()  # 全局默认目录
@@ -189,6 +189,7 @@ async def analyze_file(
     """分析数据文件（支持项目隔离 + source）"""
     target_dir = get_project_data_subdir(project_name, source=source)
     file_path = target_dir / dataset_name
+    validate_path_within(file_path, target_dir)
     if not file_path.exists():
         raise HTTPException(status_code=404, detail=f"File not found: {dataset_name}")
 
@@ -209,6 +210,7 @@ async def delete_file(
     """删除文件（支持项目隔离 + source）"""
     target_dir = get_project_data_subdir(project_name, source=source)
     file_path = target_dir / filename
+    validate_path_within(file_path, target_dir)
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
     file_path.unlink()
@@ -224,6 +226,7 @@ async def delete_output_artifact(
     from ..core.paths import get_project_output_dir, OUTPUT_DIR
     target_dir = get_project_output_dir(project_name) if project_name else OUTPUT_DIR
     file_path = target_dir / filename
+    validate_path_within(file_path, target_dir)
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Output artifact not found")
     file_path.unlink()
@@ -243,6 +246,7 @@ async def delete_output_directory(project_name: str):
     # 安全检查：不允许删除 _global
     if project_name == "_global":
         raise HTTPException(status_code=400, detail="Cannot delete global output directory")
+    validate_path_within(target_dir, outputs_root)
     shutil.rmtree(target_dir)
     target_dir.mkdir(parents=True, exist_ok=True)  # 重建空目录
     logger.info(f"清空项目输出目录: {target_dir}")
