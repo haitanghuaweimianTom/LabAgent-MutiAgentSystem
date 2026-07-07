@@ -559,6 +559,7 @@ class KnowledgeManager:
                 "content": doc.content,
                 "source": doc.source,
                 "score": round(score, 4),
+                "metadata": doc.metadata or {},
             }
             for doc, score in results
         ]
