@@ -1122,7 +1122,7 @@ class LangGraphOrchestrator:
                 "problem_text": problem_text,
                 "files": state.get("files", []),
             }
-            plan = await agent.execute(context)
+            plan = await agent.execute(task_input={}, context=context)
 
             if plan and not plan.get("_fallback"):
                 logger.info(f"[LangGraph:{task_id}] 需求分解完成: {len(plan.get('subtasks', []))} 个子任务")
@@ -1163,7 +1163,7 @@ class LangGraphOrchestrator:
                     "analyzer_agent": analyzer_output,
                 },
             }
-            analysis = await agent.execute(context)
+            analysis = await agent.execute(task_input={}, context=context)
             return {**state, "innovation_analysis": analysis, "current_step": "innovation_done"}
         except Exception as e:
             logger.warning(f"[LangGraph:{task_id}] 创新分析失败: {e}")
@@ -1192,20 +1192,27 @@ class LangGraphOrchestrator:
                 "results": results,
                 "sub_problems": state.get("sub_problems", []),
             }
-            summary = await agent.execute(context)
+            summary = await agent.execute(task_input={}, context=context)
         except Exception as e:
             logger.warning(f"[LangGraph:{task_id}] 任务总结失败: {e}")
 
         # 2. 整理知识库（下载的文献/数据集自动分类）
         try:
-            from ..services.knowledge_organizer import KnowledgeOrganizer
-            from ..core.paths import get_project_output_dir
+            from ..services.knowledge_organizer import run_full_organization
+            from ..core.paths import get_project_output_dir, get_project_base_dir
             from ..core.knowledge_manager import get_knowledge_manager
-            task_dir = get_project_output_dir(state.get("project_name")) / task_id
-            organizer = KnowledgeOrganizer()
+            project_name = state.get("project_name")
+            task_dir = get_project_output_dir(project_name) / task_id
+            # 扫描范围：task 输出目录 + 全局参考文献目录 + 项目 reading 目录
+            global_refs = get_project_base_dir(None) / "global_references"
+            reading_dir = get_project_base_dir(project_name) / "reading" if project_name else None
             kb = get_knowledge_manager()
-            org_result = organizer.run_full_organization(task_id, str(task_dir), kb)
-            logger.info(f"[LangGraph:{task_id}] 知识库整理完成: {org_result.get('organized_count', 0)} 个资源")
+            org_result = run_full_organization(
+                task_id, str(task_dir), kb,
+                extra_scan_dirs=[str(global_refs)] + ([str(reading_dir)] if reading_dir and reading_dir.is_dir() else []),
+            )
+            organized_count = len(org_result.get("organized", []))
+            logger.info(f"[LangGraph:{task_id}] 知识库整理完成: {organized_count} 个资源")
         except Exception as e:
             logger.warning(f"[LangGraph:{task_id}] 知识库整理失败: {e}")
 
