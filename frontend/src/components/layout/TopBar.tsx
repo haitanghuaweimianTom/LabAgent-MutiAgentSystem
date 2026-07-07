@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Search, Sun, Moon, Bell, FileText, Loader2 } from 'lucide-react'
+import { Search, Sun, Moon, Bell, FileText, Loader2, CheckCircle2, XCircle, Clock, AlertTriangle } from 'lucide-react'
 import { useTheme } from '@/hooks/useTheme'
 import { usePathname, useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
@@ -27,8 +27,23 @@ export function TopBar({ title, subtitle, className }: TopBarProps) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<TaskResult[]>([])
   const [searching, setSearching] = useState(false)
+  const [showNotif, setShowNotif] = useState(false)
+  const [notifTasks, setNotifTasks] = useState<TaskResult[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
+  const notifRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
+
+  // Close notification on outside click
+  useEffect(() => {
+    if (!showNotif) return
+    const handler = (e: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+        setShowNotif(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showNotif])
 
   // Ctrl+K / Cmd+K to open search
   useEffect(() => {
@@ -37,7 +52,7 @@ export function TopBar({ title, subtitle, className }: TopBarProps) {
         e.preventDefault()
         setShowSearch(prev => !prev)
       }
-      if (e.key === 'Escape') setShowSearch(false)
+      if (e.key === 'Escape') { setShowSearch(false); setShowNotif(false) }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
@@ -50,6 +65,26 @@ export function TopBar({ title, subtitle, className }: TopBarProps) {
       setResults([])
     }
   }, [showSearch])
+
+  // Fetch notifications on mount and every 30s
+  useEffect(() => {
+    const fetchNotif = async () => {
+      try {
+        const res = await fetch(apiBase() + '/tasks')
+        if (res.ok) {
+          const tasks: TaskResult[] = await res.json()
+          // Show recent completed/failed tasks as notifications
+          setNotifTasks(tasks
+            .filter(t => ['completed', 'failed', 'cancelled'].includes(t.status))
+            .sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+            .slice(0, 8))
+        }
+      } catch {}
+    }
+    fetchNotif()
+    const interval = setInterval(fetchNotif, 30000)
+    return () => clearInterval(interval)
+  }, [])
 
   const doSearch = useCallback(async (q: string) => {
     if (!q.trim()) { setResults([]); return }
@@ -105,10 +140,44 @@ export function TopBar({ title, subtitle, className }: TopBarProps) {
           </button>
 
           {/* Notifications */}
-          <button className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors relative">
-            <Bell className="w-4 h-4" />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-error" />
-          </button>
+          <div className="relative" ref={notifRef}>
+            <button
+              onClick={() => { setShowNotif(prev => !prev); setShowSearch(false) }}
+              className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors relative"
+            >
+              <Bell className="w-4 h-4" />
+              {notifTasks.length > 0 && (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-error" />
+              )}
+            </button>
+            {showNotif && (
+              <div className="absolute right-0 top-full mt-2 w-[360px] bg-card border border-border rounded-xl shadow-2xl z-50" onClick={e => e.stopPropagation()}>
+                <div className="flex justify-between items-center px-4 py-3 border-b border-border">
+                  <span className="text-foreground font-semibold text-[0.875rem]">通知</span>
+                  <button onClick={() => setShowNotif(false)} className="text-muted-foreground hover:text-foreground text-[0.75rem]">关闭</button>
+                </div>
+                <div className="max-h-[320px] overflow-y-auto">
+                  {notifTasks.length === 0 ? (
+                    <div className="py-8 text-center text-muted-foreground text-[0.875rem]">暂无通知</div>
+                  ) : notifTasks.map(t => (
+                    <button
+                      key={t.task_id}
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/50 transition-colors text-left border-b border-border last:border-0"
+                      onClick={() => { setShowNotif(false); router.push(`/task/${t.task_id}`) }}
+                    >
+                      {t.status === 'completed' && <CheckCircle2 className="w-4 h-4 text-success shrink-0" />}
+                      {t.status === 'failed' && <XCircle className="w-4 h-4 text-error shrink-0" />}
+                      {t.status === 'cancelled' && <AlertTriangle className="w-4 h-4 text-warning shrink-0" />}
+                      <div className="flex-1 min-w-0">
+                        <div className="text-foreground text-[0.82rem] truncate">{t.problem_text || t.task_id}</div>
+                        <div className="text-muted-foreground text-[0.72rem]">{statusLabel(t.status)} · {t.task_id.slice(0, 8)}</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Theme Toggle */}
           <button
