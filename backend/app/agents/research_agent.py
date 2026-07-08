@@ -597,22 +597,10 @@ class ResearchAgent(BaseAgent):
                 "paper_source": "arxiv",
             }
 
-        # 步骤5：最终 fallback（模拟模式或原始 MCP 结果）
-        fallback: Dict[str, Any] = {
-            "papers": [],
-            "datasets": [],
-            "methods": [],
-            "summary": "资料搜索完成（模拟模式）",
-        }
-        if action == "search_background":
-            fallback["trends"] = []
-            fallback["background_summary"] = ""
-        elif action == "search_methods":
-            fallback["model_summary"] = ""
-        if mcp_result:
-            fallback["mcp_search_used"] = True
-            fallback["raw_mcp_result"] = mcp_result[:2000]
-        return fallback
+        # 步骤5：搜索失败，终止流程
+        error_msg = f"研究搜索失败：所有搜索路径（MCP + LLM）均失败，无法获取真实研究资料 (action={action})"
+        logger.error(f"[research_agent] {error_msg}")
+        raise RuntimeError(error_msg)
 
     # ====================================================================
     # v6.0: 跨论文研究空白识别

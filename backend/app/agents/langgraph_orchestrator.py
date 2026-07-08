@@ -2636,6 +2636,31 @@ print(json.dumps({{"accuracy": round(acc, 4)}}))
 
         return ctx
 
+    def _collect_degraded_markers(self, results: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """递归收集所有结果中的 _degraded 标记"""
+        degraded = []
+
+        def _scan(obj: Any, path: str = ""):
+            if isinstance(obj, dict):
+                if obj.get("_degraded"):
+                    degraded.append({
+                        "path": path or "root",
+                        "agent": obj.get("_degraded_by", "unknown"),
+                        "reason": obj.get("_degraded_reason", ""),
+                    })
+                for k, v in obj.items():
+                    _scan(v, f"{path}.{k}" if path else k)
+            elif isinstance(obj, list):
+                for i, item in enumerate(obj):
+                    _scan(item, f"{path}[{i}]")
+
+        for agent_name, output in results.items():
+            if agent_name.startswith("_"):
+                continue
+            _scan(output, agent_name)
+
+        return degraded
+
     def _save_results(self, task_id: str, state: TaskState) -> None:
         """持久化结果到 task_result.json 和 checkpoints。"""
         from ..core.task_persistence import save_task_result, save_task_checkpoint, save_task_metadata, save_task_messages
@@ -2646,6 +2671,16 @@ print(json.dumps({{"accuracy": round(acc, 4)}}))
             val = state.get(key)
             if val is not None:
                 results[key] = val
+
+        # 收集所有降级标记，生成质量报告
+        degraded_items = self._collect_degraded_markers(results)
+        if degraded_items:
+            results["_quality_report"] = {
+                "total_degraded": len(degraded_items),
+                "degraded_items": degraded_items,
+                "warning": "部分环节因服务不可用而降级生成，内容可能不准确，请人工审核标记为 [DEGRADED] 的部分",
+            }
+            logger.warning(f"[LangGraph:{task_id}] 质量报告: {len(degraded_items)} 个降级项")
 
         if results:
             save_task_result(task_id, {"task_id": task_id, "output": results})

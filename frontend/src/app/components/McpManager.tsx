@@ -53,8 +53,8 @@ const MCP_SERVERS = [
   {
     id: 'web_search',
     label: '🔍 网页搜索',
-    desc: 'DuckDuckGo 实时搜索（无需 API Key）',
-    tools: ['web_search'],
+    desc: 'DuckDuckGo + Bing + 微信公众号搜索（无需 API Key）',
+    tools: ['web_search', 'bing_search', 'wechat_search'],
     tags: ['search', 'web'],
     recommended: true,
   },

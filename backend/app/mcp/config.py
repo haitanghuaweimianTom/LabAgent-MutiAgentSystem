@@ -91,6 +91,8 @@ class MCPManager:
     # 内置工具到服务器的映射
     BUILTIN_TOOLS: Dict[str, str] = {
         "web_search": "web_search",
+        "bing_search": "web_search",
+        "wechat_search": "web_search",
         "arxiv_search": "arxiv_server",
         "arxiv_download": "arxiv_server",
         "arxiv_abstract": "arxiv_server",
@@ -197,8 +199,8 @@ class MCPManager:
         # v5.3.0: 所有 Agent 默认配备 web_search + file_read + file_write
         # 用户可在设置中自定义每个 Agent 的工具
         self.agent_tools_map = {
-            "research_agent": ["web_search", "arxiv_search", "arxiv_download", "arxiv_abstract", "arxiv_citation", "file_read", "file_write"],
-            "analyzer_agent": ["web_search", "arxiv_search", "arxiv_abstract", "file_read", "file_write"],
+            "research_agent": ["web_search", "bing_search", "wechat_search", "arxiv_search", "arxiv_download", "arxiv_abstract", "arxiv_citation", "file_read", "file_write"],
+            "analyzer_agent": ["web_search", "bing_search", "wechat_search", "arxiv_search", "arxiv_abstract", "file_read", "file_write"],
             "modeler_agent": ["web_search", "arxiv_search", "file_read", "file_write"],
             "solver_agent": ["web_search", "file_read", "file_write", "code_execute"],
             "writer_agent": ["web_search", "file_read", "arxiv_abstract", "latex_compile"],

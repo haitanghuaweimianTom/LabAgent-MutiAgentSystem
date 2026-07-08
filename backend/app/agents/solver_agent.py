@@ -1512,13 +1512,12 @@ class SolverAgent(BaseAgent):
                     raw_code = _extract_code_from_response(content)
 
             except Exception as e:
-                logger.warning(f"SolverAgent 逐个求解LLM失败: {e}，使用模板")
+                logger.error(f"SolverAgent 逐个求解LLM失败: {e}")
+                raise RuntimeError(f"求解代码生成失败：LLM 调用异常 ({e})") from e
 
-            # 模板兜底
+            # 无代码则终止
             if not sol_result or not raw_code:
-                fallback = self._single_template_fallback(sr)
-                raw_code = fallback.get("code_files", [{}])[0].get("code", CODE_TEMPLATES.get("linear_programming", ""))
-                sol_result = fallback
+                raise RuntimeError(f"求解代码生成失败：LLM 未返回有效代码 (sub_problem={sr.get('sub_problem_name', '')})")
 
             # ====== 全自动编程：通过 Claude CLI 写文件+执行 ======
             project_name = context.get("project_name") if context else None
@@ -1604,7 +1603,7 @@ class SolverAgent(BaseAgent):
         }
 
     def _single_template_fallback(self, section_result: Dict) -> Dict[str, Any]:
-        """单个求解的模板兜底 — 智能选择模板"""
+        """单个求解的模板兜底 — 智能选择模板，标记为降级"""
         model = section_result.get("model", {})
         template_code = get_template_for_model(model)
         sp_name = section_result.get("sub_problem_name", "子问题")
@@ -1616,7 +1615,7 @@ class SolverAgent(BaseAgent):
                 "filename": f"solver_{section_result.get('sub_problem_id', 1)}.py",
                 "language": "python",
                 "code": template_code,
-                "description": f"基于{model_name}的求解代码",
+                "description": f"基于{model_name}的求解代码（模板生成，需验证适用性）",
             }],
             "algorithm_steps": [
                 f"步骤1：导入必要的库（NumPy, SciPy/sklearn等）",
@@ -1636,10 +1635,13 @@ class SolverAgent(BaseAgent):
                 {"type": "柱状图", "description": "结果对比图"},
             ],
             "validation": {
-                "passed": True,
-                "tests": ["结果合理性检验", "约束满足性检验"],
-                "error_analysis": "求解算法收敛性良好，结果可信",
+                "passed": False,
+                "tests": [],
+                "error_analysis": "模板代码未经验证，需运行后检查结果",
             },
+            "_degraded": True,
+            "_degraded_by": "solver_template_fallback",
+            "_degraded_reason": "LLM 求解代码生成失败，使用模板代码替代",
         }
 
     async def _solve_single(self, task_input: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
@@ -1713,12 +1715,11 @@ class SolverAgent(BaseAgent):
                 raw_code = _extract_code_from_response(content)
 
         except Exception as e:
-            logger.warning(f"SolverAgent LLM失败: {e}，使用模板")
+            logger.error(f"SolverAgent LLM失败: {e}")
+            raise RuntimeError(f"求解代码生成失败：LLM 调用异常 ({e})") from e
 
         if not result or not raw_code:
-            fallback = self._template_fallback(model_result, sub_idx, sub_problem)
-            raw_code = fallback.get("code_files", [{}])[0].get("code", template_code)
-            result = fallback
+            raise RuntimeError(f"求解代码生成失败：LLM 未返回有效代码 (sub_problem={sub_problem.get('name', '')})")
 
         # 真正执行代码（通过 Claude CLI 全自动）
         project_name = context.get("project_name") if context else None

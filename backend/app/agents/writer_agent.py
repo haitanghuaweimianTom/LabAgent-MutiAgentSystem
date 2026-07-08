@@ -1507,8 +1507,9 @@ class WriterAgent(BaseAgent):
                 logger.warning(f"章节 [{plan['title']}] 生成失败 (attempt {attempt+1}): {e}")
                 last_error = e
 
-        logger.error(f"章节 [{plan['title']}] 生成失败（3次重试后）: {last_error}")
-        return self._chapter_fallback(plan, template), ""
+        error_msg = f"章节 [{plan['title']}] 生成失败（3次重试后）: {last_error}"
+        logger.error(error_msg)
+        raise RuntimeError(error_msg)
 
     async def _critique_chapter(
         self,
@@ -1569,16 +1570,8 @@ class WriterAgent(BaseAgent):
 
             return critique
         except Exception as e:
-            logger.warning(f"章节 [{plan['title']}] 评审失败: {e}，默认通过")
-            return {
-                "format_score": 80,
-                "content_score": 80,
-                "citation_score": 80,
-                "figure_score": 80,
-                "total_score": 80,
-                "passed": True,
-                "issues": [],
-            }
+            logger.error(f"章节 [{plan['title']}] 评审失败: {e}")
+            raise RuntimeError(f"章节评审失败：LLM 调用异常 ({e})") from e
 
     # ====================================================================
     # v5.0: 全局论文记忆池（跨章节一致性）
@@ -2242,13 +2235,18 @@ class WriterAgent(BaseAgent):
         return fallback_keywords.get(template, ["数学建模", "优化模型"])
 
     def _chapter_fallback(self, plan: ChapterPlan, template: str) -> str:
-        """章节生成失败时的兜底内容（v7.2: 生成有意义的占位内容）"""
+        """章节生成失败时的兜底内容 — 标注为降级生成，非真实内容"""
         title = plan.get("title", "未知章节")
         description = plan.get("description", "")
 
+        # 降级标记：LaTeX 注释标明此内容为 fallback 生成
+        degraded_marker = "% [DEGRADED] 此章节内容为自动生成的占位内容，非 LLM 真实生成，请人工补充\n"
+
         if plan["id"] == "abstract":
             return (
-                "\\begin{abstract}\n"
+                degraded_marker
+                + "\\begin{abstract}\n"
+                "% [DEGRADED] 摘要为占位内容，需根据实际研究重写\n"
                 "本文针对问题进行了系统研究。首先对问题进行了深入分析，建立了相应的数学模型并进行了求解。"
                 "结果表明所采用的方法是有效的。\n\n"
                 "\\textbf{关键词}: 数学建模；优化模型；算法设计；数据分析\n"
@@ -2263,8 +2261,8 @@ class WriterAgent(BaseAgent):
                 "\\end{appendices}"
             )
 
-        # v7.2: 生成有意义的章节内容而非"内容待补充"
-        content_parts = [f"\\section{{{title}}}"]
+        # 降级生成：标注为占位内容
+        content_parts = [degraded_marker, f"\\section{{{title}}}"]
         if description:
             content_parts.append(f"% 章节说明：{description}")
         content_parts.append("")

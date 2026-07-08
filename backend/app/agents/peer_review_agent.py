@@ -150,17 +150,8 @@ class PeerReviewAgent(BaseAgent):
                 "error": None,
             }
         except Exception as exc:  # noqa: BLE001
-            logger.warning(f"peer_review_agent failed: {exc}")
-            return {
-                "scores": {"novelty": 3, "soundness": 3, "clarity": 3, "significance": 3},
-                "overall_score": 3.0,
-                "comments": {"major": [], "minor": []},
-                "recommendation": "revise",
-                "suggested_edits": [],
-                "confidence": 1,
-                "raw_text": "",
-                "error": str(exc),
-            }
+            logger.error(f"peer_review_agent failed: {exc}")
+            raise RuntimeError(f"论文评审失败：LLM 调用异常 ({exc})") from exc
 
     @staticmethod
     def get_acceptance_threshold(template_id: str) -> int:

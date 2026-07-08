@@ -318,10 +318,7 @@ class ModelerAgent(BaseAgent):
                     await asyncio.sleep(2)
 
         if not model_result:
-            # 兜底模板：标记为降级模式，非真实建模结果
-            model_result = self._smart_template_fallback(sp, suggested, sp_type)
-            model_result["_degraded_mode"] = True
-            model_result["_degraded_reason"] = "LLM 调用失败（含重试），使用模板兜底"
+            raise RuntimeError(f"建模失败：LLM 未返回有效模型 (子问题={sp_name})")
 
         model_result["sub_problem_id"] = sp_id
         model_result["sub_problem_name"] = sp_name
@@ -386,14 +383,9 @@ class ModelerAgent(BaseAgent):
                     import asyncio
                     await asyncio.sleep(2)
 
-        # 重试全部失败，使用兜底模板（标记为降级）
-        result = self._smart_template_fallback(sub_problem, suggested_method, problem_type)
-        result["sub_problem_index"] = sub_idx
-        result["sub_problem_name"] = sub_problem.get("name", f"子问题{sub_idx+1}")
-        result["_degraded_mode"] = True
-        result["_degraded_reason"] = "LLM 调用失败（含重试），使用模板兜底"
-        logger.info(f"ModelerAgent 智能模板: {result.get('model_name')}")
-        return result
+        # 重试全部失败，终止
+        sp_name = sub_problem.get("name", f"子问题{sub_idx+1}")
+        raise RuntimeError(f"建模失败：LLM 调用多次失败 (子问题={sp_name})")
 
     async def _build_all_models(self, task_input: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
         """一次性为所有子问题建立数学模型"""
@@ -492,10 +484,11 @@ class ModelerAgent(BaseAgent):
 
                 return result
         except Exception as e:
-            logger.warning(f"ModelerAgent 批量建模LLM失败: {e}")
+            logger.error(f"ModelerAgent 批量建模LLM失败: {e}")
+            raise RuntimeError(f"批量建模失败：LLM 调用异常 ({e})") from e
 
-        logger.info("ModelerAgent: 使用智能模板批量生成模型")
-        return self._batch_template_fallback(sub_problems, analyzer_result)
+        # 不应到达这里
+        raise RuntimeError("批量建模失败：未知错误")
 
     def _batch_template_fallback(self, sub_problems: List, analyzer_result: Dict) -> Dict[str, Any]:
         models = []
