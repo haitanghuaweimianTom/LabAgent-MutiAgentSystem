@@ -1952,7 +1952,15 @@ class LangGraphOrchestrator:
 
         # v6.0: NAS 神经架构搜索（图像/深度学习任务）
         nas_result = None
-        if any(kw in state["problem_text"].lower() for kw in ["image", "vision", "cnn", "deep learning", "neural"]):
+        _text = state["problem_text"].lower()
+        _nas_keywords = [
+            # English
+            "image", "vision", "cnn", "deep learning", "neural", "resnet", "yolo", "transformer",
+            # Chinese
+            "图像", "视觉", "卷积", "神经网络", "深度学习", "目标检测", "图像分割", "图像识别",
+            "计算机视觉", "cnn", "resnet", "yolo", "transformer", "unet",
+        ]
+        if any(kw in _text for kw in _nas_keywords):
             try:
                 from ..core.nas import create_nas_agent
                 nas_agent = create_nas_agent(population_size=6, max_generations=3)
