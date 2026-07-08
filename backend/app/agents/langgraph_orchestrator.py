@@ -1950,19 +1950,48 @@ class LangGraphOrchestrator:
         except Exception as exc:
             logger.warning(f"[LangGraph:{task_id}] 自动损失函数设计失败: {exc}")
 
-        # v6.0: NAS 神经架构搜索（图像/深度学习任务）
+        # v6.0: NAS 神经架构搜索 — 由协调者和研究员共同讨论决定
         nas_result = None
-        _text = state["problem_text"].lower()
-        _nas_keywords = [
-            # English
-            "image", "vision", "cnn", "deep learning", "neural", "resnet", "yolo", "transformer",
-            # Chinese
-            "图像", "视觉", "卷积", "神经网络", "深度学习", "目标检测", "图像分割", "图像识别",
-            "计算机视觉", "cnn", "resnet", "yolo", "transformer", "unet",
-        ]
-        if any(kw in _text for kw in _nas_keywords):
-            try:
-                from ..core.nas import create_nas_agent
+        try:
+            from ..core.nas import create_nas_agent
+            from ..core.security import wrap_user_content
+
+            # 让研究员分析问题，判断是否需要 NAS
+            researcher = self.agents.get("research_agent")
+            nas_decision = None
+            if researcher:
+                nas_prompt = f"""请分析以下问题，判断是否需要使用 NAS（神经架构搜索）来设计最优神经网络架构。
+
+问题：{state['problem_text'][:500]}
+
+判断标准：
+1. 问题是否涉及图像处理、计算机视觉、目标检测、图像分割等任务？
+2. 问题是否需要设计或优化神经网络架构？
+3. 问题是否涉及深度学习模型的选择或改进？
+
+请返回 JSON 格式：
+{{"need_nas": true/false, "reason": "判断理由", "task_type": "classification/detection/segmentation/generation/other"}}
+
+只返回 JSON，不要其他内容。"""
+                try:
+                    resp = await researcher.call_llm([{"role": "user", "content": wrap_user_content(nas_prompt)}])
+                    content = resp.get("choices", [{}])[0].get("message", {}).get("content", "")
+                    # 提取 JSON
+                    import json, re
+                    json_match = re.search(r'\{[^{}]*"need_nas"[^{}]*\}', content)
+                    if json_match:
+                        nas_decision = json.loads(json_match.group())
+                except Exception as e:
+                    logger.warning(f"[LangGraph:{task_id}] NAS 决策分析失败: {e}")
+
+            # 根据研究员的分析决定是否执行 NAS
+            need_nas = nas_decision.get("need_nas", False) if nas_decision else False
+            task_type = nas_decision.get("task_type", "classification") if nas_decision else "classification"
+
+            if need_nas:
+                logger.info(f"[LangGraph:{task_id}] 研究员建议执行 NAS: {nas_decision.get('reason', '')}")
+                self._post_chat(task_id, "orchestrator", f"研究员分析：需要 NAS（{nas_decision.get('reason', '')}）")
+
                 nas_agent = create_nas_agent(population_size=6, max_generations=3)
                 baselines = []
                 if isinstance(modeling_result, dict):
@@ -1973,8 +2002,11 @@ class LangGraphOrchestrator:
                 )
                 logger.info(f"[LangGraph:{task_id}] NAS 搜索完成，fitness={nas_result.get('fitness', 0):.4f}")
                 self._post_chat(task_id, "experimentation_agent", "NAS 神经架构搜索完成")
-            except Exception as exc:
-                logger.warning(f"[LangGraph:{task_id}] NAS 搜索失败: {exc}")
+            else:
+                reason = nas_decision.get("reason", "问题不需要 NAS") if nas_decision else "无法分析"
+                logger.info(f"[LangGraph:{task_id}] 跳过 NAS: {reason}")
+        except Exception as exc:
+            logger.warning(f"[LangGraph:{task_id}] NAS 流程异常: {exc}")
 
         # v6.0: AutoML 超参数优化
         automl_result = None
