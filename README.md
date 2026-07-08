@@ -1,4 +1,4 @@
-# 多智能体协作论文生产系统 v7.4
+# 多智能体协作论文生产系统 v8.0
 
 > **面向 CCF-A 顶会 / 数学建模竞赛的全自动 AI 科学家多智能体协作平台。**
 > 内置 8 套论文模板（含 NeurIPS 2024、ACM SIGCONF、IEEE Conference、Springer LNCS、综述、CUMCM），
@@ -45,7 +45,7 @@
 ### Agent 团队
 | Agent | 角色 | 关键能力 |
 |------|------|---------|
-| coordinator | 协调者 | 工作流编排、暂停/恢复、跨 Agent 黑板 |
+| coordinator | 协调者 | 工作流编排、暂停/恢复、跨 Agent 黑板、与研究员讨论决策 NAS |
 | requirement_decomposer | 需求分解器 | 万字以上长提示词自动拆解为结构化研究计划 |
 | analyzer_agent | 分析师 | 子问题分解、问题类型识别、难度评估 |
 | data_agent | 数据分析师 | 数据文件解析、洞察抽取 |
@@ -881,6 +881,15 @@ MATHMODEL_API_KEY=your-secret-key    # 可选：启用 API 认证
 - **Phase 3** 实验设计 Agent + PeerReview 4 维评分
 - **Phase 2** 8 数学建模模板 + 拆文件编程 + 同行评议 + Camera-Ready
 - **Phase 1** 14 个 git commit 落地的通用论文产线
+
+### v6.0（2026-07）
+- **混合检索引擎**：语义检索（sentence-transformers）+ BM25 关键词检索，RRF 融合，替代纯 TF-IDF
+- **所有 Agent 知识库查询**：BaseAgent 标准化 `_inject_knowledge_context()`，所有 Agent 可按需查询知识库
+- **来源追踪**：每条检索结果标注来源文档、知识库名称、检索方式，用于论文末尾参考文献
+- **NAS 智能决策**：协调者与研究员讨论决定是否执行 NAS（支持中英文关键词）
+- **严格模式**：删除所有 fallback，任何 Agent 失败立即终止，不生成虚假内容
+- **MCP 修复**：DuckDuckGo + Bing 搜索、微信公众号搜索、文件系统操作全部正常工作
+- **死代码清理**：删除 `_mock_response`（400+ 行）和 `demo_code_templates.py`
 
 ### 历史版本
 - v2.6 — CC Switch 风格 Provider 管理 + MCP 增强
