@@ -53,17 +53,9 @@ const MCP_SERVERS = [
   {
     id: 'web_search',
     label: '🔍 网页搜索',
-    desc: 'DuckDuckGo / Brave 实时搜索',
+    desc: 'DuckDuckGo 实时搜索（无需 API Key）',
     tools: ['web_search'],
     tags: ['search', 'web'],
-    recommended: true,
-  },
-  {
-    id: 'scholarly_research',
-    label: '📚 学术搜索',
-    desc: 'Google Scholar, ArXiv, PubMed, JSTOR 论文搜索',
-    tools: ['paper_search', 'scholar_search'],
-    tags: ['search', 'academic'],
     recommended: true,
   },
   {
@@ -72,7 +64,7 @@ const MCP_SERVERS = [
     desc: 'arXiv 论文搜索、下载、摘要、引用图谱',
     tools: ['arxiv_search', 'arxiv_download', 'arxiv_abstract', 'arxiv_citation'],
     tags: ['search', 'academic', 'arxiv'],
-    recommended: false,
+    recommended: true,
   },
   {
     id: 'file_system',

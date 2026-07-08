@@ -61,9 +61,9 @@ class MCPManager:
     BUILTIN_SERVERS: Dict[str, MCPServerConfig] = {
         "web_search": MCPServerConfig(
             name="web_search",
-            command="npx",
-            args=["-y", "@nachoretro/internetsearch"],
-            description="网页搜索工具 (DuckDuckGo / Brave)",
+            command="python",
+            args=[str(Path(__file__).parent / "web_search_server.py")],
+            description="网页搜索工具 (DuckDuckGo)",
             tags=["search", "web"],
             install_source=InstallSource.BUILTIN,
             is_trusted=True,
@@ -74,25 +74,6 @@ class MCPManager:
             args=["-y", "@modelcontextprotocol/server-filesystem", "./workspace", "./output"],
             description="文件系统操作工具（workspace + output）",
             tags=["filesystem"],
-            install_source=InstallSource.BUILTIN,
-            is_trusted=True,
-        ),
-        "github": MCPServerConfig(
-            name="github",
-            command="npx",
-            args=["-y", "@modelcontextprotocol/server-github"],
-            env={"GITHUB_TOKEN": ""},
-            description="GitHub API工具",
-            tags=["git", "code"],
-            install_source=InstallSource.BUILTIN,
-            is_trusted=True,
-        ),
-        "scholarly_research": MCPServerConfig(
-            name="scholarly_research",
-            command="npx",
-            args=["-y", "scholarly-research-mcp"],
-            description="学术论文检索 (Google Scholar, ArXiv, PubMed, JSTOR)",
-            tags=["search", "academic", "paper"],
             install_source=InstallSource.BUILTIN,
             is_trusted=True,
         ),
@@ -110,9 +91,7 @@ class MCPManager:
     # 内置工具到服务器的映射
     BUILTIN_TOOLS: Dict[str, str] = {
         "web_search": "web_search",
-        "paper_search": "scholarly_research",
         "arxiv_search": "arxiv_server",
-        "scholar_search": "scholarly_research",
         "arxiv_download": "arxiv_server",
         "arxiv_abstract": "arxiv_server",
         "arxiv_citation": "arxiv_server",
@@ -215,20 +194,20 @@ class MCPManager:
                 description=f"内置工具: {tool_name}",
             )
 
-        # v5.3.0: 所有 Agent 默认配备 web_search + paper_search + file_read + file_write
+        # v5.3.0: 所有 Agent 默认配备 web_search + file_read + file_write
         # 用户可在设置中自定义每个 Agent 的工具
         self.agent_tools_map = {
-            "research_agent": ["web_search", "paper_search", "arxiv_search", "arxiv_download", "arxiv_abstract", "arxiv_citation", "scholar_search", "file_read", "file_write"],
-            "analyzer_agent": ["web_search", "paper_search", "sequentialthinking", "arxiv_search", "arxiv_abstract", "scholar_search", "file_read", "file_write"],
-            "modeler_agent": ["web_search", "paper_search", "sequentialthinking", "arxiv_search", "arxiv_abstract", "scholar_search", "file_read", "file_write"],
-            "solver_agent": ["web_search", "paper_search", "file_read", "file_write", "code_execute"],
-            "writer_agent": ["web_search", "paper_search", "file_read", "file_write", "arxiv_abstract", "latex_compile"],
-            "data_agent": ["web_search", "paper_search", "file_read", "file_write", "code_execute"],
-            "algorithm_engineer_agent": ["web_search", "paper_search", "arxiv_search", "arxiv_abstract", "scholar_search", "file_read", "file_write"],
-            "financial_analyst_agent": ["web_search", "paper_search", "file_read", "file_write"],
-            "figure_agent": ["web_search", "paper_search", "file_read", "file_write"],
-            "peer_review_agent": ["web_search", "paper_search", "arxiv_search", "arxiv_abstract", "file_read", "file_write"],
-            "experimentation_agent": ["web_search", "paper_search", "arxiv_search", "arxiv_abstract", "file_read", "file_write"],
+            "research_agent": ["web_search", "arxiv_search", "arxiv_download", "arxiv_abstract", "arxiv_citation", "file_read", "file_write"],
+            "analyzer_agent": ["web_search", "arxiv_search", "arxiv_abstract", "file_read", "file_write"],
+            "modeler_agent": ["web_search", "arxiv_search", "file_read", "file_write"],
+            "solver_agent": ["web_search", "file_read", "file_write", "code_execute"],
+            "writer_agent": ["web_search", "file_read", "arxiv_abstract", "latex_compile"],
+            "data_agent": ["web_search", "file_read", "file_write", "code_execute"],
+            "algorithm_engineer_agent": ["web_search", "arxiv_search", "arxiv_abstract", "file_read", "file_write"],
+            "financial_analyst_agent": ["web_search", "file_read", "file_write"],
+            "figure_agent": ["web_search", "file_read", "file_write"],
+            "peer_review_agent": ["web_search", "arxiv_search", "arxiv_abstract", "file_read", "file_write"],
+            "experimentation_agent": ["web_search", "arxiv_search", "arxiv_abstract", "file_read", "file_write"],
         }
 
     def set_agent_tools(self, agent_name: str, tools: List[str]) -> None:
@@ -295,11 +274,11 @@ class MCPManager:
         if agent_name in self.agent_tools_map:
             return self.agent_tools_map[agent_name]
         agent_tools_map = {
-            "research_agent": ["web_search", "paper_search", "arxiv_search", "arxiv_download", "arxiv_abstract", "arxiv_citation", "scholar_search", "file_write"],
-            "analyzer_agent": ["web_search", "bing_search", "sequentialthinking", "paper_search", "arxiv_search", "arxiv_abstract", "scholar_search"],
-            "modeler_agent": ["sequentialthinking", "web_search", "paper_search", "arxiv_search", "arxiv_abstract", "scholar_search"],
-            "solver_agent": ["file_read", "file_write", "web_search", "paper_search"],
-            "writer_agent": ["file_read", "file_write", "web_search", "paper_search", "arxiv_abstract"],
+            "research_agent": ["web_search", "arxiv_search", "arxiv_download", "arxiv_abstract", "arxiv_citation", "file_write"],
+            "analyzer_agent": ["web_search", "arxiv_search", "arxiv_abstract"],
+            "modeler_agent": ["web_search", "arxiv_search", "arxiv_abstract"],
+            "solver_agent": ["file_read", "file_write", "web_search"],
+            "writer_agent": ["file_read", "file_write", "web_search", "arxiv_abstract"],
         }
         return agent_tools_map.get(agent_name, [])
 

@@ -1,10 +1,9 @@
 {
   "mcpServers": {
     "web_search": {
-      "command": "npx",
+      "command": "python",
       "args": [
-        "-y",
-        "@nachoretro/internetsearch"
+        "/home/tomgame/projects/MathModel-MutiAgentSystem/backend/app/mcp/web_search_server.py"
       ],
       "env": {}
     },
@@ -15,24 +14,6 @@
         "@modelcontextprotocol/server-filesystem",
         "./workspace",
         "./output"
-      ],
-      "env": {}
-    },
-    "github": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-github"
-      ],
-      "env": {
-        "GITHUB_TOKEN": ""
-      }
-    },
-    "scholarly_research": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "scholarly-research-mcp"
       ],
       "env": {}
     },
@@ -51,17 +32,9 @@
       "server": "web_search",
       "description": "内置工具: web_search"
     },
-    "paper_search": {
-      "server": "scholarly_research",
-      "description": "内置工具: paper_search"
-    },
     "arxiv_search": {
       "server": "arxiv_server",
       "description": "内置工具: arxiv_search"
-    },
-    "scholar_search": {
-      "server": "scholarly_research",
-      "description": "内置工具: scholar_search"
     },
     "arxiv_download": {
       "server": "arxiv_server",
@@ -95,78 +68,62 @@
   "agent_tools": {
     "research_agent": [
       "web_search",
-      "paper_search",
       "arxiv_search",
       "arxiv_download",
       "arxiv_abstract",
       "arxiv_citation",
-      "scholar_search",
       "file_read",
       "file_write"
     ],
     "analyzer_agent": [
       "web_search",
-      "paper_search",
-      "sequentialthinking",
       "arxiv_search",
       "arxiv_abstract",
-      "scholar_search",
       "file_read",
       "file_write"
     ],
     "modeler_agent": [
       "web_search",
-      "paper_search",
       "arxiv_search",
-      "sequentialthinking",
-      "scholar_search",
       "file_read",
       "file_write"
     ],
     "solver_agent": [
       "web_search",
-      "paper_search",
       "file_read",
       "file_write",
       "code_execute"
     ],
     "writer_agent": [
       "web_search",
-      "paper_search",
       "file_read",
       "arxiv_abstract"
     ],
     "data_agent": [
       "web_search",
-      "paper_search",
       "file_read",
       "file_write",
       "code_execute"
     ],
     "algorithm_engineer_agent": [
       "web_search",
-      "paper_search",
       "arxiv_search",
       "arxiv_abstract",
-      "scholar_search",
       "file_read",
       "file_write"
     ],
     "financial_analyst_agent": [
       "web_search",
-      "paper_search",
       "file_read",
       "file_write"
     ],
     "figure_agent": [
       "web_search",
-      "paper_search",
       "file_read",
       "file_write"
     ],
     "peer_review_agent": [
       "web_search",
-      "paper_search",
       "arxiv_search",
       "arxiv_abstract",
       "file_read",
@@ -174,7 +131,6 @@
     ],
     "experimentation_agent": [
       "web_search",
-      "paper_search",
       "arxiv_search",
       "arxiv_abstract",
       "file_read",
