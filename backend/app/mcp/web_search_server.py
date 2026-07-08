@@ -186,24 +186,48 @@ def _format_results(query: str, results: List[Dict[str, str]], source: str) -> s
     return "\n".join(lines)
 
 
+def _clear_socks_proxy():
+    """清除 SOCKS 代理环境变量（httpx 不支持 socks:// 协议）"""
+    for var in ("ALL_PROXY", "all_proxy", "HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"):
+        if var in os.environ:
+            val = os.environ[var].lower()
+            if "socks" in val:
+                del os.environ[var]
+
+
 @app.call_tool()
 async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
     """Handle tool calls."""
     query = arguments.get("query", "")
     max_results = arguments.get("max_results", 5)
 
+    # 每次调用前清除 SOCKS 代理（防止继承的环境变量干扰）
+    _clear_socks_proxy()
+
     try:
         if name == "web_search":
-            if DDGS is None:
-                return [TextContent(type="text", text="Error: ddgs package not installed")]
-            with DDGS() as ddgs:
-                results = list(ddgs.text(query, max_results=max_results))
-            formatted = _format_results(query, [{
-                'title': r.get('title', ''),
-                'url': r.get('href', ''),
-                'body': r.get('body', '')
-            } for r in results], "DuckDuckGo")
-            return [TextContent(type="text", text=formatted)]
+            # 尝试 DuckDuckGo，失败则 fallback 到 Bing
+            if DDGS is not None:
+                try:
+                    with DDGS() as ddgs:
+                        results = list(ddgs.text(query, max_results=max_results))
+                    if results:
+                        formatted = _format_results(query, [{
+                            'title': r.get('title', ''),
+                            'url': r.get('href', ''),
+                            'body': r.get('body', '')
+                        } for r in results], "DuckDuckGo")
+                        return [TextContent(type="text", text=formatted)]
+                except Exception as ddg_err:
+                    pass  # DuckDuckGo 失败，fallback 到 Bing
+
+            # Fallback: 使用 Bing
+            if HAS_REQUESTS:
+                results = _bing_search(query, max_results)
+                formatted = _format_results(query, results, "Bing (fallback)")
+                return [TextContent(type="text", text=formatted)]
+
+            return [TextContent(type="text", text="Error: No search backend available")]
 
         elif name == "bing_search":
             if not HAS_REQUESTS:
