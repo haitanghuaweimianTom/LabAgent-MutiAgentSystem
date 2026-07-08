@@ -2,6 +2,8 @@
 
 参照 cherry-studio 的 KnowledgeService 设计，
 支持多个独立知识库，每个库有自己的文档和向量索引。
+
+v6.0: 集成混合检索引擎（语义 + BM25），支持来源追踪。
 """
 
 import json
@@ -13,6 +15,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field
+
+from .hybrid_search import HybridSearchEngine, SearchResult, create_hybrid_search_engine
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +75,7 @@ class KnowledgeManager:
     def __init__(self):
         self._bases: Dict[str, KnowledgeBaseConfig] = {}
         self._kb_instances: Dict[str, Any] = {}  # base_id -> KnowledgeBase (TF-IDF)
+        self._hybrid_engines: Dict[str, HybridSearchEngine] = {}  # base_id -> HybridSearchEngine
         self._ensure_dirs()
         self._load_index()
 
@@ -254,6 +259,52 @@ class KnowledgeManager:
 
         self._kb_instances[base_id] = kb
         return kb
+
+    def _get_hybrid_engine(self, base_id: str) -> Optional[HybridSearchEngine]:
+        """获取或创建混合检索引擎"""
+        if base_id in self._hybrid_engines:
+            return self._hybrid_engines[base_id]
+
+        base = self._bases.get(base_id)
+        if not base:
+            return None
+
+        try:
+            engine = create_hybrid_search_engine(
+                semantic_weight=0.6,
+                bm25_weight=0.4,
+                use_reranker=False,
+            )
+
+            # 加载文档到引擎
+            documents = []
+            for item in base.items:
+                if isinstance(item.content, FileMetadata):
+                    text = self._extract_text(item)
+                else:
+                    text = str(item.content)
+
+                if text:
+                    documents.append({
+                        "content": text[:2000],  # 限制长度
+                        "title": item.metadata.get("title", item.id),
+                        "source": item.source or item.id,
+                        "metadata": {
+                            "item_id": item.id,
+                            "file_path": item.content.path if isinstance(item.content, FileMetadata) else "",
+                            **item.metadata,
+                        },
+                    })
+
+            if documents:
+                engine.add_documents(documents)
+                self._hybrid_engines[base_id] = engine
+                logger.info(f"[KnowledgeManager] 混合检索引擎已创建: {base_id} ({len(documents)} 文档)")
+
+            return engine
+        except Exception as e:
+            logger.warning(f"[KnowledgeManager] 混合检索引擎创建失败: {e}")
+            return None
 
     def _rebuild_kb_vectors(self, base: KnowledgeBaseConfig, kb: Any) -> None:
         """重建知识库的向量索引（批量添加以确保 TF-IDF 词汇表完整）"""
@@ -582,17 +633,40 @@ class KnowledgeManager:
         return True
 
     def search(self, base_id: str, query: str, top_k: int = 5, min_score: float = 0.0) -> List[Dict[str, Any]]:
-        """在指定知识库中搜索"""
+        """在指定知识库中搜索（使用混合检索引擎）"""
         import re
+
+        # 优先使用混合检索引擎
+        engine = self._get_hybrid_engine(base_id)
+        if engine:
+            results = engine.search(query, top_k=top_k, min_score=min_score)
+            output = []
+            for r in results:
+                # 从内容中提取页码标记 [PAGE N]
+                page_match = re.search(r"\[PAGE (\d+)\]", r.content)
+                page = int(page_match.group(1)) if page_match else None
+                clean_content = re.sub(r"\[PAGE \d+\]\n?", "", r.content).strip()
+                output.append({
+                    "id": r.chunk_id,
+                    "title": r.title,
+                    "content": clean_content,
+                    "source": r.source,
+                    "score": round(r.score, 4),
+                    "page": page,
+                    "file_path": r.metadata.get("file_path", ""),
+                    "metadata": r.metadata,
+                    "retrieval_method": r.retrieval_method,
+                })
+            return output
+
+        # 回退到原有 TF-IDF 搜索
         kb = self._get_kb_instance(base_id)
         results = kb.query(query, top_k=top_k, min_score=min_score)
         output = []
         for doc, score in results:
             meta = doc.metadata or {}
-            # 从内容中提取页码标记 [PAGE N]
             page_match = re.search(r"\[PAGE (\d+)\]", doc.content)
             page = int(page_match.group(1)) if page_match else None
-            # 清理内容中的页码标记
             clean_content = re.sub(r"\[PAGE \d+\]\n?", "", doc.content).strip()
             output.append({
                 "id": doc.id,
@@ -603,6 +677,7 @@ class KnowledgeManager:
                 "page": page,
                 "file_path": meta.get("file_path", ""),
                 "metadata": meta,
+                "retrieval_method": "tfidf",
             })
         return output
 

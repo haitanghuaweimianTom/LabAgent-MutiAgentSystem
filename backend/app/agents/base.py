@@ -1189,7 +1189,8 @@ class BaseAgent(ABC):
     ) -> str:
         """查询知识库并返回上下文文本（静默失败）
 
-        v5.3.0 多 KB 注入：
+        v6.0: 使用混合检索引擎（语义 + BM25），支持来源追踪。
+
         优先级：
           1. base_ids / self._knowledge_base_ids（多 KB，按 KB 均分 max_chars）
           2. base_id / self._knowledge_base_id（旧版单 KB，向后兼容）
@@ -1203,53 +1204,104 @@ class BaseAgent(ABC):
             # 优先级 1: 多 KB
             effective_ids = base_ids or self._knowledge_base_ids
             if effective_ids:
-                ctx = km.query_context_for_task(
-                    task_project_name=project_name or self._task_project_name,
-                    base_ids=effective_ids,
-                    query=query_text,
-                    top_k=top_k,
-                    max_chars=4000,
-                )
-                if ctx:
-                    logger.info(
-                        f"[{self.name}] 注入多 KB 上下文 "
-                        f"(bases={len(effective_ids)}, {len(ctx)} chars)"
-                    )
-                    return f"\n\n## 知识库参考上下文\n{ctx}\n"
+                results = self._search_knowledge_bases(km, effective_ids, query_text, top_k, project_name)
+                if results:
+                    return self._format_knowledge_context(results, "多 KB")
 
             # 优先级 2: 单 KB（向后兼容）
             target_id = base_id or self._knowledge_base_id
             if target_id:
-                ctx = km.query_context(target_id, query_text, top_k=top_k, max_chars=1500)
-                if ctx:
-                    logger.info(f"[{self.name}] 注入知识库上下文 (base={target_id}, {len(ctx)} chars)")
-                    return f"\n\n## 知识库参考上下文\n{ctx}\n"
+                results = self._search_knowledge_bases(km, [target_id], query_text, top_k, project_name)
+                if results:
+                    return self._format_knowledge_context(results, f"KB={target_id}")
 
             # 优先级 3: 自动选（项目私有 + 全局公共）
             eff_project = project_name or self._task_project_name
             if eff_project:
-                ctx = km.query_context_for_task(
-                    task_project_name=eff_project,
-                    base_ids=None,
-                    query=query_text,
-                    top_k=top_k,
-                    max_chars=4000,
-                )
-                if ctx:
-                    logger.info(
-                        f"[{self.name}] 注入自动选择 KB 上下文 "
-                        f"(project={eff_project}, {len(ctx)} chars)"
-                    )
-                    return f"\n\n## 知识库参考上下文\n{ctx}\n"
+                results = self._search_knowledge_bases(km, None, query_text, top_k, project_name)
+                if results:
+                    return self._format_knowledge_context(results, f"project={eff_project}")
 
             # 优先级 4: 全部 KB（旧兜底）
-            ctx = km.query_all_context(query_text, top_k=top_k, max_chars=1500)
-            if ctx:
-                logger.info(f"[{self.name}] 注入知识库上下文 (all bases, {len(ctx)} chars)")
-                return f"\n\n## 知识库参考上下文\n{ctx}\n"
+            all_results = []
+            for bid in km._bases:
+                results = self._search_knowledge_bases(km, [bid], query_text, top_k, project_name)
+                all_results.extend(results)
+            if all_results:
+                # 按分数排序，取 top_k
+                all_results.sort(key=lambda x: x.get("score", 0), reverse=True)
+                return self._format_knowledge_context(all_results[:top_k], "all bases")
         except Exception as e:
             logger.debug(f"[{self.name}] 知识库查询失败: {e}")
         return ""
+
+    def _search_knowledge_bases(
+        self,
+        km,
+        base_ids: Optional[List[str]],
+        query_text: str,
+        top_k: int,
+        project_name: Optional[str],
+    ) -> List[Dict[str, Any]]:
+        """搜索知识库，返回带来源信息的结果"""
+        all_results = []
+
+        if base_ids:
+            for bid in base_ids:
+                try:
+                    results = km.search(bid, query_text, top_k=top_k)
+                    for r in results:
+                        r["kb_id"] = bid
+                        r["kb_name"] = km._bases.get(bid, type("", (), {"name": bid})()).name
+                    all_results.extend(results)
+                except Exception as e:
+                    logger.debug(f"[{self.name}] KB {bid} 搜索失败: {e}")
+        else:
+            # 自动模式：项目私有 + 全局公共
+            for bid, base in km._bases.items():
+                scope = getattr(base, "scope", "global")
+                bproj = getattr(base, "project_name", None)
+                if scope == "global" or (scope == "project" and bproj == project_name):
+                    try:
+                        results = km.search(bid, query_text, top_k=top_k)
+                        for r in results:
+                            r["kb_id"] = bid
+                            r["kb_name"] = base.name
+                        all_results.extend(results)
+                    except Exception as e:
+                        logger.debug(f"[{self.name}] KB {bid} 搜索失败: {e}")
+
+        # 按分数排序，去重
+        all_results.sort(key=lambda x: x.get("score", 0), reverse=True)
+        return all_results[:top_k * 2]
+
+    def _format_knowledge_context(self, results: List[Dict[str, Any]], source_label: str) -> str:
+        """格式化知识库上下文，包含来源追踪信息"""
+        if not results:
+            return ""
+
+        lines = [f"\n\n## 知识库参考上下文 ({source_label})"]
+        lines.append("以下信息来自知识库，仅供参考，使用时请标注来源：\n")
+
+        for i, r in enumerate(results, 1):
+            title = r.get("title", "未知")
+            content = r.get("content", "")
+            source = r.get("source", "")
+            kb_name = r.get("kb_name", "")
+            score = r.get("score", 0)
+            retrieval_method = r.get("retrieval_method", "unknown")
+
+            # 来源追踪信息（用于论文末尾的参考文献）
+            source_info = f"[来源: {kb_name}]" if kb_name else ""
+            if source:
+                source_info += f" ({source})"
+
+            lines.append(f"### [{i}] {title} {source_info}")
+            lines.append(f"相关度: {score:.2f} | 检索方式: {retrieval_method}")
+            lines.append(content[:500])
+            lines.append("")
+
+        return "\n".join(lines)
 
     def _inject_memory_context(self, context: Dict[str, Any], max_tokens: Optional[int] = None) -> str:
         """注入记忆系统上下文（黑板状态 + 经验教训）
