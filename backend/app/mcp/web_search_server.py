@@ -6,9 +6,17 @@ Supports: DuckDuckGo, Bing, WeChat articles (via Sogou).
 
 import asyncio
 import json
+import os
 import sys
 import urllib.parse
 from typing import Any, Dict, List, Optional
+
+# 清除 SOCKS 代理环境变量（httpx 不支持 socks:// 协议）
+for _var in ("ALL_PROXY", "all_proxy", "HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"):
+    if _var in os.environ:
+        val = os.environ[_var].lower()
+        if "socks" in val:
+            del os.environ[_var]
 
 try:
     from mcp.server import Server
