@@ -662,8 +662,15 @@ def build(
     else:
         skipped.append("missing main.tex")
 
-    # 2. main.bib
-    bib_text = build_bib(artifact.bib_entries)
+    # 2. main.bib — 过滤未验证的引用（_verified=False），保留未标记的（无验真流程时）
+    verified_entries = [
+        e for e in artifact.bib_entries
+        if not isinstance(e, dict) or e.get("_verified", True)
+    ]
+    unverified_count = len(artifact.bib_entries) - len(verified_entries)
+    if unverified_count:
+        skipped.append(f"filtered {unverified_count} unverified references")
+    bib_text = build_bib(verified_entries)
     bib_path = pkg_dir / "main.bib"
     bib_path.write_text(bib_text, encoding="utf-8")
 

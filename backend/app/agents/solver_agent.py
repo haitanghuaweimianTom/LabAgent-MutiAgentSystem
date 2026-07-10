@@ -1263,15 +1263,41 @@ class SolverAgent(BaseAgent):
                     user_content = task_description
                 else:
                     prev = last_attempt or attempt_history[-1]
-                    classification = self._classify_execution_error(
-                        prev.get("error", ""), prev.get("code", "")
-                    )
-                    fix_hint = "\n".join(classification.get("fixes", []))
+                    error_text = prev.get("error", "")
+                    prev_code = prev.get("code", "")
+
+                    # v8.0: 优先使用 DebuggerAgent 进行智能错误分析
+                    debugger_fix = ""
+                    try:
+                        from .debugger_agent import DebuggerAgent
+                        debugger = DebuggerAgent()
+                        debugger_result = await debugger.execute(
+                            task_input={
+                                "code": prev_code,
+                                "error_traceback": error_text,
+                                "file_path": file_path,
+                                "attempt": attempt + 1,
+                            },
+                            context={},
+                        )
+                        debugger_fix = debugger_result.get("fix", "")
+                        root_cause = debugger_result.get("root_cause", "")
+                        error_type = debugger_result.get("error_type", "unknown")
+                        logger.info(
+                            f"[{self.name}] DebuggerAgent 分析: type={error_type}, "
+                            f"cause={root_cause[:100]}, has_fix={bool(debugger_fix)}"
+                        )
+                    except Exception as e:
+                        logger.debug(f"[{self.name}] DebuggerAgent 不可用，回退到规则分类: {e}")
+
+                    # 回退到规则分类
+                    classification = self._classify_execution_error(error_text, prev_code)
+                    fix_hint = debugger_fix or "\n".join(classification.get("fixes", []))
                     user_content = (
                         f"{task_description}\n\n"
                         f"## 上一次执行失败（第 {attempt} 次尝试）\n"
                         f"错误类型: {classification.get('category', 'unknown')}\n"
-                        f"错误信息: {classification.get('raw_error', '')[:800]}\n"
+                        f"错误信息: {error_text[:800]}\n"
                         f"修复建议: {fix_hint}\n\n"
                         "请修正代码后重新输出完整可执行代码。"
                     )
@@ -1296,6 +1322,20 @@ class SolverAgent(BaseAgent):
                     raise RuntimeError("LLM 未返回可执行代码")
 
                 Path(file_path).write_text(raw_code, encoding="utf-8")
+
+                # v6.2: AST代码审计 — 执行前检测硬编码指标和作弊嫌疑
+                from ..core.code_audit import audit_code
+                audit_result = audit_code(raw_code, task_type="training")
+                if not audit_result.passed:
+                    error_issues = [i for i in audit_result.issues if i.severity == "error"]
+                    error_msg = "; ".join(f"L{i.line}: {i.message}" for i in error_issues[:3])
+                    raise RuntimeError(
+                        f"代码审计未通过（{len(error_issues)}个严重问题）: {error_msg}。"
+                        f"请修改代码，确保不硬编码任何指标数值，从模型实际输出获取结果。"
+                    )
+                if audit_result.issues:
+                    warning_issues = [i for i in audit_result.issues if i.severity == "warning"]
+                    logger.warning(f"[{self.name}] 代码审计警告: {[i.message for i in warning_issues]}")
 
                 # v5.3.0: 使用沙箱执行代码（替代直接 subprocess）
                 # v5.4.0: 如果代码需要 GPU 且 CUDA 可用，使用 GPUExecutor
@@ -1357,6 +1397,25 @@ class SolverAgent(BaseAgent):
                 attempt_history.append(last_attempt)
 
                 if exec_ok:
+                    # v8.0: 数据血缘追踪 — 记录执行信息
+                    try:
+                        from ..core.data_provenance import record_execution
+                        exec_record = record_execution(
+                            code_path=file_path,
+                            success=True,
+                            duration=0,  # 精确计时可后续增强
+                            stdout=stdout_text[:2000],
+                            stderr=stderr_text[:2000],
+                            metadata={"task_id": sp_id, "attempt": attempt + 1},
+                        )
+                        last_attempt["_provenance"] = {
+                            "code_sha256": exec_record.code_sha256,
+                            "executed_at": exec_record.executed_at,
+                            "dependencies": exec_record.dependencies,
+                        }
+                    except Exception as e:
+                        logger.debug(f"[{self.name}] 数据血缘记录失败: {e}")
+
                     return {
                         **last_attempt,
                         "attempts": attempt + 1,

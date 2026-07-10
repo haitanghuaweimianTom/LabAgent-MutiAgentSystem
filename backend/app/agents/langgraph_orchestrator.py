@@ -986,6 +986,7 @@ class LangGraphOrchestrator:
         builder.add_node("experiment", self._node_experiment)
         builder.add_node("figure", self._node_figure)
         builder.add_node("fact_check", self._node_fact_check)
+        builder.add_node("compliance_check", self._node_compliance_check)  # v8.0: 金融合规审查
         builder.add_node("summary", self._node_summary)
         builder.add_node("cannot_solve", self._node_cannot_solve)
         builder.add_node("self_collect", self._node_self_collect)
@@ -1125,7 +1126,8 @@ class LangGraphOrchestrator:
         )
         builder.add_edge("figure", "writer")
         builder.add_edge("writer", "peer_review")
-        builder.add_edge("fact_check", "summary")
+        builder.add_edge("fact_check", "compliance_check")  # v8.0: fact_check → compliance_check → summary
+        builder.add_edge("compliance_check", "summary")
         builder.add_edge("cannot_solve", "summary")
         builder.add_edge("summary", END)
         builder.add_edge("self_collect", "preflight_decision")
@@ -2281,6 +2283,42 @@ print(json.dumps({{"accuracy": round(acc, 4)}}))
         logger.info(f"Task {task_id}: fact_check passed={report['passed']} issues={report['issue_count']} fabrication={len(fabrication_issues)}")
 
         return {**state, "results": {**state.get("results", {}), "fact_checker": report}, "current_step": "fact_check_done"}
+
+    async def _node_compliance_check(self, state: TaskState) -> TaskState:
+        """v8.0: 金融报告合规审查 — 非 financial_analysis 模板直接跳过。"""
+        template = state.get("paper_template", "")
+        if template != "financial_analysis":
+            return {**state, "current_step": "compliance_check_skipped"}
+
+        task_id = state["task_id"]
+        results = self._resolve_results(state)
+        writer_output = results.get("writer_agent", {})
+        report_text = ""
+        if isinstance(writer_output, dict):
+            report_text = writer_output.get("latex_code", "") or writer_output.get("abstract", "")
+
+        if not report_text:
+            logger.info(f"[LangGraph:{task_id}] compliance_check: 无论文内容，跳过")
+            return {**state, "current_step": "compliance_check_skipped"}
+
+        try:
+            from ..agents.compliance_agent import ComplianceAgent
+            agent = ComplianceAgent()
+            result = await agent.execute(
+                task_input={"report_text": report_text, "language": "zh"},
+                context={},
+            )
+            violations = result.get("violations", [])
+            if violations:
+                logger.warning(f"[LangGraph:{task_id}] compliance_check: 检测到 {len(violations)} 个违规")
+                # 将违规信息注入到 writer 结果中供后续参考
+                writer_output["_compliance_violations"] = violations
+            self._set_result(state, "compliance_agent", result)
+            logger.info(f"[LangGraph:{task_id}] compliance_check done, passed={result.get('passed', True)}")
+            return {**state, "results": {**state.get("results", {}), "compliance_agent": result}, "current_step": "compliance_check_done"}
+        except Exception as e:
+            logger.warning(f"[LangGraph:{task_id}] compliance_check 失败: {e}")
+            return {**state, "current_step": "compliance_check_failed"}
 
     async def _node_cannot_solve(self, state: TaskState) -> TaskState:
         report = {

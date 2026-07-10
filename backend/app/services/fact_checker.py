@@ -173,15 +173,35 @@ class FactChecker:
         solve_numbers = self.extract_numbers_from_solves(solves)
         issues = self.compare(latex_numbers, solve_numbers, threshold)
 
+        # v8.0: Neuro-Symbolic Auditor — 统计结果验证
+        symbolic_findings = []
+        try:
+            from .symbolic_auditor import audit_experiment_results
+            # 从 solves.json 提取指标进行范围检查
+            metrics = {}
+            for key, val in solve_numbers.items():
+                if isinstance(val, (int, float)):
+                    metrics[key] = (float(val), 0.0, 1.0)  # 默认范围，后续可细化
+            if metrics:
+                audit_report = audit_experiment_results(metrics=metrics)
+                symbolic_findings = [
+                    {"severity": f.severity, "category": f.category,
+                     "message": f.message, "expected": f.expected, "actual": f.actual}
+                    for f in audit_report.findings
+                ]
+        except Exception as e:
+            logger.debug(f"FactChecker: symbolic_auditor 不可用: {e}")
+
         report = {
             "task_id": task_id,
             "latex_file": str(latex_file.relative_to(output_dir)) if latex_file.exists() else None,
             "solves_file": str(solves_file.relative_to(output_dir)) if solves_file.exists() else None,
             "latex_number_count": len(latex_numbers),
             "solve_number_count": len(solve_numbers),
-            "issue_count": len(issues),
+            "issue_count": len(issues) + len(symbolic_findings),
             "issues": [i.to_dict() for i in issues],
-            "passed": len(issues) == 0,
+            "symbolic_findings": symbolic_findings,
+            "passed": len(issues) == 0 and not any(f.get("severity") == "error" for f in symbolic_findings),
         }
         return report
 

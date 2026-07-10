@@ -1054,6 +1054,14 @@ class WriterAgent(BaseAgent):
             f"[WriterAgent] paper_memory citations pre-filled: {len(paper_memory['citations'])} entries"
         )
 
+        # v6.1: 从知识库搜索结果中提取来源，添加到 citations（论文末尾参考文献）
+        kb_citation_count = self._collect_kb_sources_for_citations(paper_memory, problem_text)
+        if kb_citation_count:
+            logger.info(f"[WriterAgent] KB sources added to citations: {kb_citation_count} entries")
+
+        # v6.2: 参考文献双重验真 — 验证DOI/arXiv ID存在性，标记未验证的引用
+        await self._verify_references(paper_memory)
+
         # 4. 按章节独立生成
         chapters: List[Dict[str, Any]] = []
         chapter_plan = self.get_template_chapters(template)
@@ -1687,6 +1695,98 @@ class WriterAgent(BaseAgent):
 
         return memory
 
+    def _collect_kb_sources_for_citations(
+        self,
+        paper_memory: Dict[str, Any],
+        query_text: str,
+    ) -> int:
+        """从知识库搜索结果中提取来源信息，添加到 paper_memory.citations。
+
+        论文正文不显示来源标签（[来源: KB名称]），但在末尾参考文献列表中标注。
+        返回新添加的 citation 数量。
+        """
+        try:
+            from ..core.knowledge_manager import get_knowledge_manager
+            km = get_knowledge_manager()
+        except Exception:
+            return 0
+
+        added = 0
+        # 遍历所有知识库，搜索相关内容
+        for bid, base in km._bases.items():
+            try:
+                results = km.search(bid, query_text, top_k=3)
+                for r in results:
+                    title = r.get("title", "")
+                    source = r.get("source", "")
+                    kb_name = getattr(base, "name", bid)
+                    content = r.get("content", "")
+
+                    # 跳过无有效信息的结果
+                    if not title and not source and not content[:50]:
+                        continue
+
+                    # 构建 citation entry
+                    citation = {
+                        "key": f"kb_{bid}_{added}",
+                        "title": title or f"知识库文档 ({kb_name})",
+                        "author": kb_name,
+                        "year": "",
+                        "venue": f"知识库: {kb_name}",
+                        "doi": "",
+                        "arxiv_id": "",
+                        "url": source if source and source.startswith("http") else "",
+                        "chapter": "knowledge_base",
+                        "_source_type": "knowledge_base",
+                    }
+
+                    # 去重：以 title + kb_name 作为唯一键
+                    is_dup = any(
+                        c.get("title") == citation["title"]
+                        and c.get("venue") == citation["venue"]
+                        for c in paper_memory["citations"]
+                    )
+                    if not is_dup:
+                        paper_memory["citations"].append(citation)
+                        added += 1
+            except Exception as e:
+                logger.debug(f"[WriterAgent] KB {bid} citation extraction failed: {e}")
+
+        return added
+
+    async def _verify_references(self, paper_memory: Dict[str, Any]) -> None:
+        """对paper_memory中的参考文献进行双重验真。
+
+        验证DOI/arXiv ID存在性，标记未通过验证的引用。
+        论文正文不显示验证状态，但参考文献列表会过滤未验证的条目。
+        """
+        citations = paper_memory.get("citations", [])
+        if not citations:
+            return
+
+        try:
+            from ..services.reference_verifier import verify_all_references
+            results = await verify_all_references(citations, max_concurrent=5, check_title=True)
+
+            verified_count = 0
+            for citation, result in zip(citations, results):
+                if result.verified:
+                    citation["_verified"] = True
+                    verified_count += 1
+                else:
+                    citation["_verified"] = False
+                    citation["_verify_error"] = result.error
+                    logger.warning(
+                        f"[WriterAgent] 参考文献验证失败: {citation.get('title', '?')[:50]} "
+                        f"— {result.error}"
+                    )
+
+            logger.info(
+                f"[WriterAgent] 参考文献验真完成: {verified_count}/{len(citations)} 通过"
+            )
+        except Exception as e:
+            logger.warning(f"[WriterAgent] 参考文献验真异常（跳过）: {e}")
+
     def _build_memory_context(
         self,
         paper_memory: Optional[Dict[str, Any]],
@@ -1983,9 +2083,14 @@ class WriterAgent(BaseAgent):
             if summary:
                 sections_summary[plan["title"]] = summary
 
+        # v6.2: AI使用声明 — 论文末尾自动添加
+        ai_declaration = self._build_ai_declaration(template)
+
         latex_code = f"""{preamble}
 
 {chr(10).join(body_parts)}
+
+{ai_declaration}
 
 \\end{{document}}
 """
@@ -1997,6 +2102,48 @@ class WriterAgent(BaseAgent):
         if skipped_placeholders:
             result["skipped_placeholders"] = skipped_placeholders
         return result
+
+    def _build_ai_declaration(self, template: str) -> str:
+        """生成AI使用声明（符合ACM/IEEE/ACL学术规范）"""
+        from datetime import datetime
+        year = datetime.now().year
+
+        # 根据模板类型生成不同声明
+        if template in ("neurips_2024", "ieee_conference", "acm_sigconf", "springer_lncs"):
+            return (
+                f"\\section*{{AI Usage Declaration}}\n"
+                f"\\addcontentsline{{toc}}{{section}}{{AI Usage Declaration}}\n"
+                f"This work was produced with the assistance of an AI-powered multi-agent research system. "
+                f"The following components were AI-assisted: literature review and synthesis, "
+                f"mathematical modeling and formula derivation, experiment code generation and execution, "
+                f"LaTeX typesetting, and figure generation. All AI-generated content was reviewed, "
+                f"verified, and edited by human authors. The authors take full responsibility for "
+                f"the accuracy and integrity of all claims, data, and conclusions presented herein. "
+                f"({year})"
+            )
+        elif template == "math_modeling":
+            return (
+                f"\\section*{{AI使用声明}}\n"
+                f"本论文的完成借助了AI多智能体研究系统的辅助。以下环节由AI辅助完成："
+                f"文献检索与综述、数学建模与公式推导、求解代码生成与执行、LaTeX排版、图表生成。"
+                f"所有AI生成的内容均经人工审核、验证和修改。作者对本文所有声明、数据和结论的准确性和完整性负全部责任。"
+                f"（{year}年）"
+            )
+        elif template == "financial_analysis":
+            return (
+                f"\\section*{{免责声明与AI使用声明}}\n"
+                f"本报告由AI辅助生成，仅供学术研究和学习参考，不构成任何投资建议。"
+                f"以下环节由AI辅助完成：数据获取与处理、量化分析、报告撰写。"
+                f"所有AI生成的内容均经人工审核。投资有风险，入市需谨慎。"
+                f"（{year}年）"
+            )
+        else:
+            return (
+                f"\\section*{{AI Usage Declaration}}\n"
+                f"This work was produced with the assistance of an AI system. "
+                f"All AI-generated content was reviewed and verified by human authors. "
+                f"The authors take full responsibility for all claims and conclusions. ({year})"
+            )
 
     def _build_paper_metadata(self, chapters: List[Dict[str, Any]], template: str) -> Dict[str, Any]:
         """从章节结果与模板默认值构建论文元数据。"""
