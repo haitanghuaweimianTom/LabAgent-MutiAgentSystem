@@ -275,7 +275,10 @@ class CourseworkTemplate(PaperTemplate):
 3. 实验/计算部分要有具体步骤和结果
 4. 讨论部分要有自己的思考，不能只是罗列结果
 5. 适当使用图表辅助说明
-6. 中文学术写作风格"""
+6. 中文学术写作风格
+7. 必须包含"学习心得与反思"章节，总结本次作业的学习收获、遇到的困难及解决方法
+8. 参考文献需分类标注（教材/论文/网络资源），体现学术规范
+9. 论文正文目标约8,000-12,000中文字符，内容完整且有深度"""
 
     def get_outline(self) -> List[ChapterSpec]:
         return [
@@ -354,8 +357,17 @@ class CourseworkTemplate(PaperTemplate):
                 relevance_keys=["execution_result", "result_analysis"],
             ),
             ChapterSpec(
+                id="reflection",
+                title="八、学习心得与反思",
+                level=1,
+                min_chars=500,
+                target_chars=800,
+                max_chars=1200,
+                relevance_keys=["problem_text", "analysis"],
+            ),
+            ChapterSpec(
                 id="references",
-                title="参考文献",
+                title="九、参考文献",
                 level=1,
                 min_chars=200,
                 target_chars=400,
