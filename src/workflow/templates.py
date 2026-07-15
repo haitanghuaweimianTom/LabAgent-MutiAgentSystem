@@ -553,6 +553,7 @@ Writing requirements:
                 target_chars=2500,
                 max_chars=3500,
                 relevance_keys=["modeling", "algorithm", "formulas"],
+                requires_coding=True,
             ),
             ChapterSpec(
                 id="experiments",
@@ -679,6 +680,7 @@ Writing requirements:
                 target_chars=2500,
                 max_chars=3500,
                 relevance_keys=["modeling", "algorithm", "formulas"],
+                requires_coding=True,
             ),
             ChapterSpec(
                 id="experiments",
@@ -796,6 +798,7 @@ Writing requirements:
                 target_chars=2500,
                 max_chars=3500,
                 relevance_keys=["modeling", "algorithm", "formulas"],
+                requires_coding=True,
             ),
             ChapterSpec(
                 id="implementation",
@@ -931,6 +934,7 @@ Writing requirements:
                 target_chars=2500,
                 max_chars=3500,
                 relevance_keys=["modeling", "algorithm", "formulas"],
+                requires_coding=True,
             ),
             ChapterSpec(
                 id="experiments",
