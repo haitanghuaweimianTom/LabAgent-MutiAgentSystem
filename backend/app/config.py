@@ -92,6 +92,12 @@ class Settings(BaseSettings):
     experiment_enable_baseline: bool = True
     experiment_allow_network: bool = True
 
+    # ===== Knowledge Graph settings =====
+    kg_enabled: bool = True
+    kg_extraction_batch_size: int = 5
+    kg_max_traversal_depth: int = 3
+    kg_rrf_weight_graph: float = 0.3
+
     # ===== 全自动模式配置 =====
     auto_mode_enabled: bool = True              # 全自动模式开关
     max_concurrent_tasks: int = 3               # 最大并发任务数
