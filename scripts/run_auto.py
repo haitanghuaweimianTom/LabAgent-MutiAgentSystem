@@ -75,7 +75,11 @@ def run_problem(problem: dict, template_name: str = 'math_modeling', use_critiqu
 def main():
     parser = argparse.ArgumentParser(description='全自动数学建模论文生成')
     parser.add_argument('--root', default='.', help='扫描根目录 (默认: 当前目录)')
-    parser.add_argument('--template', default='math_modeling', help='论文模板名称')
+    parser.add_argument('--template', default='math_modeling',
+                       choices=['math_modeling', 'coursework', 'financial_analysis',
+                                'neurips_2024', 'ieee_conference', 'acm_sigconf',
+                                'springer_lncs', 'research_survey'],
+                       help='论文模板名称（可选: math_modeling, coursework, financial_analysis, neurips_2024, ieee_conference, acm_sigconf, springer_lncs, research_survey）')
     parser.add_argument('--no-critique', action='store_true', help='关闭 Critique-Improvement 循环')
     parser.add_argument('--provider', default='claude_cli',
                         choices=['claude_cli', 'anthropic', 'openai', 'gemini', 'ollama'],

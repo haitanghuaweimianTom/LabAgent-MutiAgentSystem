@@ -10,11 +10,21 @@
 - math_modeling: 数学建模竞赛论文（MCM/ICM标准格式）
 - coursework: 一般课程作业论文
 - financial_analysis: 金融数据分析与投资报告
+- neurips_2024: NeurIPS 2024 机器学习顶会论文（CCF-A，英文）
+- ieee_conference: IEEE 会议论文（系统/安全方向，CCF-A，英文）
+- acm_sigconf: ACM SIGCONF 会议论文（图形/网络方向，CCF-A，英文）
+- springer_lncs: Springer LNCS 期刊论文（计算机科学，CCF-B，英文）
+- research_survey: 文献综述论文（中文）
 
 使用方法:
     python main.py --auto                              # 全自动生成（默认数学建模）
     python main.py --auto --template coursework        # 生成课程作业论文
     python main.py --auto --template financial_analysis # 生成金融分析报告
+    python main.py --auto --template neurips_2024      # 生成 NeurIPS 2024 论文
+    python main.py --auto --template ieee_conference   # 生成 IEEE 会议论文
+    python main.py --auto --template acm_sigconf       # 生成 ACM SIGCONF 论文
+    python main.py --auto --template springer_lncs    # 生成 Springer LNCS 论文
+    python main.py --auto --template research_survey   # 生成文献综述论文
     python main.py --auto --output-dir work_test       # 指定输出目录
 """
 
@@ -38,7 +48,9 @@ def main():
     parser.add_argument('--auto', action='store_true',
                        help='全自动生成论文（推荐）')
     parser.add_argument('--template', type=str, default='math_modeling',
-                       choices=['math_modeling', 'coursework', 'financial_analysis'],
+                       choices=['math_modeling', 'coursework', 'financial_analysis',
+                                'neurips_2024', 'ieee_conference', 'acm_sigconf',
+                                'springer_lncs', 'research_survey'],
                        help='论文模板类型（默认: math_modeling）')
     parser.add_argument('--output-dir', type=str, default='work',
                        help='输出目录')
@@ -65,6 +77,11 @@ def main():
         print("  python main.py --auto                              # 全自动生成数学建模论文")
         print("  python main.py --auto --template coursework        # 生成课程作业论文")
         print("  python main.py --auto --template financial_analysis # 生成金融分析报告")
+        print("  python main.py --auto --template neurips_2024      # 生成 NeurIPS 2024 论文")
+        print("  python main.py --auto --template ieee_conference   # 生成 IEEE 会议论文")
+        print("  python main.py --auto --template acm_sigconf       # 生成 ACM SIGCONF 论文")
+        print("  python main.py --auto --template springer_lncs    # 生成 Springer LNCS 论文")
+        print("  python main.py --auto --template research_survey   # 生成文献综述论文")
         print("\n推荐使用 --auto 模式，系统将自动完成所有工作")
 
 

@@ -6,6 +6,11 @@
 - 数学建模论文 (Math Modeling)
 - 课程作业论文 (Coursework)
 - 金融分析论文 (Financial Analysis)
+- NeurIPS 2024 (ML/CCF-A)
+- IEEE Conference (Systems/Security/CCF-A)
+- ACM SIGCONF (Graphics/Networking/CCF-A)
+- Springer LNCS (Computer Science/CCF-B)
+- Research Survey (文献综述)
 
 每个模板定义：
 - 大纲结构（章节列表）
@@ -474,11 +479,614 @@ class FinancialAnalysisTemplate(PaperTemplate):
         ]
 
 
+class NeurIPS2024Template(PaperTemplate):
+    """
+    NeurIPS 2024 论文模板 (ML/CCF-A)
+
+    标准 ML 顶会结构：
+    Abstract → Introduction → Related Work → Preliminaries →
+    Method → Experiments → Discussion → Conclusion →
+    References → Appendix
+    """
+
+    name = "neurips_2024"
+    description = "NeurIPS 2024 机器学习顶会论文（CCF-A，英文）"
+
+    def get_system_prompt(self) -> str:
+        return """You are an expert ML researcher and writer targeting NeurIPS 2024.
+
+Writing requirements:
+1. Write in formal academic English suitable for top-tier ML venues
+2. Use LaTeX notation for all mathematical formulations ($...$ or $$...$$)
+3. Provide rigorous theoretical justification with proofs in appendices when needed
+4. Include comprehensive ablation studies and statistical significance tests
+5. Compare against at least 5 recent baselines (2022-2024)
+6. Report all results with standard deviations across multiple runs
+7. Discuss limitations and broader impact honestly
+8. Total paper length: 8-10 pages (excluding references and appendix)
+9. Follow NeurIPS style guidelines (neurips_2024.sty)
+10. Ensure reproducibility: release code and describe all hyperparameters"""
+
+    def get_outline(self) -> List[ChapterSpec]:
+        return [
+            ChapterSpec(
+                id="abstract",
+                title="Abstract",
+                level=1,
+                min_chars=100,
+                target_chars=150,
+                max_chars=200,
+                relevance_keys=["problem_text", "method_summary", "key_results"],
+            ),
+            ChapterSpec(
+                id="introduction",
+                title="1. Introduction",
+                level=1,
+                min_chars=800,
+                target_chars=1200,
+                max_chars=1800,
+                relevance_keys=["problem_text", "analysis", "method_summary"],
+            ),
+            ChapterSpec(
+                id="related_work",
+                title="2. Related Work",
+                level=1,
+                min_chars=800,
+                target_chars=1200,
+                max_chars=1800,
+                relevance_keys=["problem_text", "analysis"],
+            ),
+            ChapterSpec(
+                id="preliminaries",
+                title="3. Preliminaries",
+                level=1,
+                min_chars=500,
+                target_chars=800,
+                max_chars=1200,
+                relevance_keys=["problem_text", "modeling", "formulas"],
+            ),
+            ChapterSpec(
+                id="method",
+                title="4. Method",
+                level=1,
+                min_chars=1500,
+                target_chars=2500,
+                max_chars=3500,
+                relevance_keys=["modeling", "algorithm", "formulas"],
+            ),
+            ChapterSpec(
+                id="experiments",
+                title="5. Experiments",
+                level=1,
+                min_chars=2000,
+                target_chars=3000,
+                max_chars=4500,
+                relevance_keys=["execution_result", "result_analysis", "charts"],
+                requires_coding=True,
+            ),
+            ChapterSpec(
+                id="discussion",
+                title="6. Discussion",
+                level=1,
+                min_chars=500,
+                target_chars=800,
+                max_chars=1200,
+                relevance_keys=["execution_result", "result_analysis"],
+                requires_coding=True,
+            ),
+            ChapterSpec(
+                id="conclusion",
+                title="7. Conclusion",
+                level=1,
+                min_chars=300,
+                target_chars=500,
+                max_chars=800,
+                relevance_keys=["result_analysis", "method_summary"],
+            ),
+            ChapterSpec(
+                id="references",
+                title="References",
+                level=1,
+                min_chars=300,
+                target_chars=500,
+                max_chars=1000,
+                relevance_keys=["problem_text", "modeling"],
+            ),
+            ChapterSpec(
+                id="appendix",
+                title="Appendix",
+                level=1,
+                min_chars=500,
+                target_chars=1000,
+                max_chars=2000,
+                relevance_keys=["code", "execution_result", "formulas"],
+                requires_coding=True,
+            ),
+        ]
+
+
+class IEEEConferenceTemplate(PaperTemplate):
+    """
+    IEEE Conference 论文模板 (Systems/Security/CCF-A)
+
+    标准 IEEE 会议结构：
+    Abstract → Introduction → Related Work → Background →
+    Method → Experiments → Discussion → Conclusion →
+    References → Appendix
+    """
+
+    name = "ieee_conference"
+    description = "IEEE 会议论文（系统/安全方向，CCF-A，英文）"
+
+    def get_system_prompt(self) -> str:
+        return """You are an expert systems/security researcher writing for a top IEEE conference.
+
+Writing requirements:
+1. Write in formal academic English following IEEE style
+2. Use IEEE citation format [1], [2], etc.
+3. Clearly state research questions and hypotheses upfront
+4. Provide detailed threat models for security papers
+5. Include formal security proofs or game-based reductions when applicable
+6. Benchmark on standard datasets with realistic threat models
+7. Discuss practical deployment considerations
+8. Total paper length: 10-12 pages (IEEE two-column format)
+9. Follow IEEE conference template (IEEEtran.cls)
+10. Include a clear ethics statement for security/privacy work"""
+
+    def get_outline(self) -> List[ChapterSpec]:
+        return [
+            ChapterSpec(
+                id="abstract",
+                title="Abstract",
+                level=1,
+                min_chars=100,
+                target_chars=150,
+                max_chars=200,
+                relevance_keys=["problem_text", "method_summary", "key_results"],
+            ),
+            ChapterSpec(
+                id="introduction",
+                title="I. Introduction",
+                level=1,
+                min_chars=800,
+                target_chars=1200,
+                max_chars=1800,
+                relevance_keys=["problem_text", "analysis", "method_summary"],
+            ),
+            ChapterSpec(
+                id="related_work",
+                title="II. Related Work",
+                level=1,
+                min_chars=600,
+                target_chars=1000,
+                max_chars=1500,
+                relevance_keys=["problem_text", "analysis"],
+            ),
+            ChapterSpec(
+                id="background",
+                title="III. Background",
+                level=1,
+                min_chars=600,
+                target_chars=1000,
+                max_chars=1500,
+                relevance_keys=["problem_text", "modeling", "formulas"],
+            ),
+            ChapterSpec(
+                id="method",
+                title="IV. Proposed Method",
+                level=1,
+                min_chars=1500,
+                target_chars=2500,
+                max_chars=3500,
+                relevance_keys=["modeling", "algorithm", "formulas"],
+            ),
+            ChapterSpec(
+                id="experiments",
+                title="V. Evaluation",
+                level=1,
+                min_chars=2000,
+                target_chars=3000,
+                max_chars=4500,
+                relevance_keys=["execution_result", "result_analysis", "charts"],
+                requires_coding=True,
+            ),
+            ChapterSpec(
+                id="discussion",
+                title="VI. Discussion",
+                level=1,
+                min_chars=500,
+                target_chars=800,
+                max_chars=1200,
+                relevance_keys=["execution_result", "result_analysis"],
+                requires_coding=True,
+            ),
+            ChapterSpec(
+                id="conclusion",
+                title="VII. Conclusion",
+                level=1,
+                min_chars=300,
+                target_chars=500,
+                max_chars=800,
+                relevance_keys=["result_analysis", "method_summary"],
+            ),
+            ChapterSpec(
+                id="references",
+                title="References",
+                level=1,
+                min_chars=300,
+                target_chars=500,
+                max_chars=1000,
+                relevance_keys=["problem_text", "modeling"],
+            ),
+            ChapterSpec(
+                id="appendix",
+                title="Appendix",
+                level=1,
+                min_chars=500,
+                target_chars=1000,
+                max_chars=2000,
+                relevance_keys=["code", "execution_result"],
+                requires_coding=True,
+            ),
+        ]
+
+
+class ACMSigConfTemplate(PaperTemplate):
+    """
+    ACM SIGCONF 论文模板 (Graphics/Networking/CCF-A)
+
+    标准 ACM 会议结构：
+    Abstract → Introduction → Related Work → Method →
+    Implementation → Evaluation → Discussion → Conclusion →
+    References → Appendix
+    """
+
+    name = "acm_sigconf"
+    description = "ACM SIGCONF 会议论文（图形/网络方向，CCF-A，英文）"
+
+    def get_system_prompt(self) -> str:
+        return """You are an expert researcher writing for a top ACM conference (SIGGRAPH, SIGCOMM, etc.).
+
+Writing requirements:
+1. Write in formal academic English following ACM style
+2. Use ACM citation format (numeric [1] or author-year)
+3. Include detailed system/architecture diagrams description
+4. Provide algorithmic complexity analysis (time and space)
+5. Report experiments on standard benchmarks with multiple metrics
+6. Include qualitative and quantitative results
+7. Discuss limitations and future work candidly
+8. Total paper length: 10-14 pages (ACM sigconf template)
+9. Follow ACM formatting guidelines (acmart.cls, sigconf option)
+10. Include artifact description for reproducibility"""
+
+    def get_outline(self) -> List[ChapterSpec]:
+        return [
+            ChapterSpec(
+                id="abstract",
+                title="Abstract",
+                level=1,
+                min_chars=100,
+                target_chars=150,
+                max_chars=200,
+                relevance_keys=["problem_text", "method_summary", "key_results"],
+            ),
+            ChapterSpec(
+                id="introduction",
+                title="1. Introduction",
+                level=1,
+                min_chars=800,
+                target_chars=1200,
+                max_chars=1800,
+                relevance_keys=["problem_text", "analysis", "method_summary"],
+            ),
+            ChapterSpec(
+                id="related_work",
+                title="2. Related Work",
+                level=1,
+                min_chars=600,
+                target_chars=1000,
+                max_chars=1500,
+                relevance_keys=["problem_text", "analysis"],
+            ),
+            ChapterSpec(
+                id="method",
+                title="3. Method",
+                level=1,
+                min_chars=1500,
+                target_chars=2500,
+                max_chars=3500,
+                relevance_keys=["modeling", "algorithm", "formulas"],
+            ),
+            ChapterSpec(
+                id="implementation",
+                title="4. Implementation",
+                level=1,
+                min_chars=800,
+                target_chars=1200,
+                max_chars=1800,
+                relevance_keys=["code", "algorithm", "execution_result"],
+                requires_coding=True,
+            ),
+            ChapterSpec(
+                id="evaluation",
+                title="5. Evaluation",
+                level=1,
+                min_chars=2000,
+                target_chars=3000,
+                max_chars=4500,
+                relevance_keys=["execution_result", "result_analysis", "charts"],
+                requires_coding=True,
+            ),
+            ChapterSpec(
+                id="discussion",
+                title="6. Discussion",
+                level=1,
+                min_chars=500,
+                target_chars=800,
+                max_chars=1200,
+                relevance_keys=["execution_result", "result_analysis"],
+                requires_coding=True,
+            ),
+            ChapterSpec(
+                id="conclusion",
+                title="7. Conclusion",
+                level=1,
+                min_chars=300,
+                target_chars=500,
+                max_chars=800,
+                relevance_keys=["result_analysis", "method_summary"],
+            ),
+            ChapterSpec(
+                id="references",
+                title="References",
+                level=1,
+                min_chars=300,
+                target_chars=500,
+                max_chars=1000,
+                relevance_keys=["problem_text", "modeling"],
+            ),
+            ChapterSpec(
+                id="appendix",
+                title="Appendix",
+                level=1,
+                min_chars=500,
+                target_chars=1000,
+                max_chars=2000,
+                relevance_keys=["code", "execution_result"],
+                requires_coding=True,
+            ),
+        ]
+
+
+class SpringerLNCSWriterTemplate(PaperTemplate):
+    """
+    Springer LNCS 论文模板 (Computer Science/CCF-B)
+
+    标准 Springer LNCS 结构：
+    Abstract → Introduction → Related Work → Preliminaries →
+    Method → Experiments → Conclusion → References
+    """
+
+    name = "springer_lncs"
+    description = "Springer LNCS 期刊论文（计算机科学，CCF-B，英文）"
+
+    def get_system_prompt(self) -> str:
+        return """You are an expert computer science researcher writing for a Springer LNCS journal.
+
+Writing requirements:
+1. Write in formal academic English following Springer LNCS style
+2. Provide clear mathematical notation with consistent symbol usage
+3. Include comprehensive experimental validation
+4. Compare with state-of-the-art methods from 2022-2024
+5. Report metrics with confidence intervals where applicable
+6. Discuss theoretical foundations before presenting the method
+7. Include a dedicated section on experimental setup and datasets
+8. Total paper length: 16-20 pages (LNCS template)
+9. Follow Springer formatting guidelines (llncs.cls)
+10. Ensure clarity for interdisciplinary readers"""
+
+    def get_outline(self) -> List[ChapterSpec]:
+        return [
+            ChapterSpec(
+                id="abstract",
+                title="Abstract",
+                level=1,
+                min_chars=100,
+                target_chars=150,
+                max_chars=200,
+                relevance_keys=["problem_text", "method_summary", "key_results"],
+            ),
+            ChapterSpec(
+                id="introduction",
+                title="1. Introduction",
+                level=1,
+                min_chars=800,
+                target_chars=1200,
+                max_chars=1800,
+                relevance_keys=["problem_text", "analysis", "method_summary"],
+            ),
+            ChapterSpec(
+                id="related_work",
+                title="2. Related Work",
+                level=1,
+                min_chars=800,
+                target_chars=1200,
+                max_chars=1800,
+                relevance_keys=["problem_text", "analysis"],
+            ),
+            ChapterSpec(
+                id="preliminaries",
+                title="3. Preliminaries",
+                level=1,
+                min_chars=600,
+                target_chars=1000,
+                max_chars=1500,
+                relevance_keys=["problem_text", "modeling", "formulas"],
+            ),
+            ChapterSpec(
+                id="method",
+                title="4. Proposed Method",
+                level=1,
+                min_chars=1500,
+                target_chars=2500,
+                max_chars=3500,
+                relevance_keys=["modeling", "algorithm", "formulas"],
+            ),
+            ChapterSpec(
+                id="experiments",
+                title="5. Experiments",
+                level=1,
+                min_chars=2000,
+                target_chars=3000,
+                max_chars=4500,
+                relevance_keys=["execution_result", "result_analysis", "charts"],
+                requires_coding=True,
+            ),
+            ChapterSpec(
+                id="conclusion",
+                title="6. Conclusion",
+                level=1,
+                min_chars=400,
+                target_chars=600,
+                max_chars=1000,
+                relevance_keys=["result_analysis", "method_summary"],
+            ),
+            ChapterSpec(
+                id="references",
+                title="References",
+                level=1,
+                min_chars=300,
+                target_chars=500,
+                max_chars=1000,
+                relevance_keys=["problem_text", "modeling"],
+            ),
+        ]
+
+
+class ResearchSurveyTemplate(PaperTemplate):
+    """
+    文献综述论文模板 (Literature Survey)
+
+    结构：
+    摘要 → 研究全景图 → Research Gaps → 交叉学科启发 →
+    创新点提案 → 必读文献清单 → 数据集与实验设置 →
+    结果对比与讨论 → 结论与展望
+    """
+
+    name = "research_survey"
+    description = "文献综述论文（中文）"
+
+    def get_system_prompt(self) -> str:
+        return """你是一位资深的学术文献综述专家，擅长系统性地梳理和分析研究领域的发展脉络。
+
+写作要求：
+1. 系统全面地覆盖领域内的重要文献，按主题/时间/方法分类组织
+2. 对每篇关键文献给出客观评价，指出其贡献和局限
+3. 识别现有研究的空白和不足，提出未来方向
+4. 使用学术中文写作风格，术语准确规范
+5. 引用格式统一（GB/T 7714 或 APA 格式）
+6. 注重跨学科视角，发掘不同领域的交叉启发
+7. 总字数约 8,000-12,000 中文字符
+8. 图表辅助说明：研究分类图、时间线、对比表格"""
+
+    def get_outline(self) -> List[ChapterSpec]:
+        return [
+            ChapterSpec(
+                id="abstract",
+                title="摘要",
+                level=1,
+                min_chars=300,
+                target_chars=500,
+                max_chars=700,
+                relevance_keys=["problem_text", "analysis"],
+            ),
+            ChapterSpec(
+                id="research_landscape",
+                title="一、研究全景图",
+                level=1,
+                min_chars=1500,
+                target_chars=2500,
+                max_chars=3500,
+                relevance_keys=["problem_text", "analysis", "sub_problems"],
+            ),
+            ChapterSpec(
+                id="research_gaps",
+                title="二、Research Gaps",
+                level=1,
+                min_chars=1000,
+                target_chars=1500,
+                max_chars=2500,
+                relevance_keys=["problem_text", "analysis", "sub_problems"],
+            ),
+            ChapterSpec(
+                id="interdisciplinary",
+                title="三、交叉学科启发",
+                level=1,
+                min_chars=1000,
+                target_chars=1500,
+                max_chars=2500,
+                relevance_keys=["problem_text", "analysis"],
+            ),
+            ChapterSpec(
+                id="innovation_proposal",
+                title="四、创新点提案",
+                level=1,
+                min_chars=1000,
+                target_chars=1500,
+                max_chars=2500,
+                relevance_keys=["problem_text", "analysis", "modeling"],
+            ),
+            ChapterSpec(
+                id="must_read_literature",
+                title="五、必读文献清单",
+                level=1,
+                min_chars=1000,
+                target_chars=1500,
+                max_chars=2500,
+                relevance_keys=["problem_text", "analysis"],
+            ),
+            ChapterSpec(
+                id="dataset_experiment",
+                title="六、数据集与实验设置",
+                level=1,
+                min_chars=1000,
+                target_chars=1500,
+                max_chars=2500,
+                relevance_keys=["problem_text", "analysis", "execution_result"],
+                requires_coding=True,
+            ),
+            ChapterSpec(
+                id="result_comparison",
+                title="七、结果对比与讨论",
+                level=1,
+                min_chars=1200,
+                target_chars=2000,
+                max_chars=3000,
+                relevance_keys=["execution_result", "result_analysis", "charts"],
+                requires_coding=True,
+            ),
+            ChapterSpec(
+                id="conclusion",
+                title="八、结论与展望",
+                level=1,
+                min_chars=600,
+                target_chars=1000,
+                max_chars=1500,
+                relevance_keys=["result_analysis", "analysis"],
+            ),
+        ]
+
+
 # 模板注册表
 _TEMPLATE_REGISTRY = {
     "math_modeling": MathModelingTemplate,
     "coursework": CourseworkTemplate,
     "financial_analysis": FinancialAnalysisTemplate,
+    "neurips_2024": NeurIPS2024Template,
+    "ieee_conference": IEEEConferenceTemplate,
+    "acm_sigconf": ACMSigConfTemplate,
+    "springer_lncs": SpringerLNCSWriterTemplate,
+    "research_survey": ResearchSurveyTemplate,
 }
 
 
