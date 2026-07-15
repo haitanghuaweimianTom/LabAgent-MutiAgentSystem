@@ -345,3 +345,17 @@ class Neo4jStore:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.disconnect()
         return False
+
+
+_kg_store = None
+
+
+def get_kg_store():
+    global _kg_store
+    if _kg_store is None:
+        try:
+            _kg_store = Neo4jStore()
+            _kg_store.connect()
+        except Exception:
+            _kg_store = None
+    return _kg_store

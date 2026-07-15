@@ -1235,6 +1235,28 @@ class BaseAgent(ABC):
             logger.debug(f"[{self.name}] 知识库查询失败: {e}")
         return ""
 
+    def _inject_graph_context(self, query: str) -> str:
+        """查询知识图谱并返回上下文文本（静默失败）
+
+        通过 Neo4j 图数据库检索实体和关系，为 Agent 提供结构化知识。
+        如果 Neo4j 不可用或未连接，返回空字符串，不中断流程。
+        """
+        try:
+            from ..core.neo4j_store import get_kg_store
+            from ..services.kg_search import get_graph_searcher
+
+            store = get_kg_store()
+            if store is None:
+                return ""
+
+            searcher = get_graph_searcher(store)
+            context = searcher.get_context_for_query(query)
+            if context and context != "No relevant entities found in knowledge graph.":
+                return f"\n\n## 知识图谱参考\n{context}\n"
+        except Exception as e:
+            logger.debug(f"[{self.name}] 知识图谱查询失败: {e}")
+        return ""
+
     def _search_knowledge_bases(
         self,
         km,
@@ -1489,6 +1511,22 @@ class BaseAgent(ABC):
                             msg["content"] = msg["content"] + "\n\n【知识库参考】\n" + kb_context
                         elif isinstance(msg["content"], list):
                             msg["content"].append({"type": "text", "text": "\n\n【知识库参考】\n" + kb_context})
+                        break
+
+        # ===== 注入知识图谱上下文 =====
+        graph_context = self._inject_graph_context(query_text)
+        if graph_context:
+            allowed = budget_mgr.remaining("knowledge_context")
+            if budget_mgr.estimate_tokens(graph_context) > allowed:
+                graph_context = budget_mgr.clip_text(graph_context, allowed)
+            budget_mgr.reserve("knowledge_context", budget_mgr.estimate_tokens(graph_context))
+            if graph_context:
+                for msg in messages:
+                    if msg.get("role") == "user":
+                        if isinstance(msg["content"], str):
+                            msg["content"] = msg["content"] + "\n\n【知识图谱参考】\n" + graph_context
+                        elif isinstance(msg["content"], list):
+                            msg["content"].append({"type": "text", "text": "\n\n【知识图谱参考】\n" + graph_context})
                         break
 
         # ===== 注入记忆系统上下文（黑板状态 + 经验教训）=====
