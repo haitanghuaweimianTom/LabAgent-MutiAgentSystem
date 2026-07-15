@@ -23,3 +23,6 @@ scikit-learn>=1.0.0
 
 # 网络请求
 httpx>=0.24.0
+
+# 知识图谱 Neo4j 驱动
+neo4j>=5.0.0
