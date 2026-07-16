@@ -33,7 +33,7 @@ interface CameraReadyPanelProps {
 }
 
 export function CameraReadyPanel({ taskId, templateId, apiBase }: CameraReadyPanelProps) {
-  const base = apiBase || (typeof window !== 'undefined' && (window as any).__API_BASE__) || 'http://localhost:8000/api/v1';
+  const base = apiBase || (typeof window !== 'undefined' && (window as any).__API_BASE__) || 'http://localhost:8001/api/v1';
   const [status, setStatus] = useState<CameraReadyResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

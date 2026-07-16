@@ -27,7 +27,7 @@ print_ok() { echo -e "${GREEN}[OK]${NC} $1"; }
 print_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
-BACKEND_PORT=8000
+BACKEND_PORT=8001
 LOG_FILE="/tmp/backend.log"
 
 # ===== 1. 激活 Python 环境 =====

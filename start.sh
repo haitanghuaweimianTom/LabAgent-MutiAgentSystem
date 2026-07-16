@@ -210,8 +210,8 @@ print('  所有关键依赖已就绪')
 
 # ===== 5. 检查端口 & 停止已运行服务 =====
 print_step "[5/8] 检查端口 & 停止旧服务..."
-BACKEND_PORT=8000
-FRONTEND_PORT=3000
+BACKEND_PORT=8001
+FRONTEND_PORT=3001
 
 # 检测并停止后端
 PIDS=$(pgrep -f "uvicorn app.main:app" || true)

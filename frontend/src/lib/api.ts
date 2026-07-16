@@ -5,4 +5,4 @@ declare global {
 }
 
 export const apiBase = (): string =>
-  window.__API_BASE__ || 'http://localhost:8000/api/v1';
+  window.__API_BASE__ || 'http://localhost:8001/api/v1';

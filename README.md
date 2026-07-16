@@ -409,6 +409,12 @@ xelatex -interaction=nonstopmode main.tex
 
 ---
 
+## Acknowledgments
+
+This project's architecture (Knowledge Base, Agent Manager, MCP integration, LLM Provider system) was inspired by [Cherry Studio](https://github.com/CherryHQ/cherry-studio), an open-source AI chat application. The original submodule reference has been removed to reduce repository size; design patterns are referenced in code comments throughout the codebase.
+
+---
+
 ## License
 
 For academic research and educational use only. Please comply with target venue submission guidelines.

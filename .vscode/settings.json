@@ -1,0 +1,38 @@
+{
+  // 禁用 git 自动 fetch（减少后台扫描）
+  "git.autofetch": false,
+  
+  // 限制 git 扫描的子目录
+  "git.scanRepositories": [
+    "."
+  ],
+  
+  // 忽略大目录
+  "files.watcherExclude": {
+    "**/node_modules/**": true,
+    "**/.next/**": true,
+    "**/data/**": true,
+    "**/outputs/**": true,
+    "**/workspace/**": true,
+    "**/cherry-studio/**": true,
+    "**/.git/objects/**": true
+  },
+  
+  // 搜索排除
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/.next": true,
+    "**/data": true,
+    "**/outputs": true,
+    "**/workspace": true
+  },
+  
+  // 文件监视器排除
+  "files.exclude": {
+    "**/.git": false,
+    "**/node_modules": true,
+    "**/.next": true,
+    "**/__pycache__": true,
+    "**/data": true
+  }
+}

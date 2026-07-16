@@ -86,7 +86,7 @@ export function useTaskState(options: UseTaskStateOptions): {
   refresh: () => Promise<void>;
 } {
   const { taskId, subscribe = true, reconnectMs = 3000 } = options;
-  const apiBase = options.apiBase || (typeof window !== 'undefined' && (window as any).__API_BASE__) || 'http://localhost:8000/api/v1';
+  const apiBase = options.apiBase || (typeof window !== 'undefined' && (window as any).__API_BASE__) || 'http://localhost:8001/api/v1';
 
   const [state, setState] = useState<TaskState | null>(null);
   const [error, setError] = useState<string | null>(null);

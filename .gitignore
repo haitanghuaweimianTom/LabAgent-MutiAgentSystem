@@ -27,11 +27,15 @@ env/
 .venv/
 
 # IDE
-.vscode/
+.vscode/*
+!.vscode/settings.json
 .idea/
 *.swp
 *.swo
 *~
+
+# MiMoCode
+.mimocode/
 
 # Environment
 .env
@@ -89,8 +93,17 @@ main.pdf
 # Third-party cloned repositories
 src/knowledge/figures4papers/
 /rules/github-config-rule.md
+
+# Global references (large PDFs, not suitable for git)
+global_references/
 # Project-level paper reading artifacts
 outputs/*/references/
 outputs/*/reading/
 /references/
 /reading/
+
+# Documentation (local only)
+docs/
+技术详解.md
+面试模拟.md
+笔试模拟.md

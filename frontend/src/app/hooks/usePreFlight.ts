@@ -23,7 +23,7 @@ interface UsePreFlightResult {
   fetch: (taskId: string) => Promise<void>;
 }
 
-const apiBase = () => (typeof window !== 'undefined' && (window as any).__API_BASE__) || 'http://localhost:8000/api/v1';
+const apiBase = () => (typeof window !== 'undefined' && (window as any).__API_BASE__) || 'http://localhost:8001/api/v1';
 
 export function usePreFlight(): UsePreFlightResult {
   const [report, setReport] = useState<PreflightReport | null>(null);

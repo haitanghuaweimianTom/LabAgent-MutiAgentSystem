@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 
 async function fetchInitialInfo() {
   try {
-    const res = await fetch('http://localhost:8000/api/v1/info', {
+    const res = await fetch('http://localhost:8001/api/v1/info', {
       cache: 'no-store',
     });
     if (res.ok) return await res.json();
@@ -38,7 +38,7 @@ export default async function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){var o=window.location.origin.replace(/:(\\d+)$/,'');window.__API_BASE__=o+':8000/api/v1';${initialInfoScript}})()`,
+            __html: `(function(){var o=window.location.origin.replace(/:(\\d+)$/,'');window.__API_BASE__=o+':8001/api/v1';${initialInfoScript}})()`,
           }}
         />
       </head>

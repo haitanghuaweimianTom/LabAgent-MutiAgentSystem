@@ -211,7 +211,7 @@ export default function SettingsPage() {
               <code className="text-[#e0c080]">本机: http://localhost:3000</code><br />
               <code className="text-[#e0c080]">局域网: 请使用本机 IP:3000</code><br />
               <strong className="text-[#F8FAFC]">📖 后端 API 文档：</strong>
-              <code className="text-[#e0c080]">http://localhost:8000/docs</code><br />
+              <code className="text-[#e0c080]">http://localhost:8001/docs</code><br />
               {sysInfo && (
                 <>
                   <strong className="text-[#F8FAFC]">🔄 版本：</strong><code className="text-[#e0c080]">v{sysInfo.version}</code><br />
