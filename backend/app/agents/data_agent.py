@@ -267,13 +267,26 @@ print('\\n分析完成')
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
         if isinstance(data, list):
-            return {"shape": [len(data), len(data[0]) if data else 0], "type": "JSON array"}
-        return {"shape": [1, len(data)], "type": "JSON object"}
+            shape = [len(data), len(data[0]) if data else 0]
+        else:
+            shape = [1, len(data)]
+        return {
+            "shape": shape,
+            "type": "JSON array" if isinstance(data, list) else "JSON object",
+            "file_name": path.name,
+            "file_size": path.stat().st_size,
+        }
 
     def _analyze_txt(self, path: Path) -> Dict[str, Any]:
         with open(path, "r", encoding="utf-8") as f:
             lines = f.readlines()
-        return {"shape": [len(lines), 1], "type": "text file", "preview": "".join(lines[:5])}
+        return {
+            "shape": [len(lines), 1],
+            "type": "text file",
+            "preview": "".join(lines[:5]),
+            "file_name": path.name,
+            "file_size": path.stat().st_size,
+        }
 
     def _is_numerical(self, value: str) -> bool:
         try:
@@ -332,7 +345,12 @@ print('\\n分析完成')
                 summary_text = wrap_user_content(f"数据分析完成！分析了 {len(results)} 个文件。", "analysis_result")
                 room.post("data_agent", summary_text, "broadcast")
                 for r in results:
-                    room.post("data_agent", f"  - {r.get('file_name', '未知')}: {r.get('shape', '?')}", "broadcast")
+                    shape = r.get('shape', '?')
+                    if isinstance(shape, list) and len(shape) == 2:
+                        shape_str = f"{shape[0]}行×{shape[1]}列"
+                    else:
+                        shape_str = str(shape)
+                    room.post("data_agent", f"  - {r.get('file_name', '未知')}: {shape_str}", "broadcast")
 
             return {"analyses": results, "summary": f"分析了{len(results)}个数据文件"}
         return {"analyses": [], "summary": "暂无数据文件"}

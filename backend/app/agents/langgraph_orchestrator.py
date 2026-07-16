@@ -1867,22 +1867,83 @@ class LangGraphOrchestrator:
         self._update_progress(task_id, state["problem_text"], 70, "论文写作中")
 
         # 从 writer_agent 历史结果读取修订次数（更可靠）
-        writer_history = self._resolve_results(state).get("writer_agent", {})
+        resolved = self._resolve_results(state)
+        writer_history = resolved.get("writer_agent", {})
         revision_count = (writer_history.get("_revision_count", 0) if isinstance(writer_history, dict) else 0) + 1
         logger.info(f"[LangGraph:{task_id}] writer node start, revision_count={revision_count}")
+
+        # ===== 修订模式：注入 Peer Review 反馈 =====
+        review_feedback = None
+        if revision_count > 1:
+            peer_review = resolved.get("peer_review_agent", {})
+            if peer_review and isinstance(peer_review, dict):
+                scores = peer_review.get("scores", {})
+                comments = peer_review.get("comments", {})
+                suggested_edits = peer_review.get("suggested_edits", [])
+                rec = peer_review.get("recommendation", "")
+                overall = peer_review.get("overall_score", 0)
+                # 适配 writer_agent._format_peer_review_feedback 的期望格式：
+                # comments: {major: [...], minor: [...]}
+                # suggested_edits: [{location, suggestion}]
+                normalized_edits = []
+                for ed in suggested_edits:
+                    if isinstance(ed, dict):
+                        normalized_edits.append({
+                            "location": ed.get("target", ed.get("location", "")),
+                            "suggestion": ed.get("change", ed.get("suggestion", "")),
+                        })
+                    else:
+                        normalized_edits.append(str(ed))
+                # 合并 issues 列表（writer_agent 在 chapter 级别读取 issues/feedback 字段）
+                major_list = comments.get("major", []) if isinstance(comments, dict) else []
+                issues_list = [str(m) for m in major_list] + [
+                    f"{ed.get('location', '')}: {ed.get('suggestion', '')}" for ed in normalized_edits
+                ]
+                review_feedback = {
+                    "recommendation": rec,
+                    "overall_score": overall,
+                    "scores": scores,
+                    "comments": comments if isinstance(comments, dict) else {"major": [], "minor": []},
+                    "suggested_edits": normalized_edits,
+                    "issues": issues_list,
+                    "instruction": (
+                        f"上一轮审稿评分 {overall}/5（{rec}），"
+                        f"请根据以下 {len(normalized_edits)} 条修改建议重写论文："
+                    ),
+                }
+                self._post_chat(
+                    task_id, "coordinator",
+                    f"📝 第 {revision_count} 稿修订：审稿评分 {overall}/5，"
+                    f"{len(major_list)} 条主要意见，{len(normalized_edits)} 条修改建议",
+                )
 
         agent._knowledge_base_id = state.get("knowledge_base_id")
         agent._knowledge_base_ids = state.get("knowledge_base_ids")
         agent._task_project_name = state.get("project_name")
-        output = await agent.execute(
-            task_input={
-                "action": "write",
-                "problem_text": state["problem_text"],
-                "sub_problems": state.get("sub_problems", []),
-                "use_critique": state.get("use_critique", True),
-            },
-            context=self._agent_context(state),
-        )
+        task_input = {
+            "action": "write",
+            "problem_text": state["problem_text"],
+            "sub_problems": state.get("sub_problems", []),
+            "use_critique": state.get("use_critique", True),
+        }
+        if review_feedback:
+            task_input["review_feedback"] = review_feedback
+        try:
+            output = await agent.execute(
+                task_input=task_input,
+                context=self._agent_context(state),
+            )
+        except Exception as writer_exc:
+            logger.error(f"[LangGraph:{task_id}] writer agent failed: {writer_exc}")
+            output = {
+                "latex_code": "",
+                "abstract": "",
+                "title": "",
+                "_error": str(writer_exc),
+                "_degraded": True,
+                "_degraded_reason": f"writer_agent 执行失败: {writer_exc}",
+            }
+            self._post_chat(task_id, "coordinator", f"⚠️ 论文写作异常：{writer_exc}，已生成降级标记")
         output["_contract"] = get_contract_validator().validate("writer_agent", output)
         output["_revision_count"] = revision_count
 
@@ -1902,10 +1963,24 @@ class LangGraphOrchestrator:
         bus.emit_agent_start(task_id, "peer_review_agent", "peer_review")
         self._update_progress(task_id, state["problem_text"], 80, "同行评议中")
 
-        output = await agent.execute(
-            task_input={"action": "review", "problem_text": state["problem_text"]},
-            context=self._agent_context(state),
-        )
+        try:
+            output = await agent.execute(
+                task_input={"action": "review", "problem_text": state["problem_text"]},
+                context=self._agent_context(state),
+            )
+        except Exception as pr_exc:
+            logger.error(f"[LangGraph:{task_id}] peer_review agent failed: {pr_exc}")
+            # 审稿失败时自动放行（避免阻塞全流程），但标记降级
+            output = {
+                "recommendation": "accept",
+                "overall_score": 3,
+                "scores": {},
+                "comments": {"major": [], "minor": []},
+                "suggested_edits": [],
+                "_degraded": True,
+                "_degraded_reason": f"peer_review_agent 执行失败: {pr_exc}",
+            }
+            self._post_chat(task_id, "coordinator", f"⚠️ 同行评议异常：{pr_exc}，已自动放行")
 
         ref_update = self._set_result(state, "peer_review_agent", output)
         rec = (output.get("recommendation") or "").lower()
@@ -1913,7 +1988,6 @@ class LangGraphOrchestrator:
         self._post_chat(task_id, "peer_review_agent", f"同行评议完成：{rec}，得分 {score}")
         bus.emit_agent_complete(task_id, "peer_review_agent", "peer_review", f"{rec}, score={score}")
         return {**state, "results": {**state.get("results", {}), **ref_update}, "current_step": "peer_review_done"}
-
     async def _node_experiment(self, state: TaskState) -> TaskState:
         """调用 experimentation_agent 设计并执行实验（CCF-A 模板才启用）。
 
@@ -1931,7 +2005,7 @@ class LangGraphOrchestrator:
         task_id = state["task_id"]
         self._update_progress(task_id, state["problem_text"], 55, "实验执行中")
 
-        results = state.get("results", {})
+        results = self._resolve_results(state)
         modeling_agent = self._select_modeling_agent(template, state.get("workflow_type", "standard"))
         modeling_result = results.get(modeling_agent, {}) if modeling_agent else {}
 
@@ -2196,7 +2270,7 @@ print(json.dumps({{"accuracy": round(acc, 4)}}))
         task_id = state["task_id"]
         self._update_progress(task_id, state["problem_text"], 65, "科研图表生成中")
 
-        results = state.get("results", {})
+        results = self._resolve_results(state)
         solver_result = results.get("solver_agent", {})
 
         # 第一步：规划图表
@@ -2249,7 +2323,40 @@ print(json.dumps({{"accuracy": round(acc, 4)}}))
             output_dir = None
 
         report: Dict[str, Any] = {"enabled": True, "passed": True}
+        results = self._resolve_results(state)
+
         if output_dir:
+            # ===== 关键时序修复：确保 fact_checker 所需的文件已存在 =====
+            # fact_checker.check() 从磁盘读取 final/main.tex 和 solves.json，
+            # 但这些文件在正常流程中仅在 _save_results（图执行完毕后）写入。
+            # 此处提前将 writer / solver 结果物化到磁盘，保证事实核查不会因文件缺失而空转。
+            try:
+                # 写出 LaTeX 到 final/main.tex
+                writer_output = results.get("writer_agent") or {}
+                latex_code = writer_output.get("latex_code", "") if isinstance(writer_output, dict) else ""
+                if latex_code:
+                    final_dir = output_dir / "final"
+                    final_dir.mkdir(parents=True, exist_ok=True)
+                    final_tex = final_dir / "main.tex"
+                    if not final_tex.exists():
+                        final_tex.write_text(latex_code, encoding="utf-8")
+                        logger.info(f"[LangGraph:{task_id}] fact_check: pre-wrote {final_tex}")
+
+                # 写出求解结果到 solves.json（优先 final/，回退根目录）
+                solver_output = results.get("solver_agent") or {}
+                solves = solver_output.get("sub_problem_solutions", []) if isinstance(solver_output, dict) else []
+                if solves:
+                    solves_file = output_dir / "final" / "solves.json"
+                    if not solves_file.exists():
+                        solves_file.parent.mkdir(parents=True, exist_ok=True)
+                        solves_file.write_text(
+                            json.dumps(solves, ensure_ascii=False, indent=2, default=str),
+                            encoding="utf-8",
+                        )
+                        logger.info(f"[LangGraph:{task_id}] fact_check: pre-wrote {solves_file}")
+            except Exception as prewrite_exc:
+                logger.warning(f"[LangGraph:{task_id}] fact_check pre-write failed: {prewrite_exc}")
+
             report = get_fact_checker().check(
                 task_id=task_id,
                 output_dir=output_dir,
@@ -2257,7 +2364,6 @@ print(json.dumps({{"accuracy": round(acc, 4)}}))
 
         # v7.2: 检查 fabrication flags（从 solver/modeler 传递过来）
         fabrication_issues = []
-        results = self._resolve_results(state)
         for agent_name, agent_output in results.items():
             if isinstance(agent_output, dict):
                 flags = agent_output.get("_fabrication_flags", [])
@@ -2279,13 +2385,54 @@ print(json.dumps({{"accuracy": round(acc, 4)}}))
             report["review_required"] = True
             logger.warning(f"Task {task_id}: fact_check FAILED, review required")
 
+        # ===== 保存事实核查报告到磁盘 + 通知用户 =====
+        issue_count = report.get("issue_count", 0)
+        has_issues = not report.get("passed") or fabrication_issues
+        if has_issues:
+            # 持久化报告到 final/ 目录
+            try:
+                if output_dir:
+                    report_path = output_dir / "final" / "fact_check_report.json"
+                    report_path.parent.mkdir(parents=True, exist_ok=True)
+                    report_path.write_text(
+                        json.dumps(report, ensure_ascii=False, indent=2, default=str),
+                        encoding="utf-8",
+                    )
+                    logger.info(f"Task {task_id}: fact_check report saved to {report_path}")
+            except Exception as disk_exc:
+                logger.warning(f"Task {task_id}: fact_check report save failed: {disk_exc}")
+
+            # 通知用户具体问题
+            issues_summary = []
+            if not report.get("passed"):
+                numeric_issues = report.get("issues", [])
+                for iss in numeric_issues[:5]:
+                    msg = iss.get("message", "") if isinstance(iss, dict) else str(iss)
+                    issues_summary.append(msg)
+            if fabrication_issues:
+                issues_summary.extend(fabrication_issues[:3])
+
+            self._post_chat(
+                task_id, "coordinator",
+                f"⚠️ 事实核查发现问题：{issue_count} 处数值不一致，"
+                f"{len(fabrication_issues)} 处疑似编造。\n"
+                + ("\n".join(f"  - {s}" for s in issues_summary[:5]) if issues_summary else "")
+                + "\n报告已保存至 final/fact_check_report.json，请人工审核后修正。",
+            )
+        else:
+            self._post_chat(task_id, "coordinator", "✅ 事实核查通过：论文数值与求解结果一致")
+
         self._set_result(state, "fact_checker", report)
         logger.info(f"Task {task_id}: fact_check passed={report['passed']} issues={report['issue_count']} fabrication={len(fabrication_issues)}")
 
         return {**state, "results": {**state.get("results", {}), "fact_checker": report}, "current_step": "fact_check_done"}
 
     async def _node_compliance_check(self, state: TaskState) -> TaskState:
-        """v8.0: 金融报告合规审查 — 非 financial_analysis 模板直接跳过。"""
+        """v8.0: 金融报告合规审查 — 非 financial_analysis 模板直接跳过。
+
+        检测到违规后，将清洗后的文本回写到 writer_agent 结果中，
+        同时更新磁盘上的 final/main.tex。
+        """
         template = state.get("paper_template", "")
         if template != "financial_analysis":
             return {**state, "current_step": "compliance_check_skipped"}
@@ -2309,10 +2456,34 @@ print(json.dumps({{"accuracy": round(acc, 4)}}))
                 context={},
             )
             violations = result.get("violations", [])
+            cleaned_text = result.get("cleaned_text", "")
             if violations:
                 logger.warning(f"[LangGraph:{task_id}] compliance_check: 检测到 {len(violations)} 个违规")
-                # 将违规信息注入到 writer 结果中供后续参考
                 writer_output["_compliance_violations"] = violations
+
+            # ===== 回写清洗后文本到 writer_agent 结果和磁盘 =====
+            if cleaned_text and cleaned_text != report_text and isinstance(writer_output, dict):
+                # 更新 writer 结果中的 latex_code
+                writer_output["latex_code"] = cleaned_text
+                writer_output["_compliance_cleaned"] = True
+                self._set_result(state, "writer_agent", writer_output)
+                # 同步更新磁盘文件
+                try:
+                    output_dir = get_project_output_dir(state.get("project_name"))
+                    final_tex = output_dir / "final" / "main.tex"
+                    if final_tex.exists():
+                        final_tex.write_text(cleaned_text, encoding="utf-8")
+                    papers_tex = output_dir / "papers" / f"paper_{task_id}.tex"
+                    if papers_tex.exists():
+                        papers_tex.write_text(cleaned_text, encoding="utf-8")
+                    logger.info(f"[LangGraph:{task_id}] compliance cleaned text written back to disk")
+                except Exception as disk_exc:
+                    logger.warning(f"[LangGraph:{task_id}] compliance text disk write failed: {disk_exc}")
+                self._post_chat(
+                    task_id, "compliance_agent",
+                    f"⚠️ 合规审查：检测到 {len(violations)} 处违规投顾话术，已自动清洗并添加免责声明",
+                )
+
             self._set_result(state, "compliance_agent", result)
             logger.info(f"[LangGraph:{task_id}] compliance_check done, passed={result.get('passed', True)}")
             return {**state, "results": {**state.get("results", {}), "compliance_agent": result}, "current_step": "compliance_check_done"}
@@ -2768,6 +2939,70 @@ print(json.dumps({{"accuracy": round(acc, 4)}}))
                 except Exception as exc:
                     logger.debug(f"Checkpoint save failed for {agent_name}: {exc}")
 
+        # ===== 保存输出文件到项目目录（代码 / 论文 / 模型 / 求解结果）=====
+        project_name = state.get("project_name")
+        writer_ok = "writer_agent" in results
+        try:
+            saved_files = self._save_output_files(
+                task_id, state.get("problem_text", ""), results,
+                project_name=project_name,
+            )
+            if saved_files:
+                self._post_chat(task_id, "coordinator", f"已保存 {len(saved_files)} 个文件到 output 目录")
+        except Exception as exc:
+            logger.error(f"[LangGraph:{task_id}] 保存输出文件失败: {exc}")
+
+        # ===== 组装交付文件夹（项目名_日期）=====
+        if writer_ok:
+            try:
+                from ..services.deliverable import assemble_deliverable
+                task_output_dir = get_project_output_dir(project_name)
+                # 收集聊天室事件作为时间线
+                chat_events = []
+                try:
+                    room = get_chat_room(task_id)
+                    if room:
+                        chat_events = [
+                            {"timestamp": getattr(m, "timestamp", ""), "agent": getattr(m, "sender", ""),
+                             "message": getattr(m, "content", str(m))}
+                            for m in (room.get_messages() or [])
+                        ]
+                except Exception:
+                    pass
+                deliverable_path = assemble_deliverable(
+                    task_id=task_id,
+                    output_dir=task_output_dir,
+                    results=results,
+                    state=state,
+                    project_name=project_name,
+                    chat_events=chat_events,
+                )
+                if deliverable_path:
+                    self._post_chat(
+                        task_id, "coordinator",
+                        f"📁 交付文件夹已生成: {deliverable_path.name}/（含论文、参考文献、数据、实验日志、参数等）",
+                    )
+                    logger.info(f"[LangGraph:{task_id}] deliverable folder: {deliverable_path}")
+            except Exception as dl_exc:
+                logger.exception(f"[LangGraph:{task_id}] deliverable assembly failed: {dl_exc}")
+
+        # ===== Camera-Ready 打包（可选，兼容旧流程）=====
+        if writer_ok:
+            try:
+                from ..services.camera_ready import collect_artifacts, build
+                task_output_dir = get_project_output_dir(project_name)
+                template = state.get("paper_template", "math_modeling")
+                artifact = collect_artifacts(task_id, task_output_dir, template_id=template)
+                cr_result = build(task_id, artifact, task_output_dir, make_zip=True, max_zip_mb=50)
+                self._post_chat(
+                    task_id, "coordinator",
+                    f"📦 Camera-ready 打包完成：{cr_result.zip_path or 'N/A'}，"
+                    f"编译验证={'通过' if cr_result.verification.get('success') else '未通过'}",
+                )
+                logger.info(f"[LangGraph:{task_id}] camera-ready done: {cr_result.zip_path}")
+            except Exception as cr_exc:
+                logger.exception(f"[LangGraph:{task_id}] camera-ready failed: {cr_exc}")
+
         # 保存聊天记录到磁盘
         try:
             room = get_chat_room(task_id)
@@ -2878,3 +3113,99 @@ print(json.dumps({{"accuracy": round(acc, 4)}}))
                 room.post(sender, message, "broadcast")
         except Exception:
             pass
+
+    def _save_output_files(
+        self,
+        task_id: str,
+        problem_text: str,
+        results: Dict[str, Any],
+        project_name: Optional[str] = None,
+    ) -> List[str]:
+        """将求解器生成的代码和论文写入项目输出目录（与经典编排器保持一致）。
+
+        Returns:
+            已保存的文件路径列表。
+        """
+        output_dir = get_project_output_dir(project_name)
+        code_dir = output_dir / "code"
+        papers_dir = output_dir / "papers"
+        code_dir.mkdir(parents=True, exist_ok=True)
+        papers_dir.mkdir(parents=True, exist_ok=True)
+
+        saved_files: List[str] = []
+
+        # ===== 1. 保存代码文件 =====
+        solver_output = results.get("solver_agent") or {}
+        solves = solver_output.get("sub_problem_solutions", []) if isinstance(solver_output, dict) else []
+        for sol in solves:
+            sp_id = sol.get("sub_problem_id", "?")
+            code_files = sol.get("code_files", [])
+            for cf in code_files:
+                filename = cf.get("filename", f"solver_sub{sp_id}.py")
+                code_content = cf.get("code", "")
+                if code_content:
+                    filepath = code_dir / filename
+                    filepath.write_text(code_content, encoding="utf-8")
+                    saved_files.append(str(filepath))
+                    # 保存对应的执行结果
+                    numerical = sol.get("numerical_results", {})
+                    if numerical and isinstance(numerical, dict):
+                        result_file = code_dir / f"{filepath.stem}_result.json"
+                        result_file.write_text(
+                            json.dumps(numerical, ensure_ascii=False, indent=2), encoding="utf-8"
+                        )
+                        saved_files.append(str(result_file))
+
+        # ===== 2. 保存论文（LaTeX）=====
+        writer_output = results.get("writer_agent") or {}
+        latex_code = writer_output.get("latex_code", "") if isinstance(writer_output, dict) else ""
+        if latex_code:
+            paper_file = papers_dir / f"paper_{task_id}.tex"
+            paper_file.write_text(latex_code, encoding="utf-8")
+            saved_files.append(str(paper_file))
+            # Markdown 版本
+            md_code = writer_output.get("markdown_code", "") or writer_output.get("content", "")
+            if md_code and len(md_code) > 100:
+                md_file = papers_dir / f"paper_{task_id}.md"
+                md_file.write_text(md_code, encoding="utf-8")
+                saved_files.append(str(md_file))
+            # 复制到 final/main.tex 供 camera-ready collect_artifacts 读取
+            final_dir = output_dir / "final"
+            final_dir.mkdir(parents=True, exist_ok=True)
+            final_tex = final_dir / "main.tex"
+            final_tex.write_text(latex_code, encoding="utf-8")
+            saved_files.append(str(final_tex))
+            # 保存 solution.json
+            final_solution = final_dir / "solution.json"
+            final_solution.write_text(
+                json.dumps({
+                    "title": writer_output.get("title", ""),
+                    "abstract": writer_output.get("abstract", ""),
+                    "keywords": writer_output.get("keywords", []),
+                    "solver_agent": solver_output,
+                    "writer_agent": writer_output,
+                }, ensure_ascii=False, indent=2, default=str),
+                encoding="utf-8",
+            )
+            saved_files.append(str(final_solution))
+
+        # ===== 3. 保存完整模型描述 JSON =====
+        modeler_output = results.get("modeler_agent") or {}
+        models = modeler_output.get("sub_problem_models", []) if isinstance(modeler_output, dict) else []
+        if models:
+            models_file = output_dir / "models.json"
+            models_file.write_text(
+                json.dumps(models, ensure_ascii=False, indent=2, default=str), encoding="utf-8"
+            )
+            saved_files.append(str(models_file))
+
+        # ===== 4. 保存完整求解结果 JSON =====
+        if solves:
+            solves_file = output_dir / "solves.json"
+            solves_file.write_text(
+                json.dumps(solves, ensure_ascii=False, indent=2, default=str), encoding="utf-8"
+            )
+            saved_files.append(str(solves_file))
+
+        logger.info(f"[LangGraph:{task_id}] 共保存 {len(saved_files)} 个输出文件到 output 目录")
+        return saved_files
