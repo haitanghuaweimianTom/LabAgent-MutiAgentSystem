@@ -7,6 +7,8 @@
 4. 调用 experiment_runner 执行所有脚本
 5. 调用 result_aggregator 整理结果
 6. 返回 writer_agent 可用的结构化结果
+
+v8.1: 集成一键复现 bundle（env/data hash/logs → claims 追溯表）
 """
 from __future__ import annotations
 
@@ -20,6 +22,7 @@ from ..core.dataset_manager import DatasetManager, ProcessedDataset, get_dataset
 from ..core.environment_manager import EnvironmentManager, get_environment_manager
 from ..core.paths import get_project_output_dir
 from ..core.sandbox import CodeSandbox, SandboxConfig
+from ..core.reproducibility_bundle import get_reproducibility_bundle
 from .experiment_result_aggregator import (
     AggregatedExperimentResult,
     ExperimentResultAggregator,
@@ -41,6 +44,7 @@ class ExperimentExecutorResult:
     dataset_info: Optional[Dict[str, Any]] = None
     code_dir: Optional[str] = None
     errors: List[str] = field(default_factory=list)
+    reproducibility_bundle: Optional[Dict[str, Any]] = None  # v8.1: 一键复现 bundle
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -51,6 +55,7 @@ class ExperimentExecutorResult:
             "dataset_info": self.dataset_info,
             "code_dir": self.code_dir,
             "errors": self.errors,
+            "reproducibility_bundle": self.reproducibility_bundle,
         }
 
 
@@ -149,6 +154,19 @@ class ExperimentExecutor:
             # 6. 聚合结果
             aggregated = self.aggregator.aggregate(batch_result)
             result.aggregated = aggregated
+
+            # v8.1: 创建一键复现 bundle
+            try:
+                bundle = get_reproducibility_bundle()
+                bundle_result = bundle.create_bundle(
+                    experiment_result=result.to_dict(),
+                    task_id=task_id or "default",
+                    project_name=project_name,
+                )
+                result.reproducibility_bundle = bundle_result
+                logger.info(f"[ExperimentExecutor] Reproducibility bundle created: {bundle_result.get('bundle_id')}")
+            except Exception as e:
+                logger.warning(f"[ExperimentExecutor] Failed to create reproducibility bundle: {e}")
 
             # 保存完整结果
             self._save_result(result, output_dir / "experiment_result.json")

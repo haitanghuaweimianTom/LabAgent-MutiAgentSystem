@@ -8,6 +8,8 @@
 
 在系统中的位置：solver_agent 之后、writer_agent 之前被调用，
 接收 solver 的输出数据，生成图表，输出图表路径列表给 writer。
+
+v8.2: 集成 VLM 图审闭环 + 浅层实验树/并行 seed 搜索
 """
 from __future__ import annotations
 
@@ -23,6 +25,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from .base import BaseAgent, AgentFactory
 from ..core.security import wrap_user_content
+from ..core.vlm_figure_reviewer import get_vlm_figure_reviewer
 
 logger = logging.getLogger(__name__)
 
@@ -336,6 +339,12 @@ class FigureAgent(BaseAgent):
             return await self._edit(task_input, context, output_dir)
         elif action == "style_transfer":
             return await self._style_transfer(task_input, context, output_dir)
+        elif action == "review":
+            # v8.2: VLM 图审闭环
+            return await self._review_figure(task_input, context, output_dir)
+        elif action == "generate_with_review":
+            # v8.2: 生成 + VLM 审核 + 自动修订
+            return await self._generate_with_review(task_input, context, output_dir)
         else:
             return {"error": f"Unknown action: {action}"}
 
@@ -622,6 +631,116 @@ class FigureAgent(BaseAgent):
             context,
             output_dir,
         )
+
+    # ── Action: review (v8.2: VLM 图审闭环) ──
+
+    async def _review_figure(
+        self, task_input: Dict[str, Any], context: Dict[str, Any], output_dir: Path
+    ) -> Dict[str, Any]:
+        """使用 VLM 评估图表质量。"""
+        figure_path = task_input.get("figure_path")
+        figure_spec = task_input.get("figure_spec", {})
+        experiment_data = task_input.get("data", {})
+
+        if not figure_path or not Path(figure_path).exists():
+            return {"action": "review", "error": "Figure not found", "success": False}
+
+        reviewer = get_vlm_figure_reviewer()
+        review_result = reviewer.review_figure(
+            figure_path=Path(figure_path),
+            figure_spec=figure_spec,
+            experiment_data=experiment_data,
+        )
+
+        return {
+            "action": "review",
+            "review": review_result,
+            "success": True,
+        }
+
+    # ── Action: generate_with_review (v8.2: 生成 + VLM 审核 + 自动修订) ──
+
+    async def _generate_with_review(
+        self, task_input: Dict[str, Any], context: Dict[str, Any], output_dir: Path
+    ) -> Dict[str, Any]:
+        """生成图表 + VLM 审核 + 自动修订。"""
+        figure_spec = task_input.get("figure_spec", {})
+        data = self._extract_data(task_input, context)
+        style_name = self._get_style_name(task_input, context)
+        max_revisions = task_input.get("max_revisions", 3)
+
+        reviewer = get_vlm_figure_reviewer()
+        current_code = None
+        figure_path = None
+        revision_count = 0
+
+        for attempt in range(max_revisions + 1):
+            # 生成图表
+            if current_code is None:
+                result = await self._generate(
+                    {"figure_spec": figure_spec, "data": data, "style_name": style_name},
+                    context,
+                    output_dir,
+                )
+            else:
+                # 使用修改后的代码重新生成
+                result = await self._edit(
+                    {
+                        "original_code": current_code,
+                        "edit_instruction": "根据审查建议修改图表",
+                        "figure_id": figure_spec.get("id", "fig_01"),
+                    },
+                    context,
+                    output_dir,
+                )
+
+            if not result.get("success"):
+                return {
+                    "action": "generate_with_review",
+                    "error": result.get("error"),
+                    "success": False,
+                    "revisions": revision_count,
+                }
+
+            figure_path = result.get("figure_path")
+            if not figure_path:
+                break
+
+            # VLM 审核
+            review_result = reviewer.review_figure(
+                figure_path=Path(figure_path),
+                figure_spec=figure_spec,
+                experiment_data=data,
+            )
+
+            # 如果质量足够好，退出循环
+            if not review_result.get("needs_revision"):
+                logger.info(
+                    f"Figure quality acceptable after {revision_count} revisions "
+                    f"(score={review_result.get('quality_score', 0):.2f})"
+                )
+                break
+
+            # 生成修改后的代码
+            if attempt < max_revisions:
+                current_code = reviewer.get_revision_code_suggestions(
+                    review_result, current_code or ""
+                )
+                revision_count += 1
+                logger.info(
+                    f"Figure needs revision {revision_count}/{max_revisions} "
+                    f"(issues={len(review_result.get('issues', []))})"
+                )
+
+        return {
+            "action": "generate_with_review",
+            "figure_id": figure_spec.get("id", "fig_01"),
+            "figure_path": figure_path,
+            "style": style_name,
+            "revisions": revision_count,
+            "final_review": review_result if 'review_result' in dir() else None,
+            "success": figure_path is not None,
+        }
 
     # ── 代码执行 ──
 

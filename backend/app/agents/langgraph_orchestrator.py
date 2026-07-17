@@ -70,6 +70,7 @@ class TaskState(TypedDict, total=False):
     task_summary: Optional[Dict[str, Any]]  # 任务总结报告
     user_messages: List[Dict[str, Any]]  # 用户在执行期间输入的消息
     last_input_check: float  # 上次检查用户消息的时间戳
+    claims_trace: List[Dict[str, Any]]  # v8.1: claims↔日志追溯表
 
 
 @dataclass
@@ -406,6 +407,7 @@ class LangGraphOrchestrator:
             "use_critique": use_critique,
             "user_messages": [],
             "last_input_check": time.time(),
+            "claims_trace": [],  # v8.1: claims↔日志追溯表
         }
 
         # 检查是否可以从 checkpoint 恢复（断点续传）
@@ -1016,6 +1018,8 @@ class LangGraphOrchestrator:
             self._route_peer_review,
             {
                 "revise": "writer",
+                "experiment": "experiment",  # v8.1: 缺少实验/消融不足
+                "iterative_solver": "iterative_solver",  # v8.1: 数字矛盾/结果不合理
                 "accept": "fact_check",
                 "wait_user": "wait_user",
                 "abort": "cannot_solve",
@@ -2238,27 +2242,112 @@ print(json.dumps({{"accuracy": round(acc, 4)}}))
         return {**state, "results": {**state.get("results", {}), **ref_update}, "current_step": "experiment_done"}
 
     def _evaluate_experiment_quality(self, experiment_output: Dict[str, Any]) -> bool:
-        """评估实验质量，决定是否需要迭代。返回 True 表示需要迭代。"""
+        """评估实验质量，决定是否需要迭代。
+
+        v8.1: 使用真实 metrics/失败率驱动，替代字段存在性判据。
+
+        Returns:
+            True 表示需要迭代。
+        """
         if not isinstance(experiment_output, dict):
             return False
-        # 检查是否包含 baseline 对比
-        has_baseline = bool(experiment_output.get("baseline_comparison"))
-        # 检查是否包含 ablation study
-        has_ablation = bool(experiment_output.get("ablation_study"))
-        # 检查实验是否成功执行
+
+        # 1. 检查实验是否成功执行
         executed = experiment_output.get("executed", False)
-        # 如果缺少 baseline 或 ablation 且已执行，需要迭代
-        if executed and (not has_baseline or not has_ablation):
+        if not executed:
+            return False
+
+        # 2. 检查是否有实验结果
+        experiment_result = experiment_output.get("experiment_result")
+        if not experiment_result:
+            return True  # 没有结果，需要重新执行
+
+        # 3. 基于真实 metrics 评估质量
+        plan = experiment_output.get("plan", {})
+        metrics = plan.get("metrics", [])
+        ablation_plan = plan.get("ablation_plan", [])
+        baselines = plan.get("baselines", [])
+
+        # 3.1 检查是否有 baseline 对比
+        has_baseline_comparison = len(baselines) >= 2
+
+        # 3.2 检查是否有消融实验
+        has_ablation = len(ablation_plan) >= 1
+
+        # 3.3 检查实验成功率（如果有结果）
+        if isinstance(experiment_result, dict):
+            success_rate = experiment_result.get("success_rate", 0)
+            failed_experiments = experiment_result.get("failed_experiments", [])
+
+            # 如果失败率过高（>30%），需要迭代
+            if success_rate < 0.7 and len(failed_experiments) > 0:
+                logger.info(f"实验成功率过低: {success_rate:.2%}，需要迭代优化")
+                return True
+
+            # 检查是否有关键指标缺失
+            reported_metrics = experiment_result.get("metrics", {})
+            if metrics and not reported_metrics:
+                logger.info("实验未报告任何指标，需要迭代")
+                return True
+
+        # 3.4 检查 baseline 和 ablation 是否完整
+        if executed and (not has_baseline_comparison or not has_ablation):
+            logger.info(f"实验缺少完整对比: baseline={has_baseline_comparison}, ablation={has_ablation}")
             return True
+
         return False
 
     def _generate_iteration_feedback(self, experiment_output: Dict[str, Any]) -> str:
-        """生成实验迭代反馈，指导 experimentation_agent 改进。"""
+        """生成实验迭代反馈，指导 experimentation_agent 改进。
+
+        v8.1: 基于真实 metrics/失败率生成详细反馈。
+        """
         feedback_parts = []
-        if not experiment_output.get("baseline_comparison"):
-            feedback_parts.append("缺少 baseline 对比实验，请添加至少2个 baseline 方法")
-        if not experiment_output.get("ablation_study"):
-            feedback_parts.append("缺少 ablation study，请添加消融实验验证各组件贡献")
+        plan = experiment_output.get("plan", {})
+        experiment_result = experiment_output.get("experiment_result", {})
+
+        # 检查 baseline 对比
+        baselines = plan.get("baselines", [])
+        if len(baselines) < 2:
+            feedback_parts.append(
+                f"当前只有 {len(baselines)} 个 baseline，请添加至少2个强 baseline 方法"
+                "（如 Random Forest、BERT-base 等）进行对比"
+            )
+
+        # 检查消融实验
+        ablation_plan = plan.get("ablation_plan", [])
+        if len(ablation_plan) < 1:
+            feedback_parts.append(
+                "缺少 ablation study，请添加消融实验验证各组件贡献"
+                "（如：移除XX模块后性能下降多少）"
+            )
+
+        # 检查实验成功率
+        if isinstance(experiment_result, dict):
+            success_rate = experiment_result.get("success_rate", 0)
+            failed_experiments = experiment_result.get("failed_experiments", [])
+
+            if success_rate < 0.7:
+                feedback_parts.append(
+                    f"实验成功率过低 ({success_rate:.2%})，"
+                    f"有 {len(failed_experiments)} 个实验失败，请分析失败原因并修复"
+                )
+
+            # 检查失败的实验类型
+            for failed in failed_experiments[:3]:  # 只报告前3个失败
+                exp_name = failed.get("name", "unknown")
+                error = failed.get("error", "unknown error")
+                feedback_parts.append(f"实验 '{exp_name}' 失败: {error}")
+
+        # 检查指标报告
+        metrics = plan.get("metrics", [])
+        reported_metrics = experiment_result.get("metrics", {}) if isinstance(experiment_result, dict) else {}
+        if metrics and not reported_metrics:
+            feedback_parts.append(
+                f"实验未报告任何指标，请确保报告以下指标: "
+                f"{', '.join(m.get('name', '?') for m in metrics[:5])}"
+            )
+
         return "；".join(feedback_parts) if feedback_parts else "请优化实验设计和结果分析"
 
     async def _node_figure(self, state: TaskState) -> TaskState:
@@ -2769,8 +2858,33 @@ print(json.dumps({{"accuracy": round(acc, 4)}}))
             logger.info(f"[LangGraph:{state['task_id']}] auto-accept after {revision_count} revisions (score={score})")
             return "accept"
 
-        # 未达上限 → 自动修订
-        return "revise"
+        # v8.1: 按缺陷类型路由 — 区分文笔问题 vs 实验/数据问题
+        defect_type = self._classify_review_defects(review)
+        logger.info(f"[LangGraph:{state['task_id']}] defect_type={defect_type}")
+
+        # 记录 claims 追溯信息
+        trace_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "revision_count": revision_count,
+            "defect_type": defect_type,
+            "review_score": score,
+            "recommendation": rec,
+            "suggested_edits": review.get("suggested_edits", []),
+            "major_comments": review.get("comments", {}).get("major", []),
+            "reproducibility_score": review.get("reproducibility", {}).get("score", 3),
+        }
+        claims_trace = state.get("claims_trace", [])
+        claims_trace.append(trace_entry)
+
+        if defect_type == "experiment":
+            # 缺少实验 / 消融不足 / 基线不公平 → 回到 experiment
+            return "experiment"
+        elif defect_type == "solver":
+            # 数字矛盾 / 结果不合理 → 回到 solver 重新计算
+            return "iterative_solver"
+        else:
+            # 文笔问题 / 其他 → 回到 writer
+            return "revise"
 
     def _route_solver(self, state: TaskState) -> str:
         attempts = state.get("solver_attempts", [])
@@ -2789,6 +2903,82 @@ print(json.dumps({{"accuracy": round(acc, 4)}}))
             return "escalate"
 
         return "retry"
+
+    def _classify_review_defects(self, review: Dict[str, Any]) -> str:
+        """分析 peer_review 输出，判断缺陷类型。
+
+        Returns:
+            "experiment" — 缺少实验 / 消融不足 / 基线不公平
+            "solver" — 数字矛盾 / 结果不合理
+            "writer" — 文笔问题 / 其他
+        """
+        suggested_edits = review.get("suggested_edits", [])
+        comments = review.get("comments", {})
+        major_comments = comments.get("major", [])
+        reproducibility = review.get("reproducibility", {})
+
+        # 关键词匹配规则
+        experiment_keywords = [
+            "实验", "experiment", "消融", "ablation", "基线", "baseline",
+            "对比实验", "对比方法", "SOTA", "state-of-the-art", "reproducibility",
+            "复现", "随机种子", "random seed", "超参数", "hyperparameter",
+            "数据集", "dataset", "训练", "training", "评估", "evaluation",
+        ]
+
+        solver_keywords = [
+            "数字", "结果", "数值", "矛盾", "不一致", "inconsistent",
+            "误差", "error", "精度", "accuracy", "收敛", "convergence",
+            "失败", "failed", "异常", "anomaly", "不合理", "unreasonable",
+        ]
+
+        # 检查 suggested_edits
+        experiment_score = 0
+        solver_score = 0
+
+        for edit in suggested_edits:
+            target = (edit.get("target") or "").lower()
+            change = (edit.get("change") or "").lower()
+            text = f"{target} {change}"
+
+            for kw in experiment_keywords:
+                if kw.lower() in text:
+                    experiment_score += 1
+
+            for kw in solver_keywords:
+                if kw.lower() in text:
+                    solver_score += 1
+
+        # 检查 major comments
+        for comment in major_comments:
+            comment_lower = comment.lower()
+            for kw in experiment_keywords:
+                if kw.lower() in comment_lower:
+                    experiment_score += 2  # major comment 权重更高
+
+            for kw in solver_keywords:
+                if kw.lower() in comment_lower:
+                    solver_score += 2
+
+        # 检查 reproducibility 分数
+        repro_score = reproducibility.get("score", 3)
+        if repro_score <= 2:
+            experiment_score += 3
+
+        # 检查 soundness 分数（技术严谨性）
+        scores = review.get("scores", {})
+        soundness = scores.get("soundness", 3)
+        if soundness <= 2:
+            solver_score += 2
+
+        logger.debug(f"Defect scores: experiment={experiment_score}, solver={solver_score}")
+
+        # 决策
+        if experiment_score >= 3 and experiment_score > solver_score:
+            return "experiment"
+        elif solver_score >= 3 and solver_score > experiment_score:
+            return "solver"
+        else:
+            return "writer"
 
     # ------------------------------------------------------------------
     # 工具方法

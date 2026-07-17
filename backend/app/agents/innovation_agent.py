@@ -5,6 +5,8 @@
 - 识别当前研究的空白（research gaps）
 - 提出具有创新性的研究思路（novelty, methodology, expected contribution）
 - 输出结构化的创新分析报告
+
+v8.1: 集成 Idea Archive + 近重复新颖性检查 + GPU 价值 HITL 闸门
 """
 
 import json
@@ -13,6 +15,7 @@ from typing import Any, Dict, List, Optional
 from .base import BaseAgent, AgentFactory
 from ..core.security import wrap_user_content
 from ..core.paths import get_project_output_dir
+from ..core.idea_archive import get_idea_archive
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +88,7 @@ class InnovationAgent(BaseAgent):
         analyzer_result = context.get("analyzer_agent", {})
         problem_text = context.get("problem_text", "")
         project_name = context.get("project_name")
+        task_id = context.get("task_id", "")
 
         # 构建分析材料
         papers = research_result.get("papers", [])
@@ -128,6 +132,10 @@ class InnovationAgent(BaseAgent):
                 result["analyzed_paper_count"] = len(papers)
                 result["method_count"] = len(methods)
                 result["problem_type"] = problem_type
+
+                # v8.1: 将创新点添加到 Idea Archive
+                archive_results = self._add_to_idea_archive(result, task_id)
+                result["idea_archive"] = archive_results
 
                 # 保存结果到项目输出目录
                 self._save_result(result, project_name)
@@ -241,6 +249,50 @@ class InnovationAgent(BaseAgent):
             return False
 
         return True
+
+    def _add_to_idea_archive(
+        self,
+        result: Dict[str, Any],
+        task_id: str,
+    ) -> List[Dict[str, Any]]:
+        """将创新点添加到 Idea Archive。
+
+        Args:
+            result: 创新分析结果
+            task_id: 任务 ID
+
+        Returns:
+            每个创新点的 archive 结果列表
+        """
+        archive = get_idea_archive()
+        archive_results = []
+
+        for idea in result.get("innovation_ideas", []):
+            try:
+                archive_result = archive.add_idea(
+                    idea=idea,
+                    task_id=task_id,
+                    source="innovation_agent",
+                )
+                archive_results.append({
+                    "idea_id": idea.get("idea_id"),
+                    "archive_id": archive_result.get("idea_id"),
+                    "novelty_score": archive_result.get("novelty_score", 0),
+                    "gpu_value": archive_result.get("gpu_value", "medium"),
+                    "is_duplicate": archive_result.get("is_duplicate", False),
+                })
+
+                # 记录近重复警告
+                if archive_result.get("is_duplicate"):
+                    logger.warning(
+                        f"Idea Archive: idea '{idea.get('title')}' 与已有想法近重复，"
+                        f"相似 ID: {archive_result.get('duplicate_ids')}"
+                    )
+
+            except Exception as e:
+                logger.warning(f"Failed to add idea to archive: {e}")
+
+        return archive_results
 
     def _save_result(self, result: Dict[str, Any], project_name: Optional[str]) -> None:
         """保存分析结果到项目输出目录"""
