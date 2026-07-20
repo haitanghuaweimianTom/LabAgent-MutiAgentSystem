@@ -192,7 +192,7 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
         </div>
         <input
           className="w-full py-[0.7rem] px-4 mb-[0.6rem] bg-black/30 border border-[#334155] rounded-[8px] text-[#e0e0e0] text-[0.95rem]"
-          placeholder="输入项目名称（如：多智能体记忆机制研究 / 供应链优化 / CCF-A 论文）"
+          placeholder="输入项目名称（如：供应链优化 / CCF-A 论文 / 金融风控模型）"
           value={projectName}
           onChange={e => setProjectName(e.target.value)}
           maxLength={60}
@@ -363,7 +363,7 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
 
       <div className="flex gap-[0.8rem]">
         <button className="flex-1 py-[0.9rem] px-8 bg-[#2DD4BF] text-[#F8FAFC] border-none rounded-[10px] text-[1rem] font-semibold cursor-pointer hover:-translate-y-[0.5px] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleSubmit} disabled={submitting || !problemText.trim() || isRunning}>
-          {submitting ? '🚀 启动中...' : isRunning ? `🔄 生成中 ${progress}%` : '🚀 启动多智能体协作生成'}
+          {submitting ? '🚀 启动中...' : isRunning ? `🔄 生成中 ${progress}%` : '🚀 启动 LabAgent 生成'}
         </button>
       </div>
     </div>
