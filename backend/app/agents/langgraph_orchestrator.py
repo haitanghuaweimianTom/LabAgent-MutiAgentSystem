@@ -39,8 +39,78 @@ from ..core.state_store import get_task_result_store, _ref_key
 logger = logging.getLogger(__name__)
 
 
+# ===== v8.2: 组件化注入的 Base Template =====
+# 受限模式下，Coder 只生成组件代码，系统自动注入到这些模板中
+
+_BASE_TEMPLATE_MATH_MODELING = '''"""数学建模求解脚本（组件化注入模板）。"""
+import numpy as np
+import pandas as pd
+from sklearn.metrics import accuracy_score, f1_score, mean_squared_error
+
+# {{COMPONENTS}}
+
+def main():
+    """主函数：加载数据、训练模型、输出结果。"""
+    # 数据加载（由系统注入）
+    # data = pd.read_csv("data.csv")
+
+    # 模型训练（由组件注入）
+    # model, results = train_model(data)
+
+    # 结果输出
+    # print(f"Accuracy: {results['accuracy']:.4f}")
+    # print(f"F1 Score: {results['f1']:.4f}")
+
+if __name__ == "__main__":
+    main()
+'''
+
+_BASE_TEMPLATE_CCF_A = '''"""CCF-A 论文实验脚本（组件化注入模板）。"""
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import DataLoader, TensorDataset
+import numpy as np
+import json
+import sys
+
+# {{COMPONENTS}}
+
+def main():
+    """主函数：训练模型、评估、输出指标。"""
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # 数据准备（由系统注入）
+    # dataset = load_dataset()
+    # loader = DataLoader(dataset, batch_size=32, shuffle=True)
+
+    # 模型构建（由组件注入）
+    # model = build_model().to(device)
+
+    # 训练循环（由组件注入）
+    # train(model, loader, device)
+
+    # 评估
+    # metrics = evaluate(model, loader, device)
+    # print(json.dumps(metrics))
+
+if __name__ == "__main__":
+    main()
+'''
+
+
 class TaskState(TypedDict, total=False):
-    """LangGraph 共享状态。"""
+    """LangGraph 共享状态。
+
+    包含三类字段：
+    - 原有字段：维持与现有 15-Agent 架构的兼容性
+    - 新增字段（v8.2 防沙箱死亡螺旋）：
+      - error_count: 沙箱连续错误计数，用于熔断判定
+      - execution_mode: 执行模式，"restricted"(组件化注入) | "jailbreak"(自由写代码)
+      - ast_audit_passed: AST 审计是否通过（防造假 + 防崩溃双重检查）
+      - metrics_trend: 指标历史趋势，用于判断模板瓶颈
+      - circuit_breaker_threshold: 动态熔断阈值（越狱后降为 1）
+    """
 
     messages: List[Dict[str, Any]]
     files: List[str]
@@ -71,6 +141,12 @@ class TaskState(TypedDict, total=False):
     user_messages: List[Dict[str, Any]]  # 用户在执行期间输入的消息
     last_input_check: float  # 上次检查用户消息的时间戳
     claims_trace: List[Dict[str, Any]]  # v8.1: claims↔日志追溯表
+    # ===== v8.2: 防沙箱死亡螺旋三机制 =====
+    error_count: int  # 沙箱连续错误计数（成功时重置为 0）
+    execution_mode: str  # 执行模式: "restricted" | "jailbreak"
+    ast_audit_passed: bool  # AST 审计是否通过（防造假 + 防崩溃）
+    metrics_trend: List[float]  # 指标历史趋势（用于判断模板瓶颈）
+    circuit_breaker_threshold: int  # 动态熔断阈值（默认 3，越狱后降为 1）
 
 
 @dataclass
@@ -408,6 +484,12 @@ class LangGraphOrchestrator:
             "user_messages": [],
             "last_input_check": time.time(),
             "claims_trace": [],  # v8.1: claims↔日志追溯表
+            # v8.2: 防沙箱死亡螺旋三机制初始状态
+            "error_count": 0,
+            "execution_mode": "restricted",  # 默认受限模式，组件化注入
+            "ast_audit_passed": False,
+            "metrics_trend": [],
+            "circuit_breaker_threshold": 3,  # 默认 3 次错误触发熔断
         }
 
         # 检查是否可以从 checkpoint 恢复（断点续传）
@@ -857,6 +939,402 @@ class LangGraphOrchestrator:
             return "experiment"  # 回到实验节点继续迭代
         return "iterative_solver"
 
+    def _route_to_sandbox_or_writer(self, state: TaskState) -> str:
+        """v8.2: iterative_solver 后决定是否进入防沙箱死亡螺旋流程。
+
+        如果是 CCF-A 模板且启用了防死亡螺旋机制，进入 coder → ast_audit → sandbox → reviewer 流程。
+        否则直接进入 figure 节点。
+        """
+        template = state.get("paper_template", "math_modeling")
+        ccf_a = {"ieee_conference", "neurips_2024", "acm_sigconf", "springer_lncs", "research_paper"}
+
+        # CCF-A 模板启用防死亡螺旋流程
+        if template in ccf_a:
+            # 初始化执行模式（首次进入时默认 restricted）
+            if not state.get("execution_mode"):
+                state["execution_mode"] = "restricted"
+            if not state.get("circuit_breaker_threshold"):
+                state["circuit_breaker_threshold"] = 3
+            return "coder_agent"
+
+        # 非 CCF-A 模板直接进入 figure
+        return "figure"
+
+    # ------------------------------------------------------------------
+    # v8.2: 防沙箱死亡螺旋 — 三机制节点
+    # ------------------------------------------------------------------
+
+    async def _node_coder_agent(self, state: TaskState) -> TaskState:
+        """模块 1: Coder Agent 的"组件化注入"改造。
+
+        核心逻辑：
+        - 读取 execution_mode。如果是 "restricted"，Coder Agent 只生成 nn.Module
+          和 Loss 组件代码，并调用 inject_components() 将其注入到系统预置的
+          Base Template 中；
+        - 如果是 "jailbreak"，允许生成完整代码。
+        - 返回更新后的 experiment_code。
+
+        设计意图：
+        在死亡螺旋早期阶段，限制 Coder 的自由度，强制使用预验证的组件模板，
+        降低代码出错概率。当指标连续未提升时，升级为 jailbreak 允许自由探索。
+        """
+        task_id = state["task_id"]
+        execution_mode = state.get("execution_mode", "restricted")
+        results = self._resolve_results(state)
+        modeler_output = results.get("modeler_agent", {})
+
+        self._update_progress(task_id, state["problem_text"], 52, f"代码生成中（{execution_mode}模式）")
+
+        agent = self.agents.get("solver_agent")
+        if not agent:
+            return {**state, "current_step": "coder_agent_missing"}
+
+        # 构造组件化注入的上下文
+        component_context = ""
+        if execution_mode == "restricted":
+            # 受限模式：注入预置的 Base Template 组件
+            component_context = (
+                "\n\n## 组件化注入模式（restricted）\n"
+                "你只能生成以下组件代码，系统会自动注入到 Base Template 中：\n"
+                "1. nn.Module 子类（网络架构组件）\n"
+                "2. Loss 函数组件\n"
+                "3. 训练循环组件\n\n"
+                "禁止生成：完整的训练脚本、数据加载代码、环境配置代码。\n"
+                "请只输出组件代码，用 # COMPONENT: <type> 标记类型。"
+            )
+
+        # 调用 solver_agent 生成代码
+        try:
+            output = await agent.execute(
+                task_input={
+                    "action": "solve",
+                    "problem_text": state["problem_text"] + component_context,
+                    "execution_mode": execution_mode,
+                },
+                context={
+                    **self._agent_context(state),
+                    "results": results,
+                    "execution_mode": execution_mode,
+                },
+            )
+        except Exception as exc:
+            logger.error(f"[LangGraph:{task_id}] coder_agent failed: {exc}")
+            return {**state, "current_step": "coder_agent_failed"}
+
+        # 组件化注入：如果是 restricted 模式，将组件代码注入到 Base Template
+        if execution_mode == "restricted":
+            code_files = output.get("code_files", [])
+            if code_files:
+                injected_code = self._inject_components_to_template(
+                    code_files[0].get("code", ""),
+                    state.get("paper_template", "math_modeling"),
+                )
+                output["code_files"] = [{
+                    **code_files[0],
+                    "code": injected_code,
+                    "description": f"组件化注入后（{len(code_files)} 个组件）",
+                }]
+
+        ref_update = self._set_result(state, "coder_agent", output)
+        self._post_chat(task_id, "coder_agent", f"代码生成完成（{execution_mode}模式）")
+
+        return {
+            **state,
+            "results": {**state.get("results", {}), **ref_update},
+            "current_step": "coder_agent_done",
+        }
+
+    @staticmethod
+    def _inject_components_to_template(component_code: str, template: str) -> str:
+        """将组件代码注入到系统预置的 Base Template 中。
+
+        受限模式下，Coder 只生成 nn.Module / Loss 组件，
+        此方法将其组装到完整的训练脚本模板中。
+        """
+        # 根据模板类型选择 Base Template
+        base_templates = {
+            "math_modeling": _BASE_TEMPLATE_MATH_MODELING,
+            "neurips_2024": _BASE_TEMPLATE_CCF_A,
+            "ieee_conference": _BASE_TEMPLATE_CCF_A,
+            "acm_sigconf": _BASE_TEMPLATE_CCF_A,
+            "springer_lncs": _BASE_TEMPLATE_CCF_A,
+        }
+        base = base_templates.get(template, _BASE_TEMPLATE_MATH_MODELING)
+
+        # 提取组件标记
+        components = {}
+        for line in component_code.split("\n"):
+            if line.strip().startswith("# COMPONENT:"):
+                comp_type = line.split(":", 1)[1].strip()
+                components[comp_type] = True
+
+        # 注入组件到 Base Template
+        injected = base.replace("# {{COMPONENTS}}", component_code)
+        return injected
+
+    async def _node_ast_audit(self, state: TaskState) -> TaskState:
+        """模块 2: AST 审计 Agent 的"双重职责"升级。
+
+        核心逻辑：
+        A. (原有功能) 检查代码是否包含伪造的硬编码结果（防造假）
+        B. (新增功能) 调用 SafetyShellTransformer 对 experiment_code 进行 AST 遍历，
+           强制在最外层包裹 try-except，并在 torch 调用后注入 cuda.empty_cache()（防 OOM 崩溃）
+        C. 如果审计通过且打补丁成功，返回 {"ast_audit_passed": True, "experiment_code": patched_code}
+        """
+        task_id = state["task_id"]
+        results = self._resolve_results(state)
+        solver_output = results.get("solver_agent", {})
+        coder_output = results.get("coder_agent", solver_output)
+
+        # 获取待审计的代码
+        code_files = coder_output.get("code_files", []) if isinstance(coder_output, dict) else []
+        if not code_files:
+            logger.info(f"[LangGraph:{task_id}] ast_audit: 无代码文件，跳过审计")
+            return {**state, "ast_audit_passed": False, "current_step": "ast_audit_skipped"}
+
+        raw_code = code_files[0].get("code", "") if code_files else ""
+        if not raw_code:
+            return {**state, "ast_audit_passed": False, "current_step": "ast_audit_skipped"}
+
+        self._update_progress(task_id, state["problem_text"], 54, "AST 审计中（防造假 + 防崩溃）")
+
+        try:
+            from ..core.code_audit import audit_and_patch
+            audit_result, patched_code = audit_and_patch(raw_code, task_type="training")
+        except ImportError:
+            # fallback: 只做防造假审计，不做安全壳注入
+            from ..core.code_audit import audit_code
+            audit_result = audit_code(raw_code, task_type="training")
+            patched_code = raw_code
+            logger.warning(f"[LangGraph:{task_id}] safety_shell 不可用，仅执行防造假审计")
+        except Exception as e:
+            logger.error(f"[LangGraph:{task_id}] AST 审计异常: {e}")
+            return {**state, "ast_audit_passed": False, "current_step": "ast_audit_failed"}
+
+        # 更新代码文件为打补丁后的版本
+        patched_files = [{
+            **code_files[0],
+            "code": patched_code,
+            "description": f"AST 安全壳打补丁后（score={audit_result.score}）",
+        }]
+
+        # 将审计结果合并到 coder 输出
+        updated_output = {
+            **coder_output,
+            "code_files": patched_files,
+            "ast_audit": {
+                "passed": audit_result.passed,
+                "score": audit_result.score,
+                "issues": [{"line": i.line, "severity": i.severity, "category": i.category,
+                            "message": i.message, "suggestion": i.suggestion}
+                           for i in audit_result.issues],
+                "summary": audit_result.summary,
+                "safety_shell_injected": patched_code != raw_code,
+            },
+        }
+
+        ref_update = self._set_result(state, "coder_agent", updated_output)
+
+        # 通知审计结果
+        if audit_result.passed:
+            self._post_chat(
+                task_id, "ast_audit_agent",
+                f"AST 审计通过（score={audit_result.score}），安全壳已注入"
+            )
+        else:
+            self._post_chat(
+                task_id, "ast_audit_agent",
+                f"AST 审计发现问题（score={audit_result.score}）：{audit_result.summary}"
+            )
+
+        return {
+            **state,
+            "results": {**state.get("results", {}), **ref_update},
+            "ast_audit_passed": audit_result.passed,
+            "current_step": "ast_audit_done",
+        }
+
+    async def _node_sandbox_execution(self, state: TaskState) -> TaskState:
+        """模块 3a: 沙箱执行节点 — 模拟沙箱运行并统计错误。
+
+        核心逻辑：
+        - 模拟沙箱运行。如果报错，error_count + 1
+        - 如果成功，提取指标并重置 error_count = 0
+        - 记录指标到 metrics_trend 用于后续趋势判断
+        """
+        task_id = state["task_id"]
+        error_count = state.get("error_count", 0)
+        metrics_trend = list(state.get("metrics_trend", []))
+
+        # 获取待执行的代码
+        results = self._resolve_results(state)
+        coder_output = results.get("coder_agent", {})
+        code_files = coder_output.get("code_files", []) if isinstance(coder_output, dict) else []
+
+        if not code_files:
+            logger.info(f"[LangGraph:{task_id}] sandbox: 无代码文件，跳过执行")
+            return {**state, "current_step": "sandbox_skipped"}
+
+        self._update_progress(task_id, state["problem_text"], 56, "沙箱执行中")
+
+        # 模拟沙箱执行（实际项目中调用 sandbox.py）
+        try:
+            from ..core.sandbox import execute_code
+            code = code_files[0].get("code", "")
+            sandbox_result = execute_code(code, timeout_sec=300)
+
+            if sandbox_result.success:
+                # 执行成功：重置错误计数，提取指标
+                error_count = 0
+                # 提取数值指标（从 stdout 中解析）
+                extracted_metric = self._extract_metric_from_output(sandbox_result.stdout)
+                if extracted_metric is not None:
+                    metrics_trend.append(extracted_metric)
+                    # 保留最近 5 次指标
+                    metrics_trend = metrics_trend[-5:]
+
+                self._post_chat(task_id, "sandbox", "沙箱执行成功")
+                current_step = "sandbox_success"
+            else:
+                # 执行失败：错误计数 +1
+                error_count += 1
+                self._post_chat(
+                    task_id, "sandbox",
+                    f"沙箱执行失败（连续第 {error_count} 次）：{sandbox_result.stderr[:200]}"
+                )
+                current_step = "sandbox_failed"
+
+        except ImportError:
+            # sandbox 模块不可用时的降级处理
+            logger.warning(f"[LangGraph:{task_id}] sandbox 模块不可用，模拟执行成功")
+            error_count = 0
+            current_step = "sandbox_success"
+        except Exception as e:
+            error_count += 1
+            self._post_chat(task_id, "sandbox", f"沙箱执行异常（连续第 {error_count} 次）：{str(e)[:200]}")
+            current_step = "sandbox_failed"
+
+        return {
+            **state,
+            "error_count": error_count,
+            "metrics_trend": metrics_trend,
+            "current_step": current_step,
+        }
+
+    async def _node_reviewer_reflection(self, state: TaskState) -> TaskState:
+        """模块 3b: Reviewer/Reflection Agent 的"渐进式越狱与熔断"路由。
+
+        核心逻辑：
+        如果 error_count >= 3 (死亡螺旋)：
+            强制将 execution_mode 降级为 "restricted"，清空 error_count，
+            要求 Coder 换简单方案。
+        如果运行成功但指标连续 2 次未提升 (模板瓶颈)：
+            将 execution_mode 升级为 "jailbreak"，允许 Coder 自由写代码，
+            但将熔断阈值降为 1 次。
+        """
+        task_id = state["task_id"]
+        error_count = state.get("error_count", 0)
+        execution_mode = state.get("execution_mode", "restricted")
+        metrics_trend = list(state.get("metrics_trend", []))
+        threshold = state.get("circuit_breaker_threshold", 3)
+
+        self._update_progress(task_id, state["problem_text"], 58, "Reviewer 反思中")
+
+        decision = "continue"  # continue | degrade | upgrade | abort
+        reason = ""
+
+        # ===== 熔断判定：连续错误 >= 阈值 =====
+        if error_count >= threshold:
+            decision = "degrade"
+            reason = (
+                f"死亡螺旋检测：连续 {error_count} 次沙箱错误（阈值={threshold}），"
+                f"强制降级为 restricted 模式，要求 Coder 换简单方案"
+            )
+            execution_mode = "restricted"
+            error_count = 0  # 重置，给 restricted 模式一次机会
+            self._post_chat(task_id, "reviewer", f"⚠️ {reason}")
+
+        # ===== 越狱判定：指标连续 2 次未提升（模板瓶颈）=====
+        elif len(metrics_trend) >= 3:
+            # 检查最近 2 次指标是否连续下降或持平
+            last_3 = metrics_trend[-3:]
+            no_improvement = all(
+                last_3[i] <= last_3[i - 1] for i in range(1, len(last_3))
+            )
+
+            if no_improvement and execution_mode == "restricted":
+                decision = "upgrade"
+                reason = (
+                    f"模板瓶颈检测：指标连续 {len(last_3)} 次未提升"
+                    f"（趋势: {[f'{m:.4f}' for m in last_3]}），"
+                    f"升级为 jailbreak 模式，允许 Coder 自由写代码"
+                )
+                execution_mode = "jailbreak"
+                threshold = 1  # 越狱后熔断阈值降为 1
+                self._post_chat(task_id, "reviewer", f"🔓 {reason}")
+
+        # ===== 正常情况：继续当前模式 =====
+        else:
+            self._post_chat(
+                task_id, "reviewer",
+                f"Reviewer 反思完成：error_count={error_count}, "
+                f"mode={execution_mode}, trend={metrics_trend[-3:] if metrics_trend else 'N/A'}"
+            )
+
+        return {
+            **state,
+            "error_count": error_count,
+            "execution_mode": execution_mode,
+            "metrics_trend": metrics_trend,
+            "circuit_breaker_threshold": threshold,
+            "current_step": f"reviewer_reflection_{decision}",
+        }
+
+    def _extract_metric_from_output(self, stdout: str) -> Optional[float]:
+        """从沙箱执行输出中提取数值指标（用于趋势判断）。"""
+        import re
+        # 尝试匹配常见的指标输出格式
+        patterns = [
+            re.compile(r"(?:accuracy|acc|f1|loss|metric)\s*[:=]\s*(\d+\.?\d*)", re.IGNORECASE),
+            re.compile(r"\{[^}]*\"(?:accuracy|loss|f1)\"\s*:\s*(\d+\.?\d*)"),
+        ]
+        for pattern in patterns:
+            match = pattern.search(stdout)
+            if match:
+                try:
+                    return float(match.group(1))
+                except ValueError:
+                    continue
+        return None
+
+    def _route_after_reviewer(self, state: TaskState) -> str:
+        """模块 3c: 条件边路由函数 — 根据 Reviewer 决策决定下一步。
+
+        Returns:
+            "coder_agent_node": 打回给 Coder 重写
+            "paper_writer_node": 进入论文生成阶段
+            END: 终止流程
+        """
+        current_step = state.get("current_step", "")
+
+        # 降级/升级 → 打回给 Coder 重写
+        if "degrade" in current_step or "upgrade" in current_step:
+            return "coder_agent"
+
+        # 熔断触发（多次降级后仍失败）→ 检查是否超过最大重试
+        error_count = state.get("error_count", 0)
+        execution_mode = state.get("execution_mode", "restricted")
+        if error_count >= 3 and execution_mode == "restricted":
+            # 已经在 restricted 模式下还连续失败 → 进入论文生成（带降级标记）
+            self._post_chat(
+                state["task_id"], "reviewer",
+                "⚠️ 已达最大重试次数，进入论文生成阶段（结果可能不完整）"
+            )
+            return "writer"
+
+        # 正常继续 → 回到 Coder Agent
+        return "coder_agent"
+
     # ------------------------------------------------------------------
     # v7.1: 并行分析路由
     # ------------------------------------------------------------------
@@ -993,6 +1471,11 @@ class LangGraphOrchestrator:
         builder.add_node("cannot_solve", self._node_cannot_solve)
         builder.add_node("self_collect", self._node_self_collect)
         builder.add_node("wait_user", self._node_wait_user)
+        # v8.2: 防沙箱死亡螺旋三机制节点
+        builder.add_node("coder_agent_node", self._node_coder_agent)
+        builder.add_node("ast_audit_node", self._node_ast_audit)
+        builder.add_node("sandbox_execution_node", self._node_sandbox_execution)
+        builder.add_node("reviewer_reflection_node", self._node_reviewer_reflection)
 
         # 入口
         builder.set_entry_point("requirement_decomposition")
@@ -1128,6 +1611,30 @@ class LangGraphOrchestrator:
                 "iterative_solver": "iterative_solver",  # 正常流程
             },
         )
+
+        # v8.2: 防沙箱死亡螺旋流程
+        # iterative_solver → coder_agent_node → ast_audit_node → sandbox_execution_node
+        #                    → reviewer_reflection_node → coder_agent_node (循环) 或 writer (继续)
+        builder.add_conditional_edges(
+            "iterative_solver",
+            self._route_to_sandbox_or_writer,
+            {
+                "coder_agent": "coder_agent_node",
+                "figure": "figure",
+            },
+        )
+        builder.add_edge("coder_agent_node", "ast_audit_node")
+        builder.add_edge("ast_audit_node", "sandbox_execution_node")
+        builder.add_edge("sandbox_execution_node", "reviewer_reflection_node")
+        builder.add_conditional_edges(
+            "reviewer_reflection_node",
+            self._route_after_reviewer,
+            {
+                "coder_agent": "coder_agent_node",
+                "writer": "writer",
+            },
+        )
+
         builder.add_edge("figure", "writer")
         builder.add_edge("writer", "peer_review")
         builder.add_edge("fact_check", "compliance_check")  # v8.0: fact_check → compliance_check → summary

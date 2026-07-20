@@ -277,3 +277,38 @@ def audit_code(code: str, task_type: str = "general") -> AuditResult:
         score=score,
         summary=summary,
     )
+
+
+def audit_and_patch(code: str, task_type: str = "general") -> tuple:
+    """双重职责：AST 审计防造假 + 安全壳自动打补丁防崩溃。
+
+    这是 AST Audit Agent 的统一入口，执行两个阶段：
+    A. (防造假) 检查代码是否包含伪造的硬编码结果
+    B. (防崩溃) 调用 SafetyShellTransformer 对代码进行 AST 变换，
+       强制包裹 try-except，并在 torch 调用后注入 cuda.empty_cache()
+
+    Args:
+        code: Python 源代码
+        task_type: 任务类型
+
+    Returns:
+        (AuditResult, patched_code): 审计结果和打补丁后的代码
+    """
+    # 阶段 A：防造假审计
+    audit_result = audit_code(code, task_type)
+
+    # 阶段 B：安全壳自动打补丁
+    patched_code = code
+    try:
+        from .safety_shell import inject_safety_shell, inject_cuda_cache_guard
+        patched_code = inject_safety_shell(code)
+        # 额外的 cuda cache guard（AST 注入可能遗漏的情况）
+        if "torch.cuda" in patched_code:
+            patched_code = inject_cuda_cache_guard(patched_code)
+        logger.info("AST 双重审计完成：防造假 + 安全壳打补丁")
+    except ImportError:
+        logger.warning("safety_shell 模块不可用，跳过安全壳注入")
+    except Exception as e:
+        logger.warning(f"安全壳注入失败: {e}，使用原始代码")
+
+    return audit_result, patched_code
