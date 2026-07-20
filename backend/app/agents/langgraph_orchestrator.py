@@ -942,23 +942,29 @@ class LangGraphOrchestrator:
     def _route_to_sandbox_or_writer(self, state: TaskState) -> str:
         """v8.2: iterative_solver 后决定是否进入防沙箱死亡螺旋流程。
 
-        如果是 CCF-A 模板且启用了防死亡螺旋机制，进入 coder → ast_audit → sandbox → reviewer 流程。
-        否则直接进入 figure 节点。
+        所有经过 iterative_solver 的模板都接入 AST 安全壳 + 沙箱错误统计：
+        - 所有模板: ast_audit → sandbox_execution → figure（安全壳保护）
+        - CCF-A 模板: 额外走 coder_agent（组件化注入）+ reviewer_reflection（越狱熔断）
+
+        设计意图：AST 安全壳和错误统计是通用保护，应该覆盖所有代码执行场景；
+        组件化注入和越狱熔断是 CCF-A 专用的高级机制。
         """
         template = state.get("paper_template", "math_modeling")
         ccf_a = {"ieee_conference", "neurips_2024", "acm_sigconf", "springer_lncs", "research_paper"}
 
-        # CCF-A 模板启用防死亡螺旋流程
+        # 初始化执行模式（所有模板都需要）
+        if not state.get("execution_mode"):
+            state["execution_mode"] = "restricted"
+        if not state.get("circuit_breaker_threshold"):
+            state["circuit_breaker_threshold"] = 3
+
+        # CCF-A 模板：完整流程（coder_agent → ast_audit → sandbox → reviewer）
         if template in ccf_a:
-            # 初始化执行模式（首次进入时默认 restricted）
-            if not state.get("execution_mode"):
-                state["execution_mode"] = "restricted"
-            if not state.get("circuit_breaker_threshold"):
-                state["circuit_breaker_threshold"] = 3
             return "coder_agent"
 
-        # 非 CCF-A 模板直接进入 figure
-        return "figure"
+        # 非 CCF-A 模板：简化流程（ast_audit → sandbox → figure）
+        # 跳过 coder_agent（组件化注入）和 reviewer_reflection（越狱熔断）
+        return "ast_audit"
 
     # ------------------------------------------------------------------
     # v8.2: 防沙箱死亡螺旋 — 三机制节点
@@ -1073,21 +1079,47 @@ class LangGraphOrchestrator:
         return injected
 
     async def _node_ast_audit(self, state: TaskState) -> TaskState:
-        """模块 2: AST 审计 Agent 的"双重职责"升级。
+        """模块 2: AST 审计 Agent 的"双重职责"升级（所有模板通用）。
 
         核心逻辑：
         A. (原有功能) 检查代码是否包含伪造的硬编码结果（防造假）
         B. (新增功能) 调用 SafetyShellTransformer 对 experiment_code 进行 AST 遍历，
            强制在最外层包裹 try-except，并在 torch 调用后注入 cuda.empty_cache()（防 OOM 崩溃）
         C. 如果审计通过且打补丁成功，返回 {"ast_audit_passed": True, "experiment_code": patched_code}
+
+        适配所有模板：
+        - CCF-A: 代码来自 coder_agent（code_files 直接在顶层）
+        - 非 CCF-A: 代码来自 solver_agent（code_files 在 sub_problem_solutions 内）
         """
         task_id = state["task_id"]
         results = self._resolve_results(state)
-        solver_output = results.get("solver_agent", {})
-        coder_output = results.get("coder_agent", solver_output)
+        template = state.get("paper_template", "math_modeling")
+        ccf_a = {"ieee_conference", "neurips_2024", "acm_sigconf", "springer_lncs", "research_paper"}
 
-        # 获取待审计的代码
-        code_files = coder_output.get("code_files", []) if isinstance(coder_output, dict) else []
+        # 根据模板类型选择代码来源
+        if template in ccf_a:
+            # CCF-A: 代码来自 coder_agent
+            source_output = results.get("coder_agent", {})
+            source_key = "coder_agent"
+        else:
+            # 非 CCF-A: 代码来自 solver_agent
+            source_output = results.get("solver_agent", {})
+            source_key = "solver_agent"
+
+        # 获取待审计的代码（兼容两种数据结构）
+        code_files = []
+        if template in ccf_a:
+            # CCF-A: code_files 在顶层
+            code_files = source_output.get("code_files", []) if isinstance(source_output, dict) else []
+        else:
+            # 非 CCF-A: code_files 在 sub_problem_solutions 内
+            solutions = source_output.get("sub_problem_solutions", []) if isinstance(source_output, dict) else []
+            for sol in solutions:
+                sol_code_files = sol.get("code_files", [])
+                if sol_code_files:
+                    code_files = sol_code_files
+                    break
+
         if not code_files:
             logger.info(f"[LangGraph:{task_id}] ast_audit: 无代码文件，跳过审计")
             return {**state, "ast_audit_passed": False, "current_step": "ast_audit_skipped"}
@@ -1118,11 +1150,32 @@ class LangGraphOrchestrator:
             "description": f"AST 安全壳打补丁后（score={audit_result.score}）",
         }]
 
-        # 将审计结果合并到 coder 输出
-        updated_output = {
-            **coder_output,
-            "code_files": patched_files,
-            "ast_audit": {
+        # 将审计结果合并到对应的 Agent 输出
+        if template in ccf_a:
+            # CCF-A: 更新 coder_agent 输出
+            updated_output = {
+                **source_output,
+                "code_files": patched_files,
+                "ast_audit": {
+                    "passed": audit_result.passed,
+                    "score": audit_result.score,
+                    "issues": [{"line": i.line, "severity": i.severity, "category": i.category,
+                                "message": i.message, "suggestion": i.suggestion}
+                               for i in audit_result.issues],
+                    "summary": audit_result.summary,
+                    "safety_shell_injected": patched_code != raw_code,
+                },
+            }
+            ref_update = self._set_result(state, "coder_agent", updated_output)
+        else:
+            # 非 CCF-A: 更新 solver_agent 输出中的 code_files
+            updated_solutions = list(source_output.get("sub_problem_solutions", []))
+            for i, sol in enumerate(updated_solutions):
+                if sol.get("code_files"):
+                    updated_solutions[i] = {**sol, "code_files": patched_files}
+                    break
+            updated_output = {**source_output, "sub_problem_solutions": updated_solutions}
+            updated_output["ast_audit"] = {
                 "passed": audit_result.passed,
                 "score": audit_result.score,
                 "issues": [{"line": i.line, "severity": i.severity, "category": i.category,
@@ -1130,10 +1183,8 @@ class LangGraphOrchestrator:
                            for i in audit_result.issues],
                 "summary": audit_result.summary,
                 "safety_shell_injected": patched_code != raw_code,
-            },
-        }
-
-        ref_update = self._set_result(state, "coder_agent", updated_output)
+            }
+            ref_update = self._set_result(state, "solver_agent", updated_output)
 
         # 通知审计结果
         if audit_result.passed:
@@ -1155,21 +1206,41 @@ class LangGraphOrchestrator:
         }
 
     async def _node_sandbox_execution(self, state: TaskState) -> TaskState:
-        """模块 3a: 沙箱执行节点 — 模拟沙箱运行并统计错误。
+        """模块 3a: 沙箱执行节点 — 模拟沙箱运行并统计错误（所有模板通用）。
 
         核心逻辑：
         - 模拟沙箱运行。如果报错，error_count + 1
         - 如果成功，提取指标并重置 error_count = 0
         - 记录指标到 metrics_trend 用于后续趋势判断
+
+        适配所有模板：
+        - CCF-A: 代码来自 ast_audit 后的 coder_agent
+        - 非 CCF-A: 代码来自 ast_audit 后的 solver_agent
         """
         task_id = state["task_id"]
         error_count = state.get("error_count", 0)
         metrics_trend = list(state.get("metrics_trend", []))
+        template = state.get("paper_template", "math_modeling")
+        ccf_a = {"ieee_conference", "neurips_2024", "acm_sigconf", "springer_lncs", "research_paper"}
 
-        # 获取待执行的代码
+        # 根据模板类型选择代码来源
         results = self._resolve_results(state)
-        coder_output = results.get("coder_agent", {})
-        code_files = coder_output.get("code_files", []) if isinstance(coder_output, dict) else []
+        if template in ccf_a:
+            source_output = results.get("coder_agent", {})
+        else:
+            source_output = results.get("solver_agent", {})
+
+        # 获取待执行的代码（兼容两种数据结构）
+        code_files = []
+        if template in ccf_a:
+            code_files = source_output.get("code_files", []) if isinstance(source_output, dict) else []
+        else:
+            solutions = source_output.get("sub_problem_solutions", []) if isinstance(source_output, dict) else []
+            for sol in solutions:
+                sol_code_files = sol.get("code_files", [])
+                if sol_code_files:
+                    code_files = sol_code_files
+                    break
 
         if not code_files:
             logger.info(f"[LangGraph:{task_id}] sandbox: 无代码文件，跳过执行")
@@ -1306,6 +1377,17 @@ class LangGraphOrchestrator:
                 except ValueError:
                     continue
         return None
+
+    def _route_after_sandbox(self, state: TaskState) -> str:
+        """v8.2: 沙箱执行后路由 — CCF-A 进入越狱熔断，非 CCF-A 直接进入图表。"""
+        template = state.get("paper_template", "math_modeling")
+        ccf_a = {"ieee_conference", "neurips_2024", "acm_sigconf", "springer_lncs", "research_paper"}
+
+        if template in ccf_a:
+            return "reviewer"
+
+        # 非 CCF-A 模板：安全壳 + 错误统计已完成，直接进入图表生成
+        return "figure"
 
     def _route_after_reviewer(self, state: TaskState) -> str:
         """模块 3c: 条件边路由函数 — 根据 Reviewer 决策决定下一步。
@@ -1612,20 +1694,27 @@ class LangGraphOrchestrator:
             },
         )
 
-        # v8.2: 防沙箱死亡螺旋流程
-        # iterative_solver → coder_agent_node → ast_audit_node → sandbox_execution_node
-        #                    → reviewer_reflection_node → coder_agent_node (循环) 或 writer (继续)
+        # v8.2: 防沙箱死亡螺旋流程（所有模板都接入安全壳保护）
+        # CCF-A 模板: iterative_solver → coder_agent → ast_audit → sandbox → reviewer → writer
+        # 非 CCF-A 模板: iterative_solver → ast_audit → sandbox → figure → writer
         builder.add_conditional_edges(
             "iterative_solver",
             self._route_to_sandbox_or_writer,
             {
-                "coder_agent": "coder_agent_node",
-                "figure": "figure",
+                "coder_agent": "coder_agent_node",   # CCF-A: 组件化注入
+                "ast_audit": "ast_audit_node",       # 非 CCF-A: 直接进入安全壳
             },
         )
-        builder.add_edge("coder_agent_node", "ast_audit_node")
-        builder.add_edge("ast_audit_node", "sandbox_execution_node")
-        builder.add_edge("sandbox_execution_node", "reviewer_reflection_node")
+        builder.add_edge("coder_agent_node", "ast_audit_node")  # CCF-A: coder → ast_audit
+        builder.add_edge("ast_audit_node", "sandbox_execution_node")  # 所有模板: ast_audit → sandbox
+        builder.add_conditional_edges(
+            "sandbox_execution_node",
+            self._route_after_sandbox,
+            {
+                "reviewer": "reviewer_reflection_node",  # CCF-A: 进入越狱熔断
+                "figure": "figure",                      # 非 CCF-A: 直接进入图表
+            },
+        )
         builder.add_conditional_edges(
             "reviewer_reflection_node",
             self._route_after_reviewer,
