@@ -80,7 +80,7 @@
       "meta": {
         "api_format": "openai_chat"
       },
-      "api_key": "ark-8b02e574-b0dc-49a3-8c58-56dee78fb5a1-04335",
+      "api_key": "",
       "api_host": "https://ark.cn-beijing.volces.com/api/compatible",
       "models": [
         {
