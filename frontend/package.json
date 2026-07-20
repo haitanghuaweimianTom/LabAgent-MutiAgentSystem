@@ -1,5 +1,5 @@
 {
-  "name": "math-modeling-agent-frontend",
+  "name": "labagent-frontend",
   "version": "7.3.0",
   "private": true,
   "scripts": {

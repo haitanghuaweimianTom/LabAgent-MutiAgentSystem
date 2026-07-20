@@ -3,7 +3,7 @@ import './globals.css';
 import { ClientLayout } from './client-layout';
 
 export const metadata: Metadata = {
-  title: 'SciAgent — 多智能体协作论文生产系统',
+  title: 'LabAgent — 全自动科研论文生产系统',
   description:
     'LangGraph 编排 · ReAct 工具循环 · 实时协作讨论 · 自动迭代 · CCF-A 论文全自动生成',
 };

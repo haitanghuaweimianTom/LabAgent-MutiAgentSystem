@@ -14,7 +14,7 @@ const pageVariants = {
 }
 
 const ROUTE_META: Record<string, { title: string; subtitle: string }> = {
-  '/': { title: 'SciAgent', subtitle: '全自动科研助手' },
+  '/': { title: 'LabAgent', subtitle: '全自动科研论文生产系统' },
   '/generate': TAB_META.generate,
   '/history': TAB_META.history,
   '/agents': TAB_META.agents,
@@ -33,7 +33,7 @@ function getRouteMeta(pathname: string) {
     if (pathname.endsWith('/report')) return { title: '研究报告', subtitle: '查看任务报告' }
     return TAB_META.generate
   }
-  return { title: 'SciAgent', subtitle: '全自动科研助手' }
+  return { title: 'LabAgent', subtitle: '全自动科研论文生产系统' }
 }
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {

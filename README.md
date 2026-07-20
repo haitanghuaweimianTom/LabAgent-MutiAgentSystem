@@ -1,6 +1,8 @@
-# Multi-Agent Paper Production System v8.2
+# LabAgent v8.2
 
-> 全自动多智能体学术论文生产平台 | Fully automated multi-agent platform for generating academic papers (CCF-A conferences, math modeling competitions, coursework, and financial analysis reports).
+> Fully automated multi-agent platform for generating academic papers (CCF-A conferences, math modeling competitions, coursework, and financial analysis reports).
+
+[中文文档](README_CN.md)
 
 ---
 
@@ -10,8 +12,7 @@
 - [Quick Start](#quick-start)
 - [Features](#features)
 - [Architecture](#architecture)
-- [CCF-A Paper Workflow](#ccf-a-paper-workflow) **[NEW]**
-- [Anti-Death-Spiral Mechanisms](#anti-death-spiral-mechanisms) **[NEW]**
+- [Anti-Death-Spiral Mechanisms](#anti-death-spiral-mechanisms)
 - [API Reference](#api-reference)
 - [Configuration](#configuration)
 - [Troubleshooting](#troubleshooting)
@@ -21,42 +22,39 @@
 
 ## Overview
 
-本系统自动化整个学术论文生产流程：从问题分析到 Camera-Ready 提交。
+LabAgent automates the entire academic paper production pipeline:
 
-This system automates the entire academic paper production pipeline:
+1. **Problem Analysis** — Decompose complex problems into sub-problems
+2. **Literature Review** — Search arXiv + Semantic Scholar for real papers
+3. **Mathematical Modeling** — Select appropriate models and algorithms
+4. **Code Generation & Execution** — Generate Python code, execute in sandbox, auto-fix errors
+5. **Experiment Execution** — Run experiments with GPU support, baseline comparison, ablation study
+6. **Paper Writing** — Generate LaTeX documents with consistent terminology
+7. **Peer Review** — 4-dimension scoring + reproducibility check
+8. **Fact Check** — Verify numbers against actual execution results
+9. **Compliance Check** — Filter investment advice language for financial reports
+10. **Camera-Ready Packaging** — Package into submittable ZIP
 
-1. **Problem Analysis** — 问题分解与类型分类 | Decompose complex problems into sub-problems
-2. **Literature Review** — 文献检索（arXiv + Semantic Scholar） | Search real papers
-3. **Mathematical Modeling** — 数学建模与算法设计 | Select appropriate models and algorithms
-4. **Code Generation & Execution** — 代码生成 + 沙箱执行 + 自动修复 | Generate Python code, execute in sandbox, auto-fix errors
-5. **Experiment Execution** — 实验执行（GPU 支持、Baseline 对比、消融实验） | Run experiments with GPU support, baseline comparison, ablation study
-6. **Paper Writing** — LaTeX 论文逐章生成 | Generate LaTeX documents with consistent terminology
-7. **Peer Review** — 同行评议（4 维评分 + 可复现性检查） | 4-dimension scoring + reproducibility check
-8. **Fact Check** — 事实核查（数值与执行结果对比） | Verify numbers against actual execution results
-9. **Compliance Check** — 合规审查（金融报告投顾话术过滤） | Filter investment advice language for financial reports
-10. **Camera-Ready Packaging** — 交付物打包（LaTeX + 图表 + 代码） | Package into submittable ZIP
-
-### What's New in v8.2 (Anti-Death-Spiral Architecture)
-
-| Feature | Feature (EN) | Description |
-|---------|-------------|-------------|
-| **组件化注入** | Component Injection | 受限模式下 Coder 只生成 nn.Module/Loss 组件，自动注入 Base Template |
-| **AST 安全壳** | AST Safety Shell | 自动包裹 try-except + cuda.empty_cache()，防止沙箱 OOM 崩溃 |
-| **渐进式越狱熔断** | Progressive Jailbreak Circuit Breaker | 动态调整执行模式：restricted → jailbreak，熔断阈值自适应 |
-| **SHA-256 数据溯源** | SHA-256 Data Provenance | 全链路数据哈希追踪，确保结果不可篡改 |
-| **AST 防造假** | AST Anti-Fabrication | 检测硬编码指标（`accuracy = 0.95`），拦截伪造输出 |
-
-### What's New in v8.0 (Zero-Hallucination Architecture)
+### What's New in v8.2
 
 | Feature | Description |
 |---------|-------------|
-| **AST Code Audit** | Detect hardcoded metrics (`accuracy = 0.95`) before code execution |
+| **Component Injection** | Restricted mode Coder generates only nn.Module/Loss components, auto-injected into Base Templates |
+| **AST Safety Shell** | Auto-inject try-except + cuda.empty_cache() + gc.collect() to prevent sandbox crashes |
+| **Progressive Jailbreak Circuit Breaker** | Dynamic mode switching: restricted → jailbreak based on metrics trend |
+| **SHA-256 Data Provenance** | Full-chain hash tracking for tamper-proof results |
+| **AST Anti-Fabrication** | Detect hardcoded metrics (`accuracy = 0.95`), block fake outputs |
+
+### What's New in v8.0
+
+| Feature | Description |
+|---------|-------------|
+| **AST Code Audit** | Detect hardcoded metrics before code execution |
 | **Reference Verification** | Verify DOI/arXiv IDs via CrossRef/arXiv APIs |
 | **Symbolic Auditor** | Validate table sums, percentage totals, metric ranges |
 | **Debugger Agent** | Intelligent error analysis with root cause identification |
 | **Data Provenance** | SHA-256 hashing, execution logs, reproducibility packages |
 | **Compliance Agent** | Detect investment advice language, auto-generate disclaimers |
-| **AI Usage Declaration** | Auto-generate ACM/IEEE/ACL-compliant AI usage statements |
 
 ---
 
@@ -169,39 +167,18 @@ Code Generation → AST Audit → Safety Shell → Sandbox Execution → Result 
 
 ### Anti-Death-Spiral Architecture (v8.2)
 
-所有经过 `iterative_solver` 的模板都接入 AST 安全壳 + 沙箱错误统计保护。
+All templates passing through `iterative_solver` are protected by AST safety shell + sandbox error statistics.
 
-| 模板 | 流程 | 组件化注入 | 越狱熔断 |
-|------|------|-----------|---------|
-| math_modeling | iterative_solver → ast_audit → sandbox → figure | - | - |
-| coursework | iterative_solver → ast_audit → sandbox → figure | - | - |
-| financial_analysis | iterative_solver → ast_audit → sandbox → figure | - | - |
-| neurips_2024 | iterative_solver → coder_agent → ast_audit → sandbox → reviewer | Yes | Yes |
-| ieee_conference | iterative_solver → coder_agent → ast_audit → sandbox → reviewer | Yes | Yes |
-| acm_sigconf | iterative_solver → coder_agent → ast_audit → sandbox → reviewer | Yes | Yes |
-| springer_lncs | iterative_solver → coder_agent → ast_audit → sandbox → reviewer | Yes | Yes |
-| research_survey | 直接进入 writer（无代码执行） | - | - |
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  iterative_solver 完成后                                         │
-├──────────────────────┬──────────────────────────────────────────┤
-│  CCF-A 模板           │  非 CCF-A 模板                           │
-│  coder_agent_node     │  ast_audit_node (跳过组件化注入)         │
-│  (组件化注入)          │                                          │
-├──────────────────────┼──────────────────────────────────────────┤
-│  ast_audit_node       │  ast_audit_node                          │
-│  (防造假 + 安全壳)     │  (防造假 + 安全壳)                       │
-├──────────────────────┼──────────────────────────────────────────┤
-│  sandbox_execution    │  sandbox_execution                       │
-│  (错误统计)           │  (错误统计)                               │
-├──────────────────────┼──────────────────────────────────────────┤
-│  reviewer_reflection  │  figure                                  │
-│  (越狱熔断)           │  (直接进入图表)                           │
-├──────────────────────┼──────────────────────────────────────────┤
-│  writer               │  writer                                  │
-└──────────────────────┴──────────────────────────────────────────┘
-```
+| Template | Flow | Component Injection | Jailbreak |
+|----------|------|--------------------|-----------| 
+| math_modeling | iterative_solver → ast_audit → sandbox → figure | — | — |
+| coursework | iterative_solver → ast_audit → sandbox → figure | — | — |
+| financial_analysis | iterative_solver → ast_audit → sandbox → figure | — | — |
+| neurips_2024 | iterative_solver → coder → ast_audit → sandbox → reviewer → figure | Yes | Yes |
+| ieee_conference | iterative_solver → coder → ast_audit → sandbox → reviewer → figure | Yes | Yes |
+| acm_sigconf | iterative_solver → coder → ast_audit → sandbox → reviewer → figure | Yes | Yes |
+| springer_lncs | iterative_solver → coder → ast_audit → sandbox → reviewer → figure | Yes | Yes |
+| research_survey | Direct to writer (no code execution) | — | — |
 
 ### Knowledge Base System
 
@@ -239,7 +216,7 @@ Code Generation → AST Audit → Safety Shell → Sandbox Execution → Result 
 │  ├─ Agent Layer (15 agents)                                      │
 │  ├─ Core Modules                                                 │
 │  │   ├─ code_audit.py        (AST analysis + anti-fabrication)   │
-│  │   ├─ safety_shell.py      (AST safety shell transformer) [NEW]│
+│  │   ├─ safety_shell.py      (AST safety shell transformer)      │
 │  │   ├─ reference_verifier.py (DOI/arXiv verification)           │
 │  │   ├─ symbolic_auditor.py  (statistical validation)            │
 │  │   ├─ data_provenance.py   (SHA-256 tracking)                  │
@@ -261,7 +238,7 @@ Code Generation → AST Audit → Safety Shell → Sandbox Execution → Result 
 3. Parallel: Data analysis + Literature review + Innovation discovery
 4. Agents discuss approach (voting system)
 5. Modeler creates mathematical models
-6. **[v8.2]** Coder Agent (restricted/jailbreak) → AST Audit (anti-fabrication + safety shell) → Sandbox Execution → Reviewer Reflection (circuit breaker)
+6. **[v8.2]** Coder Agent (restricted/jailbreak) → AST Audit → Sandbox → Reviewer
 7. Writer generates LaTeX chapter by chapter
 8. Peer reviewer scores and suggests revisions (auto-iterate up to 3 rounds)
 9. Fact checker verifies numbers against execution results
@@ -270,60 +247,16 @@ Code Generation → AST Audit → Safety Shell → Sandbox Execution → Result 
 
 ---
 
-## CCF-A Paper Workflow
-
-CCF-A 论文模板（NeurIPS、IEEE、ACM、Springer）使用专用工作流，包含额外的实验设计和消融分析步骤。
-
-### 所有模板的防死亡螺旋保护
-
-所有经过 `iterative_solver` 的模板都接入 AST 安全壳 + 沙箱错误统计：
-
-| 保护机制 | 适用模板 | 说明 |
-|---------|---------|------|
-| AST 安全壳 | 所有模板 | 自动包裹 try-except + cuda.empty_cache() |
-| 沙箱错误统计 | 所有模板 | 连续错误计数，用于熔断判定 |
-| 组件化注入 | 仅 CCF-A | restricted 模式下只生成组件代码 |
-| 越狱熔断 | 仅 CCF-A | 指标瓶颈时自动升级为 jailbreak |
-
-### CCF-A 专用节点
-
-| Node | Description |
-|------|-------------|
-| `algorithm_engineer` | CCF-A 算法设计专家，提出可发表的算法（形式化定义 + 伪代码 + 复杂度分析） |
-| `experimentation` | 实验设计（Baseline、数据集、指标、硬件预算、消融计划） |
-| `coder_agent_node` | 组件化注入模式代码生成 |
-| `ast_audit_node` | AST 双重审计（防造假 + 防崩溃安全壳） |
-| `sandbox_execution_node` | 沙箱执行 + 错误统计 |
-| `reviewer_reflection_node` | 渐进式越狱与熔断路由 |
-
-### CCF-A 工作流
-
-```
-analyzer → parallel_analysis → algorithm_engineer → experiment
-    → [v8.2] coder_agent → ast_audit → sandbox → reviewer
-    → writer → peer_review → fact_check → summary → END
-```
-
-### CCF-A 论文质量保证
-
-1. **算法创新性检查**: algorithm_engineer 确保方法有形式化定义和理论分析
-2. **实验完整性检查**: experimentation 确保有 baseline 对比 + 消融实验
-3. **可复现性检查**: peer_review 检查 random seed、超参数、数据集划分
-4. **数值一致性检查**: fact_check 对比 LaTeX 中的数字与实际执行结果
-5. **防死亡螺旋**: v8.2 三机制确保代码执行不会陷入无限失败循环
-
----
-
 ## Anti-Death-Spiral Mechanisms
 
-### 机制 1: 组件化注入 (Component Injection)
+### Mechanism 1: Component Injection
 
-**问题**: Coder Agent 生成的完整训练脚本容易包含多种错误，导致沙箱反复失败。
+**Problem**: Full training scripts generated by Coder contain multiple errors, causing repeated sandbox failures.
 
-**解决方案**: 受限模式下，Coder 只能生成 nn.Module 和 Loss 组件代码，系统自动注入到预置的 Base Template 中。
+**Solution**: In restricted mode, Coder only generates nn.Module and Loss components. The system auto-injects them into pre-validated Base Templates.
 
 ```python
-# restricted 模式：Coder 只输出组件
+# Restricted mode: Coder outputs only components
 # COMPONENT: nn.Module
 class MyModel(nn.Module):
     def __init__(self):
@@ -335,42 +268,40 @@ def my_loss(pred, target):
     return F.cross_entropy(pred, target)
 ```
 
-系统自动组装为完整训练脚本。
+### Mechanism 2: AST Safety Shell
 
-### 机制 2: AST 安全壳 (AST Safety Shell)
+**Problem**: Uncaught exceptions (especially CUDA OOM) crash the entire pipeline.
 
-**问题**: 沙箱中的未捕获异常（特别是 CUDA OOM）导致整个流程崩溃。
-
-**解决方案**: SafetyShellTransformer 对代码进行 AST 变换，自动注入防护层。
+**Solution**: SafetyShellTransformer performs AST-level code transformation.
 
 ```python
-# 原始代码
+# Before
 model = MyModel().cuda()
 output = model(data)
 
-# 安全壳注入后
+# After safety shell injection
 try:
     model = MyModel().cuda()
     output = model(data)
-    torch.cuda.empty_cache()  # 自动注入
+    torch.cuda.empty_cache()  # auto-injected
 except Exception as _safety_exc:
     traceback.print_exc()
 finally:
-    gc.collect()  # 自动注入
+    gc.collect()  # auto-injected
 ```
 
-### 机制 3: 渐进式越狱熔断 (Progressive Jailbreak Circuit Breaker)
+### Mechanism 3: Progressive Jailbreak Circuit Breaker
 
-**问题**: 受限模式可能陷入"模板瓶颈"——代码能运行但指标无法提升。
+**Problem**: Restricted mode may hit "template bottleneck" — code runs but metrics don't improve.
 
-**解决方案**: Reviewer Agent 监控指标趋势，动态调整执行模式。
+**Solution**: Reviewer Agent monitors metrics trend, dynamically adjusts execution mode.
 
-| 状态 | 条件 | 动作 |
-|------|------|------|
-| 正常运行 | error_count < 3 | 保持当前模式 |
-| 死亡螺旋 | error_count >= 3 | 降级为 restricted，熔断阈值=3 |
-| 模板瓶颈 | 指标连续 2 次未提升 | 升级为 jailbreak，熔断阈值=1 |
-| 最大重试 | restricted 模式下仍连续失败 | 进入论文生成（带降级标记） |
+| State | Condition | Action |
+|-------|-----------|--------|
+| Normal | error_count < 3 | Keep current mode |
+| Death Spiral | error_count >= 3 | Degrade to restricted, threshold=3 |
+| Template Bottleneck | Metrics plateau 2+ rounds | Upgrade to jailbreak, threshold=1 |
+| Max Retries | Still failing in restricted | Proceed to paper generation (degraded) |
 
 ---
 
@@ -417,8 +348,9 @@ OPENAI_API_KEY=sk-...
 ANTHROPIC_API_KEY=sk-ant-...
 
 # Optional
-MATHMODEL_API_KEY=your-secret-key    # Enable API authentication
+LABAGENT_API_KEY=your-secret-key    # Enable API authentication
 CUDA_VISIBLE_DEVICES=0               # GPU selection
+NEXT_PUBLIC_API_URL=http://localhost:8001  # Backend URL for frontend
 ```
 
 ### Runtime Configuration (`backend/app/config.py`)
@@ -466,6 +398,7 @@ docker compose up -d    # Start backend + Redis
 - AST safety shell: auto-inject try-except + cuda.empty_cache() + gc.collect()
 - Progressive jailbreak circuit breaker: dynamic mode switching based on metrics trend
 - Dual-responsibility AST audit: anti-fabrication + anti-crash in single pass
+- Project renamed to **LabAgent**
 
 ### v8.0 (2026-07) — Zero-Hallucination Architecture
 - AST code audit for hardcoded metrics detection

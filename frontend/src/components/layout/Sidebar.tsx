@@ -66,8 +66,8 @@ export function Sidebar({ tasks = [] }: SidebarProps) {
               exit={{ opacity: 0, width: 0 }}
               className="overflow-hidden whitespace-nowrap"
             >
-              <span className="text-sm font-semibold text-foreground">SciAgent</span>
-              <span className="text-xs text-muted-foreground ml-1">v7.3</span>
+              <span className="text-sm font-semibold text-foreground">LabAgent</span>
+              <span className="text-xs text-muted-foreground ml-1">v8.2</span>
             </motion.div>
           )}
         </AnimatePresence>
