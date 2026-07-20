@@ -169,27 +169,38 @@ Code Generation → AST Audit → Safety Shell → Sandbox Execution → Result 
 
 ### Anti-Death-Spiral Architecture (v8.2)
 
+所有经过 `iterative_solver` 的模板都接入 AST 安全壳 + 沙箱错误统计保护。
+
+| 模板 | 流程 | 组件化注入 | 越狱熔断 |
+|------|------|-----------|---------|
+| math_modeling | iterative_solver → ast_audit → sandbox → figure | - | - |
+| coursework | iterative_solver → ast_audit → sandbox → figure | - | - |
+| financial_analysis | iterative_solver → ast_audit → sandbox → figure | - | - |
+| neurips_2024 | iterative_solver → coder_agent → ast_audit → sandbox → reviewer | Yes | Yes |
+| ieee_conference | iterative_solver → coder_agent → ast_audit → sandbox → reviewer | Yes | Yes |
+| acm_sigconf | iterative_solver → coder_agent → ast_audit → sandbox → reviewer | Yes | Yes |
+| springer_lncs | iterative_solver → coder_agent → ast_audit → sandbox → reviewer | Yes | Yes |
+| research_survey | 直接进入 writer（无代码执行） | - | - |
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  Coder Agent (restricted / jailbreak 模式切换)                   │
-│  ├─ restricted: 只生成 nn.Module/Loss 组件，注入 Base Template    │
-│  └─ jailbreak: 允许生成完整代码（指标瓶颈时自动升级）               │
-└──────────────────────┬──────────────────────────────────────────┘
-                       │
-┌──────────────────────▼──────────────────────────────────────────┐
-│  AST Audit Agent (双重职责)                                      │
-│  ├─ 防造假: 检测硬编码指标 (accuracy = 0.95)                      │
-│  └─ 防崩溃: SafetyShellTransformer 自动打补丁                    │
-│      - 包裹 try-except                                          │
-│      - 注入 cuda.empty_cache()                                  │
-│      - 注入 gc.collect()                                        │
-└──────────────────────┬──────────────────────────────────────────┘
-                       │
-┌──────────────────────▼──────────────────────────────────────────┐
-│  Sandbox Execution → Reviewer Reflection                        │
-│  ├─ error_count >= 3 → 降级为 restricted（死亡螺旋熔断）          │
-│  └─ 指标连续未提升 → 升级为 jailbreak（模板瓶颈越狱）              │
-└─────────────────────────────────────────────────────────────────┘
+│  iterative_solver 完成后                                         │
+├──────────────────────┬──────────────────────────────────────────┤
+│  CCF-A 模板           │  非 CCF-A 模板                           │
+│  coder_agent_node     │  ast_audit_node (跳过组件化注入)         │
+│  (组件化注入)          │                                          │
+├──────────────────────┼──────────────────────────────────────────┤
+│  ast_audit_node       │  ast_audit_node                          │
+│  (防造假 + 安全壳)     │  (防造假 + 安全壳)                       │
+├──────────────────────┼──────────────────────────────────────────┤
+│  sandbox_execution    │  sandbox_execution                       │
+│  (错误统计)           │  (错误统计)                               │
+├──────────────────────┼──────────────────────────────────────────┤
+│  reviewer_reflection  │  figure                                  │
+│  (越狱熔断)           │  (直接进入图表)                           │
+├──────────────────────┼──────────────────────────────────────────┤
+│  writer               │  writer                                  │
+└──────────────────────┴──────────────────────────────────────────┘
 ```
 
 ### Knowledge Base System
@@ -262,6 +273,17 @@ Code Generation → AST Audit → Safety Shell → Sandbox Execution → Result 
 ## CCF-A Paper Workflow
 
 CCF-A 论文模板（NeurIPS、IEEE、ACM、Springer）使用专用工作流，包含额外的实验设计和消融分析步骤。
+
+### 所有模板的防死亡螺旋保护
+
+所有经过 `iterative_solver` 的模板都接入 AST 安全壳 + 沙箱错误统计：
+
+| 保护机制 | 适用模板 | 说明 |
+|---------|---------|------|
+| AST 安全壳 | 所有模板 | 自动包裹 try-except + cuda.empty_cache() |
+| 沙箱错误统计 | 所有模板 | 连续错误计数，用于熔断判定 |
+| 组件化注入 | 仅 CCF-A | restricted 模式下只生成组件代码 |
+| 越狱熔断 | 仅 CCF-A | 指标瓶颈时自动升级为 jailbreak |
 
 ### CCF-A 专用节点
 
