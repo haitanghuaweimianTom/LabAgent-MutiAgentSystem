@@ -1394,7 +1394,7 @@ class LangGraphOrchestrator:
 
         Returns:
             "coder_agent_node": 打回给 Coder 重写
-            "paper_writer_node": 进入论文生成阶段
+            "figure": 进入图表生成阶段（所有模板都需要图表）
             END: 终止流程
         """
         current_step = state.get("current_step", "")
@@ -1407,15 +1407,15 @@ class LangGraphOrchestrator:
         error_count = state.get("error_count", 0)
         execution_mode = state.get("execution_mode", "restricted")
         if error_count >= 3 and execution_mode == "restricted":
-            # 已经在 restricted 模式下还连续失败 → 进入论文生成（带降级标记）
+            # 已经在 restricted 模式下还连续失败 → 进入图表生成（带降级标记）
             self._post_chat(
                 state["task_id"], "reviewer",
-                "⚠️ 已达最大重试次数，进入论文生成阶段（结果可能不完整）"
+                "⚠️ 已达最大重试次数，进入图表生成阶段（结果可能不完整）"
             )
-            return "writer"
+            return "figure"
 
-        # 正常继续 → 回到 Coder Agent
-        return "coder_agent"
+        # 正常继续 → 进入图表生成（所有模板都需要图表）
+        return "figure"
 
     # ------------------------------------------------------------------
     # v7.1: 并行分析路由
@@ -1695,7 +1695,7 @@ class LangGraphOrchestrator:
         )
 
         # v8.2: 防沙箱死亡螺旋流程（所有模板都接入安全壳保护）
-        # CCF-A 模板: iterative_solver → coder_agent → ast_audit → sandbox → reviewer → writer
+        # CCF-A 模板: iterative_solver → coder_agent → ast_audit → sandbox → reviewer → figure → writer
         # 非 CCF-A 模板: iterative_solver → ast_audit → sandbox → figure → writer
         builder.add_conditional_edges(
             "iterative_solver",
@@ -1720,7 +1720,7 @@ class LangGraphOrchestrator:
             self._route_after_reviewer,
             {
                 "coder_agent": "coder_agent_node",
-                "writer": "writer",
+                "figure": "figure",
             },
         )
 
