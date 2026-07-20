@@ -23,9 +23,10 @@ const AGENT_FLOW: string[][] = [
   ['analyzer_agent'],
   ['data_agent', 'research_agent'],
   ['innovation_agent'],
-  ['modeler_agent', 'algorithm_engineer_agent'],
+  ['modeler_agent', 'algorithm_engineer_agent', 'financial_analyst_agent'],
   ['solver_agent'],
   ['experimentation_agent'],
+  ['figure_agent'],
   ['writer_agent'],
   ['peer_review_agent'],
   ['summary_agent'],
@@ -40,10 +41,13 @@ const EDGES: Edge[] = [
   { from: 'research_agent', to: 'innovation_agent' },
   { from: 'innovation_agent', to: 'modeler_agent' },
   { from: 'innovation_agent', to: 'algorithm_engineer_agent' },
+  { from: 'innovation_agent', to: 'financial_analyst_agent' },
   { from: 'modeler_agent', to: 'solver_agent' },
   { from: 'algorithm_engineer_agent', to: 'solver_agent' },
+  { from: 'financial_analyst_agent', to: 'solver_agent' },
   { from: 'solver_agent', to: 'experimentation_agent' },
-  { from: 'experimentation_agent', to: 'writer_agent' },
+  { from: 'experimentation_agent', to: 'figure_agent' },
+  { from: 'figure_agent', to: 'writer_agent' },
   { from: 'writer_agent', to: 'peer_review_agent' },
   { from: 'peer_review_agent', to: 'summary_agent' },
 ]
@@ -111,7 +115,7 @@ export default function AgentTopology({ activeAgent, className }: AgentTopologyP
   return (
     <div className={cn('rounded-xl border border-border bg-card/50 backdrop-blur p-4 overflow-x-auto', className)}>
       <h3 className="text-sm font-semibold text-foreground mb-3">Agent 执行拓扑</h3>
-      <svg viewBox="0 0 600 520" className="w-full max-w-[600px] mx-auto">
+      <svg viewBox="0 0 600 600" className="w-full max-w-[600px] mx-auto">
         {/* Edges */}
         {EDGES.map((edge, i) => {
           const from = nodeMap.get(edge.from)
