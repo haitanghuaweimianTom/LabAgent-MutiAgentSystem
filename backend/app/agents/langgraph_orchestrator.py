@@ -966,6 +966,35 @@ class LangGraphOrchestrator:
         # 跳过 coder_agent（组件化注入）和 reviewer_reflection（越狱熔断）
         return "ast_audit"
 
+    def _route_after_solver(self, state: TaskState) -> str:
+        """统一路由：iterative_solver 完成后决定下一步。
+
+        合并原 _route_solver（重试/升级/中止）和 _route_to_sandbox_or_writer（安全壳流程）。
+
+        决策逻辑：
+        1. 检查求解结果：成功 → 进入安全壳流程；失败 → 重试/升级/中止
+        2. 安全壳流程：根据模板类型选择 CCF-A 或非 CCF-A 路径
+        """
+        attempts = state.get("solver_attempts", [])
+        escalation = state.get("escalation_count", 0)
+
+        # 检查是否有求解结果
+        if not attempts:
+            return "retry"
+
+        last = attempts[-1]
+        if last.get("execution_success"):
+            # 求解成功 → 进入安全壳流程
+            return self._route_to_sandbox_or_writer(state)
+
+        # 求解失败 → 检查是否达到重试上限
+        if len(attempts) >= self.cfg.max_solver_iterations:
+            if escalation >= self.cfg.max_solver_escalations:
+                return "abort"
+            return "escalate"
+
+        return "retry"
+
     # ------------------------------------------------------------------
     # v8.2: 防沙箱死亡螺旋 — 三机制节点
     # ------------------------------------------------------------------
@@ -1534,10 +1563,7 @@ class LangGraphOrchestrator:
         builder.add_node("requirement_decomposition", self._node_requirement_decomposition)
         builder.add_node("preflight_decision", self._node_preflight_decision)
         builder.add_node("analyzer", self._node_analyzer)
-        builder.add_node("parallel_analysis", self._node_parallel_analysis)  # v7.1: 并行分析
-        builder.add_node("data", self._node_data)
-        builder.add_node("research", self._node_research)
-        builder.add_node("innovation", self._node_innovation)
+        builder.add_node("parallel_analysis", self._node_parallel_analysis)  # v7.1: 并行分析（内部调用 data/research/innovation）
         builder.add_node("discuss_approach", self._node_discuss_approach)
         builder.add_node("modeler", self._node_modeler)
         builder.add_node("algorithm_engineer", self._node_algorithm_engineer)
@@ -1558,6 +1584,7 @@ class LangGraphOrchestrator:
         builder.add_node("ast_audit_node", self._node_ast_audit)
         builder.add_node("sandbox_execution_node", self._node_sandbox_execution)
         builder.add_node("reviewer_reflection_node", self._node_reviewer_reflection)
+        # 注意：data、research、innovation 节点已移除（由 parallel_analysis 内部并行调用）
 
         # 入口
         builder.set_entry_point("requirement_decomposition")
@@ -1591,35 +1618,23 @@ class LangGraphOrchestrator:
             },
         )
 
+        # v8.2: 统一路由 — iterative_solver 完成后决定下一步
+        # 合并原 _route_solver（重试/升级）和 _route_to_sandbox_or_writer（安全壳流程）
         builder.add_conditional_edges(
             "iterative_solver",
-            self._route_solver,
+            self._route_after_solver,
             {
-                "success": "figure",
                 "retry": "iterative_solver",
                 "escalate": "cannot_solve",
                 "abort": "cannot_solve",
-            },
-        )
-
-        # 条件边：research → innovation（始终经过创新分析）
-        builder.add_edge("research", "innovation")
-
-        # 条件边：innovation 后决定（继承 research 的路由逻辑）
-        builder.add_conditional_edges(
-            "innovation",
-            self._route_after_research,
-            {
-                "discuss": "discuss_approach",
-                "modeler": "modeler",
-                "algorithm_engineer": "algorithm_engineer",
-                "financial_analyst": "financial_analyst",
-                "writer": "writer",
+                "coder_agent": "coder_agent_node",
+                "ast_audit": "ast_audit_node",
             },
         )
 
         # 条件边：analyzer → v7.1 并行分析（data+research+innovation 同时执行）
         # v7.2 fix: skip_to_modeling 也走 parallel_analysis 节点（它会自动选择正确的建模 Agent）
+        # 注意：data、research、innovation 不再作为独立图节点，由 parallel_analysis 内部并行调用
         builder.add_conditional_edges(
             "analyzer",
             self._route_after_analyzer_parallel,
@@ -1639,19 +1654,6 @@ class LangGraphOrchestrator:
                 "financial_analyst": "financial_analyst",
                 "writer": "writer",
                 "discuss": "discuss_approach",
-            },
-        )
-
-        # 条件边：data → 按 problem_type 决定
-        builder.add_conditional_edges(
-            "data",
-            self._route_after_data,
-            {
-                "research": "research",
-                "modeler": "modeler",
-                "algorithm_engineer": "algorithm_engineer",
-                "financial_analyst": "financial_analyst",
-                "writer": "writer",
             },
         )
 
@@ -1697,14 +1699,7 @@ class LangGraphOrchestrator:
         # v8.2: 防沙箱死亡螺旋流程（所有模板都接入安全壳保护）
         # CCF-A 模板: iterative_solver → coder_agent → ast_audit → sandbox → reviewer → figure → writer
         # 非 CCF-A 模板: iterative_solver → ast_audit → sandbox → figure → writer
-        builder.add_conditional_edges(
-            "iterative_solver",
-            self._route_to_sandbox_or_writer,
-            {
-                "coder_agent": "coder_agent_node",   # CCF-A: 组件化注入
-                "ast_audit": "ast_audit_node",       # 非 CCF-A: 直接进入安全壳
-            },
-        )
+        # 注：iterative_solver 的路由已在上方统一定义（_route_after_solver）
         builder.add_edge("coder_agent_node", "ast_audit_node")  # CCF-A: coder → ast_audit
         builder.add_edge("ast_audit_node", "sandbox_execution_node")  # 所有模板: ast_audit → sandbox
         builder.add_conditional_edges(
