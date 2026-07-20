@@ -10,7 +10,8 @@ export const metadata: Metadata = {
 
 async function fetchInitialInfo() {
   try {
-    const res = await fetch('http://localhost:8001/api/v1/info', {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
+    const res = await fetch(`${apiUrl}/api/v1/info`, {
       cache: 'no-store',
     });
     if (res.ok) return await res.json();

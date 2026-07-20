@@ -1585,6 +1585,8 @@ async def export_task_output(req: dict):
     if not meta:
         raise HTTPException(status_code=404, detail="任务元数据不存在")
 
+    project_name = meta.get("project_name") or task_id
+
     # 获取问题文本，提取赛题名称作为文件夹名
     problem_text = meta.get("problem_text", "")
     # 从问题文本中提取标题（取前80字符，移除特殊字符）

@@ -3892,8 +3892,8 @@ print(json.dumps({{"accuracy": round(acc, 4)}}))
             room = get_chat_room(task_id)
             if room:
                 room.post(sender, message, "broadcast")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"[LangGraph:{task_id}] ChatRoom 消息发送失败: {e}")
 
     def _save_output_files(
         self,
