@@ -664,3 +664,7 @@ def execute_code_sandboxed(
     )
     sandbox = CodeSandbox(config)
     return sandbox.execute(code)
+
+
+# 兼容别名：orchestrator 中导入 execute_code
+execute_code = execute_code_sandboxed
