@@ -71,8 +71,32 @@
       "created_at": 1782967923,
       "updated_at": 1784185681,
       "_version": 2
+    },
+    {
+      "id": "1e28239f-0b28-4be9-8613-67d7a17b2080",
+      "name": "火山引擎",
+      "type": "openai",
+      "category": "custom",
+      "meta": {
+        "api_format": "openai_chat"
+      },
+      "api_key": "ark-8b02e574-b0dc-49a3-8c58-56dee78fb5a1-04335",
+      "api_host": "https://ark.cn-beijing.volces.com/api/compatible",
+      "models": [
+        {
+          "name": "glm-5-2-260617",
+          "enabled": true
+        }
+      ],
+      "enabled": true,
+      "icon": "Claude",
+      "icon_color": "#d97706",
+      "notes": "从 ccswitch 自动同步",
+      "created_at": 1784190883,
+      "updated_at": 1784190883,
+      "_version": 2
     }
   ],
-  "default_provider": "kimi",
+  "default_provider": "1e28239f-0b28-4be9-8613-67d7a17b2080",
   "_version": 2
 }
