@@ -10,7 +10,7 @@ import tempfile
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Dict, List, Optional, TypedDict
+from typing import Any, Dict, List, Optional, Tuple, TypedDict
 import httpx
 
 # Token 预算与 Agent 独立记忆
@@ -18,6 +18,21 @@ from ..core.token_budget import get_token_budget_manager
 from ..core.agent_memory import get_agent_profile
 from ..core.llm import get_unified_llm_client
 from ..core.security import wrap_user_content
+
+# 从独立模块导入
+from .claude_code import (
+    find_claude_code,
+    call_claude_code,
+    call_claude_code_direct,
+    call_claude_code_print,
+    call_claude_code_agent,
+)
+from .mcp_tools import (
+    MCP_SERVER_MAP,
+    MCP_TOOL_SCHEMAS,
+    build_mcp_tool_def,
+    get_tool_schemas_for_agent,
+)
 
 
 class ToolDef(TypedDict):
@@ -33,220 +48,6 @@ class ToolCall(TypedDict):
 
 
 logger = logging.getLogger(__name__)
-
-# ===== Claude Code 后端 =====
-_CLAUDE_CODE_PATH: Optional[str] = None
-
-
-def _find_claude_code() -> Optional[str]:
-    """自动搜索 Claude Code CLI 路径"""
-    global _CLAUDE_CODE_PATH
-    if _CLAUDE_CODE_PATH is not None:
-        return _CLAUDE_CODE_PATH if _CLAUDE_CODE_PATH else None
-
-    # 1. 用户配置的路径
-    from ..config import get_settings
-    settings = get_settings()
-    if settings.claude_code_path:
-        if os.path.isfile(settings.claude_code_path):
-            _CLAUDE_CODE_PATH = settings.claude_code_path
-            return _CLAUDE_CODE_PATH
-        # 可能是命令名，PATH 中搜索
-        found = shutil.which(settings.claude_code_path)
-        if found:
-            _CLAUDE_CODE_PATH = found
-            return _CLAUDE_CODE_PATH
-
-    # 2. PATH 中搜索
-    found = shutil.which("claude-code") or shutil.which("claude")
-    if found:
-        _CLAUDE_CODE_PATH = found
-        return _CLAUDE_CODE_PATH
-
-    # 3. 环境变量 CLAUDE_CODE_PATH（新增，避免绑定特定安装路径）
-    env_path = os.environ.get("CLAUDE_CODE_PATH", "")
-    if env_path and os.path.isfile(env_path):
-        _CLAUDE_CODE_PATH = env_path
-        return _CLAUDE_CODE_PATH
-
-    _CLAUDE_CODE_PATH = ""  # 找不到
-    return None
-
-
-# ===== MCP 工具注册表 =====
-# name -> MCP服务器ID（与CherryStudio一致）
-MCP_SERVER_MAP: Dict[str, str] = {
-    # web_search: "mcp__bingCnMcpServer__bingSearch",
-    "bing_search": "bing_search",
-    "web_search": "web_search",
-    "paper_search": "paper_search",
-    "python_execute": "python_execute",
-    "sequentialthinking": "sequentialthinking",
-}
-
-
-def _build_mcp_tools_env(mcp_tool_names: List[str]) -> Dict[str, str]:
-    """为 Claude Code subprocess 构建 MCP 工具环境变量
-
-    Cherry Claw agent 将允许的工具列表通过 MCP servers 配置关联到各MCP服务器。
-    这里我们用 --print 模式（简短任务）跳过 MCP，或者用完整 MCP 模式。
-    """
-    return {}
-
-
-def _call_claude_code_direct(
-    prompt: str,
-    model: str = "sonnet",
-    system_prompt: Optional[str] = None,
-    timeout: int = 300,
-    task_dir: Optional[str] = None,
-) -> str:
-    """
-    【核心】通过 Claude Code CLI 实现全自动编程。
-
-    这个函数是关键桥梁：
-    - 接收一个完整的编程任务描述（含问题背景、数据文件路径、模型信息）
-    - 通过 claude -p 让 Claude Code 在 task_dir 下写 .py 文件并执行
-    - 返回 JSON 格式的执行结果
-
-    不会让 Claude 生成代码文本后由 Python 重新执行——全程由 Claude CLI 闭环完成。
-    """
-    return _call_claude_code_base(
-        prompt=prompt,
-        model=model,
-        system_prompt=system_prompt,
-        timeout=timeout,
-        task_dir=task_dir,
-        mode="direct",
-    )
-
-
-def _call_claude_code_print(
-    prompt: str,
-    model: str = "sonnet",
-    system_prompt: Optional[str] = None,
-    timeout: int = 120,
-    task_dir: Optional[str] = None,
-) -> str:
-    """
-    通过 Claude Code CLI 的 --print 模式（-p）调用。
-    - 正确选项: --print / -p, --model, --output-format, --input-format
-    - 无效选项（已移除）: --max-tokens, --temperature, --no-input
-    - 提示通过 stdin 传入
-    """
-    return _call_claude_code_base(
-        prompt=prompt,
-        model=model,
-        system_prompt=system_prompt,
-        timeout=timeout,
-        task_dir=task_dir,
-        mode="print",
-    )
-
-
-def _call_claude_code_agent(
-    prompt: str,
-    model: str = "sonnet",
-    system_prompt: Optional[str] = None,
-    timeout: int = 300,
-    task_dir: Optional[str] = None,
-    mcp_config_path: Optional[str] = None,
-    allowed_tools: Optional[List[str]] = None,
-) -> str:
-    """
-    通过 Claude Code CLI 的 --agent 模式调用。
-    --agent 模式支持 MCP 工具，是完整的 coding agent。
-    """
-    return _call_claude_code_base(
-        prompt=prompt,
-        model=model,
-        system_prompt=system_prompt,
-        timeout=timeout,
-        task_dir=task_dir,
-        mode="agent",
-        mcp_config_path=mcp_config_path,
-        allowed_tools=allowed_tools,
-    )
-
-
-def _call_claude_code_base(
-    prompt: str,
-    model: str = "sonnet",
-    system_prompt: Optional[str] = None,
-    timeout: int = 300,
-    task_dir: Optional[str] = None,
-    mode: str = "print",
-    mcp_config_path: Optional[str] = None,
-    allowed_tools: Optional[List[str]] = None,
-) -> str:
-    """Claude Code CLI 调用的公共实现"""
-    claude_path = _find_claude_code()
-    if not claude_path:
-        raise RuntimeError("Claude Code CLI 未找到，请确保已安装 Claude Code 并添加到 PATH")
-
-    cmd = [claude_path]
-
-    if mode == "agent":
-        cmd.append("--agent")
-    else:
-        cmd.extend(["-p", "--input-format", "text"])
-
-    cmd.extend(["--model", model, "--output-format", "json"])
-
-    if mcp_config_path:
-        cmd.extend(["--mcp-config", mcp_config_path])
-    if allowed_tools:
-        cmd.extend(["--allowedTools", ",".join(allowed_tools)])
-
-    env = os.environ.copy()
-    full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
-
-    try:
-        cwd = task_dir if task_dir and os.path.isdir(task_dir) else os.getcwd()
-        proc = subprocess.Popen(
-            cmd,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            cwd=cwd,
-            env=env,
-        )
-        stdout, stderr = proc.communicate(
-            input=full_prompt.encode("utf-8"),
-            timeout=timeout,
-        )
-        stdout_text = stdout.decode("utf-8", errors="replace").strip()
-        stderr_text = stderr.decode("utf-8", errors="replace").strip()
-
-        if proc.returncode != 0:
-            logger.warning(f"Claude Code {mode} 失败 (code={proc.returncode}): {stderr_text[:300]}")
-            raise RuntimeError(f"Claude Code {mode} 调用失败: {stderr_text[:500]}")
-
-        raw = stdout_text.strip()
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError:
-            return raw
-
-        result_text = data.get("result", "")
-        if isinstance(result_text, str):
-            result_text = result_text.strip()
-            if result_text.startswith("```"):
-                lines = result_text.splitlines()
-                if lines:
-                    first = lines[0]
-                    if first.startswith("```"):
-                        lines = lines[1:]
-                    if lines and lines[-1].strip() == "```":
-                        lines = lines[:-1]
-                result_text = "\n".join(lines).strip()
-            return result_text
-        return str(result_text)
-
-    except subprocess.TimeoutExpired:
-        raise RuntimeError(f"Claude Code {mode} 调用超时（{timeout}秒）")
-    except FileNotFoundError:
-        raise RuntimeError("Claude Code CLI 未找到")
 
 
 class PausedException(Exception):
@@ -411,133 +212,10 @@ class BaseAgent(ABC):
 
     def _build_mcp_tool_def(self, tool_name: str) -> Optional[ToolDef]:
         """根据 MCP 工具名称构建 ToolDef（供 LLM 使用）。"""
-        # 工具定义映射：名称 -> (描述, 参数schema)
-        MCP_TOOL_SCHEMAS: Dict[str, Tuple[str, Dict[str, Any]]] = {
-            "web_search": (
-                "搜索网页获取实时信息。支持 DuckDuckGo/Brave 搜索。",
-                {
-                    "type": "object",
-                    "properties": {
-                        "query": {"type": "string", "description": "搜索关键词"},
-                    },
-                    "required": ["query"],
-                }
-            ),
-            "paper_search": (
-                "搜索学术论文。支持 Google Scholar, ArXiv, PubMed, JSTOR。",
-                {
-                    "type": "object",
-                    "properties": {
-                        "query": {"type": "string", "description": "搜索关键词"},
-                        "limit": {"type": "integer", "description": "返回结果数量", "default": 5},
-                    },
-                    "required": ["query"],
-                }
-            ),
-            "arxiv_search": (
-                "搜索 arXiv 论文。",
-                {
-                    "type": "object",
-                    "properties": {
-                        "query": {"type": "string", "description": "搜索关键词"},
-                        "max_results": {"type": "integer", "description": "最大结果数", "default": 5},
-                    },
-                    "required": ["query"],
-                }
-            ),
-            "arxiv_download": (
-                "下载 arXiv 论文 PDF。",
-                {
-                    "type": "object",
-                    "properties": {
-                        "paper_id": {"type": "string", "description": "arXiv 论文 ID (如 2401.12345)"},
-                    },
-                    "required": ["paper_id"],
-                }
-            ),
-            "arxiv_abstract": (
-                "获取 arXiv 论文摘要。",
-                {
-                    "type": "object",
-                    "properties": {
-                        "paper_id": {"type": "string", "description": "arXiv 论文 ID"},
-                    },
-                    "required": ["paper_id"],
-                }
-            ),
-            "arxiv_citation": (
-                "获取 arXiv 论文引用信息。",
-                {
-                    "type": "object",
-                    "properties": {
-                        "paper_id": {"type": "string", "description": "arXiv 论文 ID"},
-                    },
-                    "required": ["paper_id"],
-                }
-            ),
-            "scholar_search": (
-                "搜索 Google Scholar 学术论文。",
-                {
-                    "type": "object",
-                    "properties": {
-                        "query": {"type": "string", "description": "搜索关键词"},
-                    },
-                    "required": ["query"],
-                }
-            ),
-            "file_read": (
-                "读取本地文件内容。",
-                {
-                    "type": "object",
-                    "properties": {
-                        "path": {"type": "string", "description": "文件路径"},
-                    },
-                    "required": ["path"],
-                }
-            ),
-            "file_write": (
-                "写入内容到本地文件。",
-                {
-                    "type": "object",
-                    "properties": {
-                        "path": {"type": "string", "description": "文件路径"},
-                        "content": {"type": "string", "description": "文件内容"},
-                    },
-                    "required": ["path", "content"],
-                }
-            ),
-            "code_execute": (
-                "执行代码片段。",
-                {
-                    "type": "object",
-                    "properties": {
-                        "code": {"type": "string", "description": "代码内容"},
-                        "language": {"type": "string", "description": "编程语言", "default": "python"},
-                    },
-                    "required": ["code"],
-                }
-            ),
-            "latex_compile": (
-                "编译 LaTeX 文档。",
-                {
-                    "type": "object",
-                    "properties": {
-                        "path": {"type": "string", "description": "LaTeX 文件路径"},
-                    },
-                    "required": ["path"],
-                }
-            ),
-        }
-
-        if tool_name not in MCP_TOOL_SCHEMAS:
-            return None
-
-        desc, params = MCP_TOOL_SCHEMAS[tool_name]
-        return {
-            "name": tool_name,
-            "description": desc,
-            "parameters": params,
-        }
+        tool_def = build_mcp_tool_def(tool_name)
+        if tool_def:
+            return ToolDef(tool_def)
+        return None
 
     def _resolve_provider_config(self) -> None:
         """从当前指定的 Provider（或全局默认）解析 API 配置"""
@@ -665,7 +343,7 @@ class BaseAgent(ABC):
         output_dir = workspace_dir or str(get_output_dir())
 
         # ===== 判断使用哪个后端 =====
-        cli_available = _find_claude_code() is not None if prefer_cli else False
+        cli_available = find_claude_code() is not None if prefer_cli else False
         backend = "claude_cli" if cli_available else "http_api"
         logger.info(f"[{self.name}] 全自动编程后端: {backend}, 工作目录: {output_dir}")
 
@@ -674,7 +352,7 @@ class BaseAgent(ABC):
             claude_text = ""
             try:
                 claude_text = await asyncio.to_thread(
-                    _call_claude_code_direct,
+                    call_claude_code_direct,
                     prompt=task_description,
                     model=self._claude_model,
                     system_prompt=system_instruction,
@@ -2190,7 +1868,7 @@ class BaseAgent(ABC):
         if use_mcp:
             try:
                 claude_output = await asyncio.to_thread(
-                    _call_claude_code_agent,
+                    call_claude_code_agent,
                     prompt=combined_user,
                     model=self._claude_model,
                     system_prompt=system_prompt,
@@ -2208,7 +1886,7 @@ class BaseAgent(ABC):
         if claude_output is None:
             try:
                 claude_output = await asyncio.to_thread(
-                    _call_claude_code_print,
+                    call_claude_code_print,
                     prompt=combined_user,
                     model=self._claude_model,
                     system_prompt=system_prompt,
