@@ -1,0 +1,17 @@
+[lint]
+select = ["F", "E"]
+ignore = [
+    "E401",   # multiple imports on one line
+    "E402",   # module-level import not at top of file
+    "E501",   # line too long
+    "E701",   # multiple statements on one line (colon)
+    "E712",   # true-false-comparison
+    "E731",   # lambda-assignment
+    "E741",   # ambiguous variable name
+    "E722",   # bare except
+    "F401",   # unused import
+    "F403",   # wildcard import
+    "F541",   # f-string-missing-placeholders
+    "F811",   # redefined-while-unused
+    "F841",   # unused-variable
+]

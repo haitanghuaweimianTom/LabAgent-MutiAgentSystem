@@ -199,7 +199,7 @@ def _atomic_write_json(path: Path, data: Dict[str, Any]) -> None:
             f.write(json.dumps(data, ensure_ascii=False, indent=2))
         tmp.replace(path)
     except Exception as e:
-        logger.error(f"保存任务数据失败 {task_id}: {e}")
+        logger.error(f"保存任务数据失败 {path}: {e}")
         # 失败清理
         if tmp.exists():
             try:

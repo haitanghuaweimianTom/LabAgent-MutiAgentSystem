@@ -155,7 +155,7 @@ class InnovationAgent(BaseAgent):
         # LLM 失败时的 fallback
         return self._fallback_result(
             project_name=project_name,
-            reason=f"LLM 分析失败: {str(e)[:100]}" if 'e' in dir() else "LLM 分析失败",
+            reason="LLM 分析失败",
             papers=papers,
             methods=methods,
             problem_type=problem_type,

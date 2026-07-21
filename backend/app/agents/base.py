@@ -13,6 +13,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, TypedDict
 import httpx
 
+# 导入 demo_code_templates 中定义的常量
+from .demo_code_templates import DEMO_KEYWORD_TO_TEMPLATE, DEMO_CODE_TEMPLATES
+
 # Token 预算与 Agent 独立记忆
 from ..core.token_budget import get_token_budget_manager
 from ..core.agent_memory import get_agent_profile
@@ -487,6 +490,7 @@ class BaseAgent(ABC):
         4. 如果执行失败，最多重试 3 次（每次将错误信息反馈给 LLM）
         """
         import asyncio
+        from ..core.paths import get_output_dir
 
         output_dir = workspace_dir or str(get_output_dir())
         code_dir = os.path.join(output_dir, "code")
@@ -520,6 +524,7 @@ class BaseAgent(ABC):
                 parsed = self.extract_json(content) or {}
                 if not parsed:
                     # 尝试直接提取代码块
+                    from .solver_agent import _extract_code_from_response
                     parsed = {"code": _extract_code_from_response(content) or ""}
 
                 code = parsed.get("code", "")

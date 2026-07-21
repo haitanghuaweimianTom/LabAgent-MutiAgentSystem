@@ -22,6 +22,7 @@ v3.3 通用化（CCF-A 论文工厂 Phase 1C）：
 import json
 import logging
 import os
+import random
 import re
 import subprocess
 import sys

@@ -2,8 +2,10 @@
 多智能体协作论文生产系统 - 配置管理
 """
 
+import json
 import os
-from typing import List, Optional
+from typing import Any, List, Optional
+from pydantic import model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -14,6 +16,20 @@ class Settings(BaseSettings):
 
     api_prefix: str = "/api/v1"
     cors_origins: List[str] = ["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000"]
+
+    @model_validator(mode="before")
+    @classmethod
+    def parse_cors_origins(cls, data: Any) -> Any:
+        if isinstance(data, dict) and "cors_origins" in data:
+            v = data["cors_origins"]
+            if isinstance(v, str):
+                # 支持 JSON 数组格式 ["http://...", "..."]
+                if v.startswith("["):
+                    data["cors_origins"] = json.loads(v)
+                else:
+                    # 支持逗号分隔格式
+                    data["cors_origins"] = [origin.strip() for origin in v.split(",") if origin.strip()]
+        return data
 
     default_model: str = ""
     fallback_model: str = ""
