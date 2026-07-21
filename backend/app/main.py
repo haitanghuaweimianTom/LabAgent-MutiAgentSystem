@@ -177,11 +177,12 @@ async def health():
 @app.get("/api/v1/info")
 async def info():
     from . import agents  # noqa: F401 确保所有 agent 模块被加载并注册到 AgentFactory
-    from .agents.base import _find_claude_code, AgentFactory
+    from .agents.claude_code import find_claude_code
+    from .agents.base import AgentFactory
     from .core.task_persistence import list_all_tasks
     from .core.knowledge_manager import get_knowledge_manager
     s = get_settings()
-    claude_code_path = _find_claude_code()
+    claude_code_path = find_claude_code()
     default_p = get_default_provider()
 
     # 任务统计
@@ -300,14 +301,14 @@ async def get_runtime_settings():
                 "model": s.ollama_model,
             },
             "claude_cli": {
-                "available": _find_claude_code() is not None,
+                "available": find_claude_code() is not None,
                 "model": s.claude_model,
             },
         },
         "default_llm_provider": s.default_llm_provider,
     }
 
-from .agents.base import _find_claude_code
+from .agents.claude_code import find_claude_code
 
 @app.post("/api/v1/settings", dependencies=[Depends(require_api_key)])
 async def update_runtime_settings(body: SettingsUpdate):
