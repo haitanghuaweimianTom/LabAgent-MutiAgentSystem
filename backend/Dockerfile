@@ -38,11 +38,11 @@ RUN mkdir -p /app/backend/data/uploads \
              /app/outputs/_global/figures
 
 # 暴露端口
-EXPOSE 8000
+EXPOSE 8001
 
 # 设置环境变量
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
 
 # 启动命令
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]

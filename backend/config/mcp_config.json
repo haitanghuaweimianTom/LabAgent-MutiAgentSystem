@@ -3,7 +3,7 @@
     "web_search": {
       "command": "python",
       "args": [
-        "/home/tomgame/projects/MathModel-MutiAgentSystem/backend/app/mcp/web_search_server.py"
+        "app/mcp/web_search_server.py"
       ],
       "env": {}
     },

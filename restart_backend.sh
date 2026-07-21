@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 数学建模多Agent系统 - 后端重启脚本（v5.4.0）
+# 数学建模多Agent系统 - 后端重启脚本（v8.2.0）
 # 设计原则：无 --reload（避免 reload 期间请求悬挂导致前端假死）
 # 用法：./restart_backend.sh
 # 行为：
