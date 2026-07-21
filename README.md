@@ -15,6 +15,7 @@
 - [Anti-Death-Spiral Mechanisms](#anti-death-spiral-mechanisms)
 - [API Reference](#api-reference)
 - [Configuration](#configuration)
+- [Development](#development)
 - [Troubleshooting](#troubleshooting)
 - [Version History](#version-history)
 
@@ -44,17 +45,7 @@ LabAgent automates the entire academic paper production pipeline:
 | **Progressive Jailbreak Circuit Breaker** | Dynamic mode switching: restricted → jailbreak based on metrics trend |
 | **SHA-256 Data Provenance** | Full-chain hash tracking for tamper-proof results |
 | **AST Anti-Fabrication** | Detect hardcoded metrics (`accuracy = 0.95`), block fake outputs |
-
-### What's New in v8.0
-
-| Feature | Description |
-|---------|-------------|
-| **AST Code Audit** | Detect hardcoded metrics before code execution |
-| **Reference Verification** | Verify DOI/arXiv IDs via CrossRef/arXiv APIs |
-| **Symbolic Auditor** | Validate table sums, percentage totals, metric ranges |
-| **Debugger Agent** | Intelligent error analysis with root cause identification |
-| **Data Provenance** | SHA-256 hashing, execution logs, reproducibility packages |
-| **Compliance Agent** | Detect investment advice language, auto-generate disclaimers |
+| **Code Quality Fixes** | Fixed debug endpoint, unified versions, added CI/CD, rate limiting |
 
 ---
 
@@ -62,8 +53,8 @@ LabAgent automates the entire academic paper production pipeline:
 
 ### Prerequisites
 
-- Python 3.9+
-- Node.js 18+ (for Web UI)
+- Python 3.11+
+- Node.js 20+ (for Web UI)
 - An LLM API key (OpenAI, Anthropic, Kimi, DeepSeek, or any compatible provider)
 
 ### 1. Install Dependencies
@@ -101,7 +92,7 @@ ANTHROPIC_AUTH_TOKEN=sk-kimi-...
 ```bash
 # Terminal 1: Backend
 cd backend
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8001
 
 # Terminal 2: Frontend
 cd frontend
@@ -307,7 +298,7 @@ finally:
 
 ## API Reference
 
-Base URL: `http://localhost:8000/api/v1`
+Base URL: `http://localhost:8001/api/v1`
 
 ### Task Management
 
@@ -327,7 +318,7 @@ Base URL: `http://localhost:8000/api/v1`
 ### Submit Task Example
 
 ```bash
-curl -X POST http://localhost:8000/api/v1/tasks/submit \
+curl -X POST http://localhost:8001/api/v1/tasks/submit \
   -H "Content-Type: application/json" \
   -d '{
     "problem_text": "Predict GDP for 2030 based on 2024 data...",
@@ -370,6 +361,56 @@ docker compose up -d    # Start backend + Redis
 
 ---
 
+## Development
+
+### Project Structure
+
+```
+├── backend/                 # FastAPI backend
+│   ├── app/
+│   │   ├── agents/          # Agent implementations
+│   │   │   ├── base.py      # BaseAgent class
+│   │   │   ├── claude_code.py # Claude Code CLI integration
+│   │   │   └── mcp_tools.py # MCP tool definitions
+│   │   ├── core/            # Core modules
+│   │   ├── routers/         # API routes
+│   │   └── services/        # Business logic
+│   └── tests/               # Backend tests
+├── frontend/                # Next.js frontend
+├── config/                  # Configuration files
+├── scripts/                 # Utility scripts
+├── .github/workflows/       # CI/CD pipeline
+├── CONTRIBUTING.md          # Contribution guidelines
+├── CHANGELOG.md             # Version history
+└── requirements-dev.txt     # Development dependencies
+```
+
+### Running Tests
+
+```bash
+# Backend
+cd backend
+python -m pytest tests/ -v
+
+# Frontend
+cd frontend
+npm test
+```
+
+### Code Quality
+
+```bash
+# Linting
+ruff check backend/
+ruff format backend/
+
+# Pre-commit hooks
+pre-commit install
+pre-commit run --all-files
+```
+
+---
+
 ## Troubleshooting
 
 ### Task Stuck on Solver
@@ -399,6 +440,8 @@ docker compose up -d    # Start backend + Redis
 - Progressive jailbreak circuit breaker: dynamic mode switching based on metrics trend
 - Dual-responsibility AST audit: anti-fabrication + anti-crash in single pass
 - Project renamed to **LabAgent**
+- Code quality: fixed debug endpoint, unified versions, added CI/CD, rate limiting
+- Refactored BaseAgent: extracted claude_code.py and mcp_tools.py modules
 
 ### v8.0 (2026-07) — Zero-Hallucination Architecture
 - AST code audit for hardcoded metrics detection

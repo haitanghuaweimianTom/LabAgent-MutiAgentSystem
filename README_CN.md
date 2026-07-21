@@ -15,6 +15,7 @@
 - [防死亡螺旋机制](#防死亡螺旋机制)
 - [API 参考](#api-参考)
 - [配置说明](#配置说明)
+- [开发指南](#开发指南)
 - [故障排查](#故障排查)
 - [版本历史](#版本历史)
 
@@ -44,17 +45,7 @@ LabAgent 自动化整个学术论文生产流程：
 | **渐进式越狱熔断** | 动态调整执行模式：restricted → jailbreak，熔断阈值自适应 |
 | **SHA-256 数据溯源** | 全链路数据哈希追踪，确保结果不可篡改 |
 | **AST 防造假** | 检测硬编码指标（`accuracy = 0.95`），拦截伪造输出 |
-
-### v8.0 新特性
-
-| 特性 | 说明 |
-|------|------|
-| **AST 代码审计** | 检测硬编码指标 |
-| **参考文献验真** | 通过 CrossRef/arXiv API 验证 DOI/arXiv ID |
-| **符号审计** | 验证表格加总、百分比、指标范围 |
-| **Debugger Agent** | 智能错误分析 + 根因定位 |
-| **数据溯源** | SHA-256 哈希、执行日志、可复现性包 |
-| **合规审查** | 检测投顾话术，自动生成免责声明 |
+| **代码质量修复** | 修复 debug 端点、统一版本号、添加 CI/CD、速率限制 |
 
 ---
 
@@ -62,8 +53,8 @@ LabAgent 自动化整个学术论文生产流程：
 
 ### 前置条件
 
-- Python 3.9+
-- Node.js 18+（Web UI）
+- Python 3.11+
+- Node.js 20+（Web UI）
 - LLM API Key（OpenAI、Anthropic、Kimi、DeepSeek 或任何兼容 Provider）
 
 ### 1. 安装依赖
@@ -101,7 +92,7 @@ ANTHROPIC_AUTH_TOKEN=sk-kimi-...
 ```bash
 # 终端 1：后端
 cd backend
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8001
 
 # 终端 2：前端
 cd frontend
@@ -307,7 +298,7 @@ finally:
 
 ## API 参考
 
-基础 URL：`http://localhost:8000/api/v1`
+基础 URL：`http://localhost:8001/api/v1`
 
 ### 任务管理
 
@@ -327,7 +318,7 @@ finally:
 ### 提交任务示例
 
 ```bash
-curl -X POST http://localhost:8000/api/v1/tasks/submit \
+curl -X POST http://localhost:8001/api/v1/tasks/submit \
   -H "Content-Type: application/json" \
   -d '{
     "problem_text": "基于 2024 年数据预测 2030 年 GDP...",
@@ -370,6 +361,56 @@ docker compose up -d    # 启动后端 + Redis
 
 ---
 
+## 开发指南
+
+### 项目结构
+
+```
+├── backend/                 # FastAPI 后端
+│   ├── app/
+│   │   ├── agents/          # Agent 实现
+│   │   │   ├── base.py      # BaseAgent 基类
+│   │   │   ├── claude_code.py # Claude Code CLI 集成
+│   │   │   └── mcp_tools.py # MCP 工具定义
+│   │   ├── core/            # 核心模块
+│   │   ├── routers/         # API 路由
+│   │   └── services/        # 业务逻辑
+│   └── tests/               # 后端测试
+├── frontend/                # Next.js 前端
+├── config/                  # 配置文件
+├── scripts/                 # 工具脚本
+├── .github/workflows/       # CI/CD 流水线
+├── CONTRIBUTING.md          # 贡献指南
+├── CHANGELOG.md             # 版本历史
+└── requirements-dev.txt     # 开发依赖
+```
+
+### 运行测试
+
+```bash
+# 后端
+cd backend
+python -m pytest tests/ -v
+
+# 前端
+cd frontend
+npm test
+```
+
+### 代码质量
+
+```bash
+# Linting
+ruff check backend/
+ruff format backend/
+
+# Pre-commit hooks
+pre-commit install
+pre-commit run --all-files
+```
+
+---
+
 ## 故障排查
 
 ### 任务卡在求解器
@@ -399,6 +440,8 @@ docker compose up -d    # 启动后端 + Redis
 - 渐进式越狱熔断：基于指标趋势的动态模式切换
 - AST 双重职责审计：防造假 + 防崩溃一次完成
 - 项目更名为 **LabAgent**
+- 代码质量：修复 debug 端点、统一版本号、添加 CI/CD、速率限制
+- 重构 BaseAgent：提取 claude_code.py 和 mcp_tools.py 模块
 
 ### v8.0（2026-07）— 零幻觉架构
 - AST 代码审计检测硬编码指标
