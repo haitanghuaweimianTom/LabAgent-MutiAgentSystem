@@ -3,7 +3,7 @@
     "web_search": {
       "command": "python",
       "args": [
-        "/home/tomgame/projects/MathModel-MutiAgentSystem/backend/app/mcp/web_search_server.py"
+        "backend/app/mcp/web_search_server.py"
       ],
       "env": {}
     },
@@ -18,7 +18,7 @@
       "env": {}
     },
     "arxiv_server": {
-      "command": "/home/tomgame/.local/bin/uvx",
+      "command": "uvx",
       "args": [
         "--from",
         "arxiv-mcp-server",

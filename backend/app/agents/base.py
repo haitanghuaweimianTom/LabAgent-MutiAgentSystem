@@ -111,76 +111,14 @@ def _call_claude_code_direct(
 
     不会让 Claude 生成代码文本后由 Python 重新执行——全程由 Claude CLI 闭环完成。
     """
-    claude_path = _find_claude_code()
-    if not claude_path:
-        raise RuntimeError("Claude Code CLI 未找到，请确保已安装 Claude Code 并添加到 PATH")
-
-    cmd = [
-        claude_path,
-        "-p",
-        "--model", model,
-        "--output-format", "json",
-        "--input-format", "text",
-    ]
-
-    env = os.environ.copy()
-
-    # 组合 prompt（含 system prompt）
-    full_prompt = prompt
-    if system_prompt:
-        full_prompt = f"{system_prompt}\n\n{prompt}"
-
-    try:
-        cwd = task_dir if task_dir and os.path.isdir(task_dir) else os.getcwd()
-
-        # 使用 Popen + communicate() 强制 UTF-8，解决 Windows console GBK 乱码问题
-        proc = subprocess.Popen(
-            cmd,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            cwd=cwd,
-            env=env,
-        )
-        stdout, stderr = proc.communicate(
-            input=full_prompt.encode("utf-8"),
-            timeout=timeout,
-        )
-
-        # 强制 UTF-8 解码（Claude Code 输出 JSON 为 UTF-8）
-        stdout_text = stdout.decode("utf-8", errors="replace").strip()
-        stderr_text = stderr.decode("utf-8", errors="replace").strip()
-
-        if proc.returncode != 0:
-            logger.warning(f"Claude Code direct 调用失败 (code={proc.returncode}): {stderr_text[:300]}")
-            raise RuntimeError(f"Claude Code 调用失败: {stderr_text[:500]}")
-
-        # 解析 JSON 输出，提取 result 字段
-        raw = stdout_text.strip()
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError:
-            return raw
-
-        result_text = data.get("result", "")
-        if isinstance(result_text, str):
-            result_text = result_text.strip()
-            if result_text.startswith("```"):
-                lines = result_text.splitlines()
-                if lines:
-                    first = lines[0]
-                    if first.startswith("```"):
-                        lines = lines[1:]
-                    if lines and lines[-1].strip() == "```":
-                        lines = lines[:-1]
-                result_text = "\n".join(lines).strip()
-            return result_text
-        return str(result_text)
-
-    except subprocess.TimeoutExpired:
-        raise RuntimeError(f"Claude Code 调用超时（{timeout}秒）")
-    except FileNotFoundError:
-        raise RuntimeError("Claude Code CLI 未找到")
+    return _call_claude_code_base(
+        prompt=prompt,
+        model=model,
+        system_prompt=system_prompt,
+        timeout=timeout,
+        task_dir=task_dir,
+        mode="direct",
+    )
 
 
 def _call_claude_code_print(
@@ -196,76 +134,14 @@ def _call_claude_code_print(
     - 无效选项（已移除）: --max-tokens, --temperature, --no-input
     - 提示通过 stdin 传入
     """
-    claude_path = _find_claude_code()
-    if not claude_path:
-        raise RuntimeError("Claude Code CLI 未找到，请确保已安装 Claude Code 并添加到 PATH")
-
-    cmd = [
-        claude_path,
-        "-p",          # --print，非交互模式
-        "--model", model,
-        "--output-format", "json",   # 获取结构化 JSON 输出
-        "--input-format", "text",
-    ]
-
-    env = os.environ.copy()
-
-    # 组合 prompt（含 system prompt）
-    full_prompt = prompt
-    if system_prompt:
-        full_prompt = f"{system_prompt}\n\n{prompt}"
-
-    try:
-        cwd = task_dir if task_dir and os.path.isdir(task_dir) else os.getcwd()
-        proc = subprocess.Popen(
-            cmd,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            cwd=cwd,
-            env=env,
-        )
-        stdout, stderr = proc.communicate(
-            input=full_prompt.encode("utf-8"),
-            timeout=timeout,
-        )
-        stdout_text = stdout.decode("utf-8", errors="replace").strip()
-        stderr_text = stderr.decode("utf-8", errors="replace").strip()
-        if proc.returncode != 0:
-            logger.warning(f"Claude Code -p 失败 (code={proc.returncode}): {stderr_text[:300]}")
-            raise RuntimeError(f"Claude Code 调用失败: {stderr_text[:500]}")
-
-        # 解析 JSON 输出，提取 result 字段
-        raw = stdout_text.strip()
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError:
-            # 不是 JSON，直接返回原始文本
-            return raw
-
-        # JSON 格式: {"result": "```json\n{...}\n```\n", ...}
-        result_text = data.get("result", "")
-        if isinstance(result_text, str):
-            result_text = result_text.strip()
-            # 去掉 markdown code block 包装
-            if result_text.startswith("```"):
-                # 去掉 ```json 或 ```python 等前缀和 ``` 后缀
-                lines = result_text.splitlines()
-                # 去掉第一行（```xxx）和最后一行（```）
-                if lines:
-                    first = lines[0]
-                    if first.startswith("```"):
-                        lines = lines[1:]
-                    if lines and lines[-1].strip() == "```":
-                        lines = lines[:-1]
-                result_text = "\n".join(lines).strip()
-            return result_text
-        return str(result_text)
-
-    except subprocess.TimeoutExpired:
-        raise RuntimeError(f"Claude Code 调用超时（{timeout}秒）")
-    except FileNotFoundError:
-        raise RuntimeError("Claude Code CLI 未找到")
+    return _call_claude_code_base(
+        prompt=prompt,
+        model=model,
+        system_prompt=system_prompt,
+        timeout=timeout,
+        task_dir=task_dir,
+        mode="print",
+    )
 
 
 def _call_claude_code_agent(
@@ -281,30 +157,49 @@ def _call_claude_code_agent(
     通过 Claude Code CLI 的 --agent 模式调用。
     --agent 模式支持 MCP 工具，是完整的 coding agent。
     """
+    return _call_claude_code_base(
+        prompt=prompt,
+        model=model,
+        system_prompt=system_prompt,
+        timeout=timeout,
+        task_dir=task_dir,
+        mode="agent",
+        mcp_config_path=mcp_config_path,
+        allowed_tools=allowed_tools,
+    )
+
+
+def _call_claude_code_base(
+    prompt: str,
+    model: str = "sonnet",
+    system_prompt: Optional[str] = None,
+    timeout: int = 300,
+    task_dir: Optional[str] = None,
+    mode: str = "print",
+    mcp_config_path: Optional[str] = None,
+    allowed_tools: Optional[List[str]] = None,
+) -> str:
+    """Claude Code CLI 调用的公共实现"""
     claude_path = _find_claude_code()
     if not claude_path:
         raise RuntimeError("Claude Code CLI 未找到，请确保已安装 Claude Code 并添加到 PATH")
 
-    cmd = [
-        claude_path,
-        "--agent",
-        "--model", model,
-        "--output-format", "json",   # 结构化输出
-    ]
+    cmd = [claude_path]
 
-    # MCP 配置文件
+    if mode == "agent":
+        cmd.append("--agent")
+    else:
+        cmd.extend(["-p", "--input-format", "text"])
+
+    cmd.extend(["--model", model, "--output-format", "json"])
+
     if mcp_config_path:
         cmd.extend(["--mcp-config", mcp_config_path])
-
-    # 允许的工具
     if allowed_tools:
         cmd.extend(["--allowedTools", ",".join(allowed_tools)])
 
     env = os.environ.copy()
-
-    full_prompt = prompt
-    if system_prompt:
-        full_prompt = f"{system_prompt}\n\n{prompt}"
+    full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
 
     try:
         cwd = task_dir if task_dir and os.path.isdir(task_dir) else os.getcwd()
@@ -322,11 +217,11 @@ def _call_claude_code_agent(
         )
         stdout_text = stdout.decode("utf-8", errors="replace").strip()
         stderr_text = stderr.decode("utf-8", errors="replace").strip()
-        if proc.returncode != 0:
-            logger.warning(f"Claude Code --agent 失败 (code={proc.returncode}): {stderr_text[:300]}")
-            raise RuntimeError(f"Claude Code --agent 调用失败: {stderr_text[:500]}")
 
-        # 解析 JSON 输出
+        if proc.returncode != 0:
+            logger.warning(f"Claude Code {mode} 失败 (code={proc.returncode}): {stderr_text[:300]}")
+            raise RuntimeError(f"Claude Code {mode} 调用失败: {stderr_text[:500]}")
+
         raw = stdout_text.strip()
         try:
             data = json.loads(raw)
@@ -349,7 +244,7 @@ def _call_claude_code_agent(
         return str(result_text)
 
     except subprocess.TimeoutExpired:
-        raise RuntimeError(f"Claude Code --agent 调用超时（{timeout}秒）")
+        raise RuntimeError(f"Claude Code {mode} 调用超时（{timeout}秒）")
     except FileNotFoundError:
         raise RuntimeError("Claude Code CLI 未找到")
 
@@ -921,6 +816,7 @@ class BaseAgent(ABC):
         file_path = os.path.join(code_dir, "solver_http.py")
 
         max_retries = 3
+        last_error = ""
         for attempt in range(1, max_retries + 1):
             logger.info(f"[{self.name}] HTTP API 编程尝试 {attempt}/{max_retries}")
 

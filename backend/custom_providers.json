@@ -8,7 +8,7 @@
       "meta": {
         "api_format": "anthropic"
       },
-      "api_key": "sk-kimi-s6lwecwgcJWfZCM8YSVAoE5T9Lwj8WPhElCuoDOjpc7gHmpmkuyTHcavqf7NzKbm",
+      "api_key": "",
       "api_host": "https://api.kimi.com/coding/v1",
       "models": [
         {
@@ -32,7 +32,7 @@
       "meta": {
         "api_format": "anthropic"
       },
-      "api_key": "sk-cp-wPOYBPl7QAyll27SO0SGc0XzGL7Z6nsURt1Ssyk_qs09HUqNBKy4fWpjxsaPvLcGQr4mbw_cduJ1Qaaq4ZXkHC-YS5_2xXd4-fsgoG9q-NcSZdhL8q5sKms",
+      "api_key": "",
       "api_host": "https://api.minimaxi.com/anthropic",
       "models": [
         {
@@ -56,7 +56,7 @@
       "meta": {
         "api_format": "anthropic"
       },
-      "api_key": "tp-cs5vm6kbvdokemi2mzwpk0i12ihamujzyjoz7th75a6387il",
+      "api_key": "",
       "api_host": "https://token-plan-cn.xiaomimimo.com/anthropic",
       "models": [
         {

@@ -21,6 +21,8 @@ from .paths import get_task_data_dir
 
 logger = logging.getLogger(__name__)
 
+logger = logging.getLogger(__name__)
+
 # 任务存储目录（使用统一路径管理）
 TASK_DATA_DIR: Path = get_task_data_dir()
 
@@ -54,8 +56,8 @@ def save_task_metadata(
     if file.exists():
         try:
             existing = json.loads(file.read_text(encoding="utf-8"))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"读取任务文件失败 {file}: {e}")
 
     # 如果传入的 problem_text 为空，保留已有的值（避免后续更新覆盖初始值）
     final_problem_text = problem_text if problem_text else existing.get("problem_text", "")
@@ -196,13 +198,14 @@ def _atomic_write_json(path: Path, data: Dict[str, Any]) -> None:
                 pass  # Windows / 非 POSIX 跳过
             f.write(json.dumps(data, ensure_ascii=False, indent=2))
         tmp.replace(path)
-    except Exception:
+    except Exception as e:
+        logger.error(f"保存任务数据失败 {task_id}: {e}")
         # 失败清理
         if tmp.exists():
             try:
                 tmp.unlink()
-            except Exception:
-                pass
+            except Exception as unlink_err:
+                logger.warning(f"清理临时文件失败 {tmp}: {unlink_err}")
         raise
 
 
@@ -252,8 +255,8 @@ def list_all_tasks() -> List[Dict[str, Any]]:
             continue
         try:
             tasks.append(json.loads(f.read_text(encoding="utf-8")))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"读取任务文件失败 {f.name}: {e}")
     # 按创建时间倒序
     tasks.sort(key=lambda x: x.get("created_at", ""), reverse=True)
     return tasks
@@ -332,8 +335,8 @@ def delete_task(task_id: str) -> bool:
                         try:
                             f.unlink()
                             deleted = True
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.warning(f"删除文件失败 {f}: {e}")
     except Exception as e:
         logger.debug(f"清理项目 artifacts 失败: {e}")
 
@@ -373,8 +376,8 @@ def delete_task(task_id: str) -> bool:
                             f.unlink()
                             logger.info(f"清理项目文件: {f}")
                             deleted = True
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.warning(f"删除文件失败 {f}: {e}")
                 # 清理 camera_ready_task_xxx 目录
                 for d in sub_dir.iterdir():
                     if d.is_dir() and task_id in d.name:
@@ -382,8 +385,8 @@ def delete_task(task_id: str) -> bool:
                             shutil.rmtree(d)
                             logger.info(f"清理项目目录: {d}")
                             deleted = True
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.warning(f"删除目录失败 {d}: {e}")
 
         # 3) 如果项目目录下已无任务产出物，删除整个项目目录
         if project_name and project_name != "_global":

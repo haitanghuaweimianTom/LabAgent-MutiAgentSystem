@@ -9,11 +9,11 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     app_name: str = "多智能体协作论文生产系统"
-    app_version: str = "8.0.0"
+    app_version: str = "8.2.0"
     debug: bool = True
 
     api_prefix: str = "/api/v1"
-    cors_origins: List[str] = ["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000", "*"]
+    cors_origins: List[str] = ["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000"]
 
     default_model: str = ""
     fallback_model: str = ""

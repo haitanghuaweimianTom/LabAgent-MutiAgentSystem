@@ -37,9 +37,13 @@ from ..core.task_persistence import (
     load_task_metadata,
     delete_task as persistence_delete_task,
 )
+from ..services.rate_limiter import AsyncTokenBucket
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/tasks", tags=["任务管理"])
+
+# 速率限制：每秒最多 1 个任务提交，桶容量 5（允许突发）
+_task_submit_limiter = AsyncTokenBucket(rate=1.0, capacity=5)
 
 _orchestrator = None
 DATA_DIR: Path = get_data_dir()  # 使用统一的路径管理
@@ -185,6 +189,9 @@ def get_uploaded_files(selected_names: Optional[List[str]] = None, project_name:
 
 @router.post("/submit")
 async def submit_task(req: TaskCreateRequest):
+    # 速率限制
+    await _task_submit_limiter.acquire()
+
     # 验证问题描述不能为空
     if not req.problem_text or not req.problem_text.strip():
         raise HTTPException(

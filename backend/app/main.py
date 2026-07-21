@@ -139,7 +139,7 @@ async def lifespan(app: FastAPI):
     logger.info("系统关闭...")
 
 
-app = FastAPI(title="数学建模多Agent系统", version="3.0.0", lifespan=lifespan)
+app = FastAPI(title="数学建模多Agent系统", version="8.2.0", lifespan=lifespan)
 settings = get_settings()
 
 app.add_middleware(
@@ -166,7 +166,7 @@ app.include_router(discussion_router, prefix="/api/v1")
 
 @app.get("/")
 async def root():
-    return {"name": "数学建模多Agent系统", "version": "7.3.0", "status": "running", "docs": "/docs"}
+    return {"name": "数学建模多Agent系统", "version": "8.2.0", "status": "running", "docs": "/docs"}
 
 
 @app.get("/health")
@@ -408,16 +408,13 @@ async def update_runtime_settings(body: SettingsUpdate):
 
 @app.get("/api/v1/debug/key", dependencies=[Depends(require_api_key)])
 async def debug_api_key():
-    """调试接口：查看当前API密钥状态"""
+    """调试接口：查看当前API密钥配置状态（不暴露密钥内容）"""
     from .core.runtime_config import ENV_FILE
     key = get_runtime_api_key()
     return {
-        "env_file_path": str(ENV_FILE),
         "env_file_exists": ENV_FILE.exists(),
-        "key_length": len(key),
-        "key_prefix": key[:15] + "..." if key else "EMPTY",
+        "key_length": len(key) if key else 0,
         "is_set": is_api_key_set(),
-        "env_content_preview": ENV_FILE.read_text("utf-8")[:300] if ENV_FILE.exists() else "NOT FOUND",
     }
 
 

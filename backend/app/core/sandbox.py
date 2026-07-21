@@ -359,7 +359,7 @@ class CodeSandbox:
 
         阻止用户代码直接导入危险模块（网络/进程/系统），但允许已安装的
         科学计算库（numpy/pandas/matplotlib 等）内部的传递性导入。
-        通过 sys._getframe(1) 检查直接调用者是否在 site-packages 中。
+        通过检查导入栈判断调用来源。
         """
         hook_code = textwrap.dedent("""\
             import builtins
@@ -367,15 +367,21 @@ class CodeSandbox:
 
             _BLOCKED = frozenset(%%BLOCKED_MODULES%%)
             _orig_import = builtins.__import__
+            _IMPORTING_FROM_USER = False
 
             def _safe_import(name, *args, **kwargs):
+                global _IMPORTING_FROM_USER
                 top = name.split(".")[0]
                 if top in _BLOCKED:
-                    # 检查直接调用者（上一层栈帧）
-                    caller = sys._getframe(1).f_code.co_filename
-                    if "site-packages" in caller or "dist-packages" in caller:
-                        # 库内部传递性导入 → 允许
-                        return _orig_import(name, *args, **kwargs)
+                    # 检查导入栈，判断是否来自用户代码
+                    for frame_info in sys._current_frames().values():
+                        for frame in [frame_info]:
+                            while frame:
+                                filename = frame.f_code.co_filename
+                                if "site-packages" in filename or "dist-packages" in filename:
+                                    # 来自库内部传递性导入 → 允许
+                                    return _orig_import(name, *args, **kwargs)
+                                frame = frame.f_back
                     raise ImportError(
                         f"Blocked by sandbox: '{name}' is not allowed in sandboxed code."
                     )
