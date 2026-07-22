@@ -1,0 +1,52 @@
+# 论文质量 Reward Model DPO 训练配置
+# 模型：Qwen2.5-1.5B-Instruct
+# 任务：学习论文质量偏好（好 vs 差）
+# 硬件：RTX 4060 8GB
+
+model:
+  name_or_path: "Qwen/Qwen2.5-1.5B-Instruct"
+  quantization_bit: 4
+  max_length: 4096
+
+lora:
+  finetuning_type: "lora"
+  rank: 32
+  alpha: 64
+  target: ["q_proj", "v_proj", "k_proj", "o_proj"]
+  dropout: 0.05
+
+dpo:
+  beta: 0.1
+  loss_type: "sigmoid"
+  max_length: 4096
+  max_prompt_length: 2048
+
+training:
+  dataset: "reward_model_dpo"
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 8
+  num_train_epochs: 3
+  learning_rate: 5.0e-6
+  weight_decay: 0.01
+  warmup_ratio: 0.1
+  lr_scheduler_type: "cosine"
+  fp16: true
+  logging_steps: 10
+  save_steps: 50
+  eval_steps: 50
+  output_dir: "ml/checkpoints/reward_model"
+  seed: 42
+
+data:
+  train_file: "ml/collected_data/dpo_train_pairs.json"
+  eval_file: "ml/collected_data/dpo_eval_pairs.json"
+  max_samples: 500
+
+scoring:
+  dimensions:
+    - structure    # 论文结构完整性
+    - innovation   # 创新性
+    - experiment   # 实验设计与结果
+    - writing      # 写作质量
+  baseline_spearman_rho: 0.58
+  target_spearman_rho: 0.76

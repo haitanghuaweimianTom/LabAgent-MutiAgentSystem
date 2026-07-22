@@ -25,6 +25,7 @@ from . import peer_review_agent  # noqa: F401
 from . import requirement_decomposer  # noqa: F401
 from . import summary_agent  # noqa: F401
 from . import innovation_agent  # noqa: F401
+from . import bug_finder_agent  # noqa: F401
 
 # Phase 3：LangGraph 编排器（按需导入，未安装也不阻断旧流程）
 from .langgraph_orchestrator import LangGraphOrchestrator, LANGGRAPH_AVAILABLE

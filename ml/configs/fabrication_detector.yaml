@@ -1,0 +1,43 @@
+# 代码伪造检测模型训练配置
+# 模型：UniXcoder-base (125M)
+# 任务：检测代码中的硬编码指标（伪造输出）
+# 硬件：RTX 4060 8GB
+
+model:
+  name_or_path: "microsoft/unixcoder-base"
+  max_length: 512
+  num_labels: 2  # 正常 vs 伪造
+
+training:
+  dataset: "fabrication_detection"
+  per_device_train_batch_size: 32
+  gradient_accumulation_steps: 1
+  num_train_epochs: 5
+  learning_rate: 2.0e-5
+  weight_decay: 0.01
+  warmup_ratio: 0.1
+  fp16: true
+  logging_steps: 10
+  save_steps: 100
+  output_dir: "ml/checkpoints/fabrication_detector"
+  seed: 42
+
+data:
+  train_file: "ml/collected_data/fabrication_train.json"
+  eval_file: "ml/collected_data/fabrication_eval.json"
+  max_samples: 1000
+  augmentation:
+    - hardcoded_metric_injection
+    - variable_name_substitution
+    - code_context_swap
+
+evaluation:
+  metrics:
+    - accuracy
+    - precision
+    - recall
+    - f1
+  targets:
+    accuracy: 0.90
+    f1: 0.88
+  baseline_f1: 0.65  # 规则方法的 F1

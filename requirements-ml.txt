@@ -1,0 +1,28 @@
+# LabAgent 模型训练依赖
+# 用于 Bug Finder / Reward Model / Reranker / 伪造检测训练
+# 仅在训练时需要，生产环境不需要
+
+# 核心训练框架
+transformers>=4.40.0
+peft>=0.10.0              # QLoRA 微调
+datasets>=2.19.0          # HuggingFace datasets
+trl>=0.8.0                # DPO trainer
+accelerate>=0.30.0        # 分布式训练
+bitsandbytes>=0.43.0      # 4-bit/8-bit 量化
+
+# Tokenizer
+tiktoken>=0.7.0           # OpenAI 分词器
+
+# 评估
+rouge-score>=0.1.2        # ROUGE 评估
+nltk>=3.8.0               # 自然语言处理工具
+
+# 可选：LLaMA-Factory（推荐用于 QLoRA 训练）
+# 安装方式：pip install llamafactory
+# llamafactory>=0.8.0
+
+# GPU 检查
+torch>=2.0.0              # PyTorch（应已安装）
+
+# 安装命令：
+# pip install -r requirements-ml.txt

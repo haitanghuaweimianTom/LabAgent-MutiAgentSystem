@@ -11,6 +11,7 @@ from .financial_analyst_agent import FinancialAnalystAgent
 from .figure_agent import FigureAgent
 from .requirement_decomposer import RequirementDecomposerAgent
 from .summary_agent import SummaryAgent
+from .bug_finder_agent import BugFinderAgent
 
 try:
     from .data_agent import DataAgent
@@ -23,4 +24,5 @@ __all__ = [
     "SolverAgent", "WriterAgent", "DataAgent",
     "AlgorithmEngineerAgent", "FinancialAnalystAgent",
     "FigureAgent", "RequirementDecomposerAgent", "SummaryAgent",
+    "BugFinderAgent",
 ]
