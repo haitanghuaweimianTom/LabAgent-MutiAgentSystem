@@ -1,0 +1,146 @@
+{
+  "model": "ml/models/qwen2.5-coder-1.5b-instruct",
+  "metrics": {
+    "error_type_accuracy": 0.575,
+    "location_accuracy": 0.85,
+    "fix_rate": 0.85,
+    "valid_json_rate": 0.85,
+    "avg_latency_ms": 3136.670058965683,
+    "p50_latency_ms": 2959.5086574554443,
+    "p95_latency_ms": 3970.3943729400635,
+    "total_samples": 80
+  },
+  "per_type": {
+    "ValueError": {
+      "total": 13,
+      "correct": 13
+    },
+    "IndexError": {
+      "total": 10,
+      "correct": 10
+    },
+    "ZeroDivisionError": {
+      "total": 9,
+      "correct": 0
+    },
+    "KeyError": {
+      "total": 13,
+      "correct": 13
+    },
+    "TypeError": {
+      "total": 5,
+      "correct": 5
+    },
+    "AttributeError": {
+      "total": 1,
+      "correct": 0
+    },
+    "ImportError": {
+      "total": 8,
+      "correct": 0
+    },
+    "ShapeMismatch": {
+      "total": 4,
+      "correct": 1
+    },
+    "LogicError": {
+      "total": 9,
+      "correct": 0
+    },
+    "FileNotFoundError": {
+      "total": 4,
+      "correct": 0
+    },
+    "OOM": {
+      "total": 4,
+      "correct": 4
+    }
+  },
+  "sample_predictions": [
+    {
+      "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nfrom sklearn.model_selection import train_test_split\nX = [[1,2],[3,4],[5,6]]\ny = [0,1]\nX_train, X_test, y_train, y_test = train_test_split(X, y, test_size=1.5)\n\nTrac",
+      "expected": {
+        "error_type": "ValueError",
+        "error_location": "line 1",
+        "root_cause": "test_size=1.5 should be between 0 and 1",
+        "fix_suggestion": "将 test_size 设置为 0 到 1 之间的值，如 0.2",
+        "confidence": 0.9
+      },
+      "predicted": {
+        "error_type": "ValueError",
+        "error_location": "line 1",
+        "root_cause": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nfrom sklearn.model_selection import train_test_split\nX = [[1,2],[3,4],[5,6]]\ny = [0,1]\nX_train, X_test, y_train, y_test = train_test_split(X, y, test_size=1.5)\n\nTrac",
+        "fix_suggestion": "将`test_size`参数的值调整为一个介于0和1之间的数值。例如：",
+        "confidence": 0.7
+      }
+    },
+    {
+      "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\narr = np.random.randn(3, 8)\nprint(arr[4, 0])\n\nTraceback：\nIndexError: index 4 is out of bounds for axis 0 with size 3",
+      "expected": {
+        "error_type": "IndexError",
+        "error_location": "line 1",
+        "root_cause": "index 4 is out of bounds for axis 0 with size 3",
+        "fix_suggestion": "确保行索引在 0 到 3-1 之间",
+        "confidence": 0.9
+      },
+      "predicted": {
+        "error_type": "IndexError",
+        "error_location": "line 1",
+        "root_cause": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\narr = np.random.randn(3, 8)\nprint(arr[4, 0])\n\nTraceback：\nIndexError: index 4 is out of bounds for axis 0 with size 3\n\n错误类型：IndexError\n定位：在尝试访问数组 `",
+        "fix_suggestion": "检查代码中的索引是否正确，并确保索引在数组的有效范围内。如果需要访问特定的行或列，可以使用切片操作来实现。例如：",
+        "confidence": 0.7
+      }
+    },
+    {
+      "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndata = [1, 2, 3, 4, 5]\nindex = 100\nprint(data[index])\n\nTraceback：\nIndexError: list index out of range",
+      "expected": {
+        "error_type": "IndexError",
+        "error_location": "line 1",
+        "root_cause": "list index out of range",
+        "fix_suggestion": "检查索引是否在有效范围内：0 <= index < len(data)",
+        "confidence": 0.9
+      },
+      "predicted": {
+        "error_type": "IndexError",
+        "error_location": "line 1",
+        "root_cause": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndata = [1, 2, 3, 4, 5]\nindex = 100\nprint(data[index])\n\nTraceback：\nIndexError: list index out of range\n\n错误类型：`IndexError`\n\n定位：在尝试访问列表 `data` 的索引 `100` 时，由于列表的长度为 5，而索",
+        "fix_suggestion": "修改代码以正确访问列表中的元素。例如：",
+        "confidence": 0.7
+      }
+    },
+    {
+      "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\na = 20\nb = 0\nresult = a / b\n\nTraceback：\nZeroDivisionError: division by zero",
+      "expected": {
+        "error_type": "ZeroDivisionError",
+        "error_location": "line 1",
+        "root_cause": "division by zero",
+        "fix_suggestion": "检查除数 b 是否为 0，添加非零检查",
+        "confidence": 0.9
+      },
+      "predicted": {
+        "error_type": "LogicError",
+        "error_location": "line 1",
+        "root_cause": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\na = 20\nb = 0\nresult = a / b\n\nTraceback：\nZeroDivisionError: division by zero\n\n错误类型：ZeroDivisionError\n\n定位：在计算 `result = a / b` 时，发生了除以零的错误。\n\n原因：在代码中，变量 `b` 的值被设置为零。当尝试",
+        "fix_suggestion": "检查代码中的所有除法操作，并确保除数不为零。如果可能，可以使用条件语句来处理这种情况，例如：",
+        "confidence": 0.7
+      }
+    },
+    {
+      "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndata = [1, 2, 3]\nfor i in range(10):\n    print(data[i])\n\nTraceback：\nIndexError: list index out of range",
+      "expected": {
+        "error_type": "IndexError",
+        "error_location": "line 1",
+        "root_cause": "IndexError: list index out of range",
+        "fix_suggestion": "使用 for item in data 或 for i in range(len(data))",
+        "confidence": 0.9
+      },
+      "predicted": {
+        "error_type": "IndexError",
+        "error_location": "line 1",
+        "root_cause": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndata = [1, 2, 3]\nfor i in range(10):\n    print(data[i])\n\nTraceback：\nIndexError: list index out of range\n\n错误类型：`IndexError`\n\n定位：在循环中尝试访问列表 `data` 的索引 `i`，但 `i` 的值超过了列",
+        "fix_suggestion": "在循环中添加一个条件检查，确保 `i` 不会超出列表的长度。可以使用 `len()` 函数来获取列表的长度，并在循环中添加一个条件判断：",
+        "confidence": 0.7
+      }
+    }
+  ]
+}
