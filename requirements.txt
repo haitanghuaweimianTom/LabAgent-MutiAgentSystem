@@ -22,3 +22,22 @@ httpx>=0.24.0
 
 # 知识图谱 Neo4j 驱动
 neo4j>=5.0.0
+
+# ===== 模型训练（算法岗新增） =====
+# 核心训练框架
+transformers>=4.40.0
+peft>=0.10.0              # QLoRA 微调
+datasets>=2.19.0          # DPO 训练数据
+trl>=0.8.0                # DPO trainer
+accelerate>=0.30.0        # 分布式训练
+bitsandbytes>=0.43.0      # 4-bit/8-bit 量化
+
+# Tokenizer
+tiktoken>=0.7.0           # OpenAI 分词器
+
+# 评估
+rouge-score>=0.1.2        # ROUGE 评估
+nltk>=3.8.0               # 自然语言处理工具
+
+# 可选：LLaMA-Factory（推荐用于 QLoRA 训练）
+# llamafactory>=0.8.0     # 取消注释以启用

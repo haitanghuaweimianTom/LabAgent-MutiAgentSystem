@@ -1,0 +1,35 @@
+# Reranker 微调配置
+# 模型：bge-reranker-base (278M)
+# 任务：文档相关性重排序
+# 硬件：RTX 4060 8GB
+
+model:
+  name_or_path: "BAAI/bge-reranker-base"
+  max_length: 512
+
+training:
+  dataset: "reranker_pairs"
+  per_device_train_batch_size: 16
+  gradient_accumulation_steps: 2
+  num_train_epochs: 3
+  learning_rate: 2.0e-5
+  weight_decay: 0.01
+  warmup_ratio: 0.1
+  fp16: true
+  logging_steps: 10
+  save_steps: 100
+  output_dir: "ml/checkpoints/reranker"
+  seed: 42
+
+data:
+  train_file: "ml/collected_data/reranker_train.json"
+  eval_file: "ml/collected_data/reranker_eval.json"
+  max_samples: 1500
+
+evaluation:
+  metrics:
+    - mrr_at_10
+    - ndcg_at_10
+    - recall_at_10
+  baseline_mrr_at_10: 0.45
+  target_mrr_at_10: 0.74  # 提升 65%

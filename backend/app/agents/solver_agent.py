@@ -1267,12 +1267,13 @@ class SolverAgent(BaseAgent):
                     error_text = prev.get("error", "")
                     prev_code = prev.get("code", "")
 
-                    # v8.0: 优先使用 DebuggerAgent 进行智能错误分析
+                    # v8.3: 优先使用 BugFinderAgent（本地小模型，零成本）进行快速诊断
                     debugger_fix = ""
+                    bug_finder_diagnosis = None
                     try:
-                        from .debugger_agent import DebuggerAgent
-                        debugger = DebuggerAgent()
-                        debugger_result = await debugger.execute(
+                        from .bug_finder_agent import BugFinderAgent
+                        bug_finder = BugFinderAgent()
+                        bf_result = await bug_finder.execute(
                             task_input={
                                 "code": prev_code,
                                 "error_traceback": error_text,
@@ -1281,15 +1282,43 @@ class SolverAgent(BaseAgent):
                             },
                             context={},
                         )
-                        debugger_fix = debugger_result.get("fix", "")
-                        root_cause = debugger_result.get("root_cause", "")
-                        error_type = debugger_result.get("error_type", "unknown")
+                        bug_finder_diagnosis = bf_result
+                        bf_confidence = bf_result.get("confidence", 0)
+                        bf_error_type = bf_result.get("error_type", "Other")
+                        bf_fix = bf_result.get("fix_suggestion", "")
                         logger.info(
-                            f"[{self.name}] DebuggerAgent 分析: type={error_type}, "
-                            f"cause={root_cause[:100]}, has_fix={bool(debugger_fix)}"
+                            f"[{self.name}] BugFinderAgent 诊断: type={bf_error_type}, "
+                            f"confidence={bf_confidence:.2f}, has_fix={bool(bf_fix)}"
                         )
+                        # 高置信度时直接使用 BugFinder 的诊断
+                        if bf_confidence >= 0.8 and bf_fix:
+                            debugger_fix = bf_fix
                     except Exception as e:
-                        logger.debug(f"[{self.name}] DebuggerAgent 不可用，回退到规则分类: {e}")
+                        logger.debug(f"[{self.name}] BugFinderAgent 不可用: {e}")
+
+                    # BugFinder 置信度低时，回退到 DebuggerAgent（LLM，更精准但更贵）
+                    if not debugger_fix:
+                        try:
+                            from .debugger_agent import DebuggerAgent
+                            debugger = DebuggerAgent()
+                            debugger_result = await debugger.execute(
+                                task_input={
+                                    "code": prev_code,
+                                    "error_traceback": error_text,
+                                    "file_path": file_path,
+                                    "attempt": attempt + 1,
+                                },
+                                context={},
+                            )
+                            debugger_fix = debugger_result.get("fix", "")
+                            root_cause = debugger_result.get("root_cause", "")
+                            error_type = debugger_result.get("error_type", "unknown")
+                            logger.info(
+                                f"[{self.name}] DebuggerAgent 分析: type={error_type}, "
+                                f"cause={root_cause[:100]}, has_fix={bool(debugger_fix)}"
+                            )
+                        except Exception as e:
+                            logger.debug(f"[{self.name}] DebuggerAgent 不可用，回退到规则分类: {e}")
 
                     # 回退到规则分类
                     classification = self._classify_execution_error(error_text, prev_code)
