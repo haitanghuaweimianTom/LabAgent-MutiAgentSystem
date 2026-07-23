@@ -147,6 +147,9 @@ class TaskState(TypedDict, total=False):
     ast_audit_passed: bool  # AST 审计是否通过（防造假 + 防崩溃）
     metrics_trend: List[float]  # 指标历史趋势（用于判断模板瓶颈）
     circuit_breaker_threshold: int  # 动态熔断阈值（默认 3，越狱后降为 1）
+    # ===== v8.3: Contextual Bandit 自适应决策 =====
+    bandit_action_id: int  # Bandit 上次选择的动作 ID
+    bandit_context: List[float]  # Bandit 上次的上下文特征向量
 
 
 @dataclass
@@ -181,6 +184,11 @@ class LangGraphOrchestrator:
         self.cfg = LangGraphConfig(**(config or {}))
         self._result_store = get_task_result_store()
         self._graph = self._build_graph() if LANGGRAPH_AVAILABLE else None
+
+        # v8.3: Contextual Bandit 自适应重试决策
+        from ..core.contextual_bandit import ContextualBanditDecision
+        model_dir = str(Path(__file__).resolve().parent.parent.parent / "data" / "models")
+        self._bandit = ContextualBanditDecision(model_dir=model_dir)
 
     def _resolve_results(self, state: TaskState) -> Dict[str, Any]:
         """把 state 中的 result 引用还原为实际 Agent 输出。"""
@@ -490,6 +498,9 @@ class LangGraphOrchestrator:
             "ast_audit_passed": False,
             "metrics_trend": [],
             "circuit_breaker_threshold": 3,  # 默认 3 次错误触发熔断
+            # v8.3: Contextual Bandit 初始状态
+            "bandit_action_id": 0,
+            "bandit_context": [0.0] * 7,
         }
 
         # 检查是否可以从 checkpoint 恢复（断点续传）
@@ -1293,11 +1304,31 @@ class LangGraphOrchestrator:
                     # 保留最近 5 次指标
                     metrics_trend = metrics_trend[-5:]
 
+                # v8.3: 更新 Bandit — 执行成功
+                self._bandit.update_from_result(
+                    action_id=state.get("bandit_action_id", 0),
+                    context_list=state.get("bandit_context", [0.0] * 7),
+                    success=True,
+                    metric_improved=extracted_metric is not None and (
+                        len(metrics_trend) < 2 or metrics_trend[-1] > metrics_trend[-2]
+                    ),
+                    current_metric=extracted_metric,
+                )
+
                 self._post_chat(task_id, "sandbox", "沙箱执行成功")
                 current_step = "sandbox_success"
             else:
                 # 执行失败：错误计数 +1
                 error_count += 1
+
+                # v8.3: 更新 Bandit — 执行失败
+                self._bandit.update_from_result(
+                    action_id=state.get("bandit_action_id", 0),
+                    context_list=state.get("bandit_context", [0.0] * 7),
+                    success=False,
+                    metric_improved=False,
+                )
+
                 self._post_chat(
                     task_id, "sandbox",
                     f"沙箱执行失败（连续第 {error_count} 次）：{sandbox_result.stderr[:200]}"
@@ -1322,64 +1353,77 @@ class LangGraphOrchestrator:
         }
 
     async def _node_reviewer_reflection(self, state: TaskState) -> TaskState:
-        """模块 3b: Reviewer/Reflection Agent 的"渐进式越狱与熔断"路由。
+        """模块 3b: Reviewer/Reflection — Contextual Bandit 自适应决策。
 
-        核心逻辑：
-        如果 error_count >= 3 (死亡螺旋)：
-            强制将 execution_mode 降级为 "restricted"，清空 error_count，
-            要求 Coder 换简单方案。
-        如果运行成功但指标连续 2 次未提升 (模板瓶颈)：
-            将 execution_mode 升级为 "jailbreak"，允许 Coder 自由写代码，
-            但将熔断阈值降为 1 次。
+        v8.3: 使用 LinUCB Contextual Bandit 替代固定规则熔断逻辑。
+        Bandit 根据上下文（错误次数、模式、尝试次数、指标趋势）自适应选择：
+        - continue: 继续当前模式重试
+        - degrade: 降级为 restricted 模式
+        - upgrade: 升级为 jailbreak 模式
+        - abort: 放弃当前问题
+
+        保留一个安全网：连续错误 >= 5 时强制降级（防止 Bandit 探索阶段的灾难性决策）。
         """
         task_id = state["task_id"]
         error_count = state.get("error_count", 0)
         execution_mode = state.get("execution_mode", "restricted")
         metrics_trend = list(state.get("metrics_trend", []))
         threshold = state.get("circuit_breaker_threshold", 3)
+        attempt = state.get("experiment_iterations", 1)
 
         self._update_progress(task_id, state["problem_text"], 58, "Reviewer 反思中")
 
-        decision = "continue"  # continue | degrade | upgrade | abort
+        decision = "continue"
         reason = ""
+        bandit_result = None
 
-        # ===== 熔断判定：连续错误 >= 阈值 =====
-        if error_count >= threshold:
+        # ===== 安全网：连续错误过多时强制降级（防止 Bandit 探索期灾难）=====
+        if error_count >= 5:
             decision = "degrade"
             reason = (
-                f"死亡螺旋检测：连续 {error_count} 次沙箱错误（阈值={threshold}），"
-                f"强制降级为 restricted 模式，要求 Coder 换简单方案"
+                f"安全网触发：连续 {error_count} 次错误（>=5），"
+                f"强制降级为 restricted 模式"
             )
             execution_mode = "restricted"
-            error_count = 0  # 重置，给 restricted 模式一次机会
-            self._post_chat(task_id, "reviewer", f"⚠️ {reason}")
+            error_count = 0
+            self._post_chat(task_id, "reviewer", f"🛡️ {reason}")
 
-        # ===== 越狱判定：指标连续 2 次未提升（模板瓶颈）=====
-        elif len(metrics_trend) >= 3:
-            # 检查最近 2 次指标是否连续下降或持平
-            last_3 = metrics_trend[-3:]
-            no_improvement = all(
-                last_3[i] <= last_3[i - 1] for i in range(1, len(last_3))
-            )
-
-            if no_improvement and execution_mode == "restricted":
-                decision = "upgrade"
-                reason = (
-                    f"模板瓶颈检测：指标连续 {len(last_3)} 次未提升"
-                    f"（趋势: {[f'{m:.4f}' for m in last_3]}），"
-                    f"升级为 jailbreak 模式，允许 Coder 自由写代码"
+            # 记录安全网触发（reward 为负，让 Bandit 学习避免这种情况）
+            prev_context = state.get("bandit_context", [0.0] * 7)
+            prev_action = state.get("bandit_action_id", 0)
+            if prev_context and len(prev_context) == 7:
+                self._bandit.update_from_result(
+                    action_id=prev_action,
+                    context_list=prev_context,
+                    success=False,
+                    metric_improved=False,
                 )
-                execution_mode = "jailbreak"
-                threshold = 1  # 越狱后熔断阈值降为 1
-                self._post_chat(task_id, "reviewer", f"🔓 {reason}")
 
-        # ===== 正常情况：继续当前模式 =====
+        # ===== Contextual Bandit 决策 =====
         else:
-            self._post_chat(
-                task_id, "reviewer",
-                f"Reviewer 反思完成：error_count={error_count}, "
-                f"mode={execution_mode}, trend={metrics_trend[-3:] if metrics_trend else 'N/A'}"
+            bandit_result = self._bandit.decide(
+                error_count=error_count,
+                execution_mode=execution_mode,
+                attempt=attempt,
+                metrics_trend=metrics_trend,
             )
+
+            decision = bandit_result["action"]
+            reason = bandit_result["reason"]
+
+            # 应用决策
+            if decision == "degrade":
+                execution_mode = "restricted"
+                error_count = 0
+            elif decision == "upgrade":
+                execution_mode = "jailbreak"
+                threshold = 1
+            elif decision == "abort":
+                # abort: 保持当前状态，让上层路由决定
+                pass
+            # "continue": 不修改任何状态
+
+            self._post_chat(task_id, "reviewer", f"🤖 {reason}")
 
         return {
             **state,
@@ -1387,6 +1431,8 @@ class LangGraphOrchestrator:
             "execution_mode": execution_mode,
             "metrics_trend": metrics_trend,
             "circuit_breaker_threshold": threshold,
+            "bandit_action_id": bandit_result.get("action_id", 0) if bandit_result else 0,
+            "bandit_context": bandit_result.get("context", [0.0] * 7) if bandit_result else [0.0] * 7,
             "current_step": f"reviewer_reflection_{decision}",
         }
 

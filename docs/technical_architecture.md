@@ -10,13 +10,21 @@
 1. [System Overview](#1-system-overview)
 2. [Core Architecture](#2-core-architecture)
 3. [Agent System](#3-agent-system)
-4. [Zero-Hallucination Pipeline](#4-zero-hallucination-pipeline)
-5. [Knowledge Base System](#5-knowledge-base-system)
-6. [Memory System](#6-memory-system)
-7. [GPU Execution](#7-gpu-execution)
-8. [Security](#8-security)
-9. [API Design](#9-api-design)
-10. [Deployment](#10-deployment)
+4. [Anti-Death-Spiral Architecture (v8.2)](#4-anti-death-spiral-architecture-v82)
+5. [Zero-Hallucination Pipeline](#5-zero-hallucination-pipeline)
+6. [Knowledge Base System](#5-knowledge-base-system)
+7. [Memory System](#6-memory-system)
+8. [GPU Execution & ML Training](#7-gpu-execution)
+   - 7.1 [ML Training Module](#71-ml-training-module-v82-new)
+   - 7.2 [Contextual Bandit (LinUCB)](#72-contextual-bandit--adaptive-retry-decision-v83)
+   - 7.3 [BugFinder API Service](#73-bugfinder-api-service-v83)
+   - 7.4 [Experiment Tree Search](#74-experiment-tree-search)
+   - 7.5 [Claims Traceability](#75-claims-traceability)
+   - 7.6 [VLM Figure Review Loop](#76-vlm-figure-review-loop)
+   - 7.7 [Other ML-Enhanced Capabilities](#77-other-ml-enhanced-capabilities)
+9. [Security](#8-security)
+10. [API Design](#9-api-design)
+11. [Deployment](#10-deployment)
 
 ---
 
@@ -511,6 +519,197 @@ Bug Finder Agent (local, zero API cost)
 Solver(LLM) applies structured diagnosis → Precise fix
 ```
 
+## 7.2 Contextual Bandit — Adaptive Retry Decision (v8.3)
+
+### Problem
+
+The original circuit breaker used fixed rules:
+- `error_count >= 3` → force degrade
+- 2 consecutive no-improvement → upgrade mode
+
+This is rigid and doesn't adapt to different task characteristics.
+
+### Solution: LinUCB Contextual Bandit
+
+Replace fixed rules with a learned policy that adapts based on context.
+
+**Context Features (7-dimensional)**:
+```
+[error_count_normalized, mode_restricted, mode_jailbreak,
+ attempt_normalized, metric_trend_slope, metric_last, consecutive_failures]
+```
+
+**Action Space**:
+| Action | Description |
+|--------|-------------|
+| `continue` | Retry with current mode |
+| `degrade` | Switch to restricted mode (component injection) |
+| `upgrade` | Switch to jailbreak mode (free code generation) |
+| `abort` | Give up on current problem |
+
+**LinUCB Algorithm**:
+```
+For each action a, maintain:
+  A_a (d×d matrix): Regularized covariance
+  b_a (d-vector): Reward accumulator
+
+Select action:
+  a* = argmax_a θ_a^T x + α √(x^T A_a^{-1} x)
+  where θ_a = A_a^{-1} b_a
+
+Update after reward r:
+  A_a += x x^T
+  b_a += r x
+```
+
+**Reward Function**:
+- Execution success + metric improvement: +1.0
+- Execution success, no improvement: -0.2
+- Execution failure: -1.0
+
+**Safety Net**: If `error_count >= 5`, bypass Bandit and force degrade (prevents catastrophic exploration).
+
+**Offline Evaluation**: Importance Sampling estimates new policy's expected reward from historical logs.
+
+**File**: `backend/app/core/contextual_bandit.py`
+
+## 7.3 BugFinder API Service (v8.3)
+
+### Architecture
+
+BugFinder Agent refactored from direct model loading to API-based architecture:
+
+```
+BugFinderAgent
+    │
+    ├── BaseAgent.call_llm()  ← Unified API interface
+    │       │
+    │       ├── Ollama (local)
+    │       ├── vLLM (local)
+    │       └── Remote API (fallback)
+    │
+    └── Rule Engine (fallback when no model available)
+```
+
+**API Server**: `ml/serve_bug_finder.py`
+- FastAPI + uvicorn
+- Loads Qwen2.5-Coder-1.5B + LoRA adapter
+- OpenAI-compatible `/v1/chat/completions` endpoint
+- Port 8100, ~2.9GB VRAM, 2.4s cold start
+
+**Integration**:
+- All Agents use unified `BaseAgent.call_llm()` interface
+- AgentModelRouter routes to appropriate model
+- No local model → automatic fallback to rule engine
+
+## 7.4 Experiment Tree Search
+
+### Architecture
+
+`ExperimentTreeSearch` implements shallow tree search for experiment optimization:
+
+```
+Root (baseline)
+├── Seed 1 (different hyperparams)
+│   ├── Beam 1.1 (further refinement)
+│   └── Beam 1.2 (alternative approach)
+├── Seed 2 (different architecture)
+│   └── Failure → Pivot (change strategy)
+└── Seed 3 (ablation study)
+```
+
+**Key Features**:
+- Parallel seed/beam evaluation
+- Failure pivot: when a branch fails, pivot to alternative approach
+- Budget-aware: stops when compute budget exhausted
+- Result aggregation into paper-ready tables
+
+**File**: `backend/app/services/experiment_tree_search.py`
+
+## 7.5 Claims Traceability
+
+### Problem
+
+Papers make claims ("Our method achieves 95% accuracy") but these claims must be traceable to actual solver outputs and experiment logs.
+
+### Solution
+
+`ClaimsTraceability` builds a mapping table:
+
+```json
+{
+  "claim": "Model achieves 95% accuracy on test set",
+  "source_type": "solver_output",
+  "source_file": "experiment_results.json",
+  "source_metric": "accuracy",
+  "source_value": 0.95,
+  "verified": true
+}
+```
+
+**Verification Chain**:
+1. Extract claims from paper text
+2. Match claims to solver outputs / experiment results
+3. Flag unverified claims
+4. Generate audit trail for peer review
+
+**File**: `backend/app/services/claims_traceability.py`
+
+## 7.6 VLM Figure Review Loop
+
+### Problem
+
+AI-generated figures often have quality issues (wrong labels, inconsistent styles, misleading visualizations).
+
+### Solution
+
+Vision-Language Model (VLM) reads the generated figure and provides feedback:
+
+```
+Figure Generation → VLM Review → Quality Assessment
+                                    │
+                                    ├── Content consistency check
+                                    ├── Aesthetic evaluation
+                                    ├── Label accuracy verification
+                                    │
+                                    ▼
+                             Modification Suggestions
+                                    │
+                                    ▼
+                             Regenerate Figure (with fixes)
+```
+
+**Loop**: Up to 3 iterations until quality threshold met.
+
+**File**: `backend/app/core/vlm_figure_reviewer.py`
+
+## 7.7 Other ML-Enhanced Capabilities
+
+### Symbolic Auditor
+- Uses SymPy to verify mathematical formulas
+- Checks algebraic equivalence, dimensional consistency
+- File: `backend/app/services/symbolic_auditor.py`
+
+### Idea Archive
+- Cross-run idea tracking with novelty detection
+- GPU value HITL gate for expensive experiments
+- File: `backend/app/core/idea_archive.py`
+
+### Data Provenance
+- SHA-256 hash tracking for all data transformations
+- Reproducibility bundle generation
+- File: `backend/app/core/data_provenance.py`
+
+### Context Compressor
+- 3-level strategy: soft compress → LLM summarize → truncate
+- Protects critical deliverables (LaTeX, title, abstract, citations)
+- File: `backend/app/core/context_compressor.py`
+
+### Token Budget Manager
+- 7-category allocation: system/user/knowledge/memory/react/feedback/summary
+- Prevents context window explosion
+- File: `backend/app/core/token_budget.py`
+
 ---
 
 ## 8. Security
@@ -627,25 +826,40 @@ services:
 backend/app/
 ├── agents/           # Agent implementations
 │   ├── base.py       # BaseAgent + AgentFactory + ReAct
-│   ├── langgraph_orchestrator.py  # Main orchestrator
+│   ├── langgraph_orchestrator.py  # Main orchestrator (LangGraph)
+│   ├── bug_finder_agent.py        # Bug Finder (API mode)
 │   ├── solver_agent.py
 │   ├── writer_agent.py
 │   └── ...
 ├── core/             # Core modules
-│   ├── code_audit.py        # AST analysis + dual-responsibility audit
-│   ├── safety_shell.py      # AST safety shell transformer (v8.2)
-│   ├── sandbox.py           # Code execution
-│   ├── gpu_executor.py      # GPU training
-│   ├── memory.py            # Memory system
-│   ├── data_provenance.py   # SHA-256 tracking
+│   ├── contextual_bandit.py    # LinUCB adaptive retry (v8.3)
+│   ├── code_audit.py           # AST analysis + dual-responsibility audit
+│   ├── safety_shell.py         # AST safety shell transformer (v8.2)
+│   ├── sandbox.py              # Code execution (4-layer defense)
+│   ├── gpu_executor.py         # GPU training + OOM protection
+│   ├── memory.py               # 3-layer memory system
+│   ├── data_provenance.py      # SHA-256 tracking
+│   ├── context_compressor.py   # 3-level context compression
+│   ├── token_budget.py         # 7-category token allocation
+│   ├── idea_archive.py         # Cross-run idea tracking
 │   └── ...
 ├── services/         # Service layer
-│   ├── fact_checker.py      # Number verification
-│   ├── reference_verifier.py # DOI/arXiv verification
-│   ├── symbolic_auditor.py  # Statistical validation
-│   ├── camera_ready.py      # ZIP packaging
+│   ├── fact_checker.py         # Number verification
+│   ├── reference_verifier.py   # DOI/arXiv verification
+│   ├── symbolic_auditor.py     # SymPy formula verification
+│   ├── claims_traceability.py  # Paper claims ↔ solver results
+│   ├── experiment_tree_search.py # Shallow tree search
+│   ├── vlm_figure_review.py    # VLM figure quality check
 │   └── ...
 ├── routers/          # FastAPI routes
 ├── schemas/          # Pydantic models
+├── mcp/              # MCP tool integration
+├── pdf_parsing/      # PDF parsing (MinerU/PyMuPDF)
+ml/
+├── serve_bug_finder.py  # BugFinder API server (FastAPI)
+├── train_bug_finder.py  # QLoRA training script
+├── evaluation/          # Evaluation scripts
+├── collected_data/      # Training/eval data
+└── configs/             # Training configs
 └── main.py           # FastAPI app
 ```
