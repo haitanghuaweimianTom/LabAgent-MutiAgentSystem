@@ -1,0 +1,794 @@
+[
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(8192, 8192)\nbatch_size = 64\nx = torch.randn(batch_size, 8192)\nout = model(x.cuda())\n\nTraceback：\ntorch.cuda.OutOfMemoryError: CUDA out of memory. Tried to allocate 4096 MiB (GPU 0; 8192 MiB total)",
+    "output": "{\"error_type\": \"OOM\", \"error_location\": \"line 1\", \"root_cause\": \"CUDA out of memory. Tried to allocate 4096 MiB (GPU 0; 8192 MiB total)\", \"fix_suggestion\": \"减小 batch_size 或使用 gradient_accumulation；添加 torch.cuda.empty_cache()\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "OOM"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport pandas as pd\ndf = pd.DataFrame({'a': [1,2], 'b': [3,4]})\nprint(df['c'])\n\nTraceback：\nKeyError: 'c'",
+    "output": "{\"error_type\": \"KeyError\", \"error_location\": \"line 1\", \"root_cause\": \"KeyError: 'c'\", \"fix_suggestion\": \"列 'c' 不存在，可用列：['a', 'b']\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "diverse",
+      "error_type": "KeyError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nfor i in range(10)\n    print(i)\n\nTraceback：\nSyntaxError: invalid syntax",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"for循环缺少冒号\", \"fix_suggestion\": \"在for循环行末尾添加冒号\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_eval",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport pandas as pd\ndf = pd.DataFrame({'a': [1,2], 'b': [3,4]})\nprint(df['c'])\n\nTraceback：\nKeyError: 'c'",
+    "output": "{\"error_type\": \"KeyError\", \"error_location\": \"line 1\", \"root_cause\": \"KeyError: 'c'\", \"fix_suggestion\": \"列 'c' 不存在，可用列：['a', 'b']\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "diverse",
+      "error_type": "KeyError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport pandas as pd\ndf = pd.read_csv('data.csv')\n\nTraceback：\nFileNotFoundError: [Errno 2] No such file or directory: 'data.csv'",
+    "output": "{\"error_type\": \"FileNotFoundError\", \"error_location\": \"line 1\", \"root_cause\": \"'data.csv'\", \"fix_suggestion\": \"检查文件路径是否正确，确保文件存在\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "FileNotFoundError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nfrom sklearn.linear_model import LinearRegression\nmodel = LinearRegression()\nmodel.predict([[1,2,3]])\n\nTraceback：\nNotFittedError: This LinearRegression instance is not fitted yet. Call 'fit' with appropriate arguments before using this estimator.",
+    "output": "{\"error_type\": \"LogicError\", \"error_location\": \"line 1\", \"root_cause\": \"NotFittedError: This LinearRegression instance is not fitted yet. Call 'fit' with appropriate arguments before using this estimator.\", \"fix_suggestion\": \"在 predict 之前先调用 fit：model.fit(X_train, y_train)\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "diverse",
+      "error_type": "LogicError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\narr = np.random.randn(3, 8)\nprint(arr[4, 0])\n\nTraceback：\nIndexError: index 4 is out of bounds for axis 0 with size 3",
+    "output": "{\"error_type\": \"IndexError\", \"error_location\": \"line 1\", \"root_cause\": \"index 4 is out of bounds for axis 0 with size 3\", \"fix_suggestion\": \"确保行索引在 0 到 3-1 之间\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "IndexError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\narr = np.array([1, 2, 3, 4, 5])\nresult = arr.reshape(3, 3)\n\nTraceback：\nValueError: cannot reshape array of size 5 into shape (3,3)",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 1\", \"root_cause\": \"ValueError: cannot reshape array of size 5 into shape (3,3)\", \"fix_suggestion\": \"reshape 的目标形状必须与元素总数兼容：arr.reshape(1, 5) 或 arr.reshape(5, 1)\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "diverse",
+      "error_type": "ValueError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndata = {'a': 1, 'b': 2, 'c': 3}\nkey = 'e'\nprint(data[key])\n\nTraceback：\nKeyError: 'e'",
+    "output": "{\"error_type\": \"KeyError\", \"error_location\": \"line 1\", \"root_cause\": \"'e'\", \"fix_suggestion\": \"检查键 'e' 是否存在，或使用 data.get('e', default_value)\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "KeyError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\narr = np.random.randn(5, 8)\nprint(arr[6, 0])\n\nTraceback：\nIndexError: index 6 is out of bounds for axis 0 with size 5",
+    "output": "{\"error_type\": \"IndexError\", \"error_location\": \"line 1\", \"root_cause\": \"index 6 is out of bounds for axis 0 with size 5\", \"fix_suggestion\": \"确保行索引在 0 到 5-1 之间\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "IndexError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport pandas as pd\ndf = pd.read_csv('model.pkl')\n\nTraceback：\nFileNotFoundError: [Errno 2] No such file or directory: 'model.pkl'",
+    "output": "{\"error_type\": \"FileNotFoundError\", \"error_location\": \"line 1\", \"root_cause\": \"'model.pkl'\", \"fix_suggestion\": \"检查文件路径是否正确，确保文件存在\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "FileNotFoundError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nfrom torch_xla import something\n\nTraceback：\nModuleNotFoundError: No module named 'torch_xla'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'torch_xla'\", \"fix_suggestion\": \"安装缺失的包：pip install torch_xla\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(4096, 4096)\nbatch_size = 64\nx = torch.randn(batch_size, 4096)\nout = model(x.cuda())\n\nTraceback：\ntorch.cuda.OutOfMemoryError: CUDA out of memory. Tried to allocate 4096 MiB (GPU 0; 8192 MiB total)",
+    "output": "{\"error_type\": \"OOM\", \"error_location\": \"line 1\", \"root_cause\": \"CUDA out of memory. Tried to allocate 4096 MiB (GPU 0; 8192 MiB total)\", \"fix_suggestion\": \"减小 batch_size 或使用 gradient_accumulation；添加 torch.cuda.empty_cache()\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "OOM"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndef add(a, b)\n    return a + b\n\nTraceback：\nSyntaxError: invalid syntax",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"函数定义缺少冒号\", \"fix_suggestion\": \"在函数定义行末尾添加冒号\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_eval",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\n\na = np.random.randn(5, 8)\nb = np.random.randn(3, 16)\nc = np.dot(a, b)\n\nTraceback：\nValueError: shapes (5,8) and (3,16) not aligned",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (5,8) and (3,16) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "ShapeMismatch"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport pandas as pd\ndf = pd.DataFrame()\ndf.nonexistent_method()\n\nTraceback：\nAttributeError: 'DataFrame' object has no attribute 'nonexistent_method'",
+    "output": "{\"error_type\": \"AttributeError\", \"error_location\": \"line 3\", \"root_cause\": \"DataFrame对象没有nonexistent_method方法\", \"fix_suggestion\": \"检查方法名是否正确，或查看pandas文档\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_eval",
+      "error_type": "AttributeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nfrom sklearn.linear_model import LinearRegression\nmodel = LinearRegression()\nmodel.predict([[1,2,3]])\n\nTraceback：\nNotFittedError: This LinearRegression instance is not fitted yet. Call 'fit' with appropriate arguments before using this estimator.",
+    "output": "{\"error_type\": \"LogicError\", \"error_location\": \"line 1\", \"root_cause\": \"NotFittedError: This LinearRegression instance is not fitted yet. Call 'fit' with appropriate arguments before using this estimator.\", \"fix_suggestion\": \"在 predict 之前先调用 fit：model.fit(X_train, y_train)\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "diverse",
+      "error_type": "LogicError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nfrom sklearn.linear_model import LinearRegression\nmodel = LinearRegression()\nmodel.predict([[1,2,3]])\n\nTraceback：\nNotFittedError: This LinearRegression instance is not fitted yet. Call 'fit' with appropriate arguments before using this estimator.",
+    "output": "{\"error_type\": \"LogicError\", \"error_location\": \"line 1\", \"root_cause\": \"NotFittedError: This LinearRegression instance is not fitted yet. Call 'fit' with appropriate arguments before using this estimator.\", \"fix_suggestion\": \"在 predict 之前先调用 fit：model.fit(X_train, y_train)\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "diverse",
+      "error_type": "LogicError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndata = {'a': 1, 'b': 2, 'c': 3}\nkey = 'f'\nprint(data[key])\n\nTraceback：\nKeyError: 'f'",
+    "output": "{\"error_type\": \"KeyError\", \"error_location\": \"line 1\", \"root_cause\": \"'f'\", \"fix_suggestion\": \"检查键 'f' 是否存在，或使用 data.get('f', default_value)\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "KeyError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndef divide(a, b):\n    return a / b\n\nresult = divide(10, 0)\n\nTraceback：\nZeroDivisionError: division by zero",
+    "output": "{\"error_type\": \"ZeroDivisionError\", \"error_location\": \"line 1\", \"root_cause\": \"ZeroDivisionError: division by zero\", \"fix_suggestion\": \"添加除数非零检查：if b != 0: return a / b else: return None\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "diverse",
+      "error_type": "ZeroDivisionError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndata = {'a': 1, 'b': 2, 'c': 3}\nkey = 'd'\nprint(data[key])\n\nTraceback：\nKeyError: 'd'",
+    "output": "{\"error_type\": \"KeyError\", \"error_location\": \"line 1\", \"root_cause\": \"'d'\", \"fix_suggestion\": \"检查键 'd' 是否存在，或使用 data.get('d', default_value)\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "KeyError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndef divide(a, b):\n    return a / b\n\nresult = divide(10, 0)\n\nTraceback：\nZeroDivisionError: division by zero",
+    "output": "{\"error_type\": \"ZeroDivisionError\", \"error_location\": \"line 1\", \"root_cause\": \"ZeroDivisionError: division by zero\", \"fix_suggestion\": \"添加除数非零检查：if b != 0: return a / b else: return None\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "diverse",
+      "error_type": "ZeroDivisionError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nfrom sklearn.linear_model import LinearRegression\nmodel = LinearRegression()\nmodel.predict([[1,2,3]])\n\nTraceback：\nNotFittedError: This LinearRegression instance is not fitted yet. Call 'fit' with appropriate arguments before using this estimator.",
+    "output": "{\"error_type\": \"LogicError\", \"error_location\": \"line 1\", \"root_cause\": \"NotFittedError: This LinearRegression instance is not fitted yet. Call 'fit' with appropriate arguments before using this estimator.\", \"fix_suggestion\": \"在 predict 之前先调用 fit：model.fit(X_train, y_train)\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "diverse",
+      "error_type": "LogicError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndata = {'a': 1, 'b': 2, 'c': 3}\nkey = 'x'\nprint(data[key])\n\nTraceback：\nKeyError: 'x'",
+    "output": "{\"error_type\": \"KeyError\", \"error_location\": \"line 1\", \"root_cause\": \"'x'\", \"fix_suggestion\": \"检查键 'x' 是否存在，或使用 data.get('x', default_value)\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "KeyError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\narr = np.array([1, 2, 3])\nprint(arr[5])\n\nTraceback：\nIndexError: index 5 is out of bounds for axis 0 with size 3",
+    "output": "{\"error_type\": \"IndexError\", \"error_location\": \"line 3\", \"root_cause\": \"NumPy数组索引5超出范围(0-2)\", \"fix_suggestion\": \"检查数组形状和索引值\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_eval",
+      "error_type": "IndexError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nfrom sklearn.linear_model import LinearRegression\nmodel = LinearRegression()\nmodel.predict([[1,2,3]])\n\nTraceback：\nNotFittedError: This LinearRegression instance is not fitted yet. Call 'fit' with appropriate arguments before using this estimator.",
+    "output": "{\"error_type\": \"LogicError\", \"error_location\": \"line 1\", \"root_cause\": \"NotFittedError: This LinearRegression instance is not fitted yet. Call 'fit' with appropriate arguments before using this estimator.\", \"fix_suggestion\": \"在 predict 之前先调用 fit：model.fit(X_train, y_train)\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "diverse",
+      "error_type": "LogicError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport tensorflow as tf\n\nTraceback：\nModuleNotFoundError: No module named 'tensorflow'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"未安装tensorflow模块\", \"fix_suggestion\": \"运行pip install tensorflow\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_eval",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndata = [1, 2, 3]\nresult = data.predict()\n\nTraceback：\nAttributeError: 'list' object has no attribute 'predict'",
+    "output": "{\"error_type\": \"AttributeError\", \"error_location\": \"line 1\", \"root_cause\": \"'list' object has no attribute 'predict'\", \"fix_suggestion\": \"list 没有 predict 方法，检查对象类型\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "AttributeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(128, 16)\nx = torch.randn(32, 15)\nout = model(x)\n\nTraceback：\nRuntimeError: mat1 and mat2 shapes cannot be multiplied (32x15 and 128x16)",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (32x15 and 128x16)\", \"fix_suggestion\": \"将 nn.Linear(128, 16) 改为 nn.Linear(15, 16)，或调整输入维度\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "ShapeMismatch"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\na = 49\nb = 0\nresult = a / b\n\nTraceback：\nZeroDivisionError: division by zero",
+    "output": "{\"error_type\": \"ZeroDivisionError\", \"error_location\": \"line 1\", \"root_cause\": \"division by zero\", \"fix_suggestion\": \"检查除数 b 是否为 0，添加非零检查\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "ZeroDivisionError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nfrom sklearn.model_selection import train_test_split\nX = [[1,2],[3,4],[5,6]]\ny = [0,1]\nX_train, X_test, y_train, y_test = train_test_split(X, y, test_size=1.5)\n\nTraceback：\nValueError: test_size=1.5 should be between 0 and 1",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 1\", \"root_cause\": \"test_size=1.5 should be between 0 and 1\", \"fix_suggestion\": \"将 test_size 设置为 0 到 1 之间的值，如 0.2\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "ValueError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nfrom rapids import something\n\nTraceback：\nModuleNotFoundError: No module named 'rapids'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'rapids'\", \"fix_suggestion\": \"安装缺失的包：pip install rapids\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndef add(a, b):\n    return a + b\n\nresult = add(12, 'test')\n\nTraceback：\nTypeError: unsupported operand type(s) for +: 'int' and 'str'",
+    "output": "{\"error_type\": \"TypeError\", \"error_location\": \"line 1\", \"root_cause\": \"'int' and 'str'\", \"fix_suggestion\": \"确保两个参数类型一致：add(12, 2) 或 add('52', 'test')\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "TypeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\narr = np.random.randn(5, 8)\nprint(arr[6, 0])\n\nTraceback：\nIndexError: index 6 is out of bounds for axis 0 with size 5",
+    "output": "{\"error_type\": \"IndexError\", \"error_location\": \"line 1\", \"root_cause\": \"index 6 is out of bounds for axis 0 with size 5\", \"fix_suggestion\": \"确保行索引在 0 到 5-1 之间\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "IndexError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nmodel = LinearRegression()\nprediction = model.predict(X_test)\n\nTraceback：\nNotFittedError: This LinearRegression instance is not fitted yet. Call 'fit' with appropriate arguments before using this estimator.",
+    "output": "{\"error_type\": \"LogicError\", \"error_location\": \"line 2\", \"root_cause\": \"模型未训练就调用predict\", \"fix_suggestion\": \"先调用model.fit(X_train, y_train)训练模型\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_eval",
+      "error_type": "LogicError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport pandas as pd\ndf = pd.read_csv('data.csv')\n\nTraceback：\nFileNotFoundError: [Errno 2] No such file or directory: 'data.csv'",
+    "output": "{\"error_type\": \"FileNotFoundError\", \"error_location\": \"line 1\", \"root_cause\": \"'data.csv'\", \"fix_suggestion\": \"检查文件路径是否正确，确保文件存在\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "FileNotFoundError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nfrom sklearn.model_selection import train_test_split\nX_train, X_test, y_train, y_test = train_test_split(X, y, test_size=1.5)\n\nTraceback：\nValueError: test_size=1.5 should be either float or an integer",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 2\", \"root_cause\": \"test_size参数值1.5超出范围(0-1)\", \"fix_suggestion\": \"将test_size设置为0到1之间的小数或整数\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_eval",
+      "error_type": "ValueError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(64, 128)\nx = torch.randn(4, 30)\nout = model(x)\n\nTraceback：\nRuntimeError: mat1 and mat2 shapes cannot be multiplied (4x30 and 64x128)",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (4x30 and 64x128)\", \"fix_suggestion\": \"将 nn.Linear(64, 128) 改为 nn.Linear(30, 128)，或调整输入维度\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "ShapeMismatch"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\narr = np.array([1, 2, 3, 4, 5])\nresult = arr.reshape(3, 3)\n\nTraceback：\nValueError: cannot reshape array of size 5 into shape (3,3)",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 1\", \"root_cause\": \"ValueError: cannot reshape array of size 5 into shape (3,3)\", \"fix_suggestion\": \"reshape 的目标形状必须与元素总数兼容：arr.reshape(1, 5) 或 arr.reshape(5, 1)\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "diverse",
+      "error_type": "ValueError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\ntensor = torch.randn(3, 3)\nresult = tensor.cuda() + torch.randn(3, 3)\n\nTraceback：\nRuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "diverse",
+      "error_type": "LogicError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndata = {'a': 1, 'b': 2, 'c': 3}\nkey = 'x'\nprint(data[key])\n\nTraceback：\nKeyError: 'x'",
+    "output": "{\"error_type\": \"KeyError\", \"error_location\": \"line 1\", \"root_cause\": \"'x'\", \"fix_suggestion\": \"检查键 'x' 是否存在，或使用 data.get('x', default_value)\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "KeyError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndata = {'a': 1, 'b': 2, 'c': 3}\nkey = 'y'\nprint(data[key])\n\nTraceback：\nKeyError: 'y'",
+    "output": "{\"error_type\": \"KeyError\", \"error_location\": \"line 1\", \"root_cause\": \"'y'\", \"fix_suggestion\": \"检查键 'y' 是否存在，或使用 data.get('y', default_value)\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "KeyError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndata = {'a': 1, 'b': 2, 'c': 3}\nkey = 'x'\nprint(data[key])\n\nTraceback：\nKeyError: 'x'",
+    "output": "{\"error_type\": \"KeyError\", \"error_location\": \"line 1\", \"root_cause\": \"'x'\", \"fix_suggestion\": \"检查键 'x' 是否存在，或使用 data.get('x', default_value)\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "KeyError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nfrom torch_xla import something\n\nTraceback：\nModuleNotFoundError: No module named 'torch_xla'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'torch_xla'\", \"fix_suggestion\": \"安装缺失的包：pip install torch_xla\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\na = 47\nb = 0\nresult = a / b\n\nTraceback：\nZeroDivisionError: division by zero",
+    "output": "{\"error_type\": \"ZeroDivisionError\", \"error_location\": \"line 1\", \"root_cause\": \"division by zero\", \"fix_suggestion\": \"检查除数 b 是否为 0，添加非零检查\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "ZeroDivisionError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nfrom sklearn.model_selection import train_test_split\nX = [[1,2],[3,4],[5,6]]\ny = [0,1]\nX_train, X_test, y_train, y_test = train_test_split(X, y, test_size=2.0)\n\nTraceback：\nValueError: test_size=2.0 should be between 0 and 1",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 1\", \"root_cause\": \"test_size=2.0 should be between 0 and 1\", \"fix_suggestion\": \"将 test_size 设置为 0 到 1 之间的值，如 0.2\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "ValueError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndef add(a, b):\n    return a + b\n\nresult = add(25, 'hello')\n\nTraceback：\nTypeError: unsupported operand type(s) for +: 'int' and 'str'",
+    "output": "{\"error_type\": \"TypeError\", \"error_location\": \"line 1\", \"root_cause\": \"'int' and 'str'\", \"fix_suggestion\": \"确保两个参数类型一致：add(25, 67) 或 add('19', 'hello')\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "TypeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndef add(a, b):\n    return a + b\n\nresult = add(13, 'test')\n\nTraceback：\nTypeError: unsupported operand type(s) for +: 'int' and 'str'",
+    "output": "{\"error_type\": \"TypeError\", \"error_location\": \"line 1\", \"root_cause\": \"'int' and 'str'\", \"fix_suggestion\": \"确保两个参数类型一致：add(13, 99) 或 add('43', 'test')\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "TypeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndata = {'a': 1, 'b': 2}\nprint(data['c'])\n\nTraceback：\nKeyError: 'c'",
+    "output": "{\"error_type\": \"KeyError\", \"error_location\": \"line 2\", \"root_cause\": \"字典中不存在键 c\", \"fix_suggestion\": \"检查键是否存在或使用 data.get('c', default)\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_eval",
+      "error_type": "KeyError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nfrom sklearn.model_selection import train_test_split\nX = [[1,2],[3,4],[5,6]]\ny = [0,1]\nX_train, X_test, y_train, y_test = train_test_split(X, y, test_size=2.0)\n\nTraceback：\nValueError: test_size=2.0 should be between 0 and 1",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 1\", \"root_cause\": \"test_size=2.0 should be between 0 and 1\", \"fix_suggestion\": \"将 test_size 设置为 0 到 1 之间的值，如 0.2\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "ValueError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndata = [1, 2, 3, 4, 5]\nindex = 100\nprint(data[index])\n\nTraceback：\nIndexError: list index out of range",
+    "output": "{\"error_type\": \"IndexError\", \"error_location\": \"line 1\", \"root_cause\": \"list index out of range\", \"fix_suggestion\": \"检查索引是否在有效范围内：0 <= index < len(data)\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "IndexError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nfrom sklearn.linear_model import LinearRegression\nmodel = LinearRegression()\nmodel.predict([[1,2,3]])\n\nTraceback：\nNotFittedError: This LinearRegression instance is not fitted yet. Call 'fit' with appropriate arguments before using this estimator.",
+    "output": "{\"error_type\": \"LogicError\", \"error_location\": \"line 1\", \"root_cause\": \"NotFittedError: This LinearRegression instance is not fitted yet. Call 'fit' with appropriate arguments before using this estimator.\", \"fix_suggestion\": \"在 predict 之前先调用 fit：model.fit(X_train, y_train)\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "diverse",
+      "error_type": "LogicError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndef divide(a, b):\n    return a / b\n\nresult = divide(10, 0)\n\nTraceback：\nZeroDivisionError: division by zero",
+    "output": "{\"error_type\": \"ZeroDivisionError\", \"error_location\": \"line 1\", \"root_cause\": \"ZeroDivisionError: division by zero\", \"fix_suggestion\": \"添加除数非零检查：if b != 0: return a / b else: return None\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "diverse",
+      "error_type": "ZeroDivisionError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndata = {'a': 1, 'b': 2, 'c': 3}\nkey = 'd'\nprint(data[key])\n\nTraceback：\nKeyError: 'd'",
+    "output": "{\"error_type\": \"KeyError\", \"error_location\": \"line 1\", \"root_cause\": \"'d'\", \"fix_suggestion\": \"检查键 'd' 是否存在，或使用 data.get('d', default_value)\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "KeyError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\na = 69\nb = 0\nresult = a / b\n\nTraceback：\nZeroDivisionError: division by zero",
+    "output": "{\"error_type\": \"ZeroDivisionError\", \"error_location\": \"line 1\", \"root_cause\": \"division by zero\", \"fix_suggestion\": \"检查除数 b 是否为 0，添加非零检查\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "ZeroDivisionError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\narr = np.array([1, 2, 3, 4, 5])\nresult = arr.reshape(3, 3)\n\nTraceback：\nValueError: cannot reshape array of size 5 into shape (3,3)",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 1\", \"root_cause\": \"ValueError: cannot reshape array of size 5 into shape (3,3)\", \"fix_suggestion\": \"reshape 的目标形状必须与元素总数兼容：arr.reshape(1, 5) 或 arr.reshape(5, 1)\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "diverse",
+      "error_type": "ValueError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndata = {'a': 1, 'b': 2, 'c': 3}\nkey = 'e'\nprint(data[key])\n\nTraceback：\nKeyError: 'e'",
+    "output": "{\"error_type\": \"KeyError\", \"error_location\": \"line 1\", \"root_cause\": \"'e'\", \"fix_suggestion\": \"检查键 'e' 是否存在，或使用 data.get('e', default_value)\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "KeyError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\na = 79\nb = 0\nresult = a / b\n\nTraceback：\nZeroDivisionError: division by zero",
+    "output": "{\"error_type\": \"ZeroDivisionError\", \"error_location\": \"line 1\", \"root_cause\": \"division by zero\", \"fix_suggestion\": \"检查除数 b 是否为 0，添加非零检查\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "ZeroDivisionError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndata = {'a': 1, 'b': 2, 'c': 3}\nkey = 'd'\nprint(data[key])\n\nTraceback：\nKeyError: 'd'",
+    "output": "{\"error_type\": \"KeyError\", \"error_location\": \"line 1\", \"root_cause\": \"'d'\", \"fix_suggestion\": \"检查键 'd' 是否存在，或使用 data.get('d', default_value)\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "KeyError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nfrom sklearn.model_selection import train_test_split\nX = [[1,2],[3,4],[5,6]]\ny = [0,1]\nX_train, X_test, y_train, y_test = train_test_split(X, y, test_size=2.0)\n\nTraceback：\nValueError: test_size=2.0 should be between 0 and 1",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 1\", \"root_cause\": \"test_size=2.0 should be between 0 and 1\", \"fix_suggestion\": \"将 test_size 设置为 0 到 1 之间的值，如 0.2\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "ValueError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndata = [1, 2, 3]\nfor i in range(10):\n    print(data[i])\n\nTraceback：\nIndexError: list index out of range",
+    "output": "{\"error_type\": \"IndexError\", \"error_location\": \"line 1\", \"root_cause\": \"IndexError: list index out of range\", \"fix_suggestion\": \"使用 for item in data 或 for i in range(len(data))\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "diverse",
+      "error_type": "IndexError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nfrom sklearn.linear_model import LinearRegression\nmodel = LinearRegression()\nmodel.predict([[1,2,3]])\n\nTraceback：\nNotFittedError: This LinearRegression instance is not fitted yet. Call 'fit' with appropriate arguments before using this estimator.",
+    "output": "{\"error_type\": \"LogicError\", \"error_location\": \"line 1\", \"root_cause\": \"NotFittedError: This LinearRegression instance is not fitted yet. Call 'fit' with appropriate arguments before using this estimator.\", \"fix_suggestion\": \"在 predict 之前先调用 fit：model.fit(X_train, y_train)\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "diverse",
+      "error_type": "LogicError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nx = 'hello'\nresult = x + 1\n\nTraceback：\nTypeError: can only concatenate str (not \"int\") to str",
+    "output": "{\"error_type\": \"TypeError\", \"error_location\": \"line 1\", \"root_cause\": \"TypeError: can only concatenate str (not \\\"int\\\") to str\", \"fix_suggestion\": \"将 1 转换为字符串：x + str(1)\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "diverse",
+      "error_type": "TypeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndef recursive_func(n):\n    return recursive_func(n + 1)\nrecursive_func(0)\n\nTraceback：\nRecursionError: maximum recursion depth exceeded",
+    "output": "{\"error_type\": \"LogicError\", \"error_location\": \"line 3\", \"root_cause\": \"递归函数没有终止条件\", \"fix_suggestion\": \"添加递归终止条件\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_eval",
+      "error_type": "LogicError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nfrom torch_xla import something\n\nTraceback：\nModuleNotFoundError: No module named 'torch_xla'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'torch_xla'\", \"fix_suggestion\": \"安装缺失的包：pip install torch_xla\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\narr = np.random.randn(5, 8)\nprint(arr[6, 0])\n\nTraceback：\nIndexError: index 6 is out of bounds for axis 0 with size 5",
+    "output": "{\"error_type\": \"IndexError\", \"error_location\": \"line 1\", \"root_cause\": \"index 6 is out of bounds for axis 0 with size 5\", \"fix_suggestion\": \"确保行索引在 0 到 5-1 之间\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "IndexError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nfrom jax import something\n\nTraceback：\nModuleNotFoundError: No module named 'jax'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'jax'\", \"fix_suggestion\": \"安装缺失的包：pip install jax\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nresult = 'hello' + 123\n\nTraceback：\nTypeError: can only concatenate str (not \"int\") to str",
+    "output": "{\"error_type\": \"TypeError\", \"error_location\": \"line 1\", \"root_cause\": \"字符串和整数不能直接拼接\", \"fix_suggestion\": \"使用 str(123) 将整数转换为字符串\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_eval",
+      "error_type": "TypeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndata = [1, 2, 3]\nfor i in range(10):\n    print(data[i])\n\nTraceback：\nIndexError: list index out of range",
+    "output": "{\"error_type\": \"IndexError\", \"error_location\": \"line 1\", \"root_cause\": \"IndexError: list index out of range\", \"fix_suggestion\": \"使用 for item in data 或 for i in range(len(data))\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "diverse",
+      "error_type": "IndexError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nfrom sklearn.model_selection import train_test_split\nX = [[1,2],[3,4],[5,6]]\ny = [0,1]\nX_train, X_test, y_train, y_test = train_test_split(X, y, test_size=1.5)\n\nTraceback：\nValueError: test_size=1.5 should be between 0 and 1",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 1\", \"root_cause\": \"test_size=1.5 should be between 0 and 1\", \"fix_suggestion\": \"将 test_size 设置为 0 到 1 之间的值，如 0.2\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "ValueError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nmodel = torch.nn.Linear(4096, 4096)\nx = torch.randn(64, 4096).cuda()\ny = model(x)\n\nTraceback：\ntorch.cuda.OutOfMemoryError: CUDA out of memory. Tried to allocate 4096.00 MiB",
+    "output": "{\"error_type\": \"OOM\", \"error_location\": \"line 4\", \"root_cause\": \"GPU显存不足，无法分配4096MiB\", \"fix_suggestion\": \"减小batch size或使用模型并行\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_eval",
+      "error_type": "OOM"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(64, 16)\nx = torch.randn(16, 15)\nout = model(x)\n\nTraceback：\nRuntimeError: mat1 and mat2 shapes cannot be multiplied (16x15 and 64x16)",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (16x15 and 64x16)\", \"fix_suggestion\": \"将 nn.Linear(64, 16) 改为 nn.Linear(15, 16)，或调整输入维度\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "ShapeMismatch"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nresult = None\nprint(result.shape)\n\nTraceback：\nAttributeError: 'NoneType' object has no attribute 'shape'",
+    "output": "{\"error_type\": \"AttributeError\", \"error_location\": \"line 2\", \"root_cause\": \"NoneType对象没有shape属性\", \"fix_suggestion\": \"检查变量是否为None\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_eval",
+      "error_type": "AttributeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(8192, 8192)\nbatch_size = 256\nx = torch.randn(batch_size, 8192)\nout = model(x.cuda())\n\nTraceback：\ntorch.cuda.OutOfMemoryError: CUDA out of memory. Tried to allocate 4096 MiB (GPU 0; 8192 MiB total)",
+    "output": "{\"error_type\": \"OOM\", \"error_location\": \"line 1\", \"root_cause\": \"CUDA out of memory. Tried to allocate 4096 MiB (GPU 0; 8192 MiB total)\", \"fix_suggestion\": \"减小 batch_size 或使用 gradient_accumulation；添加 torch.cuda.empty_cache()\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "OOM"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nmodel = torch.nn.Linear(10, 5)\nx = torch.randn(3, 20)\ny = model(x)\n\nTraceback：\nRuntimeError: mat1 and mat2 shapes cannot be multiplied (3x20 and 10x5)",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 4\", \"root_cause\": \"矩阵维度不匹配\", \"fix_suggestion\": \"确保输入维度与线性层期望的维度一致\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_eval",
+      "error_type": "RuntimeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nfrom sklearn.model_selection import train_test_split\nX = [[1,2],[3,4],[5,6]]\ny = [0,1]\nX_train, X_test, y_train, y_test = train_test_split(X, y, test_size=1.5)\n\nTraceback：\nValueError: test_size=1.5 should be between 0 and 1",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 1\", \"root_cause\": \"test_size=1.5 should be between 0 and 1\", \"fix_suggestion\": \"将 test_size 设置为 0 到 1 之间的值，如 0.2\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "ValueError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndata = {'a': 1, 'b': 2, 'c': 3}\nkey = 'x'\nprint(data[key])\n\nTraceback：\nKeyError: 'x'",
+    "output": "{\"error_type\": \"KeyError\", \"error_location\": \"line 1\", \"root_cause\": \"'x'\", \"fix_suggestion\": \"检查键 'x' 是否存在，或使用 data.get('x', default_value)\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "KeyError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\na = np.array([[1, 2], [3, 4]])\nb = np.array([[1, 2, 3], [4, 5, 6]])\nc = np.dot(a, b)\n\nTraceback：\nValueError: shapes (2,2) and (2,3) not aligned: 2 (dim 1) != 2 (dim 0)",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 4\", \"root_cause\": \"矩阵维度不匹配，(2,2)和(2,3)无法相乘\", \"fix_suggestion\": \"确保矩阵乘法维度兼容，或使用reshape\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_eval",
+      "error_type": "ValueError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport pandas as pd\ndf = pd.read_csv('config.json')\n\nTraceback：\nFileNotFoundError: [Errno 2] No such file or directory: 'config.json'",
+    "output": "{\"error_type\": \"FileNotFoundError\", \"error_location\": \"line 1\", \"root_cause\": \"'config.json'\", \"fix_suggestion\": \"检查文件路径是否正确，确保文件存在\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "FileNotFoundError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndef add(a, b):\n    return a + b\n\nresult = add(71, 'test')\n\nTraceback：\nTypeError: unsupported operand type(s) for +: 'int' and 'str'",
+    "output": "{\"error_type\": \"TypeError\", \"error_location\": \"line 1\", \"root_cause\": \"'int' and 'str'\", \"fix_suggestion\": \"确保两个参数类型一致：add(71, 76) 或 add('79', 'test')\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "TypeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\narr = np.array([1, 2, 3, 4, 5])\nresult = arr.reshape(3, 3)\n\nTraceback：\nValueError: cannot reshape array of size 5 into shape (3,3)",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 1\", \"root_cause\": \"ValueError: cannot reshape array of size 5 into shape (3,3)\", \"fix_suggestion\": \"reshape 的目标形状必须与元素总数兼容：arr.reshape(1, 5) 或 arr.reshape(5, 1)\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "diverse",
+      "error_type": "ValueError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\narr = np.array([1, 2, 3, 4, 5])\nresult = arr.reshape(3, 3)\n\nTraceback：\nValueError: cannot reshape array of size 5 into shape (3,3)",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 1\", \"root_cause\": \"ValueError: cannot reshape array of size 5 into shape (3,3)\", \"fix_suggestion\": \"reshape 的目标形状必须与元素总数兼容：arr.reshape(1, 5) 或 arr.reshape(5, 1)\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "diverse",
+      "error_type": "ValueError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\ntensor = torch.tensor([1, 2, 3])\nresult = tensor.cuda()\n\nTraceback：\nRuntimeError: CUDA out of memory. Tried to allocate 1.00 MiB (GPU 0; 8.00 GiB total)",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 3\", \"root_cause\": \"GPU显存不足\", \"fix_suggestion\": \"减小batch size或使用CPU\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_eval",
+      "error_type": "RuntimeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ntensor = torch.zeros(10000, 10000, device='cuda')\n\nTraceback：\ntorch.cuda.OutOfMemoryError: CUDA out of memory. Tried to allocate 381.00 MiB",
+    "output": "{\"error_type\": \"OOM\", \"error_location\": \"line 1\", \"root_cause\": \"GPU显存不足，无法分配381MiB\", \"fix_suggestion\": \"使用CPU或将tensor移到CPU\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_eval",
+      "error_type": "OOM"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndata = [1, 2, 3]\nfor i in range(10):\n    print(data[i])\n\nTraceback：\nIndexError: list index out of range",
+    "output": "{\"error_type\": \"IndexError\", \"error_location\": \"line 1\", \"root_cause\": \"IndexError: list index out of range\", \"fix_suggestion\": \"使用 for item in data 或 for i in range(len(data))\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "diverse",
+      "error_type": "IndexError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\ntensor = torch.randn(3, 3)\nresult = tensor.cuda() + torch.randn(3, 3)\n\nTraceback：\nRuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "diverse",
+      "error_type": "LogicError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\narr = np.array([1, 2, 3, 4, 5])\nresult = arr.reshape(3, 3)\n\nTraceback：\nValueError: cannot reshape array of size 5 into shape (3,3)",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 1\", \"root_cause\": \"ValueError: cannot reshape array of size 5 into shape (3,3)\", \"fix_suggestion\": \"reshape 的目标形状必须与元素总数兼容：arr.reshape(1, 5) 或 arr.reshape(5, 1)\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "diverse",
+      "error_type": "ValueError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndef divide(a, b):\n    return a / b\n\nresult = divide(10, 0)\n\nTraceback：\nZeroDivisionError: division by zero",
+    "output": "{\"error_type\": \"ZeroDivisionError\", \"error_location\": \"line 1\", \"root_cause\": \"ZeroDivisionError: division by zero\", \"fix_suggestion\": \"添加除数非零检查：if b != 0: return a / b else: return None\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "diverse",
+      "error_type": "ZeroDivisionError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(4096, 4096)\nbatch_size = 128\nx = torch.randn(batch_size, 4096)\nout = model(x.cuda())\n\nTraceback：\ntorch.cuda.OutOfMemoryError: CUDA out of memory. Tried to allocate 2048 MiB (GPU 0; 8192 MiB total)",
+    "output": "{\"error_type\": \"OOM\", \"error_location\": \"line 1\", \"root_cause\": \"CUDA out of memory. Tried to allocate 2048 MiB (GPU 0; 8192 MiB total)\", \"fix_suggestion\": \"减小 batch_size 或使用 gradient_accumulation；添加 torch.cuda.empty_cache()\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "OOM"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndef add(a, b):\n    return a + b\nresult = add([1, 2], [3, 4])\nprint(result[5])\n\nTraceback：\nTypeError: 'int' object is not subscriptable",
+    "output": "{\"error_type\": \"TypeError\", \"error_location\": \"line 4\", \"root_cause\": \"整数不支持下标访问\", \"fix_suggestion\": \"检查变量类型，确保使用正确的数据结构\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_eval",
+      "error_type": "TypeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nfrom cupy import something\n\nTraceback：\nModuleNotFoundError: No module named 'cupy'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'cupy'\", \"fix_suggestion\": \"安装缺失的包：pip install cupy\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nfrom sklearn.model_selection import train_test_split\nX = [[1,2],[3,4],[5,6]]\ny = [0,1]\nX_train, X_test, y_train, y_test = train_test_split(X, y, test_size=-0.1)\n\nTraceback：\nValueError: test_size=-0.1 should be between 0 and 1",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 1\", \"root_cause\": \"test_size=-0.1 should be between 0 and 1\", \"fix_suggestion\": \"将 test_size 设置为 0 到 1 之间的值，如 0.2\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "ValueError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nfrom jax import something\n\nTraceback：\nModuleNotFoundError: No module named 'jax'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'jax'\", \"fix_suggestion\": \"安装缺失的包：pip install jax\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndata = [1, 2, 3, 4, 5]\nindex = -1\nprint(data[index])\n\nTraceback：\nIndexError: list index out of range",
+    "output": "{\"error_type\": \"IndexError\", \"error_location\": \"line 1\", \"root_cause\": \"list index out of range\", \"fix_suggestion\": \"检查索引是否在有效范围内：0 <= index < len(data)\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "IndexError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nfrom jax import something\n\nTraceback：\nModuleNotFoundError: No module named 'jax'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'jax'\", \"fix_suggestion\": \"安装缺失的包：pip install jax\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nfrom sklearn.ensemble import RandomForestClassifier\n\nTraceback：\nModuleNotFoundError: No module named 'sklearn'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"未安装sklearn模块\", \"fix_suggestion\": \"运行pip install scikit-learn\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_eval",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\na = 20\nb = 0\nresult = a / b\n\nTraceback：\nZeroDivisionError: division by zero",
+    "output": "{\"error_type\": \"ZeroDivisionError\", \"error_location\": \"line 1\", \"root_cause\": \"division by zero\", \"fix_suggestion\": \"检查除数 b 是否为 0，添加非零检查\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "ZeroDivisionError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndata = [1, 2, 3, 4, 5]\nindex = 999\nprint(data[index])\n\nTraceback：\nIndexError: list index out of range",
+    "output": "{\"error_type\": \"IndexError\", \"error_location\": \"line 1\", \"root_cause\": \"list index out of range\", \"fix_suggestion\": \"检查索引是否在有效范围内：0 <= index < len(data)\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "IndexError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\narr = [1, 2, 3]\nprint(arr[10])\n\nTraceback：\nIndexError: list index out of range",
+    "output": "{\"error_type\": \"IndexError\", \"error_location\": \"line 2\", \"root_cause\": \"列表索引10超出范围(0-2)\", \"fix_suggestion\": \"检查索引是否在列表长度范围内\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_eval",
+      "error_type": "IndexError"
+    }
+  }
+]

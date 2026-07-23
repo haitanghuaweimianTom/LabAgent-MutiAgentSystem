@@ -4,9 +4,9 @@
 # 硬件：RTX 4060 8GB
 
 model:
-  name_or_path: "Qwen/Qwen2.5-Coder-1.5B-Instruct"
-  quantization_bit: 4
-  max_length: 2048
+  name_or_path: "ml/models/qwen2.5-coder-1.5b-instruct"
+  quantization_bit: 8
+  max_length: 1024
 
 lora:
   finetuning_type: "lora"
@@ -17,10 +17,11 @@ lora:
 
 training:
   dataset: "bug_finder_sft"
-  per_device_train_batch_size: 2
-  gradient_accumulation_steps: 8
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 16
   num_train_epochs: 3
   learning_rate: 2.0e-5
+  eval_strategy: "no"
   weight_decay: 0.01
   warmup_ratio: 0.1
   lr_scheduler_type: "cosine"
@@ -32,9 +33,9 @@ training:
   seed: 42
 
 data:
-  train_file: "ml/collected_data/bug_finder_train.json"
-  eval_file: "ml/collected_data/bug_finder_eval.json"
-  max_samples: 800
+  train_file: "ml/collected_data/bug_finder_train_v7.json"
+  eval_file: "ml/collected_data/bug_finder_eval_v2.json"
+  max_samples: 1000
 
 evaluation:
   metrics:

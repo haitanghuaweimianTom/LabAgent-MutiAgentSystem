@@ -110,3 +110,11 @@ docs/
 技术详解.md
 面试模拟.md
 笔试模拟.md
+
+# ML model files (too large for git, use HuggingFace)
+ml/checkpoints/
+ml/models/
+*.safetensors
+*.bin
+*.gguf
+ml/results/

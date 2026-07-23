@@ -57,10 +57,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\n\na = np.random.randn(3, 4)\nb = np.random.randn(5, 8)\nc = np.dot(a, b)\n\nTraceback：\nValueError: shapes (3,4) and (5,8) not aligned",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (3,4) and (5,8) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (3,4) and (5,8) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "ValueError"
     }
   },
   {
@@ -81,10 +81,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\n\na = np.random.randn(3, 4)\nb = np.random.randn(5, 4)\nc = np.dot(a, b)\n\nTraceback：\nValueError: shapes (3,4) and (5,4) not aligned",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (3,4) and (5,4) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (3,4) and (5,4) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "ValueError"
     }
   },
   {
@@ -177,10 +177,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\n\na = np.random.randn(10, 16)\nb = np.random.randn(3, 4)\nc = np.dot(a, b)\n\nTraceback：\nValueError: shapes (10,16) and (3,4) not aligned",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (10,16) and (3,4) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (10,16) and (3,4) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "ValueError"
     }
   },
   {
@@ -281,10 +281,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\ntensor = torch.randn(3, 3)\nresult = tensor.cuda() + torch.randn(3, 3)\n\nTraceback：\nRuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!",
-    "output": "{\"error_type\": \"LogicError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
     "metadata": {
       "source": "diverse",
-      "error_type": "LogicError"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -297,10 +297,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(64, 16)\nx = torch.randn(32, 30)\nout = model(x)\n\nTraceback：\nRuntimeError: mat1 and mat2 shapes cannot be multiplied (32x30 and 64x16)",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (32x30 and 64x16)\", \"fix_suggestion\": \"将 nn.Linear(64, 16) 改为 nn.Linear(30, 16)，或调整输入维度\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (32x30 and 64x16)\", \"fix_suggestion\": \"将 nn.Linear(64, 16) 改为 nn.Linear(30, 16)，或调整输入维度\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -417,10 +417,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(32, 64)\nx = torch.randn(32, 15)\nout = model(x)\n\nTraceback：\nRuntimeError: mat1 and mat2 shapes cannot be multiplied (32x15 and 32x64)",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (32x15 and 32x64)\", \"fix_suggestion\": \"将 nn.Linear(32, 64) 改为 nn.Linear(15, 64)，或调整输入维度\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (32x15 and 32x64)\", \"fix_suggestion\": \"将 nn.Linear(32, 64) 改为 nn.Linear(15, 64)，或调整输入维度\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -441,10 +441,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\n\na = np.random.randn(5, 4)\nb = np.random.randn(3, 8)\nc = np.dot(a, b)\n\nTraceback：\nValueError: shapes (5,4) and (3,8) not aligned",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (5,4) and (3,8) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (5,4) and (3,8) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "ValueError"
     }
   },
   {
@@ -457,10 +457,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(128, 16)\nx = torch.randn(8, 20)\nout = model(x)\n\nTraceback：\nRuntimeError: mat1 and mat2 shapes cannot be multiplied (8x20 and 128x16)",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (8x20 and 128x16)\", \"fix_suggestion\": \"将 nn.Linear(128, 16) 改为 nn.Linear(20, 16)，或调整输入维度\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (8x20 and 128x16)\", \"fix_suggestion\": \"将 nn.Linear(128, 16) 改为 nn.Linear(20, 16)，或调整输入维度\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -561,10 +561,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\ntensor = torch.randn(3, 3)\nresult = tensor.cuda() + torch.randn(3, 3)\n\nTraceback：\nRuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!",
-    "output": "{\"error_type\": \"LogicError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
     "metadata": {
       "source": "diverse",
-      "error_type": "LogicError"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -633,18 +633,18 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\ntensor = torch.randn(3, 3)\nresult = tensor.cuda() + torch.randn(3, 3)\n\nTraceback：\nRuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!",
-    "output": "{\"error_type\": \"LogicError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
     "metadata": {
       "source": "diverse",
-      "error_type": "LogicError"
+      "error_type": "RuntimeError"
     }
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\ntensor = torch.randn(3, 3)\nresult = tensor.cuda() + torch.randn(3, 3)\n\nTraceback：\nRuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!",
-    "output": "{\"error_type\": \"LogicError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
     "metadata": {
       "source": "diverse",
-      "error_type": "LogicError"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -729,10 +729,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\ntensor = torch.randn(3, 3)\nresult = tensor.cuda() + torch.randn(3, 3)\n\nTraceback：\nRuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!",
-    "output": "{\"error_type\": \"LogicError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
     "metadata": {
       "source": "diverse",
-      "error_type": "LogicError"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -761,10 +761,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\n\na = np.random.randn(5, 4)\nb = np.random.randn(3, 4)\nc = np.dot(a, b)\n\nTraceback：\nValueError: shapes (5,4) and (3,4) not aligned",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (5,4) and (3,4) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (5,4) and (3,4) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "ValueError"
     }
   },
   {
@@ -809,10 +809,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(128, 16)\nx = torch.randn(4, 15)\nout = model(x)\n\nTraceback：\nRuntimeError: mat1 and mat2 shapes cannot be multiplied (4x15 and 128x16)",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (4x15 and 128x16)\", \"fix_suggestion\": \"将 nn.Linear(128, 16) 改为 nn.Linear(15, 16)，或调整输入维度\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (4x15 and 128x16)\", \"fix_suggestion\": \"将 nn.Linear(128, 16) 改为 nn.Linear(15, 16)，或调整输入维度\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -873,18 +873,18 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(20, 64)\nx = torch.randn(8, 20)\nout = model(x)\n\nTraceback：\nRuntimeError: mat1 and mat2 shapes cannot be multiplied (8x20 and 20x64)",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (8x20 and 20x64)\", \"fix_suggestion\": \"将 nn.Linear(20, 64) 改为 nn.Linear(20, 64)，或调整输入维度\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (8x20 and 20x64)\", \"fix_suggestion\": \"将 nn.Linear(20, 64) 改为 nn.Linear(20, 64)，或调整输入维度\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "RuntimeError"
     }
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\ntensor = torch.randn(3, 3)\nresult = tensor.cuda() + torch.randn(3, 3)\n\nTraceback：\nRuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!",
-    "output": "{\"error_type\": \"LogicError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
     "metadata": {
       "source": "diverse",
-      "error_type": "LogicError"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -953,10 +953,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\n\na = np.random.randn(10, 8)\nb = np.random.randn(10, 4)\nc = np.dot(a, b)\n\nTraceback：\nValueError: shapes (10,8) and (10,4) not aligned",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (10,8) and (10,4) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (10,8) and (10,4) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "ValueError"
     }
   },
   {
@@ -1049,10 +1049,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(10, 32)\nx = torch.randn(8, 20)\nout = model(x)\n\nTraceback：\nRuntimeError: mat1 and mat2 shapes cannot be multiplied (8x20 and 10x32)",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (8x20 and 10x32)\", \"fix_suggestion\": \"将 nn.Linear(10, 32) 改为 nn.Linear(20, 32)，或调整输入维度\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (8x20 and 10x32)\", \"fix_suggestion\": \"将 nn.Linear(10, 32) 改为 nn.Linear(20, 32)，或调整输入维度\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -1089,10 +1089,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\ntensor = torch.randn(3, 3)\nresult = tensor.cuda() + torch.randn(3, 3)\n\nTraceback：\nRuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!",
-    "output": "{\"error_type\": \"LogicError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
     "metadata": {
       "source": "diverse",
-      "error_type": "LogicError"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -1193,10 +1193,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\ntensor = torch.randn(3, 3)\nresult = tensor.cuda() + torch.randn(3, 3)\n\nTraceback：\nRuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!",
-    "output": "{\"error_type\": \"LogicError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
     "metadata": {
       "source": "diverse",
-      "error_type": "LogicError"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -1337,26 +1337,26 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(32, 16)\nx = torch.randn(16, 30)\nout = model(x)\n\nTraceback：\nRuntimeError: mat1 and mat2 shapes cannot be multiplied (16x30 and 32x16)",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (16x30 and 32x16)\", \"fix_suggestion\": \"将 nn.Linear(32, 16) 改为 nn.Linear(30, 16)，或调整输入维度\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (16x30 and 32x16)\", \"fix_suggestion\": \"将 nn.Linear(32, 16) 改为 nn.Linear(30, 16)，或调整输入维度\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "RuntimeError"
     }
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\ntensor = torch.randn(3, 3)\nresult = tensor.cuda() + torch.randn(3, 3)\n\nTraceback：\nRuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!",
-    "output": "{\"error_type\": \"LogicError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
     "metadata": {
       "source": "diverse",
-      "error_type": "LogicError"
+      "error_type": "RuntimeError"
     }
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\n\na = np.random.randn(3, 8)\nb = np.random.randn(5, 16)\nc = np.dot(a, b)\n\nTraceback：\nValueError: shapes (3,8) and (5,16) not aligned",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (3,8) and (5,16) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (3,8) and (5,16) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "ValueError"
     }
   },
   {
@@ -1393,10 +1393,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\n\na = np.random.randn(10, 8)\nb = np.random.randn(5, 8)\nc = np.dot(a, b)\n\nTraceback：\nValueError: shapes (10,8) and (5,8) not aligned",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (10,8) and (5,8) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (10,8) and (5,8) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "ValueError"
     }
   },
   {
@@ -1449,10 +1449,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(64, 128)\nx = torch.randn(4, 15)\nout = model(x)\n\nTraceback：\nRuntimeError: mat1 and mat2 shapes cannot be multiplied (4x15 and 64x128)",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (4x15 and 64x128)\", \"fix_suggestion\": \"将 nn.Linear(64, 128) 改为 nn.Linear(15, 128)，或调整输入维度\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (4x15 and 64x128)\", \"fix_suggestion\": \"将 nn.Linear(64, 128) 改为 nn.Linear(15, 128)，或调整输入维度\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -1577,10 +1577,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(128, 16)\nx = torch.randn(4, 30)\nout = model(x)\n\nTraceback：\nRuntimeError: mat1 and mat2 shapes cannot be multiplied (4x30 and 128x16)",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (4x30 and 128x16)\", \"fix_suggestion\": \"将 nn.Linear(128, 16) 改为 nn.Linear(30, 16)，或调整输入维度\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (4x30 and 128x16)\", \"fix_suggestion\": \"将 nn.Linear(128, 16) 改为 nn.Linear(30, 16)，或调整输入维度\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -1593,10 +1593,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\n\na = np.random.randn(5, 4)\nb = np.random.randn(10, 16)\nc = np.dot(a, b)\n\nTraceback：\nValueError: shapes (5,4) and (10,16) not aligned",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (5,4) and (10,16) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (5,4) and (10,16) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "ValueError"
     }
   },
   {
@@ -1897,10 +1897,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\ntensor = torch.randn(3, 3)\nresult = tensor.cuda() + torch.randn(3, 3)\n\nTraceback：\nRuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!",
-    "output": "{\"error_type\": \"LogicError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
     "metadata": {
       "source": "diverse",
-      "error_type": "LogicError"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -1961,18 +1961,18 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\ntensor = torch.randn(3, 3)\nresult = tensor.cuda() + torch.randn(3, 3)\n\nTraceback：\nRuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!",
-    "output": "{\"error_type\": \"LogicError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
     "metadata": {
       "source": "diverse",
-      "error_type": "LogicError"
+      "error_type": "RuntimeError"
     }
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(64, 128)\nx = torch.randn(1, 15)\nout = model(x)\n\nTraceback：\nRuntimeError: mat1 and mat2 shapes cannot be multiplied (1x15 and 64x128)",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (1x15 and 64x128)\", \"fix_suggestion\": \"将 nn.Linear(64, 128) 改为 nn.Linear(15, 128)，或调整输入维度\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (1x15 and 64x128)\", \"fix_suggestion\": \"将 nn.Linear(64, 128) 改为 nn.Linear(15, 128)，或调整输入维度\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -2073,18 +2073,18 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(32, 16)\nx = torch.randn(32, 50)\nout = model(x)\n\nTraceback：\nRuntimeError: mat1 and mat2 shapes cannot be multiplied (32x50 and 32x16)",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (32x50 and 32x16)\", \"fix_suggestion\": \"将 nn.Linear(32, 16) 改为 nn.Linear(50, 16)，或调整输入维度\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (32x50 and 32x16)\", \"fix_suggestion\": \"将 nn.Linear(32, 16) 改为 nn.Linear(50, 16)，或调整输入维度\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "RuntimeError"
     }
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\n\na = np.random.randn(5, 16)\nb = np.random.randn(10, 4)\nc = np.dot(a, b)\n\nTraceback：\nValueError: shapes (5,16) and (10,4) not aligned",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (5,16) and (10,4) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (5,16) and (10,4) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "ValueError"
     }
   },
   {
@@ -2121,10 +2121,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(64, 32)\nx = torch.randn(1, 20)\nout = model(x)\n\nTraceback：\nRuntimeError: mat1 and mat2 shapes cannot be multiplied (1x20 and 64x32)",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (1x20 and 64x32)\", \"fix_suggestion\": \"将 nn.Linear(64, 32) 改为 nn.Linear(20, 32)，或调整输入维度\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (1x20 and 64x32)\", \"fix_suggestion\": \"将 nn.Linear(64, 32) 改为 nn.Linear(20, 32)，或调整输入维度\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -2137,10 +2137,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(64, 32)\nx = torch.randn(16, 20)\nout = model(x)\n\nTraceback：\nRuntimeError: mat1 and mat2 shapes cannot be multiplied (16x20 and 64x32)",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (16x20 and 64x32)\", \"fix_suggestion\": \"将 nn.Linear(64, 32) 改为 nn.Linear(20, 32)，或调整输入维度\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (16x20 and 64x32)\", \"fix_suggestion\": \"将 nn.Linear(64, 32) 改为 nn.Linear(20, 32)，或调整输入维度\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -2209,10 +2209,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(20, 32)\nx = torch.randn(16, 50)\nout = model(x)\n\nTraceback：\nRuntimeError: mat1 and mat2 shapes cannot be multiplied (16x50 and 20x32)",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (16x50 and 20x32)\", \"fix_suggestion\": \"将 nn.Linear(20, 32) 改为 nn.Linear(50, 32)，或调整输入维度\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (16x50 and 20x32)\", \"fix_suggestion\": \"将 nn.Linear(20, 32) 改为 nn.Linear(50, 32)，或调整输入维度\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -2305,10 +2305,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\n\na = np.random.randn(10, 4)\nb = np.random.randn(3, 4)\nc = np.dot(a, b)\n\nTraceback：\nValueError: shapes (10,4) and (3,4) not aligned",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (10,4) and (3,4) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (10,4) and (3,4) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "ValueError"
     }
   },
   {
@@ -2673,10 +2673,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(128, 32)\nx = torch.randn(4, 20)\nout = model(x)\n\nTraceback：\nRuntimeError: mat1 and mat2 shapes cannot be multiplied (4x20 and 128x32)",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (4x20 and 128x32)\", \"fix_suggestion\": \"将 nn.Linear(128, 32) 改为 nn.Linear(20, 32)，或调整输入维度\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (4x20 and 128x32)\", \"fix_suggestion\": \"将 nn.Linear(128, 32) 改为 nn.Linear(20, 32)，或调整输入维度\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -2697,10 +2697,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(32, 32)\nx = torch.randn(16, 50)\nout = model(x)\n\nTraceback：\nRuntimeError: mat1 and mat2 shapes cannot be multiplied (16x50 and 32x32)",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (16x50 and 32x32)\", \"fix_suggestion\": \"将 nn.Linear(32, 32) 改为 nn.Linear(50, 32)，或调整输入维度\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (16x50 and 32x32)\", \"fix_suggestion\": \"将 nn.Linear(32, 32) 改为 nn.Linear(50, 32)，或调整输入维度\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -2769,10 +2769,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\n\na = np.random.randn(10, 4)\nb = np.random.randn(10, 4)\nc = np.dot(a, b)\n\nTraceback：\nValueError: shapes (10,4) and (10,4) not aligned",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (10,4) and (10,4) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (10,4) and (10,4) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "ValueError"
     }
   },
   {
@@ -2897,10 +2897,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\ntensor = torch.randn(3, 3)\nresult = tensor.cuda() + torch.randn(3, 3)\n\nTraceback：\nRuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!",
-    "output": "{\"error_type\": \"LogicError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
     "metadata": {
       "source": "diverse",
-      "error_type": "LogicError"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -2953,10 +2953,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\n\na = np.random.randn(5, 16)\nb = np.random.randn(10, 4)\nc = np.dot(a, b)\n\nTraceback：\nValueError: shapes (5,16) and (10,4) not aligned",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (5,16) and (10,4) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (5,16) and (10,4) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "ValueError"
     }
   },
   {
@@ -2977,10 +2977,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(128, 128)\nx = torch.randn(16, 20)\nout = model(x)\n\nTraceback：\nRuntimeError: mat1 and mat2 shapes cannot be multiplied (16x20 and 128x128)",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (16x20 and 128x128)\", \"fix_suggestion\": \"将 nn.Linear(128, 128) 改为 nn.Linear(20, 128)，或调整输入维度\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (16x20 and 128x128)\", \"fix_suggestion\": \"将 nn.Linear(128, 128) 改为 nn.Linear(20, 128)，或调整输入维度\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -3001,10 +3001,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\ntensor = torch.randn(3, 3)\nresult = tensor.cuda() + torch.randn(3, 3)\n\nTraceback：\nRuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!",
-    "output": "{\"error_type\": \"LogicError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
     "metadata": {
       "source": "diverse",
-      "error_type": "LogicError"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -3193,10 +3193,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\n\na = np.random.randn(5, 4)\nb = np.random.randn(10, 16)\nc = np.dot(a, b)\n\nTraceback：\nValueError: shapes (5,4) and (10,16) not aligned",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (5,4) and (10,16) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (5,4) and (10,16) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "ValueError"
     }
   },
   {
@@ -3217,10 +3217,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\n\na = np.random.randn(3, 4)\nb = np.random.randn(5, 16)\nc = np.dot(a, b)\n\nTraceback：\nValueError: shapes (3,4) and (5,16) not aligned",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (3,4) and (5,16) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (3,4) and (5,16) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "ValueError"
     }
   },
   {
@@ -3265,10 +3265,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(128, 128)\nx = torch.randn(4, 15)\nout = model(x)\n\nTraceback：\nRuntimeError: mat1 and mat2 shapes cannot be multiplied (4x15 and 128x128)",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (4x15 and 128x128)\", \"fix_suggestion\": \"将 nn.Linear(128, 128) 改为 nn.Linear(15, 128)，或调整输入维度\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (4x15 and 128x128)\", \"fix_suggestion\": \"将 nn.Linear(128, 128) 改为 nn.Linear(15, 128)，或调整输入维度\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -3329,10 +3329,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(20, 64)\nx = torch.randn(16, 50)\nout = model(x)\n\nTraceback：\nRuntimeError: mat1 and mat2 shapes cannot be multiplied (16x50 and 20x64)",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (16x50 and 20x64)\", \"fix_suggestion\": \"将 nn.Linear(20, 64) 改为 nn.Linear(50, 64)，或调整输入维度\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (16x50 and 20x64)\", \"fix_suggestion\": \"将 nn.Linear(20, 64) 改为 nn.Linear(50, 64)，或调整输入维度\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -3417,10 +3417,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(64, 32)\nx = torch.randn(32, 30)\nout = model(x)\n\nTraceback：\nRuntimeError: mat1 and mat2 shapes cannot be multiplied (32x30 and 64x32)",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (32x30 and 64x32)\", \"fix_suggestion\": \"将 nn.Linear(64, 32) 改为 nn.Linear(30, 32)，或调整输入维度\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (32x30 and 64x32)\", \"fix_suggestion\": \"将 nn.Linear(64, 32) 改为 nn.Linear(30, 32)，或调整输入维度\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -3513,10 +3513,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\n\na = np.random.randn(3, 16)\nb = np.random.randn(10, 4)\nc = np.dot(a, b)\n\nTraceback：\nValueError: shapes (3,16) and (10,4) not aligned",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (3,16) and (10,4) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (3,16) and (10,4) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "ValueError"
     }
   },
   {
@@ -3569,10 +3569,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\ntensor = torch.randn(3, 3)\nresult = tensor.cuda() + torch.randn(3, 3)\n\nTraceback：\nRuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!",
-    "output": "{\"error_type\": \"LogicError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
     "metadata": {
       "source": "diverse",
-      "error_type": "LogicError"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -3641,10 +3641,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\ntensor = torch.randn(3, 3)\nresult = tensor.cuda() + torch.randn(3, 3)\n\nTraceback：\nRuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!",
-    "output": "{\"error_type\": \"LogicError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
     "metadata": {
       "source": "diverse",
-      "error_type": "LogicError"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -3657,10 +3657,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(10, 128)\nx = torch.randn(4, 15)\nout = model(x)\n\nTraceback：\nRuntimeError: mat1 and mat2 shapes cannot be multiplied (4x15 and 10x128)",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (4x15 and 10x128)\", \"fix_suggestion\": \"将 nn.Linear(10, 128) 改为 nn.Linear(15, 128)，或调整输入维度\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (4x15 and 10x128)\", \"fix_suggestion\": \"将 nn.Linear(10, 128) 改为 nn.Linear(15, 128)，或调整输入维度\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -3673,10 +3673,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\ntensor = torch.randn(3, 3)\nresult = tensor.cuda() + torch.randn(3, 3)\n\nTraceback：\nRuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!",
-    "output": "{\"error_type\": \"LogicError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
     "metadata": {
       "source": "diverse",
-      "error_type": "LogicError"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -3761,10 +3761,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\n\na = np.random.randn(10, 8)\nb = np.random.randn(5, 4)\nc = np.dot(a, b)\n\nTraceback：\nValueError: shapes (10,8) and (5,4) not aligned",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (10,8) and (5,4) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (10,8) and (5,4) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "ValueError"
     }
   },
   {
@@ -3913,10 +3913,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\ntensor = torch.randn(3, 3)\nresult = tensor.cuda() + torch.randn(3, 3)\n\nTraceback：\nRuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!",
-    "output": "{\"error_type\": \"LogicError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
     "metadata": {
       "source": "diverse",
-      "error_type": "LogicError"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -3945,10 +3945,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(128, 16)\nx = torch.randn(16, 50)\nout = model(x)\n\nTraceback：\nRuntimeError: mat1 and mat2 shapes cannot be multiplied (16x50 and 128x16)",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (16x50 and 128x16)\", \"fix_suggestion\": \"将 nn.Linear(128, 16) 改为 nn.Linear(50, 16)，或调整输入维度\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (16x50 and 128x16)\", \"fix_suggestion\": \"将 nn.Linear(128, 16) 改为 nn.Linear(50, 16)，或调整输入维度\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -4105,10 +4105,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\ntensor = torch.randn(3, 3)\nresult = tensor.cuda() + torch.randn(3, 3)\n\nTraceback：\nRuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!",
-    "output": "{\"error_type\": \"LogicError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
     "metadata": {
       "source": "diverse",
-      "error_type": "LogicError"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -4201,10 +4201,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(32, 64)\nx = torch.randn(1, 20)\nout = model(x)\n\nTraceback：\nRuntimeError: mat1 and mat2 shapes cannot be multiplied (1x20 and 32x64)",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (1x20 and 32x64)\", \"fix_suggestion\": \"将 nn.Linear(32, 64) 改为 nn.Linear(20, 64)，或调整输入维度\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (1x20 and 32x64)\", \"fix_suggestion\": \"将 nn.Linear(32, 64) 改为 nn.Linear(20, 64)，或调整输入维度\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -4265,10 +4265,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\ntensor = torch.randn(3, 3)\nresult = tensor.cuda() + torch.randn(3, 3)\n\nTraceback：\nRuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!",
-    "output": "{\"error_type\": \"LogicError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
     "metadata": {
       "source": "diverse",
-      "error_type": "LogicError"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -4329,10 +4329,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(128, 16)\nx = torch.randn(16, 30)\nout = model(x)\n\nTraceback：\nRuntimeError: mat1 and mat2 shapes cannot be multiplied (16x30 and 128x16)",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (16x30 and 128x16)\", \"fix_suggestion\": \"将 nn.Linear(128, 16) 改为 nn.Linear(30, 16)，或调整输入维度\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (16x30 and 128x16)\", \"fix_suggestion\": \"将 nn.Linear(128, 16) 改为 nn.Linear(30, 16)，或调整输入维度\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -4601,18 +4601,18 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\ntensor = torch.randn(3, 3)\nresult = tensor.cuda() + torch.randn(3, 3)\n\nTraceback：\nRuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!",
-    "output": "{\"error_type\": \"LogicError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
     "metadata": {
       "source": "diverse",
-      "error_type": "LogicError"
+      "error_type": "RuntimeError"
     }
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(20, 32)\nx = torch.randn(1, 50)\nout = model(x)\n\nTraceback：\nRuntimeError: mat1 and mat2 shapes cannot be multiplied (1x50 and 20x32)",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (1x50 and 20x32)\", \"fix_suggestion\": \"将 nn.Linear(20, 32) 改为 nn.Linear(50, 32)，或调整输入维度\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (1x50 and 20x32)\", \"fix_suggestion\": \"将 nn.Linear(20, 32) 改为 nn.Linear(50, 32)，或调整输入维度\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -4649,10 +4649,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(20, 64)\nx = torch.randn(8, 20)\nout = model(x)\n\nTraceback：\nRuntimeError: mat1 and mat2 shapes cannot be multiplied (8x20 and 20x64)",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (8x20 and 20x64)\", \"fix_suggestion\": \"将 nn.Linear(20, 64) 改为 nn.Linear(20, 64)，或调整输入维度\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (8x20 and 20x64)\", \"fix_suggestion\": \"将 nn.Linear(20, 64) 改为 nn.Linear(20, 64)，或调整输入维度\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -4713,10 +4713,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(10, 32)\nx = torch.randn(16, 30)\nout = model(x)\n\nTraceback：\nRuntimeError: mat1 and mat2 shapes cannot be multiplied (16x30 and 10x32)",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (16x30 and 10x32)\", \"fix_suggestion\": \"将 nn.Linear(10, 32) 改为 nn.Linear(30, 32)，或调整输入维度\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (16x30 and 10x32)\", \"fix_suggestion\": \"将 nn.Linear(10, 32) 改为 nn.Linear(30, 32)，或调整输入维度\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -4833,10 +4833,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\ntensor = torch.randn(3, 3)\nresult = tensor.cuda() + torch.randn(3, 3)\n\nTraceback：\nRuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!",
-    "output": "{\"error_type\": \"LogicError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
     "metadata": {
       "source": "diverse",
-      "error_type": "LogicError"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -4881,10 +4881,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(64, 64)\nx = torch.randn(16, 30)\nout = model(x)\n\nTraceback：\nRuntimeError: mat1 and mat2 shapes cannot be multiplied (16x30 and 64x64)",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (16x30 and 64x64)\", \"fix_suggestion\": \"将 nn.Linear(64, 64) 改为 nn.Linear(30, 64)，或调整输入维度\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (16x30 and 64x64)\", \"fix_suggestion\": \"将 nn.Linear(64, 64) 改为 nn.Linear(30, 64)，或调整输入维度\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -4977,10 +4977,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\n\na = np.random.randn(10, 16)\nb = np.random.randn(5, 16)\nc = np.dot(a, b)\n\nTraceback：\nValueError: shapes (10,16) and (5,16) not aligned",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (10,16) and (5,16) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (10,16) and (5,16) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "ValueError"
     }
   },
   {
@@ -5033,10 +5033,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\n\na = np.random.randn(5, 4)\nb = np.random.randn(3, 16)\nc = np.dot(a, b)\n\nTraceback：\nValueError: shapes (5,4) and (3,16) not aligned",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (5,4) and (3,16) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (5,4) and (3,16) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "ValueError"
     }
   },
   {
@@ -5097,10 +5097,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\ntensor = torch.randn(3, 3)\nresult = tensor.cuda() + torch.randn(3, 3)\n\nTraceback：\nRuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!",
-    "output": "{\"error_type\": \"LogicError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
     "metadata": {
       "source": "diverse",
-      "error_type": "LogicError"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -5185,10 +5185,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(10, 128)\nx = torch.randn(4, 20)\nout = model(x)\n\nTraceback：\nRuntimeError: mat1 and mat2 shapes cannot be multiplied (4x20 and 10x128)",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (4x20 and 10x128)\", \"fix_suggestion\": \"将 nn.Linear(10, 128) 改为 nn.Linear(20, 128)，或调整输入维度\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (4x20 and 10x128)\", \"fix_suggestion\": \"将 nn.Linear(10, 128) 改为 nn.Linear(20, 128)，或调整输入维度\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -5209,10 +5209,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(10, 16)\nx = torch.randn(32, 15)\nout = model(x)\n\nTraceback：\nRuntimeError: mat1 and mat2 shapes cannot be multiplied (32x15 and 10x16)",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (32x15 and 10x16)\", \"fix_suggestion\": \"将 nn.Linear(10, 16) 改为 nn.Linear(15, 16)，或调整输入维度\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (32x15 and 10x16)\", \"fix_suggestion\": \"将 nn.Linear(10, 16) 改为 nn.Linear(15, 16)，或调整输入维度\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -5305,18 +5305,18 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(64, 32)\nx = torch.randn(32, 50)\nout = model(x)\n\nTraceback：\nRuntimeError: mat1 and mat2 shapes cannot be multiplied (32x50 and 64x32)",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (32x50 and 64x32)\", \"fix_suggestion\": \"将 nn.Linear(64, 32) 改为 nn.Linear(50, 32)，或调整输入维度\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (32x50 and 64x32)\", \"fix_suggestion\": \"将 nn.Linear(64, 32) 改为 nn.Linear(50, 32)，或调整输入维度\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "RuntimeError"
     }
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\n\na = np.random.randn(5, 8)\nb = np.random.randn(5, 16)\nc = np.dot(a, b)\n\nTraceback：\nValueError: shapes (5,8) and (5,16) not aligned",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (5,8) and (5,16) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (5,8) and (5,16) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "ValueError"
     }
   },
   {
@@ -5385,10 +5385,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\n\na = np.random.randn(10, 4)\nb = np.random.randn(3, 8)\nc = np.dot(a, b)\n\nTraceback：\nValueError: shapes (10,4) and (3,8) not aligned",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (10,4) and (3,8) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (10,4) and (3,8) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "ValueError"
     }
   },
   {
@@ -5409,10 +5409,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(10, 64)\nx = torch.randn(8, 30)\nout = model(x)\n\nTraceback：\nRuntimeError: mat1 and mat2 shapes cannot be multiplied (8x30 and 10x64)",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (8x30 and 10x64)\", \"fix_suggestion\": \"将 nn.Linear(10, 64) 改为 nn.Linear(30, 64)，或调整输入维度\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (8x30 and 10x64)\", \"fix_suggestion\": \"将 nn.Linear(10, 64) 改为 nn.Linear(30, 64)，或调整输入维度\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -5481,18 +5481,18 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\ntensor = torch.randn(3, 3)\nresult = tensor.cuda() + torch.randn(3, 3)\n\nTraceback：\nRuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!",
-    "output": "{\"error_type\": \"LogicError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
     "metadata": {
       "source": "diverse",
-      "error_type": "LogicError"
+      "error_type": "RuntimeError"
     }
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\n\na = np.random.randn(10, 8)\nb = np.random.randn(10, 16)\nc = np.dot(a, b)\n\nTraceback：\nValueError: shapes (10,8) and (10,16) not aligned",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (10,8) and (10,16) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (10,8) and (10,16) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "ValueError"
     }
   },
   {
@@ -5657,10 +5657,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(64, 32)\nx = torch.randn(32, 50)\nout = model(x)\n\nTraceback：\nRuntimeError: mat1 and mat2 shapes cannot be multiplied (32x50 and 64x32)",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (32x50 and 64x32)\", \"fix_suggestion\": \"将 nn.Linear(64, 32) 改为 nn.Linear(50, 32)，或调整输入维度\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (32x50 and 64x32)\", \"fix_suggestion\": \"将 nn.Linear(64, 32) 改为 nn.Linear(50, 32)，或调整输入维度\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -5681,10 +5681,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(32, 64)\nx = torch.randn(16, 30)\nout = model(x)\n\nTraceback：\nRuntimeError: mat1 and mat2 shapes cannot be multiplied (16x30 and 32x64)",
-    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (16x30 and 32x64)\", \"fix_suggestion\": \"将 nn.Linear(32, 64) 改为 nn.Linear(30, 64)，或调整输入维度\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (16x30 and 32x64)\", \"fix_suggestion\": \"将 nn.Linear(32, 64) 改为 nn.Linear(30, 64)，或调整输入维度\", \"confidence\": 0.9}",
     "metadata": {
       "source": "template",
-      "error_type": "ShapeMismatch"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -5697,10 +5697,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\ntensor = torch.randn(3, 3)\nresult = tensor.cuda() + torch.randn(3, 3)\n\nTraceback：\nRuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!",
-    "output": "{\"error_type\": \"LogicError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
     "metadata": {
       "source": "diverse",
-      "error_type": "LogicError"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -5729,10 +5729,10 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\ntensor = torch.randn(3, 3)\nresult = tensor.cuda() + torch.randn(3, 3)\n\nTraceback：\nRuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!",
-    "output": "{\"error_type\": \"LogicError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!\", \"fix_suggestion\": \"确保所有 tensor 在同一设备：torch.randn(3, 3).cuda()\", \"confidence\": 0.9}",
     "metadata": {
       "source": "diverse",
-      "error_type": "LogicError"
+      "error_type": "RuntimeError"
     }
   },
   {
@@ -5833,10 +5833,1178 @@
   },
   {
     "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport sklearn.ensemble\nmodel = sklearn.ensemble.FakeClassifier()\n\nTraceback：\nImportError: cannot import name 'FakeClassifier' from 'sklearn.ensemble'",
-    "output": "{\"error_type\": \"DependencyMissing\", \"error_location\": \"line 1\", \"root_cause\": \"ImportError: cannot import name 'FakeClassifier' from 'sklearn.ensemble'\", \"fix_suggestion\": \"检查类名是否正确，或者该类是否存在\", \"confidence\": 0.85}",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"ImportError: cannot import name 'FakeClassifier' from 'sklearn.ensemble'\", \"fix_suggestion\": \"检查类名是否正确，或者该类是否存在\", \"confidence\": 0.85}",
     "metadata": {
       "source": "stackoverflow_style",
-      "error_type": "DependencyMissing"
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nif x > 5\n    print('big')\n\nTraceback：\nSyntaxError: expected ':'",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"expected ':'\", \"fix_suggestion\": \"在条件表达式后添加冒号\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndef greet(name)\n    print(name)\n\nTraceback：\nSyntaxError: expected ':'",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"expected ':'\", \"fix_suggestion\": \"在参数列表后添加冒号\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nfor i in range(10)\n    print(i)\n\nTraceback：\nSyntaxError: expected ':'",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"expected ':'\", \"fix_suggestion\": \"在range(10)后添加冒号\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nwhile True\n    break\n\nTraceback：\nSyntaxError: expected ':'",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"expected ':'\", \"fix_suggestion\": \"在True后添加冒号\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nclass Dog\n    pass\n\nTraceback：\nSyntaxError: expected ':'",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"expected ':'\", \"fix_suggestion\": \"在类名后添加冒号\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nresult = [1, 2, 3\n\nTraceback：\nSyntaxError: '[' was never closed",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"'[' was never closed\", \"fix_suggestion\": \"添加右括号\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nresult = (1, 2, 3\n\nTraceback：\nSyntaxError: '(' was never closed",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"'(' was never closed\", \"fix_suggestion\": \"添加右括号\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nresult = {1, 2, 3\n\nTraceback：\nSyntaxError: '{' was never closed",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"'{' was never closed\", \"fix_suggestion\": \"添加右花括号\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nx = 'hello\n\nTraceback：\nSyntaxError: EOL while scanning string literal",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"EOL while scanning string literal\", \"fix_suggestion\": \"添加右引号\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nprint('hello)\n\nTraceback：\nSyntaxError: EOL while scanning string literal",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"EOL while scanning string literal\", \"fix_suggestion\": \"添加右引号\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nif x = 5:\n    print('equal')\n\nTraceback：\nSyntaxError: cannot assign to literal",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"cannot assign to literal\", \"fix_suggestion\": \"使用==进行比较\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nx += 1\n\nTraceback：\nSyntaxError: cannot assign to literal",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"cannot assign to literal\", \"fix_suggestion\": \"确保x已定义\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport os\nimport sys\nprint(os,)\n\nTraceback：\nSyntaxError: SyntaxError: invalid syntax",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"SyntaxError: invalid syntax\", \"fix_suggestion\": \"移除多余逗号\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nresult = 1 +\n    2 + 3\n\nTraceback：\nSyntaxError: invalid syntax",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"invalid syntax\", \"fix_suggestion\": \"确保表达式完整\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nx = 1\ny = 2\nz = x +\n\n\nTraceback：\nSyntaxError: invalid syntax",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"invalid syntax\", \"fix_suggestion\": \"确保表达式完整\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nprint('hello' 'world')\n\nTraceback：\nSyntaxError: invalid syntax",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"invalid syntax\", \"fix_suggestion\": \"添加+号或使用f字符串\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\na = 1 and b = 2\n\nTraceback：\nSyntaxError: invalid syntax",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"invalid syntax\", \"fix_suggestion\": \"使用==进行比较\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nx = True if x > 0 else False\n\nTraceback：\nSyntaxError: invalid syntax",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"invalid syntax\", \"fix_suggestion\": \"确保条件表达式语法正确\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nlambda x: x + 1()\n\nTraceback：\nSyntaxError: invalid syntax",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"invalid syntax\", \"fix_suggestion\": \"lambda函数调用语法错误\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\n[x for x in range(10)]\n\nTraceback：\nSyntaxError: invalid syntax",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"invalid syntax\", \"fix_suggestion\": \"列表推导式语法错误\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndef func(a, b=1, c)\n\nTraceback：\nSyntaxError: non-default argument follows default argument",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"non-default argument follows default argument\", \"fix_suggestion\": \"默认参数放在后面\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndef func(a=1, b, c=3)\n\nTraceback：\nSyntaxError: non-default argument follows default argument",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"non-default argument follows default argument\", \"fix_suggestion\": \"默认参数放在后面\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nclass = 'myclass'\n\nTraceback：\nSyntaxError: invalid syntax",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"invalid syntax\", \"fix_suggestion\": \"class是关键字，不能用作变量名\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport = 'module'\n\nTraceback：\nSyntaxError: invalid syntax",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"invalid syntax\", \"fix_suggestion\": \"import是关键字，不能用作变量名\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\n123abc = 5\n\nTraceback：\nSyntaxError: invalid syntax",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"invalid syntax\", \"fix_suggestion\": \"变量名不能以数字开头\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nmy-var = 5\n\nTraceback：\nSyntaxError: invalid syntax",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"invalid syntax\", \"fix_suggestion\": \"变量名不能包含连字符\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nx@y = 5\n\nTraceback：\nSyntaxError: invalid syntax",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"invalid syntax\", \"fix_suggestion\": \"变量名不能包含@符号\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nx from = 5\n\nTraceback：\nSyntaxError: invalid syntax",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"invalid syntax\", \"fix_suggestion\": \"from是关键字，不能用作变量名\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nx yield = 5\n\nTraceback：\nSyntaxError: invalid syntax",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"invalid syntax\", \"fix_suggestion\": \"yield是关键字，不能用作变量名\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nx async = 5\n\nTraceback：\nSyntaxError: invalid syntax",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"invalid syntax\", \"fix_suggestion\": \"async是关键字，不能用作变量名\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nx await = 5\n\nTraceback：\nSyntaxError: invalid syntax",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"invalid syntax\", \"fix_suggestion\": \"await是关键字，不能用作变量名\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nx with = 5\n\nTraceback：\nSyntaxError: invalid syntax",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"invalid syntax\", \"fix_suggestion\": \"with是关键字，不能用作变量名\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nx as = 5\n\nTraceback：\nSyntaxError: invalid syntax",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"invalid syntax\", \"fix_suggestion\": \"as是关键字，不能用作变量名\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nx try = 5\n\nTraceback：\nSyntaxError: invalid syntax",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"invalid syntax\", \"fix_suggestion\": \"try是关键字，不能用作变量名\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nx except = 5\n\nTraceback：\nSyntaxError: invalid syntax",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"invalid syntax\", \"fix_suggestion\": \"except是关键字，不能用作变量名\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nx raise = 5\n\nTraceback：\nSyntaxError: invalid syntax",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"invalid syntax\", \"fix_suggestion\": \"raise是关键字，不能用作变量名\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nx finally = 5\n\nTraceback：\nSyntaxError: invalid syntax",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"invalid syntax\", \"fix_suggestion\": \"finally是关键字，不能用作变量名\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nx return = 5\n\nTraceback：\nSyntaxError: invalid syntax",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"invalid syntax\", \"fix_suggestion\": \"return是关键字，不能用作变量名\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nx break = 5\n\nTraceback：\nSyntaxError: invalid syntax",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"invalid syntax\", \"fix_suggestion\": \"break是关键字，不能用作变量名\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nx continue = 5\n\nTraceback：\nSyntaxError: invalid syntax",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"invalid syntax\", \"fix_suggestion\": \"continue是关键字，不能用作变量名\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nx pass = 5\n\nTraceback：\nSyntaxError: invalid syntax",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"invalid syntax\", \"fix_suggestion\": \"pass是关键字，不能用作变量名\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nx global = 5\n\nTraceback：\nSyntaxError: invalid syntax",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"invalid syntax\", \"fix_suggestion\": \"global是关键字，不能用作变量名\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nx nonlocal = 5\n\nTraceback：\nSyntaxError: invalid syntax",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"invalid syntax\", \"fix_suggestion\": \"nonlocal是关键字，不能用作变量名\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nx del = 5\n\nTraceback：\nSyntaxError: invalid syntax",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"invalid syntax\", \"fix_suggestion\": \"del是关键字，不能用作变量名\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nx assert = 5\n\nTraceback：\nSyntaxError: invalid syntax",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"invalid syntax\", \"fix_suggestion\": \"assert是关键字，不能用作变量名\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nx in = 5\n\nTraceback：\nSyntaxError: invalid syntax",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"invalid syntax\", \"fix_suggestion\": \"in是关键字，不能用作变量名\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nx is = 5\n\nTraceback：\nSyntaxError: invalid syntax",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"invalid syntax\", \"fix_suggestion\": \"is是关键字，不能用作变量名\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nx not = 5\n\nTraceback：\nSyntaxError: invalid syntax",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"invalid syntax\", \"fix_suggestion\": \"not是关键字，不能用作变量名\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nx and = 5\n\nTraceback：\nSyntaxError: invalid syntax",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"invalid syntax\", \"fix_suggestion\": \"and是关键字，不能用作变量名\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nx or = 5\n\nTraceback：\nSyntaxError: invalid syntax",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"invalid syntax\", \"fix_suggestion\": \"or是关键字，不能用作变量名\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport tensorflow as tf\n\nTraceback：\nModuleNotFoundError: No module named 'tensorflow'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'tensorflow'\", \"fix_suggestion\": \"pip install tensorflow\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\n\nTraceback：\nModuleNotFoundError: No module named 'torch'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'torch'\", \"fix_suggestion\": \"pip install torch\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport lightgbm as lgb\n\nTraceback：\nModuleNotFoundError: No module named 'lightgbm'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'lightgbm'\", \"fix_suggestion\": \"pip install lightgbm\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport xgboost as xgb\n\nTraceback：\nModuleNotFoundError: No module named 'xgboost'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'xgboost'\", \"fix_suggestion\": \"pip install xgboost\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport catboost\n\nTraceback：\nModuleNotFoundError: No module named 'catboost'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'catboost'\", \"fix_suggestion\": \"pip install catboost\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport cv2\n\nTraceback：\nModuleNotFoundError: No module named 'cv2'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'cv2'\", \"fix_suggestion\": \"pip install opencv-python\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport PIL\n\nTraceback：\nModuleNotFoundError: No module named 'PIL'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'PIL'\", \"fix_suggestion\": \"pip install Pillow\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport sklearn\n\nTraceback：\nModuleNotFoundError: No module named 'sklearn'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'sklearn'\", \"fix_suggestion\": \"pip install scikit-learn\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport pandas as pd\n\nTraceback：\nModuleNotFoundError: No module named 'pandas'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'pandas'\", \"fix_suggestion\": \"pip install pandas\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\n\nTraceback：\nModuleNotFoundError: No module named 'numpy'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'numpy'\", \"fix_suggestion\": \"pip install numpy\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport scipy\n\nTraceback：\nModuleNotFoundError: No module named 'scipy'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'scipy'\", \"fix_suggestion\": \"pip install scipy\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport matplotlib\n\nTraceback：\nModuleNotFoundError: No module named 'matplotlib'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'matplotlib'\", \"fix_suggestion\": \"pip install matplotlib\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport seaborn\n\nTraceback：\nModuleNotFoundError: No module named 'seaborn'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'seaborn'\", \"fix_suggestion\": \"pip install seaborn\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport plotly\n\nTraceback：\nModuleNotFoundError: No module named 'plotly'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'plotly'\", \"fix_suggestion\": \"pip install plotly\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport flask\n\nTraceback：\nModuleNotFoundError: No module named 'flask'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'flask'\", \"fix_suggestion\": \"pip install flask\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport django\n\nTraceback：\nModuleNotFoundError: No module named 'django'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'django'\", \"fix_suggestion\": \"pip install django\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport fastapi\n\nTraceback：\nModuleNotFoundError: No module named 'fastapi'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'fastapi'\", \"fix_suggestion\": \"pip install fastapi\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport uvicorn\n\nTraceback：\nModuleNotFoundError: No module named 'uvicorn'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'uvicorn'\", \"fix_suggestion\": \"pip install uvicorn\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport celery\n\nTraceback：\nModuleNotFoundError: No module named 'celery'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'celery'\", \"fix_suggestion\": \"pip install celery\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport redis\n\nTraceback：\nModuleNotFoundError: No module named 'redis'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'redis'\", \"fix_suggestion\": \"pip install redis\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport psycopg2\n\nTraceback：\nModuleNotFoundError: No module named 'psycopg2'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'psycopg2'\", \"fix_suggestion\": \"pip install psycopg2-binary\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport pymongo\n\nTraceback：\nModuleNotFoundError: No module named 'pymongo'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'pymongo'\", \"fix_suggestion\": \"pip install pymongo\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport elasticsearch\n\nTraceback：\nModuleNotFoundError: No module named 'elasticsearch'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'elasticsearch'\", \"fix_suggestion\": \"pip install elasticsearch\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport kafka\n\nTraceback：\nModuleNotFoundError: No module named 'kafka'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'kafka'\", \"fix_suggestion\": \"pip install kafka-python\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport boto3\n\nTraceback：\nModuleNotFoundError: No module named 'boto3'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'boto3'\", \"fix_suggestion\": \"pip install boto3\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport azure\n\nTraceback：\nModuleNotFoundError: No module named 'azure'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'azure'\", \"fix_suggestion\": \"pip install azure\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport google.cloud\n\nTraceback：\nModuleNotFoundError: No module named 'google.cloud'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'google.cloud'\", \"fix_suggestion\": \"pip install google-cloud-storage\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport pyarrow\n\nTraceback：\nModuleNotFoundError: No module named 'pyarrow'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'pyarrow'\", \"fix_suggestion\": \"pip install pyarrow\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport dask\n\nTraceback：\nModuleNotFoundError: No module named 'dask'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'dask'\", \"fix_suggestion\": \"pip install dask\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport vaex\n\nTraceback：\nModuleNotFoundError: No module named 'vaex'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'vaex'\", \"fix_suggestion\": \"pip install vaex\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport modin\n\nTraceback：\nModuleNotFoundError: No module named 'modin'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'modin'\", \"fix_suggestion\": \"pip install modin\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport cudf\n\nTraceback：\nModuleNotFoundError: No module named 'cudf'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'cudf'\", \"fix_suggestion\": \"pip install cudf\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport cuml\n\nTraceback：\nModuleNotFoundError: No module named 'cuml'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'cuml'\", \"fix_suggestion\": \"pip install cuml\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport cugraph\n\nTraceback：\nModuleNotFoundError: No module named 'cugraph'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'cugraph'\", \"fix_suggestion\": \"pip install cugraph\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport cupy\n\nTraceback：\nModuleNotFoundError: No module named 'cupy'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'cupy'\", \"fix_suggestion\": \"pip install cupy-cuda11x\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport jax\n\nTraceback：\nModuleNotFoundError: No module named 'jax'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'jax'\", \"fix_suggestion\": \"pip install jax\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport flax\n\nTraceback：\nModuleNotFoundError: No module named 'flax'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'flax'\", \"fix_suggestion\": \"pip install flax\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport haiku\n\nTraceback：\nModuleNotFoundError: No module named 'haiku'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'haiku'\", \"fix_suggestion\": \"pip install dm-haiku\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport optax\n\nTraceback：\nModuleNotFoundError: No module named 'optax'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'optax'\", \"fix_suggestion\": \"pip install optax\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport rlax\n\nTraceback：\nModuleNotFoundError: No module named 'rlax'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'rlax'\", \"fix_suggestion\": \"pip install rlax\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport gym\n\nTraceback：\nModuleNotFoundError: No module named 'gym'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'gym'\", \"fix_suggestion\": \"pip install gym\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport stable_baselines3\n\nTraceback：\nModuleNotFoundError: No module named 'stable_baselines3'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'stable_baselines3'\", \"fix_suggestion\": \"pip install stable-baselines3\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport ray\n\nTraceback：\nModuleNotFoundError: No module named 'ray'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'ray'\", \"fix_suggestion\": \"pip install ray\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport dask\n\nTraceback：\nModuleNotFoundError: No module named 'dask'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'dask'\", \"fix_suggestion\": \"pip install dask\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport prefect\n\nTraceback：\nModuleNotFoundError: No module named 'prefect'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'prefect'\", \"fix_suggestion\": \"pip install prefect\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport airflow\n\nTraceback：\nModuleNotFoundError: No module named 'airflow'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'airflow'\", \"fix_suggestion\": \"pip install apache-airflow\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport luigi\n\nTraceback：\nModuleNotFoundError: No module named 'luigi'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'luigi'\", \"fix_suggestion\": \"pip install luigi\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport snakemake\n\nTraceback：\nModuleNotFoundError: No module named 'snakemake'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'snakemake'\", \"fix_suggestion\": \"pip install snakemake\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport nextflow\n\nTraceback：\nModuleNotFoundError: No module named 'nextflow'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'nextflow'\", \"fix_suggestion\": \"pip install nextflow\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport cwltool\n\nTraceback：\nModuleNotFoundError: No module named 'cwltool'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'cwltool'\", \"fix_suggestion\": \"pip install cwltool\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport requests\nrequests.get('https://api.example.com', timeout=5)\n\nTraceback：\nTimeoutError: Read timed out",
+    "output": "{\"error_type\": \"Timeout\", \"error_location\": \"line 1\", \"root_cause\": \"Read timed out\", \"fix_suggestion\": \"增加timeout值或使用异步请求\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "Timeout"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport socket\nsock = socket.socket()\nsock.settimeout(3)\nsock.connect(('192.168.1.1', 80))\n\nTraceback：\nTimeoutError: timed out",
+    "output": "{\"error_type\": \"Timeout\", \"error_location\": \"line 1\", \"root_cause\": \"timed out\", \"fix_suggestion\": \"检查网络连接或增加超时时间\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "Timeout"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport urllib.request\nurllib.request.urlopen('http://example.com', timeout=10)\n\nTraceback：\nTimeoutError: timed out",
+    "output": "{\"error_type\": \"Timeout\", \"error_location\": \"line 1\", \"root_cause\": \"timed out\", \"fix_suggestion\": \"增加timeout值或使用异步请求\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "Timeout"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport http.client\nconn = http.client.HTTPConnection('example.com', timeout=5)\n\nTraceback：\nTimeoutError: timed out",
+    "output": "{\"error_type\": \"Timeout\", \"error_location\": \"line 1\", \"root_cause\": \"timed out\", \"fix_suggestion\": \"增加timeout值或检查网络\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "Timeout"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport subprocess\nsubprocess.run(['sleep', '100'], timeout=5)\n\nTraceback：\nTimeoutError: timed out",
+    "output": "{\"error_type\": \"Timeout\", \"error_location\": \"line 1\", \"root_cause\": \"timed out\", \"fix_suggestion\": \"增加timeout值或使用异步执行\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "Timeout"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport multiprocessing\npool = multiprocessing.Pool(4)\nresult = pool.apply_async(func, timeout=3)\n\nTraceback：\nTimeoutError: timed out",
+    "output": "{\"error_type\": \"Timeout\", \"error_location\": \"line 1\", \"root_cause\": \"timed out\", \"fix_suggestion\": \"增加timeout值或优化函数\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "Timeout"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport concurrent.futures\nwith concurrent.futures.ThreadPoolExecutor() as executor:\n    future = executor.submit(func)\n    result = future.result(timeout=5)\n\nTraceback：\nTimeoutError: timed out",
+    "output": "{\"error_type\": \"Timeout\", \"error_location\": \"line 1\", \"root_cause\": \"timed out\", \"fix_suggestion\": \"增加timeout值或优化函数\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "Timeout"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport asyncio\nasync def fetch():\n    return await asyncio.wait_for(slow_func(), timeout=3)\n\nTraceback：\nTimeoutError: timed out",
+    "output": "{\"error_type\": \"Timeout\", \"error_location\": \"line 1\", \"root_cause\": \"timed out\", \"fix_suggestion\": \"增加timeout值或优化异步函数\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "Timeout"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport signal\ndef handler(signum, frame):\n    raise TimeoutError('Timeout')\nsignal.signal(signal.SIGALRM, handler)\nsignal.alarm(5)\n\nTraceback：\nTimeoutError: timed out",
+    "output": "{\"error_type\": \"Timeout\", \"error_location\": \"line 1\", \"root_cause\": \"timed out\", \"fix_suggestion\": \"增加alarm时间或优化函数\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "Timeout"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport threading\ndef func():\n    time.sleep(100)\nt = threading.Thread(target=func)\nt.start()\nt.join(timeout=5)\n\nTraceback：\nTimeoutError: timed out",
+    "output": "{\"error_type\": \"Timeout\", \"error_location\": \"line 1\", \"root_cause\": \"timed out\", \"fix_suggestion\": \"增加join timeout或优化函数\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "Timeout"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport requests\nsession = requests.Session()\nresp = session.get('http://example.com', timeout=(3, 7))\n\nTraceback：\nTimeoutError: Connection timed out",
+    "output": "{\"error_type\": \"Timeout\", \"error_location\": \"line 1\", \"root_cause\": \"Connection timed out\", \"fix_suggestion\": \"增加connect timeout值\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "Timeout"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport aiohttp\nasync def fetch():\n    async with aiohttp.ClientSession() as session:\n        async with session.get('http://example.com', timeout=5) as resp:\n\nTraceback：\nTimeoutError: Timeout",
+    "output": "{\"error_type\": \"Timeout\", \"error_location\": \"line 1\", \"root_cause\": \"Timeout\", \"fix_suggestion\": \"增加timeout值或使用异步请求\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "Timeout"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport httpx\nclient = httpx.Client(timeout=5)\nresp = client.get('http://example.com')\n\nTraceback：\nTimeoutError: ConnectTimeout",
+    "output": "{\"error_type\": \"Timeout\", \"error_location\": \"line 1\", \"root_cause\": \"ConnectTimeout\", \"fix_suggestion\": \"增加timeout值或检查网络\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "Timeout"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport grpc\nchannel = grpc.insecure_channel('localhost:50051', options=[('grpc.connect_timeout_ms', 3000)])\n\nTraceback：\nTimeoutError: DEADLINE_EXCEEDED",
+    "output": "{\"error_type\": \"Timeout\", \"error_location\": \"line 1\", \"root_cause\": \"DEADLINE_EXCEEDED\", \"fix_suggestion\": \"增加connect_timeout_ms值\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "Timeout"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport redis\nr = redis.Redis(socket_timeout=3)\n\nTraceback：\nTimeoutError: Timeout",
+    "output": "{\"error_type\": \"Timeout\", \"error_location\": \"line 1\", \"root_cause\": \"Timeout\", \"fix_suggestion\": \"增加socket_timeout值\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "Timeout"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport pymongo\nclient = pymongo.MongoClient(serverSelectionTimeoutMS=3000)\n\nTraceback：\nTimeoutError: ServerSelectionTimeoutError",
+    "output": "{\"error_type\": \"Timeout\", \"error_location\": \"line 1\", \"root_cause\": \"ServerSelectionTimeoutError\", \"fix_suggestion\": \"增加serverSelectionTimeoutMS值\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "Timeout"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport psycopg2\nconn = psycopg2.connect(connect_timeout=3)\n\nTraceback：\nTimeoutError: timeout expired",
+    "output": "{\"error_type\": \"Timeout\", \"error_location\": \"line 1\", \"root_cause\": \"timeout expired\", \"fix_suggestion\": \"增加connect_timeout值\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "Timeout"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport mysql.connector\nconn = mysql.connector.connect(connect_timeout=3)\n\nTraceback：\nTimeoutError: Connection timed out",
+    "output": "{\"error_type\": \"Timeout\", \"error_location\": \"line 1\", \"root_cause\": \"Connection timed out\", \"fix_suggestion\": \"增加connect_timeout值\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "Timeout"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport sqlite3\nconn = sqlite3.connect('db.sqlite3', timeout=3)\n\nTraceback：\nTimeoutError: database is locked",
+    "output": "{\"error_type\": \"Timeout\", \"error_location\": \"line 1\", \"root_cause\": \"database is locked\", \"fix_suggestion\": \"增加timeout值或使用WAL模式\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "Timeout"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport paramiko\nclient = paramiko.SSHClient()\n\nTraceback：\nTimeoutError: timed out",
+    "output": "{\"error_type\": \"Timeout\", \"error_location\": \"line 1\", \"root_cause\": \"timed out\", \"fix_suggestion\": \"检查SSH连接或增加超时时间\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "Timeout"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport ftplib\nftp = ftplib.FTP('ftp.example.com', timeout=5)\n\nTraceback：\nTimeoutError: timed out",
+    "output": "{\"error_type\": \"Timeout\", \"error_location\": \"line 1\", \"root_cause\": \"timed out\", \"fix_suggestion\": \"增加timeout值或检查FTP服务器\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "Timeout"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport smtplib\nserver = smtplib.SMTP('smtp.example.com', 587, timeout=5)\n\nTraceback：\nTimeoutError: timed out",
+    "output": "{\"error_type\": \"Timeout\", \"error_location\": \"line 1\", \"root_cause\": \"timed out\", \"fix_suggestion\": \"增加timeout值或检查SMTP服务器\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "Timeout"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport imaplib\nmail = imaplib.IMAP4_SSL('imap.example.com', timeout=5)\n\nTraceback：\nTimeoutError: timed out",
+    "output": "{\"error_type\": \"Timeout\", \"error_location\": \"line 1\", \"root_cause\": \"timed out\", \"fix_suggestion\": \"增加timeout值或检查IMAP服务器\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "Timeout"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport poplib\nmail = poplib.POP3_SSL('pop.example.com', timeout=5)\n\nTraceback：\nTimeoutError: timed out",
+    "output": "{\"error_type\": \"Timeout\", \"error_location\": \"line 1\", \"root_cause\": \"timed out\", \"fix_suggestion\": \"增加timeout值或检查POP3服务器\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "Timeout"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport selenium\nfrom selenium import webdriver\ndriver = webdriver.Chrome()\n\nTraceback：\nTimeoutError: timed out",
+    "output": "{\"error_type\": \"Timeout\", \"error_location\": \"line 1\", \"root_cause\": \"timed out\", \"fix_suggestion\": \"检查ChromeDriver路径或增加超时时间\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "Timeout"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport playwright\nfrom playwright.sync_api import sync_playwright\nwith sync_playwright() as p:\n    browser = p.chromium.launch()\n\nTraceback：\nTimeoutError: Timeout",
+    "output": "{\"error_type\": \"Timeout\", \"error_location\": \"line 1\", \"root_cause\": \"Timeout\", \"fix_suggestion\": \"检查浏览器安装或增加超时时间\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "Timeout"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport scrapy\nfrom scrapy.crawler import CrawlerProcess\n\nTraceback：\nTimeoutError: Timeout",
+    "output": "{\"error_type\": \"Timeout\", \"error_location\": \"line 1\", \"root_cause\": \"Timeout\", \"fix_suggestion\": \"检查Scrapy配置或增加超时时间\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "Timeout"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport celery\napp = celery.Celery('tasks', broker='redis://localhost:6379/0')\n\nTraceback：\nTimeoutError: ConnectionRefusedError",
+    "output": "{\"error_type\": \"Timeout\", \"error_location\": \"line 1\", \"root_cause\": \"ConnectionRefusedError\", \"fix_suggestion\": \"检查Redis服务是否运行\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "Timeout"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport kafka\nconsumer = KafkaConsumer('topic', bootstrap_servers=['localhost:9092'], request_timeout_ms=3000)\n\nTraceback：\nTimeoutError: timed out",
+    "output": "{\"error_type\": \"Timeout\", \"error_location\": \"line 1\", \"root_cause\": \"timed out\", \"fix_suggestion\": \"检查Kafka服务或增加超时时间\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "Timeout"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport elasticsearch\nes = Elasticsearch(['localhost:9200'], timeout=3)\n\nTraceback：\nTimeoutError: ConnectionTimeout",
+    "output": "{\"error_type\": \"Timeout\", \"error_location\": \"line 1\", \"root_cause\": \"ConnectionTimeout\", \"fix_suggestion\": \"增加timeout值或检查Elasticsearch服务\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "Timeout"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndef factorial(n):\n    if n == 0:\n        return 1\n    return n * factorial(n-1)\n\nprint(factorial(-1))\n\nTraceback：\nRecursionError: maximum recursion depth exceeded",
+    "output": "{\"error_type\": \"LogicError\", \"error_location\": \"line 1\", \"root_cause\": \"负数导致无限递归\", \"fix_suggestion\": \"添加参数检查：if n < 0: raise ValueError\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "balance_v3",
+      "error_type": "LogicError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndef is_palindrome(s):\n    return s == s[::-1]\n\nprint(is_palindrome('A man a plan a canal Panama'))\n\nTraceback：\n输出: False (期望: True)",
+    "output": "{\"error_type\": \"LogicError\", \"error_location\": \"line 1\", \"root_cause\": \"未处理大小写和空格\", \"fix_suggestion\": \"先转换为小写并移除空格\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "balance_v3",
+      "error_type": "LogicError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndef fibonacci(n):\n    if n <= 1:\n        return n\n    return fibonacci(n-1) + fibonacci(n-2)\n\nprint(fibonacci(50))\n\nTraceback：\nRecursionError: maximum recursion depth exceeded",
+    "output": "{\"error_type\": \"LogicError\", \"error_location\": \"line 1\", \"root_cause\": \"递归深度过大\", \"fix_suggestion\": \"使用迭代或记忆化\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "balance_v3",
+      "error_type": "LogicError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nmodel = torch.nn.Linear(10000, 10000)\nx = torch.randn(1000, 10000).cuda()\nout = model(x)\n\nTraceback：\ntorch.cuda.OutOfMemoryError: CUDA out of memory. Tried to allocate 381.47 MiB",
+    "output": "{\"error_type\": \"OOM\", \"error_location\": \"line 1\", \"root_cause\": \"GPU显存不足\", \"fix_suggestion\": \"减小batch_size或使用gradient checkpointing\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "balance_v3",
+      "error_type": "OOM"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\ndata = np.random.randn(1000000, 1000)\nresult = np.dot(data, data.T)\n\nTraceback：\nnumpy.core._exceptions.MemoryError: Unable to allocate 7.45 TiB",
+    "output": "{\"error_type\": \"OOM\", \"error_location\": \"line 1\", \"root_cause\": \"矩阵乘法结果需要过多内存\", \"fix_suggestion\": \"使用分块计算或减小数据规模\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "balance_v3",
+      "error_type": "OOM"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport pandas as pd\ndf = pd.read_csv('huge_file.csv')\ndf2 = df.merge(df, on='id')\n\nTraceback：\nMemoryError: Unable to allocate",
+    "output": "{\"error_type\": \"OOM\", \"error_location\": \"line 1\", \"root_cause\": \"自连接产生过多数据\", \"fix_suggestion\": \"使用分块处理或优化合并逻辑\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "balance_v3",
+      "error_type": "OOM"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\ndef train():\n    model = torch.nn.Linear(5000, 5000).cuda()\n    for i in range(1000):\n        x = torch.randn(100, 5000).cuda()\n        out = model(x)\n        loss = out.sum()\n        loss.backward()\n\ntrain()\n\nTraceback：\ntorch.cuda.OutOfMemoryError: CUDA out of memory",
+    "output": "{\"error_type\": \"OOM\", \"error_location\": \"line 1\", \"root_cause\": \"训练循环中显存累积\", \"fix_suggestion\": \"添加 optimizer.zero_grad() 或使用 gradient accumulation\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "balance_v3",
+      "error_type": "OOM"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\nmodel = nn.Linear(784, 256)\nx = torch.randn(32, 1024)\nout = model(x)\n\nTraceback：\nRuntimeError: mat1 and mat2 shapes cannot be multiplied (32x1024 and 784x256)",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"输入维度1024与Linear层期望的784不匹配\", \"fix_suggestion\": \"调整Linear层为nn.Linear(1024, 256)\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "balance_v3",
+      "error_type": "RuntimeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\na = np.array([[1,2],[3,4]])\nb = np.array([1,2,3])\nc = np.dot(a, b)\n\nTraceback：\nValueError: shapes (2,2) and (3,) not aligned",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 1\", \"root_cause\": \"矩阵(2,2)与向量(3,)维度不匹配\", \"fix_suggestion\": \"确保矩阵乘法维度兼容\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "balance_v3",
+      "error_type": "ValueError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\na = torch.randn(3, 4)\nb = torch.randn(3, 5)\nc = torch.cat([a, b], dim=1)\n\nTraceback：\nRuntimeError: Sizes of tensors must match except in concatenation dimension",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"concatenate要求除拼接维度外其他维度相同\", \"fix_suggestion\": \"确保两个张量在非拼接维度上大小一致\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "balance_v3",
+      "error_type": "RuntimeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\nclassifier = nn.Linear(512, 10)\nfeatures = torch.randn(32, 256)\noutput = classifier(features)\n\nTraceback：\nRuntimeError: mat1 and mat2 shapes cannot be multiplied (32x256 and 512x10)",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"输入维度256与Linear层期望的512不匹配\", \"fix_suggestion\": \"调整Linear层为nn.Linear(256, 10)\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "balance_v3",
+      "error_type": "RuntimeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport tensorflow as tf\n\nTraceback：\nModuleNotFoundError: No module named 'tensorflow'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"未安装tensorflow\", \"fix_suggestion\": \"pip install tensorflow\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "balance_v3",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nfrom sklearn.ensemble import RandomForestClassifier\n\nTraceback：\nModuleNotFoundError: No module named 'sklearn'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"未安装scikit-learn\", \"fix_suggestion\": \"pip install scikit-learn\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "balance_v3",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nfrom transformers import BertModel\n\nTraceback：\nModuleNotFoundError: No module named 'transformers'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"未安装transformers\", \"fix_suggestion\": \"pip install transformers\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "balance_v3",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport cv2\n\nTraceback：\nModuleNotFoundError: No module named 'cv2'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"未安装opencv\", \"fix_suggestion\": \"pip install opencv-python\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "balance_v3",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nfrom PIL import Image\n\nTraceback：\nModuleNotFoundError: No module named 'PIL'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"未安装Pillow\", \"fix_suggestion\": \"pip install Pillow\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "balance_v3",
+      "error_type": "ImportError"
     }
   }
 ]

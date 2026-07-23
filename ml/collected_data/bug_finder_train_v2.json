@@ -5838,5 +5838,185 @@
       "source": "stackoverflow_style",
       "error_type": "DependencyMissing"
     }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport pandas as pd\ndf = pd.read_csv('data.csv')\nresult = df.groupby('category').agg({'value': 'mean'})\nprint(result['nonexistent_column'])\n\nTraceback：\nKeyError: 'nonexistent_column'",
+    "output": "{\"error_type\": \"KeyError\", \"error_location\": \"line 4\", \"root_cause\": \"尝试访问DataFrame中不存在的列'nonexistent_column'\", \"fix_suggestion\": \"检查列名是否正确，使用df.columns查看所有列名\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "high_quality",
+      "error_type": "KeyError",
+      "difficulty": "easy"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\narr = np.array([1, 2, 3, 4, 5])\nresult = arr.reshape(2, 3)\n\nTraceback：\nValueError: cannot reshape array of size 5 into shape (2,3)",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 4\", \"root_cause\": \"数组大小(5)与目标形状(2,3=6)不匹配\", \"fix_suggestion\": \"确保数组大小与目标形状一致，5个元素无法reshape为2x3\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "high_quality",
+      "error_type": "ValueError",
+      "difficulty": "easy"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\nmodel = nn.Linear(1000, 1000)\nx = torch.randn(100, 1000)\nfor i in range(100):\n    out = model(x.cuda())\n\nTraceback：\ntorch.cuda.OutOfMemoryError: CUDA out of memory. Tried to allocate 2.00 GiB",
+    "output": "{\"error_type\": \"OOM\", \"error_location\": \"line 7\", \"root_cause\": \"GPU显存不足，无法分配额外的2GB显存\", \"fix_suggestion\": \"减小batch_size或使用gradient checkpointing，添加torch.cuda.empty_cache()\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "high_quality",
+      "error_type": "OOM",
+      "difficulty": "medium"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndef calculate(x, y):\n    return x / y\nresult = calculate(10, 0)\n\nTraceback：\nZeroDivisionError: division by zero",
+    "output": "{\"error_type\": \"ZeroDivisionError\", \"error_location\": \"line 3\", \"root_cause\": \"除数y为0，导致除零错误\", \"fix_suggestion\": \"添加除数检查：if y == 0: raise ValueError('除数不能为0')\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "high_quality",
+      "error_type": "ZeroDivisionError",
+      "difficulty": "easy"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndata = [1, 2, 3]\nresult = data.append(4)\nprint(result)\n\nTraceback：\nAttributeError: 'list' object has no attribute 'append' returning non-None",
+    "output": "{\"error_type\": \"AttributeError\", \"error_location\": \"line 2\", \"root_cause\": \"list.append()方法返回None，不能将结果赋值给变量\", \"fix_suggestion\": \"直接调用data.append(4)而不赋值，或使用data = data + [4]\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "high_quality",
+      "error_type": "AttributeError",
+      "difficulty": "medium"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport json\nwith open('data.json') as f:\n    data = json.load(f)\nresult = data['key']\n\nTraceback：\nFileNotFoundError: [Errno 2] No such file or directory: 'data.json'",
+    "output": "{\"error_type\": \"FileNotFoundError\", \"error_location\": \"line 2\", \"root_cause\": \"文件'data.json'不存在\", \"fix_suggestion\": \"检查文件路径是否正确，使用os.path.exists()检查文件是否存在\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "high_quality",
+      "error_type": "FileNotFoundError",
+      "difficulty": "easy"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nx = 'hello'\ny = x + 1\n\nTraceback：\nTypeError: can only concatenate str (not \"int\") to str",
+    "output": "{\"error_type\": \"TypeError\", \"error_location\": \"line 2\", \"root_cause\": \"字符串和整数不能直接相加，类型不匹配\", \"fix_suggestion\": \"使用str(1)将整数转换为字符串，或使用f字符串：f'{x}{1}'\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "high_quality",
+      "error_type": "TypeError",
+      "difficulty": "easy"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndef func():\n    print('hello'\n\nTraceback：\nSyntaxError: unexpected EOF while parsing",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 2\", \"root_cause\": \"括号不匹配，缺少右括号\", \"fix_suggestion\": \"添加右括号：print('hello')\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "high_quality",
+      "error_type": "SyntaxError",
+      "difficulty": "easy"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport sklearn.ensemble\nmodel = sklearn.ensemble.FakeClassifier()\n\nTraceback：\nImportError: cannot import name 'FakeClassifier' from 'sklearn.ensemble'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 2\", \"root_cause\": \"sklearn.ensemble中不存在FakeClassifier类\", \"fix_suggestion\": \"检查类名是否正确，或确认该类是否存在于sklearn.ensemble中\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "high_quality",
+      "error_type": "ImportError",
+      "difficulty": "easy"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\narr = [1, 2, 3]\nprint(arr[10])\n\nTraceback：\nIndexError: list index out of range",
+    "output": "{\"error_type\": \"IndexError\", \"error_location\": \"line 2\", \"root_cause\": \"索引10超出列表范围(0-2)\", \"fix_suggestion\": \"确保索引在有效范围内：0 <= index < len(arr)\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "high_quality",
+      "error_type": "IndexError",
+      "difficulty": "easy"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport pandas as pd\ndf = pd.read_csv('data.csv')\ndf['missing_col'] = df['existing_col'] * 2\n\nTraceback：\nKeyError: 'existing_col'",
+    "output": "{\"error_type\": \"KeyError\", \"error_location\": \"line 3\", \"root_cause\": \"DataFrame中不存在列'existing_col'\", \"fix_suggestion\": \"检查列名是否正确，使用df.columns.tolist()查看所有列名\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "high_quality",
+      "error_type": "KeyError",
+      "difficulty": "medium"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nmodel = torch.nn.Linear(10, 10)\nx = torch.randn(5, 10)\ny = torch.randn(5, 20)\nloss = torch.nn.functional.mse_loss(model(x), y)\n\nTraceback：\nRuntimeError: The size of tensor a (10) must match the size of tensor b (20) at non-singleton dimension 1",
+    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 6\", \"root_cause\": \"模型输出维度(10)与目标维度(20)不匹配\", \"fix_suggestion\": \"确保模型输出维度与目标维度一致，或调整Linear层的输出维度\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "high_quality",
+      "error_type": "ShapeMismatch",
+      "difficulty": "medium"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\narr = np.array([[1, 2], [3, 4]])\nresult = np.dot(arr, np.array([1, 2, 3]))\n\nTraceback：\nValueError: shapes (2,2) and (3,) not aligned: 2 (dim 1) != 3 (dim 0)",
+    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 3\", \"root_cause\": \"矩阵(2,2)与向量(3,)维度不匹配，无法进行矩阵乘法\", \"fix_suggestion\": \"确保矩阵乘法的维度兼容：(m,n) x (n,p)\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "high_quality",
+      "error_type": "ShapeMismatch",
+      "difficulty": "medium"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport time\ndef slow_function():\n    time.sleep(100)\n    return 'done'\n\nimport signal\ndef handler(signum, frame):\n    raise TimeoutError('Function timed out')\nsignal.signal(signal.SIGALRM, handler)\nsignal.alarm(5)\nresult = slow_function()\n\nTraceback：\nTimeoutError: Function timed out",
+    "output": "{\"error_type\": \"Timeout\", \"error_location\": \"line 12\", \"root_cause\": \"函数执行时间超过5秒限制\", \"fix_suggestion\": \"优化函数性能，或增加超时时间，或使用异步执行\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "high_quality",
+      "error_type": "Timeout",
+      "difficulty": "hard"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nclass Dog:\n    def __init__(self, name):\n        self.name = name\n    def bark(self):\n        return f'{self.name} says Woof!'\n\ndog = Dog('Rex')\nprint(dog.play())\n\nTraceback：\nAttributeError: 'Dog' object has no attribute 'play'",
+    "output": "{\"error_type\": \"AttributeError\", \"error_location\": \"line 8\", \"root_cause\": \"Dog类没有play方法，只有bark方法\", \"fix_suggestion\": \"检查方法名是否正确，应使用dog.bark()\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "high_quality",
+      "error_type": "AttributeError",
+      "difficulty": "easy"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndef divide(a, b):\n    return a / b\n\nresult = divide(10, None)\n\nTraceback：\nTypeError: unsupported operand type(s) for /: 'int' and 'NoneType'",
+    "output": "{\"error_type\": \"TypeError\", \"error_location\": \"line 4\", \"root_cause\": \"不能对int和NoneType进行除法运算\", \"fix_suggestion\": \"确保除数b是数值类型，添加类型检查\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "high_quality",
+      "error_type": "TypeError",
+      "difficulty": "medium"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport sys\nsys.path.append('/nonexistent/path')\nimport my_module\n\nTraceback：\nModuleNotFoundError: No module named 'my_module'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 3\", \"root_cause\": \"找不到名为'my_module'的模块，路径可能不正确\", \"fix_suggestion\": \"检查模块名和路径是否正确，确认模块已安装\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "high_quality",
+      "error_type": "ImportError",
+      "difficulty": "easy"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\na = np.array([1, 2, 3])\nb = np.array([1, 2])\nc = np.concatenate([a, b])\n\nTraceback：\nValueError: all the input arrays must have same number of dimensions, but the array at index 0 has shape (3,) and the array at index 1 has shape (2,)",
+    "output": "{\"error_type\": \"ShapeMismatch\", \"error_location\": \"line 4\", \"root_cause\": \"concatenate要求所有数组维度相同\", \"fix_suggestion\": \"确保所有数组维度一致，或使用np.hstack/np.vstack\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "high_quality",
+      "error_type": "ShapeMismatch",
+      "difficulty": "medium"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport json\ndata = {'name': 'test', 'value': 42}\nresult = json.loads(data)\n\nTraceback：\nTypeError: the JSON object must be str, bytes or bytearray, not dict",
+    "output": "{\"error_type\": \"TypeError\", \"error_location\": \"line 3\", \"root_cause\": \"json.loads()需要字符串输入，不能直接解析字典\", \"fix_suggestion\": \"使用json.dumps()将字典转为字符串，或直接使用字典\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "high_quality",
+      "error_type": "TypeError",
+      "difficulty": "medium"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndef factorial(n):\n    if n == 0:\n        return 1\n    return n * factorial(n - 1)\n\nresult = factorial(-1)\n\nTraceback：\nRecursionError: maximum recursion depth exceeded",
+    "output": "{\"error_type\": \"LogicError\", \"error_location\": \"line 6\", \"root_cause\": \"负数导致无限递归\", \"fix_suggestion\": \"添加参数检查：if n < 0: raise ValueError('n must be non-negative')\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "high_quality",
+      "error_type": "LogicError",
+      "difficulty": "medium"
+    }
   }
 ]
