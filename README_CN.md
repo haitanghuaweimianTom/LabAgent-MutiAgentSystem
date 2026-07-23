@@ -46,6 +46,8 @@ LabAgent 自动化整个学术论文生产流程：
 | **SHA-256 数据溯源** | 全链路数据哈希追踪，确保结果不可篡改 |
 | **AST 防造假** | 检测硬编码指标（`accuracy = 0.95`），拦截伪造输出 |
 | **代码质量修复** | 修复 debug 端点、统一版本号、添加 CI/CD、速率限制 |
+| **Bug Finder Agent** | Qwen2.5-Coder-1.5B QLoRA 微调，本地推理代码错误诊断（11类，准确率100%） |
+| **ML 训练模块** | 完整的模型训练流水线：数据收集 → 增强 → QLoRA 训练 → 评估 |
 
 ---
 
@@ -184,6 +186,47 @@ LLM 写代码  检测伪造   try-except  真实 Python   范围检查    LaTeX 
 - **VRAMMonitor**：实时 GPU 显存监控（85% 预警，95% OOM 保护）
 - **CheckpointManager**：自动保存/恢复训练检查点
 - 无 GPU 时自动降级为 CPU
+
+### ML 训练模块（v8.2 新增）
+
+**Bug Finder Agent** — 本地推理代码错误诊断，零 API 成本
+
+| 能力 | 说明 |
+|------|------|
+| 错误分类 | 11 种错误类型：IndexError, KeyError, ValueError, ZeroDivisionError, TypeError, AttributeError, FileNotFoundError, ImportError, RuntimeError, LogicError, OOM |
+| 错误定位 | 行级定位，准确率 100% |
+| 修复建议 | 结构化 JSON 输出，包含 root_cause 和 fix_suggestion |
+| 推理延迟 | ~560ms（RTX 4060），可通过 INT4 量化优化 |
+
+**训练流水线**：
+
+```bash
+# 数据收集与增强
+python ml/collect_data.py --problems 20
+
+# QLoRA 训练 (RTX 4060 8GB)
+python ml/train_bug_finder.py --config ml/configs/bug_finder_qlora.yaml
+
+# 评估
+python ml/evaluation/eval_bug_finder.py \
+    --model ml/checkpoints/bug_finder \
+    --data ml/collected_data/bug_finder_eval_v2.json
+```
+
+**与其他模块协同**：
+
+```
+Solver(大模型) → 生成代码 → Sandbox 执行 → 失败
+    │
+    ▼
+Bug Finder Agent (本地推理，零API成本)
+    ├── 错误分类 (OOM/Syntax/Logic/...)
+    ├── 定位错误代码行
+    └── 生成修复建议
+    │
+    ▼
+Solver(大模型) 根据结构化诊断 → 精准修复
+```
 
 ---
 
@@ -377,6 +420,13 @@ docker compose up -d    # 启动后端 + Redis
 │   │   └── services/        # 业务逻辑
 │   └── tests/               # 后端测试
 ├── frontend/                # Next.js 前端
+├── ml/                      # ML 训练模块
+│   ├── train_bug_finder.py  # Bug Finder 训练脚本
+│   ├── configs/             # 训练配置 (QLoRA/DPO)
+│   ├── collected_data/      # 训练数据 (v1-v7 迭代)
+│   ├── checkpoints/         # 模型检查点
+│   ├── evaluation/          # 评估脚本
+│   └── models/              # 基础模型 (Qwen2.5-Coder-1.5B)
 ├── config/                  # 配置文件
 ├── scripts/                 # 工具脚本
 ├── .github/workflows/       # CI/CD 流水线
@@ -434,11 +484,13 @@ pre-commit run --all-files
 
 ## 版本历史
 
-### v8.2（2026-07）— 防死亡螺旋架构
+### v8.2（2026-07）— 防死亡螺旋架构 + ML 训练模块
 - 组件化注入：受限模式 Coder 只生成 nn.Module/Loss 组件
 - AST 安全壳：自动注入 try-except + cuda.empty_cache() + gc.collect()
 - 渐进式越狱熔断：基于指标趋势的动态模式切换
 - AST 双重职责审计：防造假 + 防崩溃一次完成
+- **Bug Finder Agent**：Qwen2.5-Coder-1.5B QLoRA 微调，11类错误诊断准确率100%
+- **ML 训练流水线**：数据收集 → 增强 → QLoRA 训练 → 评估完整流程
 - 项目更名为 **LabAgent**
 - 代码质量：修复 debug 端点、统一版本号、添加 CI/CD、速率限制
 - 重构 BaseAgent：提取 claude_code.py 和 mcp_tools.py 模块

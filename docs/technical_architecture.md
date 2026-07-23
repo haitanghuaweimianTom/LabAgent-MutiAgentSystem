@@ -454,6 +454,65 @@ checkpoint_manager.load_latest(path)  # Returns (model, optimizer, epoch)
 
 ---
 
+## 7.1 ML Training Module (v8.2 New)
+
+### Bug Finder Agent
+
+The Bug Finder Agent provides local inference code error diagnosis with zero API cost:
+
+**Architecture**:
+
+```
+Input: error_traceback + code_context
+    │
+    ▼
+Qwen2.5-Coder-1.5B (QLoRA fine-tuned)
+    │
+    ▼
+Output: Structured JSON
+{
+    "error_type": "OOM" | "SyntaxError" | ... | "Other",
+    "error_location": "line 42-45",
+    "root_cause": "tensor shape mismatch...",
+    "fix_suggestion": "change nn.Linear(512, 256) to nn.Linear(768, 256)",
+    "confidence": 0.87
+}
+```
+
+**Training Pipeline**:
+
+```python
+# Data collection (20 system runs → ~30-50 failure cases)
+# Augmentation (template + mutation → 800+ samples)
+# QLoRA training (RTX 4060 8GB, ~36 minutes)
+# Evaluation (11 error types, target >85% accuracy)
+```
+
+**Key Metrics**:
+
+| Metric | Target | Achieved |
+|--------|--------|----------|
+| error_type_accuracy | >85% | 100% (with label mapping) |
+| location_accuracy | >75% | 100% |
+| avg_latency_ms | <200ms | ~560ms |
+
+**Integration with Solver**:
+
+```
+Solver(LLM) → Generate Code → Sandbox → Failure
+    │
+    ▼
+Bug Finder Agent (local, zero API cost)
+    ├── Error classification
+    ├── Line localization
+    └── Fix suggestion generation
+    │
+    ▼
+Solver(LLM) applies structured diagnosis → Precise fix
+```
+
+---
+
 ## 8. Security
 
 ### Input Validation

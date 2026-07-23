@@ -120,7 +120,7 @@ def check_gpu():
         import torch
         if torch.cuda.is_available():
             gpu_name = torch.cuda.get_device_name(0)
-            vram = torch.cuda.get_device_properties(0).total_mem / 1024**3
+            vram = torch.cuda.get_device_properties(0).total_memory / 1024**3
             logger.info(f"GPU: {gpu_name}, VRAM: {vram:.1f} GB")
             return True
         else:
@@ -274,12 +274,11 @@ def train_with_peft(config: TrainingConfig):
         fp16=config.fp16,
         logging_steps=config.logging_steps,
         save_steps=config.save_steps,
-        eval_strategy="steps",
-        eval_steps=config.save_steps,
-        load_best_model_at_end=True,
-        metric_for_best_model="eval_loss",
+        eval_strategy="no",
         report_to="none",
         seed=config.seed,
+        gradient_checkpointing=True,
+        gradient_checkpointing_kwargs={"use_reentrant": False},
     )
 
     # 开始训练

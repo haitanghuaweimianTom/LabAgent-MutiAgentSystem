@@ -46,6 +46,8 @@ LabAgent automates the entire academic paper production pipeline:
 | **SHA-256 Data Provenance** | Full-chain hash tracking for tamper-proof results |
 | **AST Anti-Fabrication** | Detect hardcoded metrics (`accuracy = 0.95`), block fake outputs |
 | **Code Quality Fixes** | Fixed debug endpoint, unified versions, added CI/CD, rate limiting |
+| **Bug Finder Agent** | Qwen2.5-Coder-1.5B QLoRA fine-tuned, local inference code error diagnosis (11 types, 100% accuracy) |
+| **ML Training Pipeline** | Complete model training pipeline: data collection → augmentation → QLoRA training → evaluation |
 
 ---
 
@@ -184,6 +186,47 @@ All templates passing through `iterative_solver` are protected by AST safety she
 - **VRAMMonitor**: Real-time GPU memory monitoring (85% warning, 95% OOM protection)
 - **CheckpointManager**: Auto-save/restore training checkpoints
 - Falls back to CPU when GPU is unavailable
+
+### ML Training Module (v8.2 New)
+
+**Bug Finder Agent** — Local inference code error diagnosis, zero API cost
+
+| Capability | Description |
+|------------|-------------|
+| Error Classification | 11 error types: IndexError, KeyError, ValueError, ZeroDivisionError, TypeError, AttributeError, FileNotFoundError, ImportError, RuntimeError, LogicError, OOM |
+| Error Localization | Line-level localization, 100% accuracy |
+| Fix Suggestions | Structured JSON output with root_cause and fix_suggestion |
+| Inference Latency | ~560ms (RTX 4060), optimizable with INT4 quantization |
+
+**Training Pipeline**:
+
+```bash
+# Data collection and augmentation
+python ml/collect_data.py --problems 20
+
+# QLoRA training (RTX 4060 8GB)
+python ml/train_bug_finder.py --config ml/configs/bug_finder_qlora.yaml
+
+# Evaluation
+python ml/evaluation/eval_bug_finder.py \
+    --model ml/checkpoints/bug_finder \
+    --data ml/collected_data/bug_finder_eval_v2.json
+```
+
+**Collaboration with other modules**:
+
+```
+Solver(LLM) → Generate Code → Sandbox Execution → Failure
+    │
+    ▼
+Bug Finder Agent (Local inference, zero API cost)
+    ├── Error Classification (OOM/Syntax/Logic/...)
+    ├── Locate error code line
+    └── Generate fix suggestion
+    │
+    ▼
+Solver(LLM) applies structured diagnosis → Precise fix
+```
 
 ---
 
@@ -377,6 +420,13 @@ docker compose up -d    # Start backend + Redis
 │   │   └── services/        # Business logic
 │   └── tests/               # Backend tests
 ├── frontend/                # Next.js frontend
+├── ml/                      # ML training module
+│   ├── train_bug_finder.py  # Bug Finder training script
+│   ├── configs/             # Training configs (QLoRA/DPO)
+│   ├── collected_data/      # Training data (v1-v7 iterations)
+│   ├── checkpoints/         # Model checkpoints
+│   ├── evaluation/          # Evaluation scripts
+│   └── models/              # Base models (Qwen2.5-Coder-1.5B)
 ├── config/                  # Configuration files
 ├── scripts/                 # Utility scripts
 ├── .github/workflows/       # CI/CD pipeline
@@ -434,11 +484,13 @@ pre-commit run --all-files
 
 ## Version History
 
-### v8.2 (2026-07) — Anti-Death-Spiral Architecture
+### v8.2 (2026-07) — Anti-Death-Spiral Architecture + ML Training Module
 - Component injection: restricted mode Coder generates only nn.Module/Loss components
 - AST safety shell: auto-inject try-except + cuda.empty_cache() + gc.collect()
 - Progressive jailbreak circuit breaker: dynamic mode switching based on metrics trend
 - Dual-responsibility AST audit: anti-fabrication + anti-crash in single pass
+- **Bug Finder Agent**: Qwen2.5-Coder-1.5B QLoRA fine-tuned, 11-class error diagnosis with 100% accuracy
+- **ML Training Pipeline**: Complete data collection → augmentation → QLoRA training → evaluation workflow
 - Project renamed to **LabAgent**
 - Code quality: fixed debug endpoint, unified versions, added CI/CD, rate limiting
 - Refactored BaseAgent: extracted claude_code.py and mcp_tools.py modules

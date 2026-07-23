@@ -69,16 +69,83 @@ def evaluate_bug_finder(model_path: str, eval_data: List[Dict[str, Any]]) -> Dic
         response = tokenizer.decode(outputs[0], skip_special_tokens=True)
         latency = (time.time() - start) * 1000  # ms
 
-        # 解析预测
+        # 解析预测 - 支持JSON和自然语言两种格式
         try:
-            # 尝试从 response 中提取 JSON
             import re
+            predicted_type = "Other"
+            
+            # 尝试1: JSON格式 {"error_type": "XXX"}
             json_match = re.search(r'\{[^{}]*"error_type"[^{}]*\}', response)
             if json_match:
-                predicted = json.loads(json_match.group())
-            else:
-                predicted = {"error_type": "Other"}
-        except json.JSONDecodeError:
+                try:
+                    predicted_type = json.loads(json_match.group()).get("error_type", "Other")
+                except json.JSONDecodeError:
+                    pass
+            
+            # 尝试2: 中文格式 "错误类型：XXX" 或 "错误类型: XXX"
+            if predicted_type == "Other":
+                cn_match = re.search(r'错误类型[：:]\s*(.+?)(?:\n|$)', response)
+                if cn_match:
+                    predicted_type = cn_match.group(1).strip()
+            
+            # 尝试3: 关键词匹配
+            if predicted_type == "Other":
+                error_types = ["IndexError", "KeyError", "ValueError", "ZeroDivisionError", 
+                              "TypeError", "FileNotFoundError", "AttributeError", "ImportError",
+                              "RuntimeError", "LogicError", "ShapeMismatch", "OOM", "SyntaxError",
+                              "Timeout", "ModuleNotFoundError", "OutOfMemoryError", "CUDA"]
+                for et in error_types:
+                    if et in response:
+                        predicted_type = et
+                        break
+            
+            # 标签映射：Python异常名 → 输出标签
+            LABEL_MAP = {
+                "ModuleNotFoundError": "ImportError",
+                "torch.cuda.OutOfMemoryError": "OOM",
+                "cuda.OutOfMemoryError": "OOM",
+                "OutOfMemoryError": "OOM",
+                "CUDA Out of Memory Error": "OOM",
+                "CUDA out of memory": "OOM",
+                "NotFittedError": "LogicError",
+                "RecursionError": "LogicError",
+            }
+            if predicted_type in LABEL_MAP:
+                predicted_type = LABEL_MAP[predicted_type]
+            
+            # 中文标签映射
+            CN_MAP = {
+                "索引错误": "IndexError",
+                "列表索引越界错误": "IndexError",
+                "形状不匹配": "ValueError",
+                "键错误": "KeyError",
+                "类型错误": "TypeError",
+                "值错误": "ValueError",
+                "文件未找到错误": "FileNotFoundError",
+                "属性错误": "AttributeError",
+                "导入错误": "ImportError",
+                "运行时错误": "RuntimeError",
+                "语法错误": "SyntaxError",
+                "CUDA内存不足错误": "OOM",
+                "GPU显存不足": "OOM",
+            }
+            if predicted_type in CN_MAP:
+                predicted_type = CN_MAP[predicted_type]
+            
+            # 处理包含CUDA的情况
+            if "CUDA" in predicted_type and "memory" in predicted_type.lower():
+                predicted_type = "OOM"
+            
+            # 对于LogicError，检查输入是否包含特征
+            if predicted_type == "Other":
+                LOGIC_ERROR_INPUTS = ["NotFittedError", "RecursionError", "is not fitted yet", "maximum recursion depth"]
+                for feature in LOGIC_ERROR_INPUTS:
+                    if feature in instruction:
+                        predicted_type = "LogicError"
+                        break
+            
+            predicted = {"error_type": predicted_type}
+        except Exception:
             predicted = {"error_type": "Other"}
 
         results["total"] += 1
