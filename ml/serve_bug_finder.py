@@ -35,7 +35,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 # ---------- 模型配置 ----------
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 BASE_MODEL_PATH = str(PROJECT_ROOT / "ml" / "models" / "qwen2.5-coder-1.5b-instruct")
-ADAPTER_PATH = str(PROJECT_ROOT / "ml" / "checkpoints" / "bug_finder_qlora")
+ADAPTER_PATH = str(PROJECT_ROOT / "ml" / "checkpoints" / "bug_finder_v2_clean")
 
 # ---------- 全局状态 ----------
 model = None

@@ -1,0 +1,1106 @@
+[
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport pymongo\n\nTraceback：\nModuleNotFoundError: No module named 'pymongo'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'pymongo'\", \"fix_suggestion\": \"pip install pymongo\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nremainder = 7 % 0\n\nTraceback：\nZeroDivisionError: modulo by zero",
+    "output": "{\"error_type\": \"ZeroDivisionError\", \"error_location\": \"line 1\", \"root_cause\": \"除数为零\", \"fix_suggestion\": \"检查除数是否为零\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_v5",
+      "error_type": "ZeroDivisionError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nseq = [70]\nprint(seq[10])\n\nTraceback：\n    print(seq[10])\n          ~~~^^^^\nIndexError: list index out of range",
+    "output": "{\"error_type\": \"IndexError\", \"error_location\": \"line 2\", \"root_cause\": \"IndexError: list index out of range\", \"fix_suggestion\": \"确保索引在 0 <= i < len(seq) 范围内，先用 len() 检查\", \"confidence\": 0.93}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "IndexError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndef fibonacci(n):\n    if n <= 1:\n        return n\n    return fibonacci(n-1) + fibonacci(n-2)\n\nprint(fibonacci(50))\n\nTraceback：\nRecursionError: maximum recursion depth exceeded",
+    "output": "{\"error_type\": \"LogicError\", \"error_location\": \"line 1\", \"root_cause\": \"递归深度过大\", \"fix_suggestion\": \"使用迭代或记忆化\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "balance_v3",
+      "error_type": "LogicError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport pandas as pd\ndf = pd.DataFrame()\ndf.nonexistent_method()\n\nTraceback：\nAttributeError: 'DataFrame' object has no attribute 'nonexistent_method'",
+    "output": "{\"error_type\": \"AttributeError\", \"error_location\": \"line 1\", \"root_cause\": \"'DataFrame' object has no attribute 'nonexistent_method'\", \"fix_suggestion\": \"检查对象是否有该属性/方法\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_v4",
+      "error_type": "AttributeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nm = {'k0':5,'k1':7,'k2':4}\nfor k in m:\n    del m[k]\n\nTraceback：\n    for k in m:\n             ^\nRuntimeError: dictionary changed size during iteration",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 2\", \"root_cause\": \"RuntimeError: dictionary changed size during iteration\", \"fix_suggestion\": \"迭代 m 时不能同时增删键，先 list(m.keys()) 拷贝键再删除\", \"confidence\": 0.89}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "RuntimeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndef add(a, b):\n    return a + b\n\nresult = add(60, 'test')\n\nTraceback：\nTypeError: unsupported operand type(s) for +: 'int' and 'str'",
+    "output": "{\"error_type\": \"TypeError\", \"error_location\": \"line 1\", \"root_cause\": \"'int' and 'str'\", \"fix_suggestion\": \"确保两个参数类型一致：add(60, 99) 或 add('17', 'test')\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "TypeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\na = 49\nb = 0\nresult = a / b\n\nTraceback：\nZeroDivisionError: division by zero",
+    "output": "{\"error_type\": \"ZeroDivisionError\", \"error_location\": \"line 1\", \"root_cause\": \"division by zero\", \"fix_suggestion\": \"检查除数 b 是否为 0，添加非零检查\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "ZeroDivisionError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(128, 16)\nx = torch.randn(8, 20)\nout = model(x)\n\nTraceback：\nRuntimeError: mat1 and mat2 shapes cannot be multiplied (8x20 and 128x16)",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (8x20 and 128x16)\", \"fix_suggestion\": \"将 nn.Linear(128, 16) 改为 nn.Linear(20, 16)，或调整输入维度\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "RuntimeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nbuf = [69, 7, 95, 40, 7, 6]\nprint(buf[24])\n\nTraceback：\n    print(buf[24])\n          ~~~^^^^\nIndexError: list index out of range",
+    "output": "{\"error_type\": \"IndexError\", \"error_location\": \"line 2\", \"root_cause\": \"IndexError: list index out of range\", \"fix_suggestion\": \"确保索引在 0 <= i < len(buf) 范围内，先用 len() 检查\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "IndexError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport multiprocessing\npool = multiprocessing.Pool(4)\nresult = pool.apply_async(func, timeout=3)\n\nTraceback：\nTimeoutError: timed out",
+    "output": "{\"error_type\": \"Timeout\", \"error_location\": \"line 1\", \"root_cause\": \"timed out\", \"fix_suggestion\": \"增加timeout值或优化函数\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "Timeout"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\n2 = value\n\nTraceback：\n    2 = value\n    ^\nSyntaxError: cannot assign to literal here. Maybe you meant '==' instead of '='?",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"SyntaxError: cannot assign to literal here. Maybe you meant '==' instead of '='?\", \"fix_suggestion\": \"赋值左侧必须是变量名，不能是字面量\", \"confidence\": 0.89}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nwith open('report.pdf', 'rb') as f:\n    pdf = f.read()\n\nTraceback：\nFileNotFoundError: [Errno 2] No such file or directory: 'report.pdf'",
+    "output": "{\"error_type\": \"FileNotFoundError\", \"error_location\": \"line 1\", \"root_cause\": \"文件不存在\", \"fix_suggestion\": \"检查文件路径\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_v5",
+      "error_type": "FileNotFoundError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\ntensor = torch.tensor([1, 2, 3])\nresult = tensor.cuda()\n\nTraceback：\nRuntimeError: CUDA out of memory. Tried to allocate 1.00 MiB (GPU 0; 8.00 GiB total)",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 3\", \"root_cause\": \"GPU显存不足\", \"fix_suggestion\": \"减小batch size或使用CPU\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_eval",
+      "error_type": "RuntimeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nseq = [58, 36, 54]\nprint(seq[20])\n\nTraceback：\n    print(seq[20])\n          ~~~^^^^\nIndexError: list index out of range",
+    "output": "{\"error_type\": \"IndexError\", \"error_location\": \"line 2\", \"root_cause\": \"IndexError: list index out of range\", \"fix_suggestion\": \"确保索引在 0 <= i < len(seq) 范围内，先用 len() 检查\", \"confidence\": 0.92}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "IndexError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport sys\nprint(sys.nonexistent)\n\nTraceback：\nAttributeError: module 'sys' has no attribute 'nonexistent'",
+    "output": "{\"error_type\": \"AttributeError\", \"error_location\": \"line 1\", \"root_cause\": \"对象没有该属性\", \"fix_suggestion\": \"检查对象属性名\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_v5",
+      "error_type": "AttributeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nfrom cupy import something\n\nTraceback：\nModuleNotFoundError: No module named 'cupy'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'cupy'\", \"fix_suggestion\": \"安装缺失的包：pip install cupy\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nres = [7,5]\nresult = res.transform()\nprint(result)\n\nTraceback：\n    result = res.transform()\n             ^^^^^^^^^^^^^\nAttributeError: 'list' object has no attribute 'transform'",
+    "output": "{\"error_type\": \"AttributeError\", \"error_location\": \"line 2\", \"root_cause\": \"AttributeError: 'list' object has no attribute 'transform'\", \"fix_suggestion\": \"list 没有 transform 方法，检查 res 类型与可用方法\", \"confidence\": 0.87}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "AttributeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nconfig = {'host': 'localhost', 'port': 8080}\nvalue = config['timeout']\n\nTraceback：\nKeyError: 'timeout'",
+    "output": "{\"error_type\": \"KeyError\", \"error_location\": \"line 1\", \"root_cause\": \"'timeout'\", \"fix_suggestion\": \"检查KeyError边界\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_v4",
+      "error_type": "KeyError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\na = 92\nb = 0\nresult = a / b\n\nTraceback：\nZeroDivisionError: division by zero",
+    "output": "{\"error_type\": \"ZeroDivisionError\", \"error_location\": \"line 1\", \"root_cause\": \"division by zero\", \"fix_suggestion\": \"检查除数 b 是否为 0，添加非零检查\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "ZeroDivisionError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport scrapy\nfrom scrapy.crawler import CrawlerProcess\n\nTraceback：\nTimeoutError: Timeout",
+    "output": "{\"error_type\": \"Timeout\", \"error_location\": \"line 1\", \"root_cause\": \"Timeout\", \"fix_suggestion\": \"检查Scrapy配置或增加超时时间\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "Timeout"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nenv = {'k0':7,'k1':6,'k2':3,'k3':8,'k4':9,'k5':6,'k6':9}\nfor k in env:\n    del env[k]\n\nTraceback：\n    for k in env:\n             ^^^\nRuntimeError: dictionary changed size during iteration",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 2\", \"root_cause\": \"RuntimeError: dictionary changed size during iteration\", \"fix_suggestion\": \"迭代 env 时不能同时增删键，先 list(env.keys()) 拷贝键再删除\", \"confidence\": 0.89}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "RuntimeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nwith open('db.sqlite') as f:\n    print(f.read())\n\nTraceback：\n    with open('db.sqlite') as f:\n         ~~~~^^^^^^^^^^^^^\nFileNotFoundError: [Errno 2] No such file or directory: 'db.sqlite'",
+    "output": "{\"error_type\": \"FileNotFoundError\", \"error_location\": \"line 1\", \"root_cause\": \"FileNotFoundError: [Errno 2] No such file or directory: 'db.sqlite'\", \"fix_suggestion\": \"文件 db.sqlite 不存在，先 os.path.exists 检查或确认工作目录/路径\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "FileNotFoundError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nx from = 5\n\nTraceback：\nSyntaxError: invalid syntax",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"invalid syntax\", \"fix_suggestion\": \"from是关键字，不能用作变量名\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndef add(a, b):\n    return a + b\n\nresult = add(29, 'abc')\n\nTraceback：\nTypeError: unsupported operand type(s) for +: 'int' and 'str'",
+    "output": "{\"error_type\": \"TypeError\", \"error_location\": \"line 1\", \"root_cause\": \"'int' and 'str'\", \"fix_suggestion\": \"确保两个参数类型一致：add(29, 53) 或 add('49', 'abc')\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "TypeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\narr = np.array([1,2,3])\nprint(arr[10])\n\nTraceback：\nIndexError: index 10 is out of bounds for axis 0 with size 3",
+    "output": "{\"error_type\": \"IndexError\", \"error_location\": \"line 1\", \"root_cause\": \"index 10 is out of bounds for axis 0 with size 3\", \"fix_suggestion\": \"检查IndexError边界\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_v4",
+      "error_type": "IndexError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nd = {'a': 1}\nkeys = ['a', 'b', 'c']\nfor k in keys:\n    print(d[k])\n\nTraceback：\nKeyError: 'b'",
+    "output": "{\"error_type\": \"KeyError\", \"error_location\": \"line 1\", \"root_cause\": \"'b'\", \"fix_suggestion\": \"检查KeyError边界\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_v4",
+      "error_type": "KeyError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndata = [1, 2, 3, 4, 5]\nindex = -1\nprint(data[index])\n\nTraceback：\nIndexError: list index out of range",
+    "output": "{\"error_type\": \"IndexError\", \"error_location\": \"line 1\", \"root_cause\": \"list index out of range\", \"fix_suggestion\": \"检查索引是否在有效范围内：0 <= index < len(data)\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "IndexError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nfrom collections import Counter\nc = Counter()\nc.nonexistent()\n\nTraceback：\nAttributeError: 'Counter' object has no attribute 'nonexistent'",
+    "output": "{\"error_type\": \"AttributeError\", \"error_location\": \"line 1\", \"root_cause\": \"对象没有该属性\", \"fix_suggestion\": \"检查对象属性名\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_v5",
+      "error_type": "AttributeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nresult = 50 + \"str\"\nprint(result)\n\nTraceback：\n    result = 50 + \"str\"\n             ~~~^~~~~~~\nTypeError: unsupported operand type(s) for +: 'int' and 'str'",
+    "output": "{\"error_type\": \"TypeError\", \"error_location\": \"line 1\", \"root_cause\": \"TypeError: unsupported operand type(s) for +: 'int' and 'str'\", \"fix_suggestion\": \"两边类型不兼容，先做类型转换或检查 50 与 \\\"str\\\" 的类型\", \"confidence\": 0.85}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "TypeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nmodel = torch.nn.Linear(4096, 4096)\nx = torch.randn(64, 4096).cuda()\ny = model(x)\n\nTraceback：\ntorch.cuda.OutOfMemoryError: CUDA out of memory. Tried to allocate 4096.00 MiB",
+    "output": "{\"error_type\": \"OOM\", \"error_location\": \"line 1\", \"root_cause\": \"GPU显存不足\", \"fix_suggestion\": \"减小batch size、使用模型并行或CPU\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_v4",
+      "error_type": "OOM"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport scipy\n\nTraceback：\nModuleNotFoundError: No module named 'scipy'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'scipy'\", \"fix_suggestion\": \"pip install scipy\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nval = float('1.2.3')\nprint(val)\n\nTraceback：\n  File \"<string>\", line 1, in <module>\n    val = float('1.2.3')\nValueError: could not convert string to float: '1.2.3'",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 1\", \"root_cause\": \"ValueError: could not convert string to float: '1.2.3'\", \"fix_suggestion\": \"float() 要求合法浮点格式，先校验输入\", \"confidence\": 0.87}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "ValueError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nseq = [43, 13, 31, 24, 24, 68]\nprint(seq[20])\n\nTraceback：\n    print(seq[20])\n          ~~~^^^^\nIndexError: list index out of range",
+    "output": "{\"error_type\": \"IndexError\", \"error_location\": \"line 2\", \"root_cause\": \"IndexError: list index out of range\", \"fix_suggestion\": \"确保索引在 0 <= i < len(seq) 范围内，先用 len() 检查\", \"confidence\": 0.86}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "IndexError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\na = 19\nb = 0\nresult = a / b\nprint(result)\n\nTraceback：\n    result = a / b\n             ~~^~~\nZeroDivisionError: division by zero",
+    "output": "{\"error_type\": \"ZeroDivisionError\", \"error_location\": \"line 3\", \"root_cause\": \"ZeroDivisionError: division by zero\", \"fix_suggestion\": \"除数为 0，先加 `if b != 0` 守卫或用 try/except 处理\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "ZeroDivisionError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nmp = {'k0':5,'k1':6,'k2':9,'k3':8,'k4':8}\nfor k in mp:\n    del mp[k]\n\nTraceback：\n    for k in mp:\n             ^^\nRuntimeError: dictionary changed size during iteration",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 2\", \"root_cause\": \"RuntimeError: dictionary changed size during iteration\", \"fix_suggestion\": \"迭代 mp 时不能同时增删键，先 list(mp.keys()) 拷贝键再删除\", \"confidence\": 0.86}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "RuntimeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndef add(a, b):\n    return a + b\n\nresult = add(8, 'test')\n\nTraceback：\nTypeError: unsupported operand type(s) for +: 'int' and 'str'",
+    "output": "{\"error_type\": \"TypeError\", \"error_location\": \"line 1\", \"root_cause\": \"'int' and 'str'\", \"fix_suggestion\": \"确保两个参数类型一致：add(8, 48) 或 add('15', 'test')\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "TypeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nprofile = {'k0':6,'k1':2,'k2':3,'k3':9}\nfor k in profile:\n    del profile[k]\n\nTraceback：\n    for k in profile:\n             ^^^^^^^\nRuntimeError: dictionary changed size during iteration",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 2\", \"root_cause\": \"RuntimeError: dictionary changed size during iteration\", \"fix_suggestion\": \"迭代 profile 时不能同时增删键，先 list(profile.keys()) 拷贝键再删除\", \"confidence\": 0.89}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "RuntimeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport smtplib\nserver = smtplib.SMTP('smtp.example.com', 587, timeout=5)\n\nTraceback：\nTimeoutError: timed out",
+    "output": "{\"error_type\": \"Timeout\", \"error_location\": \"line 1\", \"root_cause\": \"timed out\", \"fix_suggestion\": \"增加timeout值或检查SMTP服务器\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "Timeout"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nfrom sklearn.cluster import DBSCAN\ndbscan = DBSCAN()\nlabels = dbscan.labels_\n\nTraceback：\nAttributeError: 'DBSCAN' object has no attribute 'labels_'",
+    "output": "{\"error_type\": \"LogicError\", \"error_location\": \"line 1\", \"root_cause\": \"模型未训练就调用预测/转换方法\", \"fix_suggestion\": \"先调用fit()方法训练模型\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_v4",
+      "error_type": "LogicError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nresult = sorted(None)\n\nTraceback：\nTypeError: '<' not supported between instances of 'NoneType' and 'NoneType'",
+    "output": "{\"error_type\": \"TypeError\", \"error_location\": \"line 1\", \"root_cause\": \"'<' not supported between instances of 'NoneType' and 'NoneType'\", \"fix_suggestion\": \"检查变量类型是否正确\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_v4",
+      "error_type": "TypeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nenv = {'k0':5,'k1':3,'k2':1,'k3':6,'k4':5,'k5':4,'k6':3,'k7':7}\nfor k in env:\n    del env[k]\n\nTraceback：\n    for k in env:\n             ^^^\nRuntimeError: dictionary changed size during iteration",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 2\", \"root_cause\": \"RuntimeError: dictionary changed size during iteration\", \"fix_suggestion\": \"迭代 env 时不能同时增删键，先 list(env.keys()) 拷贝键再删除\", \"confidence\": 0.93}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "RuntimeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport pandas as pd\n\nTraceback：\nModuleNotFoundError: No module named 'pandas'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'pandas'\", \"fix_suggestion\": \"pip install pandas\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nx = 5\nprint(x[0])\n\nTraceback：\nTypeError: 'int' object is not subscriptable",
+    "output": "{\"error_type\": \"TypeError\", \"error_location\": \"line 1\", \"root_cause\": \"'int' object is not subscriptable\", \"fix_suggestion\": \"检查变量类型是否正确\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_v4",
+      "error_type": "TypeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nopts = {'level': 908}\nprint(opts['label'])\n\nTraceback：\n    print(opts['label'])\n          ~~~~^^^^^^^^^\nKeyError: 'label'",
+    "output": "{\"error_type\": \"KeyError\", \"error_location\": \"line 2\", \"root_cause\": \"KeyError: 'label'\", \"fix_suggestion\": \"先用 `'label' in opts` 或 opts.get('label') 确认键存在\", \"confidence\": 0.91}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "KeyError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndef add(a, b):\n    return a + b\n\nresult = add(52, 'test')\n\nTraceback：\nTypeError: unsupported operand type(s) for +: 'int' and 'str'",
+    "output": "{\"error_type\": \"TypeError\", \"error_location\": \"line 1\", \"root_cause\": \"'int' and 'str'\", \"fix_suggestion\": \"确保两个参数类型一致：add(52, 11) 或 add('61', 'test')\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "TypeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport socket\nsock = socket.socket()\nsock.settimeout(3)\nsock.connect(('192.168.1.1', 80))\n\nTraceback：\nTimeoutError: timed out",
+    "output": "{\"error_type\": \"Timeout\", \"error_location\": \"line 1\", \"root_cause\": \"timed out\", \"fix_suggestion\": \"检查网络连接或增加超时时间\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "Timeout"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport os\nimport sys\nprint('hello'\n\nTraceback：\nSyntaxError: unexpected EOF while parsing",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"语法错误\", \"fix_suggestion\": \"检查括号、冒号、缩进\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_v5",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndef is_palindrome(s):\n    return s == s[::-1]\n\nprint(is_palindrome('A man a plan a canal Panama'))\n\nTraceback：\n输出: False (期望: True)",
+    "output": "{\"error_type\": \"LogicError\", \"error_location\": \"line 1\", \"root_cause\": \"未处理大小写和空格\", \"fix_suggestion\": \"先转换为小写并移除空格\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "balance_v3",
+      "error_type": "LogicError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nresult = model(batch)\n\nTraceback：\nRuntimeError: CUDA out of memory. Tried to allocate 4096.00 MiB",
+    "output": "{\"error_type\": \"OOM\", \"error_location\": \"line 1\", \"root_cause\": \"GPU显存不足，无法分配4096MiB内存\", \"fix_suggestion\": \"使用gradient accumulation减小显存占用\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "manual",
+      "error_type": "OOM"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nnums = [10, 29, 12]\nprint(nums[15])\n\nTraceback：\n    print(nums[15])\n          ~~~~^^^^\nIndexError: list index out of range",
+    "output": "{\"error_type\": \"IndexError\", \"error_location\": \"line 2\", \"root_cause\": \"IndexError: list index out of range\", \"fix_suggestion\": \"确保索引在 0 <= i < len(nums) 范围内，先用 len() 检查\", \"confidence\": 0.88}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "IndexError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\na = 61\nb = 0\nresult = a / b\n\nTraceback：\nZeroDivisionError: division by zero",
+    "output": "{\"error_type\": \"ZeroDivisionError\", \"error_location\": \"line 1\", \"root_cause\": \"division by zero\", \"fix_suggestion\": \"检查除数 b 是否为 0，添加非零检查\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "ZeroDivisionError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nfrom PIL import Image\n\nTraceback：\nModuleNotFoundError: No module named 'PIL'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"未安装Pillow\", \"fix_suggestion\": \"pip install Pillow\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "balance_v3",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\na = np.array([[1,2],[3,4]])\nb = np.array([[1,2,3]])\nnp.dot(a, b)\n\nTraceback：\nValueError: shapes (2,2) and (1,3) not aligned",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (2,2) and (1,3) not aligned\", \"fix_suggestion\": \"检查参数值是否在有效范围内\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_v4",
+      "error_type": "ValueError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\na = 34\nb = 0\nresult = a / b\n\nTraceback：\nZeroDivisionError: division by zero",
+    "output": "{\"error_type\": \"ZeroDivisionError\", \"error_location\": \"line 1\", \"root_cause\": \"division by zero\", \"fix_suggestion\": \"检查除数 b 是否为 0，添加非零检查\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "ZeroDivisionError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nresult = 4 + \"x\"\nprint(result)\n\nTraceback：\n    result = 4 + \"x\"\n             ~~^~~~~\nTypeError: unsupported operand type(s) for +: 'int' and 'str'",
+    "output": "{\"error_type\": \"TypeError\", \"error_location\": \"line 1\", \"root_cause\": \"TypeError: unsupported operand type(s) for +: 'int' and 'str'\", \"fix_suggestion\": \"两边类型不兼容，先做类型转换或检查 4 与 \\\"x\\\" 的类型\", \"confidence\": 0.93}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "TypeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nresult = a + b\n\nTraceback：\nRuntimeError: expected device cuda:0 but got device cpu",
+    "output": "{\"error_type\": \"LogicError\", \"error_location\": \"line 1\", \"root_cause\": \"tensor设备不匹配，a和b不在同一设备上\", \"fix_suggestion\": \"确保所有tensor在同一设备上\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "manual",
+      "error_type": "LogicError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndef add(a, b):\n    return a + b\n\nresult = add(50, 'hello')\n\nTraceback：\nTypeError: unsupported operand type(s) for +: 'int' and 'str'",
+    "output": "{\"error_type\": \"TypeError\", \"error_location\": \"line 1\", \"root_cause\": \"'int' and 'str'\", \"fix_suggestion\": \"确保两个参数类型一致：add(50, 70) 或 add('22', 'hello')\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "TypeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nfrom torch_xla import something\n\nTraceback：\nModuleNotFoundError: No module named 'torch_xla'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'torch_xla'\", \"fix_suggestion\": \"安装缺失的包：pip install torch_xla\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport sklearn\n\nTraceback：\nModuleNotFoundError: No module named 'sklearn'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'sklearn'\", \"fix_suggestion\": \"pip install scikit-learn\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndef add(a, b):\n    return a + b\nresult = add([1,2], 3)\n\nTraceback：\nTypeError: can only concatenate list (not \"int\") to list",
+    "output": "{\"error_type\": \"TypeError\", \"error_location\": \"line 1\", \"root_cause\": \"can only concatenate list (not \\\"int\\\") to list\", \"fix_suggestion\": \"检查变量类型是否正确\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_v4",
+      "error_type": "TypeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nprefs = {'k0':4,'k1':7,'k2':4,'k3':9,'k4':6,'k5':5,'k6':7,'k7':8}\nfor k in prefs:\n    del prefs[k]\n\nTraceback：\n    for k in prefs:\n             ^^^^^\nRuntimeError: dictionary changed size during iteration",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 2\", \"root_cause\": \"RuntimeError: dictionary changed size during iteration\", \"fix_suggestion\": \"迭代 prefs 时不能同时增删键，先 list(prefs.keys()) 拷贝键再删除\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "RuntimeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\na = 91\nb = 0\nresult = a / b\nprint(result)\n\nTraceback：\n    result = a / b\n             ~~^~~\nZeroDivisionError: division by zero",
+    "output": "{\"error_type\": \"ZeroDivisionError\", \"error_location\": \"line 3\", \"root_cause\": \"ZeroDivisionError: division by zero\", \"fix_suggestion\": \"除数为 0，先加 `if b != 0` 守卫或用 try/except 处理\", \"confidence\": 0.88}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "ZeroDivisionError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nwith open('report.pdf') as f:\n    print(f.read())\n\nTraceback：\n    with open('report.pdf') as f:\n         ~~~~^^^^^^^^^^^^^^\nFileNotFoundError: [Errno 2] No such file or directory: 'report.pdf'",
+    "output": "{\"error_type\": \"FileNotFoundError\", \"error_location\": \"line 1\", \"root_cause\": \"FileNotFoundError: [Errno 2] No such file or directory: 'report.pdf'\", \"fix_suggestion\": \"文件 report.pdf 不存在，先 os.path.exists 检查或确认工作目录/路径\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "FileNotFoundError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\na = 76\nb = 0\nresult = a % b\nprint(result)\n\nTraceback：\n    result = a % b\n             ~~^~~\nZeroDivisionError: integer modulo by zero",
+    "output": "{\"error_type\": \"ZeroDivisionError\", \"error_location\": \"line 3\", \"root_cause\": \"ZeroDivisionError: integer modulo by zero\", \"fix_suggestion\": \"除数为 0，先加 `if b != 0` 守卫或用 try/except 处理\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "ZeroDivisionError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndata = [1, 2, 3]\nresult = data.append(4)\nprint(result)\n\nTraceback：\nAttributeError: 'list' object has no attribute 'append'",
+    "output": "{\"error_type\": \"AttributeError\", \"error_location\": \"line 1\", \"root_cause\": \"AttributeError: 'list' object has no attribute 'append'\", \"fix_suggestion\": \"list.append() 返回 None，应该直接调用 data.append(4) 而不赋值\", \"confidence\": 0.85}",
+    "metadata": {
+      "source": "stackoverflow_style",
+      "error_type": "AttributeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nprofile = {'name': 922}\nprint(profile['label'])\n\nTraceback：\n    print(profile['label'])\n          ~~~~~~~^^^^^^^^^\nKeyError: 'label'",
+    "output": "{\"error_type\": \"KeyError\", \"error_location\": \"line 2\", \"root_cause\": \"KeyError: 'label'\", \"fix_suggestion\": \"先用 `'label' in profile` 或 profile.get('label') 确认键存在\", \"confidence\": 0.91}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "KeyError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nnode = [7,6]\nresult = node.transform()\nprint(result)\n\nTraceback：\n    result = node.transform()\n             ^^^^^^^^^^^^^^\nAttributeError: 'list' object has no attribute 'transform'",
+    "output": "{\"error_type\": \"AttributeError\", \"error_location\": \"line 2\", \"root_cause\": \"AttributeError: 'list' object has no attribute 'transform'\", \"fix_suggestion\": \"list 没有 transform 方法，检查 node 类型与可用方法\", \"confidence\": 0.91}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "AttributeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nfor i in range(10)\n    print(i)\n\nTraceback：\nSyntaxError: expected ':'",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"expected ':'\", \"fix_suggestion\": \"在range(10)后添加冒号\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport sys\nsys.setrecursionlimit(100)\ndef deep(n):\n    return deep(n+1)\ndeep(0)\n\nTraceback：\nRecursionError: maximum recursion depth exceeded",
+    "output": "{\"error_type\": \"LogicError\", \"error_location\": \"line 1\", \"root_cause\": \"递归函数没有终止条件，导致无限递归\", \"fix_suggestion\": \"添加递归终止条件\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_v4",
+      "error_type": "LogicError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nresult = 22 + \"str\"\nprint(result)\n\nTraceback：\n    result = 22 + \"str\"\n             ~~~^~~~~~~\nTypeError: unsupported operand type(s) for +: 'int' and 'str'",
+    "output": "{\"error_type\": \"TypeError\", \"error_location\": \"line 1\", \"root_cause\": \"TypeError: unsupported operand type(s) for +: 'int' and 'str'\", \"fix_suggestion\": \"两边类型不兼容，先做类型转换或检查 22 与 \\\"str\\\" 的类型\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "TypeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\n\na = np.random.randn(10, 8)\nb = np.random.randn(5, 8)\nc = np.dot(a, b)\n\nTraceback：\nValueError: shapes (10,8) and (5,8) not aligned",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (10,8) and (5,8) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "ValueError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\na = 25\nb = 0\nresult = a % b\nprint(result)\n\nTraceback：\n    result = a % b\n             ~~^~~\nZeroDivisionError: integer modulo by zero",
+    "output": "{\"error_type\": \"ZeroDivisionError\", \"error_location\": \"line 3\", \"root_cause\": \"ZeroDivisionError: integer modulo by zero\", \"fix_suggestion\": \"除数为 0，先加 `if b != 0` 守卫或用 try/except 处理\", \"confidence\": 0.87}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "ZeroDivisionError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nparams = {'level': 575}\nprint(params['label'])\n\nTraceback：\n    print(params['label'])\n          ~~~~~~^^^^^^^^^\nKeyError: 'label'",
+    "output": "{\"error_type\": \"KeyError\", \"error_location\": \"line 2\", \"root_cause\": \"KeyError: 'label'\", \"fix_suggestion\": \"先用 `'label' in params` 或 params.get('label') 确认键存在\", \"confidence\": 0.85}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "KeyError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport xgboost as xgb\n\nTraceback：\nModuleNotFoundError: No module named 'xgboost'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'xgboost'\", \"fix_suggestion\": \"pip install xgboost\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nopts = {'k0':7,'k1':1,'k2':4}\nfor k in opts:\n    del opts[k]\n\nTraceback：\n    for k in opts:\n             ^^^^\nRuntimeError: dictionary changed size during iteration",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 2\", \"root_cause\": \"RuntimeError: dictionary changed size during iteration\", \"fix_suggestion\": \"迭代 opts 时不能同时增删键，先 list(opts.keys()) 拷贝键再删除\", \"confidence\": 0.87}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "RuntimeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(20, 32)\nx = torch.randn(1, 50)\nout = model(x)\n\nTraceback：\nRuntimeError: mat1 and mat2 shapes cannot be multiplied (1x50 and 20x32)",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (1x50 and 20x32)\", \"fix_suggestion\": \"将 nn.Linear(20, 32) 改为 nn.Linear(50, 32)，或调整输入维度\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "RuntimeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\n\na = np.random.randn(3, 4)\nb = np.random.randn(5, 4)\nc = np.dot(a, b)\n\nTraceback：\nValueError: shapes (3,4) and (5,4) not aligned",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (3,4) and (5,4) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "ValueError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\ndef train():\n    model = torch.nn.Linear(5000, 5000).cuda()\n    for i in range(1000):\n        x = torch.randn(100, 5000).cuda()\n        out = model(x)\n        loss = out.sum()\n        loss.backward()\n\ntrain()\n\nTraceback：\ntorch.cuda.OutOfMemoryError: CUDA out of memory",
+    "output": "{\"error_type\": \"OOM\", \"error_location\": \"line 1\", \"root_cause\": \"训练循环中显存累积\", \"fix_suggestion\": \"添加 optimizer.zero_grad() 或使用 gradient accumulation\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "balance_v3",
+      "error_type": "OOM"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nnums = [28, 0, 9, 90, 80]\nprint(nums[6])\n\nTraceback：\n    print(nums[6])\n          ~~~~^^^\nIndexError: list index out of range",
+    "output": "{\"error_type\": \"IndexError\", \"error_location\": \"line 2\", \"root_cause\": \"IndexError: list index out of range\", \"fix_suggestion\": \"确保索引在 0 <= i < len(nums) 范围内，先用 len() 检查\", \"confidence\": 0.87}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "IndexError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndef add(a, b):\n    return a + b\n\nresult = add(100, 'abc')\n\nTraceback：\nTypeError: unsupported operand type(s) for +: 'int' and 'str'",
+    "output": "{\"error_type\": \"TypeError\", \"error_location\": \"line 1\", \"root_cause\": \"'int' and 'str'\", \"fix_suggestion\": \"确保两个参数类型一致：add(100, 8) 或 add('35', 'abc')\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "TypeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport cudf\n\nTraceback：\nModuleNotFoundError: No module named 'cudf'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'cudf'\", \"fix_suggestion\": \"pip install cudf\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nxs = [7, 7, 7]\nprint(xs.index(911))\n\nTraceback：\n    print(xs.index(911))\n          ~~~~~~~~^^^^^\nValueError: 911 is not in list",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 2\", \"root_cause\": \"ValueError: 911 is not in list\", \"fix_suggestion\": \"xs.index 找不到该值，先 `值 in xs` 判断存在性\", \"confidence\": 0.85}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "ValueError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport threading\ndef func():\n    time.sleep(100)\nt = threading.Thread(target=func)\nt.start()\nt.join(timeout=5)\n\nTraceback：\nTimeoutError: timed out",
+    "output": "{\"error_type\": \"Timeout\", \"error_location\": \"line 1\", \"root_cause\": \"timed out\", \"fix_suggestion\": \"增加join timeout或优化函数\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "Timeout"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ntarget = [2,4]\nresult = target.transform()\nprint(result)\n\nTraceback：\n    result = target.transform()\n             ^^^^^^^^^^^^^^^^\nAttributeError: 'list' object has no attribute 'transform'",
+    "output": "{\"error_type\": \"AttributeError\", \"error_location\": \"line 2\", \"root_cause\": \"AttributeError: 'list' object has no attribute 'transform'\", \"fix_suggestion\": \"list 没有 transform 方法，检查 target 类型与可用方法\", \"confidence\": 0.94}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "AttributeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport json\ndata = json.loads('{\"a\": 1}')\nprint(data['b'])\n\nTraceback：\nKeyError: 'b'",
+    "output": "{\"error_type\": \"KeyError\", \"error_location\": \"line 1\", \"root_cause\": \"字典中不存在该键\", \"fix_suggestion\": \"检查键是否存在或使用get()方法\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_v5",
+      "error_type": "KeyError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nfrom PIL import Image\nimg = Image.open('photo.jpg')\n\nTraceback：\nFileNotFoundError: [Errno 2] No such file or directory: 'photo.jpg'",
+    "output": "{\"error_type\": \"FileNotFoundError\", \"error_location\": \"line 1\", \"root_cause\": \"文件不存在\", \"fix_suggestion\": \"检查文件路径\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_v5",
+      "error_type": "FileNotFoundError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nresult = 48 + \"str\"\nprint(result)\n\nTraceback：\n    result = 48 + \"str\"\n             ~~~^~~~~~~\nTypeError: unsupported operand type(s) for +: 'int' and 'str'",
+    "output": "{\"error_type\": \"TypeError\", \"error_location\": \"line 1\", \"root_cause\": \"TypeError: unsupported operand type(s) for +: 'int' and 'str'\", \"fix_suggestion\": \"两边类型不兼容，先做类型转换或检查 48 与 \\\"str\\\" 的类型\", \"confidence\": 0.93}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "TypeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\na = 5\nb = 0\nresult = a / b\n\nTraceback：\nZeroDivisionError: division by zero",
+    "output": "{\"error_type\": \"ZeroDivisionError\", \"error_location\": \"line 1\", \"root_cause\": \"除数为零\", \"fix_suggestion\": \"检查除数是否为零，添加边界条件判断\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_v4",
+      "error_type": "ZeroDivisionError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport celery\n\nTraceback：\nModuleNotFoundError: No module named 'celery'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'celery'\", \"fix_suggestion\": \"pip install celery\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndef add(a, b):\n    return a + b\n\nresult = add(52, 'abc')\n\nTraceback：\nTypeError: unsupported operand type(s) for +: 'int' and 'str'",
+    "output": "{\"error_type\": \"TypeError\", \"error_location\": \"line 1\", \"root_cause\": \"'int' and 'str'\", \"fix_suggestion\": \"确保两个参数类型一致：add(52, 67) 或 add('82', 'abc')\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "TypeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\na = torch.randn(3, 4)\nb = torch.randn(4, 3)\nc = torch.mm(a, b)\n\nTraceback：\nRuntimeError: mat1 and mat2 shapes cannot be multiplied",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied\", \"fix_suggestion\": \"检查运行时条件是否满足\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_v4",
+      "error_type": "RuntimeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndef func(a=1, b, c=3)\n\nTraceback：\nSyntaxError: non-default argument follows default argument",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"non-default argument follows default argument\", \"fix_suggestion\": \"默认参数放在后面\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndata = {'a': 1, 'b': 2, 'c': 3}\nkey = 'y'\nprint(data[key])\n\nTraceback：\nKeyError: 'y'",
+    "output": "{\"error_type\": \"KeyError\", \"error_location\": \"line 1\", \"root_cause\": \"'y'\", \"fix_suggestion\": \"检查键 'y' 是否存在，或使用 data.get('y', default_value)\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "KeyError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport ray\n\nTraceback：\nModuleNotFoundError: No module named 'ray'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'ray'\", \"fix_suggestion\": \"pip install ray\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nwhile True\n    break\n\nTraceback：\nSyntaxError: expected ':'",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"expected ':'\", \"fix_suggestion\": \"在True后添加冒号\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nprefs = {'k0':9,'k1':8,'k2':9}\nfor k in prefs:\n    del prefs[k]\n\nTraceback：\n    for k in prefs:\n             ^^^^^\nRuntimeError: dictionary changed size during iteration",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 2\", \"root_cause\": \"RuntimeError: dictionary changed size during iteration\", \"fix_suggestion\": \"迭代 prefs 时不能同时增删键，先 list(prefs.keys()) 拷贝键再删除\", \"confidence\": 0.92}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "RuntimeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nvals = [1, 2, 5, 6]\nprint(vals.index(810))\n\nTraceback：\n    print(vals.index(810))\n          ~~~~~~~~~~^^^^^\nValueError: 810 is not in list",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 2\", \"root_cause\": \"ValueError: 810 is not in list\", \"fix_suggestion\": \"vals.index 找不到该值，先 `值 in vals` 判断存在性\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "ValueError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nfrom collections import Counter\nc = Counter()\nc.nonexistent_method()\n\nTraceback：\nAttributeError: 'Counter' object has no attribute 'nonexistent_method'",
+    "output": "{\"error_type\": \"AttributeError\", \"error_location\": \"line 1\", \"root_cause\": \"'Counter' object has no attribute 'nonexistent_method'\", \"fix_suggestion\": \"检查对象是否有该属性/方法\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_v4",
+      "error_type": "AttributeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndef add(a, b):\n    return a + b\n\nresult = add(27, 'abc')\n\nTraceback：\nTypeError: unsupported operand type(s) for +: 'int' and 'str'",
+    "output": "{\"error_type\": \"TypeError\", \"error_location\": \"line 1\", \"root_cause\": \"'int' and 'str'\", \"fix_suggestion\": \"确保两个参数类型一致：add(27, 86) 或 add('95', 'abc')\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "TypeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nenv = {'k0':4,'k1':6,'k2':6,'k3':7,'k4':1}\nfor k in env:\n    del env[k]\n\nTraceback：\n    for k in env:\n             ^^^\nRuntimeError: dictionary changed size during iteration",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 2\", \"root_cause\": \"RuntimeError: dictionary changed size during iteration\", \"fix_suggestion\": \"迭代 env 时不能同时增删键，先 list(env.keys()) 拷贝键再删除\", \"confidence\": 0.91}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "RuntimeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\na = 1 and b = 2\n\nTraceback：\nSyntaxError: invalid syntax",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"invalid syntax\", \"fix_suggestion\": \"使用==进行比较\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nitems = [8, 3]\nitems.remove(187)\n\nTraceback：\n    items.remove(187)\n    ~~~~~~~~~~~~^^^^^\nValueError: list.remove(x): x not in list",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 2\", \"root_cause\": \"ValueError: list.remove(x): x not in list\", \"fix_suggestion\": \"items.remove 的元素不存在，先判断 `值 in items` 再删除\", \"confidence\": 0.87}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "ValueError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nconfig = {'name': 225}\nprint(config['label'])\n\nTraceback：\n    print(config['label'])\n          ~~~~~~^^^^^^^^^\nKeyError: 'label'",
+    "output": "{\"error_type\": \"KeyError\", \"error_location\": \"line 2\", \"root_cause\": \"KeyError: 'label'\", \"fix_suggestion\": \"先用 `'label' in config` 或 config.get('label') 确认键存在\", \"confidence\": 0.87}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "KeyError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nnums = [1, 8, 3, 2, 4]\nnums.remove(946)\n\nTraceback：\n    nums.remove(946)\n    ~~~~~~~~~~~^^^^^\nValueError: list.remove(x): x not in list",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 2\", \"root_cause\": \"ValueError: list.remove(x): x not in list\", \"fix_suggestion\": \"nums.remove 的元素不存在，先判断 `值 in nums` 再删除\", \"confidence\": 0.86}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "ValueError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport os\nimport sys\nprint(os.path.join('a', 'b')\n\n\nTraceback：\nSyntaxError: unexpected EOF while parsing",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"代码语法不符合Python规范\", \"fix_suggestion\": \"检查括号、冒号、缩进等语法元素\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_v4",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nx yield = 5\n\nTraceback：\nSyntaxError: invalid syntax",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"invalid syntax\", \"fix_suggestion\": \"yield是关键字，不能用作变量名\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport gzip\nwith gzip.open('data.gz', 'rt') as f:\n    content = f.read()\n\nTraceback：\nFileNotFoundError: [Errno 2] No such file or directory: 'data.gz'",
+    "output": "{\"error_type\": \"FileNotFoundError\", \"error_location\": \"line 1\", \"root_cause\": \"文件不存在\", \"fix_suggestion\": \"检查文件路径\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_v5",
+      "error_type": "FileNotFoundError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\na = 23\nb = 0\nresult = a / b\n\nTraceback：\nZeroDivisionError: division by zero",
+    "output": "{\"error_type\": \"ZeroDivisionError\", \"error_location\": \"line 1\", \"root_cause\": \"division by zero\", \"fix_suggestion\": \"检查除数 b 是否为 0，添加非零检查\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "ZeroDivisionError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\na = 19\nb = 0\nresult = a / b\n\nTraceback：\nZeroDivisionError: division by zero",
+    "output": "{\"error_type\": \"ZeroDivisionError\", \"error_location\": \"line 1\", \"root_cause\": \"division by zero\", \"fix_suggestion\": \"检查除数 b 是否为 0，添加非零检查\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "ZeroDivisionError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nvals = [33, 5, 93, 58, 68]\nprint(vals[8])\n\nTraceback：\n    print(vals[8])\n          ~~~~^^^\nIndexError: list index out of range",
+    "output": "{\"error_type\": \"IndexError\", \"error_location\": \"line 2\", \"root_cause\": \"IndexError: list index out of range\", \"fix_suggestion\": \"确保索引在 0 <= i < len(vals) 范围内，先用 len() 检查\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "IndexError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\ndef add(a, b):\n    return a + b\n\nresult = add(61, 'hello')\n\nTraceback：\nTypeError: unsupported operand type(s) for +: 'int' and 'str'",
+    "output": "{\"error_type\": \"TypeError\", \"error_location\": \"line 1\", \"root_cause\": \"'int' and 'str'\", \"fix_suggestion\": \"确保两个参数类型一致：add(61, 20) 或 add('69', 'hello')\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "TypeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nopts = {'name': 414}\nprint(opts['ref'])\n\nTraceback：\n    print(opts['ref'])\n          ~~~~^^^^^^^\nKeyError: 'ref'",
+    "output": "{\"error_type\": \"KeyError\", \"error_location\": \"line 2\", \"root_cause\": \"KeyError: 'ref'\", \"fix_suggestion\": \"先用 `'ref' in opts` 或 opts.get('ref') 确认键存在\", \"confidence\": 0.86}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "KeyError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\na = 6\nb = 0\nresult = a // b\nprint(result)\n\nTraceback：\n    result = a // b\n             ~~^^~~\nZeroDivisionError: integer division or modulo by zero",
+    "output": "{\"error_type\": \"ZeroDivisionError\", \"error_location\": \"line 3\", \"root_cause\": \"ZeroDivisionError: integer division or modulo by zero\", \"fix_suggestion\": \"除数为 0，先加 `if b != 0` 守卫或用 try/except 处理\", \"confidence\": 0.93}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "ZeroDivisionError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nres = 65\nresult = res.append(5)\nprint(result)\n\nTraceback：\n    result = res.append(5)\n             ^^^^^^^^^^\nAttributeError: 'int' object has no attribute 'append'",
+    "output": "{\"error_type\": \"AttributeError\", \"error_location\": \"line 2\", \"root_cause\": \"AttributeError: 'int' object has no attribute 'append'\", \"fix_suggestion\": \"int 没有 append 方法，确认 res 的类型与目标方法\", \"confidence\": 0.93}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "AttributeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(8192, 8192)\nbatch_size = 64\nx = torch.randn(batch_size, 8192)\nout = model(x.cuda())\n\nTraceback：\ntorch.cuda.OutOfMemoryError: CUDA out of memory. Tried to allocate 2048 MiB (GPU 0; 8192 MiB total)",
+    "output": "{\"error_type\": \"OOM\", \"error_location\": \"line 1\", \"root_cause\": \"CUDA out of memory. Tried to allocate 2048 MiB (GPU 0; 8192 MiB total)\", \"fix_suggestion\": \"减小 batch_size 或使用 gradient_accumulation；添加 torch.cuda.empty_cache()\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "OOM"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nmodel = torch.nn.Linear(10000, 10000)\nx = torch.randn(1000, 10000).cuda()\nout = model(x)\n\nTraceback：\ntorch.cuda.OutOfMemoryError: CUDA out of memory. Tried to allocate 381.47 MiB",
+    "output": "{\"error_type\": \"OOM\", \"error_location\": \"line 1\", \"root_cause\": \"GPU显存不足\", \"fix_suggestion\": \"减小batch_size或使用gradient checkpointing\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "balance_v3",
+      "error_type": "OOM"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nrecords = [98, 82, 43]\nprint(records[6])\n\nTraceback：\n    print(records[6])\n          ~~~~~~~^^^\nIndexError: list index out of range",
+    "output": "{\"error_type\": \"IndexError\", \"error_location\": \"line 2\", \"root_cause\": \"IndexError: list index out of range\", \"fix_suggestion\": \"确保索引在 0 <= i < len(records) 范围内，先用 len() 检查\", \"confidence\": 0.88}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "IndexError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nnode = None\nresult = node.process()\nprint(result)\n\nTraceback：\n    result = node.process()\n             ^^^^^^^^^^^^\nAttributeError: 'NoneType' object has no attribute 'process'",
+    "output": "{\"error_type\": \"AttributeError\", \"error_location\": \"line 2\", \"root_cause\": \"AttributeError: 'NoneType' object has no attribute 'process'\", \"fix_suggestion\": \"node 为 None，先判空再调用方法\", \"confidence\": 0.91}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "AttributeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport torch\nimport torch.nn as nn\n\nmodel = nn.Linear(10, 16)\nx = torch.randn(32, 15)\nout = model(x)\n\nTraceback：\nRuntimeError: mat1 and mat2 shapes cannot be multiplied (32x15 and 10x16)",
+    "output": "{\"error_type\": \"RuntimeError\", \"error_location\": \"line 1\", \"root_cause\": \"mat1 and mat2 shapes cannot be multiplied (32x15 and 10x16)\", \"fix_suggestion\": \"将 nn.Linear(10, 16) 改为 nn.Linear(15, 16)，或调整输入维度\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "RuntimeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\na = 42\nb = 0\nresult = a / b\n\nTraceback：\nZeroDivisionError: division by zero",
+    "output": "{\"error_type\": \"ZeroDivisionError\", \"error_location\": \"line 1\", \"root_cause\": \"division by zero\", \"fix_suggestion\": \"检查除数 b 是否为 0，添加非零检查\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "ZeroDivisionError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nres = [4,8]\nresult = res.transform()\nprint(result)\n\nTraceback：\n    result = res.transform()\n             ^^^^^^^^^^^^^\nAttributeError: 'list' object has no attribute 'transform'",
+    "output": "{\"error_type\": \"AttributeError\", \"error_location\": \"line 2\", \"root_cause\": \"AttributeError: 'list' object has no attribute 'transform'\", \"fix_suggestion\": \"list 没有 transform 方法，检查 res 类型与可用方法\", \"confidence\": 0.85}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "AttributeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nx await = 5\n\nTraceback：\nSyntaxError: invalid syntax",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"invalid syntax\", \"fix_suggestion\": \"await是关键字，不能用作变量名\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\narr = np.random.randn(3, 4)\nprint(arr[4, 0])\n\nTraceback：\nIndexError: index 4 is out of bounds for axis 0 with size 3",
+    "output": "{\"error_type\": \"IndexError\", \"error_location\": \"line 1\", \"root_cause\": \"index 4 is out of bounds for axis 0 with size 3\", \"fix_suggestion\": \"确保行索引在 0 到 3-1 之间\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "IndexError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nresult = 22 + \"hello\"\nprint(result)\n\nTraceback：\n    result = 22 + \"hello\"\n             ~~~^~~~~~~~~\nTypeError: unsupported operand type(s) for +: 'int' and 'str'",
+    "output": "{\"error_type\": \"TypeError\", \"error_location\": \"line 1\", \"root_cause\": \"TypeError: unsupported operand type(s) for +: 'int' and 'str'\", \"fix_suggestion\": \"两边类型不兼容，先做类型转换或检查 22 与 \\\"hello\\\" 的类型\", \"confidence\": 0.94}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "TypeError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\na = 71\nb = 0\nresult = a / b\nprint(result)\n\nTraceback：\n    result = a / b\n             ~~^~~\nZeroDivisionError: division by zero",
+    "output": "{\"error_type\": \"ZeroDivisionError\", \"error_location\": \"line 3\", \"root_cause\": \"ZeroDivisionError: division by zero\", \"fix_suggestion\": \"除数为 0，先加 `if b != 0` 守卫或用 try/except 处理\", \"confidence\": 0.89}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "ZeroDivisionError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\na = 37\nb = 0\nresult = a / b\n\nTraceback：\nZeroDivisionError: division by zero",
+    "output": "{\"error_type\": \"ZeroDivisionError\", \"error_location\": \"line 1\", \"root_cause\": \"division by zero\", \"fix_suggestion\": \"检查除数 b 是否为 0，添加非零检查\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "ZeroDivisionError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\n\na = np.random.randn(5, 4)\nb = np.random.randn(10, 16)\nc = np.dot(a, b)\n\nTraceback：\nValueError: shapes (5,4) and (10,16) not aligned",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 1\", \"root_cause\": \"shapes (5,4) and (10,16) not aligned\", \"fix_suggestion\": \"确保 a 的列数等于 b 的行数：a.shape[1] == b.shape[0]\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "ValueError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nitems = [3, 1]\nitems.remove(671)\n\nTraceback：\n    items.remove(671)\n    ~~~~~~~~~~~~^^^^^\nValueError: list.remove(x): x not in list",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 2\", \"root_cause\": \"ValueError: list.remove(x): x not in list\", \"fix_suggestion\": \"items.remove 的元素不存在，先判断 `值 in items` 再删除\", \"confidence\": 0.93}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "ValueError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nimport numpy as np\n\nTraceback：\nModuleNotFoundError: No module named 'numpy'",
+    "output": "{\"error_type\": \"ImportError\", \"error_location\": \"line 1\", \"root_cause\": \"No module named 'numpy'\", \"fix_suggestion\": \"pip install numpy\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "ImportError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nfrom sklearn.model_selection import train_test_split\nX_train, X_test, y_train, y_test = train_test_split(X, y, test_size=1.5)\n\nTraceback：\nValueError: test_size=1.5 should be either float or an integer",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 2\", \"root_cause\": \"test_size参数值1.5超出范围(0-1)\", \"fix_suggestion\": \"将test_size设置为0到1之间的小数或整数\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_eval",
+      "error_type": "ValueError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nrecords = [16, 84]\nprint(records[17])\n\nTraceback：\n    print(records[17])\n          ~~~~~~~^^^^\nIndexError: list index out of range",
+    "output": "{\"error_type\": \"IndexError\", \"error_location\": \"line 2\", \"root_cause\": \"IndexError: list index out of range\", \"fix_suggestion\": \"确保索引在 0 <= i < len(records) 范围内，先用 len() 检查\", \"confidence\": 0.94}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "IndexError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nclass = 'myclass'\n\nTraceback：\nSyntaxError: invalid syntax",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"invalid syntax\", \"fix_suggestion\": \"class是关键字，不能用作变量名\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nx pass = 5\n\nTraceback：\nSyntaxError: invalid syntax",
+    "output": "{\"error_type\": \"SyntaxError\", \"error_location\": \"line 1\", \"root_cause\": \"invalid syntax\", \"fix_suggestion\": \"pass是关键字，不能用作变量名\", \"confidence\": 0.98}",
+    "metadata": {
+      "source": "balance",
+      "error_type": "SyntaxError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nxs = [9, 0]\nprint(xs.index(255))\n\nTraceback：\n    print(xs.index(255))\n          ~~~~~~~~^^^^^\nValueError: 255 is not in list",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 2\", \"root_cause\": \"ValueError: 255 is not in list\", \"fix_suggestion\": \"xs.index 找不到该值，先 `值 in xs` 判断存在性\", \"confidence\": 0.86}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "ValueError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nx = int('abc')\n\nTraceback：\nValueError: invalid literal for int() with base 10: 'abc'",
+    "output": "{\"error_type\": \"ValueError\", \"error_location\": \"line 1\", \"root_cause\": \"invalid literal for int() with base 10\", \"fix_suggestion\": \"检查参数值是否在有效范围内\", \"confidence\": 0.95}",
+    "metadata": {
+      "source": "expanded_v4",
+      "error_type": "ValueError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\na = 3\nb = 0\nresult = a / b\n\nTraceback：\nZeroDivisionError: division by zero",
+    "output": "{\"error_type\": \"ZeroDivisionError\", \"error_location\": \"line 1\", \"root_cause\": \"division by zero\", \"fix_suggestion\": \"检查除数 b 是否为 0，添加非零检查\", \"confidence\": 0.9}",
+    "metadata": {
+      "source": "template",
+      "error_type": "ZeroDivisionError"
+    }
+  },
+  {
+    "instruction": "分析以下代码执行错误，给出错误类型、定位、原因和修复建议。\n\n代码：\nmp = {'city': 738}\nprint(mp['token'])\n\nTraceback：\n    print(mp['token'])\n          ~~^^^^^^^^^\nKeyError: 'token'",
+    "output": "{\"error_type\": \"KeyError\", \"error_location\": \"line 2\", \"root_cause\": \"KeyError: 'token'\", \"fix_suggestion\": \"先用 `'token' in mp` 或 mp.get('token') 确认键存在\", \"confidence\": 0.94}",
+    "metadata": {
+      "source": "real_execution",
+      "class": "KeyError"
+    }
+  }
+]
