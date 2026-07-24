@@ -179,8 +179,18 @@ Traceback：
             context=context,
         )
 
-        # 解析响应
-        response_text = response.get("content", "") if isinstance(response, dict) else str(response)
+        # 解析响应：call_llm 返回 {"choices":[{"message":{"content":...}}]}，
+        # 必须沿 choices[0].message.content 路径取，顶层无 "content" 键（旧写法恒为空串，
+        # 导致小模型诊断 JSON 永远解析失败、回退规则引擎 confidence=0.75 < 0.8 阈值，
+        # 小模型诊断从未被采纳）。与 solver_agent.py / figure_agent.py 取值一致。
+        if isinstance(response, dict):
+            response_text = (
+                response.get("choices", [{}])[0]
+                .get("message", {})
+                .get("content", "")
+            )
+        else:
+            response_text = str(response)
 
         # 提取 JSON
         json_match = re.search(r'\{[^{}]*"error_type"[^{}]*\}', response_text)

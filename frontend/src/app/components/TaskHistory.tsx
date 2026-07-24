@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import TaskDetail from './TaskDetail';
 import { apiBase } from '@/lib/api';
+import { nodeLabel } from '@/lib/constants';
 
 interface TaskInfo {
   task_id: string;
@@ -175,7 +176,7 @@ export default function TaskHistory() {
                 <div className="flex gap-2 items-center text-[0.72rem] text-[#64748B]">
                   {task.template && <span>📄 {task.template}</span>}
                   {task.workflow_type && <span>⚙️ {task.workflow_type}</span>}
-                  {task.current_step && <span>📍 {task.current_step}</span>}
+                  {task.current_step && <span>📍 {nodeLabel(task.current_step)}</span>}
                   {task.total_steps > 0 && <span>📊 {task.total_steps} 步骤</span>}
                   <button className="ml-auto bg-transparent border-none cursor-pointer text-[0.875rem] opacity-30 transition-opacity duration-200 p-[0.2rem] hover:opacity-100" onClick={e => { e.stopPropagation(); handleDeleteOne(task.task_id); }} title="删除">
                     🗑️

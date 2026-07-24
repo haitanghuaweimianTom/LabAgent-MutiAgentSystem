@@ -24,25 +24,51 @@ logger = logging.getLogger(__name__)
 
 
 # ==================== Token 预估 ====================
-# 用字符数粗估 token：1 token ≈ 4 字符（中英文混合）。保守起见用 3。
+# 优先用 tiktoken 精确计数（与 OpenAI 模型 tokenizer 对齐），
+# 未安装或编码不可用时回退到字符数粗估（1 token ≈ 3 字符），保证向后兼容。
 CHARS_PER_TOKEN = 3
+
+try:
+    import tiktoken  # type: ignore
+
+    _ENCODER = None
+    _TIKTOKEN_AVAILABLE = True
+
+    def _get_encoder() -> Any:
+        global _ENCODER
+        if _ENCODER is None:
+            # cl100k_base 覆盖 GPT-4/4o/gpt-3.5-turbo 等主流模型；对国产模型也接近
+            _ENCODER = tiktoken.get_encoding("cl100k_base")
+        return _ENCODER
+
+    def _count_tokens_str(text: str) -> int:
+        try:
+            return len(_get_encoder().encode(text))
+        except Exception:
+            return max(1, len(text) // CHARS_PER_TOKEN)
+except Exception:  # tiktoken 未安装
+    _TIKTOKEN_AVAILABLE = False
+
+    def _count_tokens_str(text: str) -> int:
+        return max(1, len(text) // CHARS_PER_TOKEN)
 
 
 def estimate_tokens(obj: Any) -> int:
-    """粗估对象的 token 数。中英文混合按 1 token / 3 字符算。
+    """精确估计对象的 token 数。
 
-    不调用 tiktoken，避免引入额外依赖且对 dict/list 序列化复杂。
+    优先用 tiktoken（cl100k_base）对字符串精确编码计数；未安装时回退到
+    字符数粗估（1 token ≈ 3 字符，中英文混合）。dict/list 递归求和。
     """
     try:
         if isinstance(obj, str):
-            return max(1, len(obj) // CHARS_PER_TOKEN)
+            return _count_tokens_str(obj)
         if isinstance(obj, (int, float, bool)):
             return 1
         if isinstance(obj, dict):
             return sum(estimate_tokens(k) + estimate_tokens(v) for k, v in obj.items())
         if isinstance(obj, (list, tuple)):
             return sum(estimate_tokens(x) for x in obj)
-        return estimate_tokens(str(obj))
+        return _count_tokens_str(str(obj))
     except Exception:
         return 0
 
