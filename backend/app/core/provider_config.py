@@ -433,9 +433,20 @@ def parse_cc_switch_json(config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         model_name = _raw_model or _default_model
 
     # 自动推断 API 格式
+    # 优先看 env：若配置了 ANTHROPIC_AUTH_TOKEN/ANTHROPIC_BASE_URL，无论 host 含不含
+    # "anthropic" 关键词（如火山方舟 ark.cn-beijing.volces.com），都判定为 Anthropic 兼容格式
     api_format = "openai_chat"  # 默认
-    if "anthropic" in api_host.lower() or "kimi" in api_host.lower() or "coding" in api_host.lower():
-        # 如果 key 字段名包含 ANTHROPIC 前缀，推断为 Anthropic 格式
+    has_anthropic_env = bool(
+        env.get("ANTHROPIC_AUTH_TOKEN")
+        or env.get("ANTHROPIC_API_KEY")
+        or env.get("ANTHROPIC_BASE_URL")
+    )
+    if has_anthropic_env and any(k.startswith("ANTHROPIC_") for k in env.keys()):
+        # 配置了 Anthropic 认证/地址，按 Anthropic 兼容端点处理
+        # （覆盖火山方舟等 host 不含 "anthropic" 但走 Anthropic 兼容协议的 Provider）
+        api_format = "anthropic"
+    elif "anthropic" in api_host.lower() or "kimi" in api_host.lower() or "coding" in api_host.lower():
+        # host 含 anthropic/kimi/coding 关键词，且 key 字段含 ANTHROPIC 前缀
         if any(k.startswith("ANTHROPIC_") for k in env.keys()):
             api_format = "anthropic"
         else:
@@ -464,13 +475,18 @@ def parse_cc_switch_json(config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     if model_name:
         models.append({"name": model_name, "enabled": True})
 
+    # auth_field：Anthropic 兼容端点用 ANTHROPIC_AUTH_TOKEN（Bearer）而非 ANTHROPIC_API_KEY（x-api-key）
+    meta: Dict[str, Any] = {"api_format": api_format}
+    if api_format == "anthropic" and env.get("ANTHROPIC_AUTH_TOKEN"):
+        meta["auth_field"] = "anthropic_auth_token"
+
     return {
         "name": name or "CC Switch Provider",
         "type": p_type,
         "api_key": api_key,
         "api_host": api_host,
         "models": models,
-        "meta": {"api_format": api_format},
+        "meta": meta,
         "notes": "从 CC Switch JSON 导入",
     }
 

@@ -6,7 +6,7 @@ import { useTaskState } from '@/app/hooks/useTaskState'
 import { useAppStore } from '@/app/store/useAppStore'
 import { apiBase } from '@/lib/api'
 import { Message } from '@/lib/types'
-import { TEAM_LABELS } from '@/lib/constants'
+import { TEAM_LABELS, nodeLabel } from '@/lib/constants'
 import { PreFlightPanel, PreflightReport } from '@/app/components/PreFlightPanel'
 import { CameraReadyPanel } from '@/app/components/CameraReadyPanel'
 import DiscussionPanel from '@/app/components/DiscussionPanel'
@@ -265,7 +265,7 @@ export default function TaskDetailPage() {
       {(taskStatus === 'running' || taskStatus === 'phase1' || taskStatus === 'phase2') && (
         <div className="space-y-2">
           <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">{currentStep || '准备中...'}</span>
+            <span className="text-muted-foreground">{nodeLabel(currentStep) || '准备中...'}</span>
             <span className="text-primary font-medium">{Math.round(progress)}%</span>
           </div>
           <div className="w-full h-2 rounded-full bg-muted overflow-hidden">

@@ -13,6 +13,7 @@ import re
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, List, Optional, TypedDict
 
 try:
@@ -510,7 +511,12 @@ class LangGraphOrchestrator:
             self._post_chat(task_id, "coordinator", "🔄 从断点恢复，继续执行...")
 
         try:
-            final_state = await self._graph.ainvoke(restored_state)
+            # v8.4: 图节点数增至 40，单条最长路径（pre 链 + 主链 + post 校验链）变长，
+            # 加上条件重试/experiment 迭代，默认 recursion_limit=25 不够，放宽至 80。
+            final_state = await self._graph.ainvoke(
+                restored_state,
+                config={"recursion_limit": 80},
+            )
             # 持久化结果
             self._save_results(task_id, final_state)
             em.record("coordinator", "task_end", f"LangGraph 任务完成：{final_state.get('current_step', 'done')}")
@@ -1600,6 +1606,5572 @@ class LangGraphOrchestrator:
         return get_settings()
 
     # ------------------------------------------------------------------
+    # 需求校验节点（pre 阶段）— 修复"需求分解后不验完整性"缺陷
+    # ------------------------------------------------------------------
+    # 校验 requirement_decomposition 产出的 requirement_plan：结构完整性、
+    # 子任务 schema、依赖图 DAG 合法性、Agent 名称合法性、关键问题→子任务
+    # 覆盖度、token 预算，并辅以一次轻量 LLM 语义覆盖度校验。校验失败可回退
+    # 到 requirement_decomposition 重新分解（带重试上限熔断，避免死循环）。
+
+    # 允许的 Agent 名称集合（self.agents.keys() 的并集 + 已知标准 Agent）
+    _KNOWN_AGENT_NAMES = {
+        "research_agent", "modeler_agent", "algorithm_engineer_agent",
+        "financial_analyst_agent", "solver_agent", "writer_agent",
+        "data_agent", "experimentation_agent", "figure_agent",
+        "analyzer_agent", "peer_review_agent", "coder_agent",
+    }
+    # 重新分解次数上限（仿 retry_count 熔断）：attempts<2 回退分解，>=2 强制放行
+    _MAX_REDECOMPOSE_ATTEMPTS = 2
+    # 关键问题→子任务覆盖度的 Jaccard token 重叠阈值
+    _COVERAGE_JACCARD_THRESHOLD = 0.2
+    # 需求计划 token 预算上限（防止分解器产出臃肿计划拖垮后续 Agent 上下文）
+    _PLAN_TOKEN_BUDGET = 8000
+
+    @staticmethod
+    def _check_dependency_dag(
+        subtasks: List[Dict[str, Any]], valid_ids: set
+    ) -> tuple:
+        """校验子任务依赖图为 DAG：(a) 悬空引用、(b) 环检测。
+
+        Args:
+            subtasks: 子任务列表。
+            valid_ids: 已通过 schema 校验的合法子任务 id 字符串集合。
+
+        Returns:
+            (issues, has_cycle) — issues 为校验发现的消息列表，has_cycle 表示是否存在环。
+        """
+        issues: List[str] = []
+        graph: Dict[str, List[str]] = {}
+        for st in subtasks:
+            if not isinstance(st, dict):
+                continue
+            sid = st.get("id")
+            if sid is None or str(sid).strip() == "":
+                continue
+            deps = st.get("dependencies", []) or []
+            if not isinstance(deps, list):
+                deps = []
+            graph[str(sid)] = [str(d) for d in deps]
+            # (a) 悬空引用：依赖的 id 必须存在于 valid_ids
+            for d in deps:
+                if str(d) not in valid_ids:
+                    issues.append(
+                        f"子任务 {sid} 依赖了未定义的子任务 id: {d}（悬空引用）"
+                    )
+
+        # (b) 三色标记 DFS 检测环
+        WHITE, GRAY, BLACK = 0, 1, 2
+        color = {nid: WHITE for nid in graph}
+        has_cycle = False
+
+        def _dfs(node: str) -> None:
+            nonlocal has_cycle
+            color[node] = GRAY
+            for nxt in graph.get(node, []):
+                if nxt not in color:
+                    # 指向不在图中的节点（已记为悬空引用），跳过
+                    continue
+                if color[nxt] == GRAY:
+                    has_cycle = True
+                    issues.append(f"依赖图存在环，涉及子任务: {node} -> {nxt}")
+                elif color[nxt] == WHITE:
+                    _dfs(nxt)
+            color[node] = BLACK
+
+        for nid in list(graph.keys()):
+            if color[nid] == WHITE:
+                _dfs(nid)
+        return issues, has_cycle
+
+    @staticmethod
+    def _check_question_coverage(
+        key_questions: List[str],
+        subtasks: List[Dict[str, Any]],
+        threshold: float,
+    ) -> List[Dict[str, Any]]:
+        """关键问题→子任务覆盖度校验（Jaccard token 重叠）。
+
+        对每个 key_question，若无任何 subtask.description 与之 token 重叠系数 ≥ threshold，
+        记一条 coverage_gap（warning 级），这是"完整性"缺陷的核心拦截点。
+        """
+        gaps: List[Dict[str, Any]] = []
+
+        def _tokens(text: str) -> set:
+            # 中英文混合 token 化：英文按 ≥2 字符词、中文按单字
+            return set(re.findall(r"[a-zA-Z_]{2,}|[一-鿿]", str(text).lower()))
+
+        sub_desc_tokens: List[set] = []
+        for st in subtasks:
+            if isinstance(st, dict):
+                desc = st.get("description", "")
+                if desc:
+                    sub_desc_tokens.append(_tokens(desc))
+
+        for q in key_questions:
+            q_tokens = _tokens(q)
+            if not q_tokens:
+                continue
+            best = 0.0
+            for st_toks in sub_desc_tokens:
+                if not st_toks:
+                    continue
+                inter = len(q_tokens & st_toks)
+                union = len(q_tokens | st_toks)
+                jacc = inter / union if union else 0.0
+                if jacc > best:
+                    best = jacc
+            if best < threshold:
+                gaps.append({
+                    "severity": "warning",
+                    "category": "coverage_gap",
+                    "message": f"关键问题无子任务覆盖（最高重叠 {best:.2f} < {threshold}）: {q[:80]}",
+                })
+        return gaps
+
+    async def _node_requirement_validation(self, state: TaskState) -> TaskState:
+        """需求校验节点（pre 阶段）：校验 requirement_plan 的完整性，拦截残缺/不可调度计划。
+
+        短问题（requirement_plan 为 None，未触发分解）直接放行不阻塞主流程；
+        长问题则做结构/schema/DAG/Agent 合法性/覆盖度/token 预算 + 一次轻量 LLM
+        语义覆盖度校验，失败可回退重新分解（带重试上限熔断）。
+        """
+        task_id = state["task_id"]
+        logger.info(f"[LangGraph:{task_id}] requirement_validation: 启动需求完整性校验")
+        self._update_progress(task_id, state.get("problem_text", ""), 8, "需求完整性校验中")
+
+        plan = state.get("requirement_plan")
+        attempts = int(state.get("requirement_validation_attempts", 0) or 0)
+
+        # 1. 短路放行：未触发分解（短问题 <3000 字，见 _node_requirement_decomposition line 1792/1813）
+        if not plan:
+            logger.info(f"[LangGraph:{task_id}] requirement_validation: 无 requirement_plan，跳过校验")
+            return {
+                **state,
+                "current_step": "requirement_validation_skipped",
+                "requirement_validation_passed": True,
+                "requirement_validation_attempts": attempts,
+            }
+
+        try:
+            from ..core.context_compressor import estimate_tokens
+
+            template = state.get("paper_template", "")
+            workflow_type = state.get("workflow_type", "")
+            issues: List[Dict[str, Any]] = []
+
+            # 2. 结构完整性（确定性，仿 _validate_no_fabrication 风格）
+            required_fields = [
+                ("research_goal", str),
+                ("key_questions", list),
+                ("subtasks", list),
+                ("methodology_hints", list),
+                ("expected_output", str),
+                ("data_requirements", list),
+                ("template_suggestion", str),
+            ]
+            if not isinstance(plan, dict):
+                issues.append({
+                    "severity": "error", "category": "structure",
+                    "message": "requirement_plan 不是 dict，结构非法",
+                })
+            else:
+                for fname, ftype in required_fields:
+                    val = plan.get(fname)
+                    if val is None:
+                        issues.append({
+                            "severity": "error", "category": "structure",
+                            "message": f"requirement_plan 缺失字段: {fname}",
+                        })
+                    elif not isinstance(val, ftype):
+                        issues.append({
+                            "severity": "error", "category": "structure",
+                            "message": f"字段 {fname} 类型应为 {ftype.__name__}，实为 {type(val).__name__}",
+                        })
+                    elif isinstance(val, str) and not val.strip():
+                        issues.append({
+                            "severity": "error", "category": "structure",
+                            "message": f"字段 {fname} 为空字符串",
+                        })
+                    elif isinstance(val, list) and len(val) == 0:
+                        issues.append({
+                            "severity": "error", "category": "structure",
+                            "message": f"字段 {fname} 为空列表（至少 1 项）",
+                        })
+
+            subtasks = plan.get("subtasks", []) if isinstance(plan, dict) else []
+            subtasks = subtasks if isinstance(subtasks, list) else []
+
+            # 3. 子任务 schema：每个必须有 id、description(非空)、suggested_agent(非空)
+            valid_subtask_ids: set = set()
+            for idx, st in enumerate(subtasks):
+                if not isinstance(st, dict):
+                    issues.append({
+                        "severity": "error", "category": "subtask_schema",
+                        "message": f"subtasks[{idx}] 不是 dict",
+                    })
+                    continue
+                sid = st.get("id")
+                desc = st.get("description")
+                agent = st.get("suggested_agent")
+                if sid is None or str(sid).strip() == "":
+                    issues.append({
+                        "severity": "error", "category": "subtask_schema",
+                        "message": f"subtasks[{idx}] 缺失 id",
+                    })
+                else:
+                    valid_subtask_ids.add(str(sid))
+                if not desc or (isinstance(desc, str) and not desc.strip()):
+                    issues.append({
+                        "severity": "error", "category": "subtask_schema",
+                        "message": f"subtasks[{idx}] 缺失 description",
+                    })
+                if not agent or (isinstance(agent, str) and not agent.strip()):
+                    issues.append({
+                        "severity": "error", "category": "subtask_schema",
+                        "message": f"subtasks[{idx}] 缺失 suggested_agent",
+                    })
+
+            # 4. 依赖图 DAG 校验（悬空引用 + 环检测）
+            dag_issues, has_cycle = self._check_dependency_dag(subtasks, valid_subtask_ids)
+            for msg in dag_issues:
+                issues.append({
+                    "severity": "error", "category": "dependency_dag",
+                    "message": msg,
+                })
+
+            # 5. Agent 名称合法性：对照 self.agents.keys() 并集已知集合
+            allowed_agents = set(self.agents.keys()) | self._KNOWN_AGENT_NAMES
+            for st in subtasks:
+                if not isinstance(st, dict):
+                    continue
+                ag = st.get("suggested_agent")
+                if ag and isinstance(ag, str) and ag.strip() and ag not in allowed_agents:
+                    issues.append({
+                        "severity": "warning", "category": "agent_name",
+                        "message": f"子任务 {st.get('id')} 的 suggested_agent 不在已知集合: {ag}",
+                    })
+
+            # 6. 关键问题→子任务覆盖度（确定性，Jaccard token 重叠）
+            key_questions = plan.get("key_questions", []) if isinstance(plan, dict) else []
+            key_questions = key_questions if isinstance(key_questions, list) else []
+            coverage_gaps = self._check_question_coverage(
+                [str(q) for q in key_questions],
+                subtasks,
+                self._COVERAGE_JACCARD_THRESHOLD,
+            )
+            issues.extend(coverage_gaps)
+
+            # 7. Token 预算（复用 context_compressor.estimate_tokens）
+            plan_tokens = estimate_tokens(plan)
+            if plan_tokens > self._PLAN_TOKEN_BUDGET:
+                issues.append({
+                    "severity": "warning", "category": "token_budget",
+                    "message": f"requirement_plan 体积过大: {plan_tokens} tokens > {self._PLAN_TOKEN_BUDGET}",
+                })
+
+            # 8. 问题覆盖度 LLM 校验（轻量单次调用，补足语义级缺口；解析失败降级跳过）
+            try:
+                problem_text = (state.get("problem_text") or "")[:6000]
+                llm_gaps = await self._llm_question_coverage(
+                    task_id, problem_text, plan, template, workflow_type
+                )
+                if llm_gaps:
+                    issues.extend(llm_gaps)
+            except Exception as llm_exc:
+                logger.warning(
+                    f"[LangGraph:{task_id}] requirement_validation LLM 覆盖度校验失败，降级跳过: {llm_exc}"
+                )
+
+            # 9. 汇总打分（仿 code_audit.audit_code 评分式）
+            error_count = sum(1 for i in issues if i.get("severity") == "error")
+            warning_count = sum(1 for i in issues if i.get("severity") == "warning")
+            passed = error_count == 0
+            score = max(0, 100 - error_count * 20 - warning_count * 5)
+            new_attempts = attempts + 1
+
+            validation = {
+                "passed": passed,
+                "score": score,
+                "issues": issues,
+                "gaps": [g.get("message", "") for g in coverage_gaps],
+                "error_count": error_count,
+                "warning_count": warning_count,
+                "validated_at": datetime.now().isoformat(),
+                "attempts": new_attempts,
+                "plan_tokens": plan_tokens,
+                "has_cycle": has_cycle,
+                # 补全指令：注入下一次分解的 context（由路由层回退时消费）
+                "remediation_hints": [
+                    i.get("message", "") for i in issues if i.get("severity") == "error"
+                ],
+            }
+
+            # 10. 写回：把 _validation 子字典并入 plan（仿 _fabrication_flags 注入输出 dict 范式）
+            base_plan = plan if isinstance(plan, dict) else {"_raw_plan": plan}
+            annotated_plan = {**base_plan, "_validation": validation}
+
+            # 持久化校验报告（仿 _node_fact_check line 3151 的 _set_result 范式）
+            self._set_result(state, "requirement_validator", validation)
+
+            # 11. 路由语义：passed→done；失败且未达上限→failed 回退；达上限→降级放行
+            if passed:
+                current_step = "requirement_validation_done"
+                rv_passed = True
+                notice = (f"✅ 需求完整性校验通过（score={score}，warnings={warning_count}）")
+            elif new_attempts >= self._MAX_REDECOMPOSE_ATTEMPTS:
+                # 熔断：强制放行并打降级标记，避免阻塞主流程
+                current_step = "requirement_validation_degraded"
+                rv_passed = True
+                notice = (f"⚠️ 需求校验第 {new_attempts} 次仍失败（score={score}，"
+                          f"errors={error_count}），已达重试上限，降级放行。"
+                          f"缺口: {'; '.join(validation['gaps'][:3]) or '无'}")
+            else:
+                current_step = "requirement_validation_failed"
+                rv_passed = False
+                notice = (f"⚠️ 需求完整性校验失败（score={score}，errors={error_count}），"
+                          f"将回退重新分解（第 {new_attempts} 次）。"
+                          f"问题: {'; '.join(validation['remediation_hints'][:3]) or '无'}")
+
+            self._post_chat(task_id, "requirement_validator", notice)
+
+            # 校验问题写回 state 的 _quality_issues 列表（无则新增）
+            quality_issues = list(state.get("_quality_issues") or [])
+            for iss in issues:
+                quality_issues.append({
+                    **iss, "stage": "pre", "node": "requirement_validation",
+                })
+
+            logger.info(
+                f"[LangGraph:{task_id}] requirement_validation: passed={passed} "
+                f"score={score} errors={error_count} warnings={warning_count} "
+                f"attempts={new_attempts} step={current_step}"
+            )
+
+            return {
+                **state,
+                "requirement_plan": annotated_plan,
+                "current_step": current_step,
+                "results": {**state.get("results", {}), "requirement_validator": validation},
+                "requirement_validation_passed": rv_passed,
+                "requirement_validation_attempts": new_attempts,
+                "_quality_issues": quality_issues,
+            }
+        except Exception as exc:
+            logger.warning(f"[LangGraph:{task_id}] requirement_validation 异常: {exc}")
+            return state
+
+    async def _llm_question_coverage(
+        self,
+        task_id: str,
+        problem_text: str,
+        plan: Dict[str, Any],
+        template: str,
+        workflow_type: str,
+    ) -> List[Dict[str, Any]]:
+        """轻量单次 LLM 语义覆盖度校验（仿 _multi_agent_vote/_classify_review_defects 模式）。
+
+        把 problem_text（截断前 6000 字）+ plan 喂给 LLM，要求返回 JSON
+        {uncovered:[...], reason:...}，列出 problem_text 中明确要求但 subtasks
+        未覆盖的交付物/约束。解析失败则降级返回空列表（不阻塞主流程）。
+        """
+        agent = self.agents.get("analyzer_agent")
+        if not agent or not problem_text:
+            return []
+        subtasks = plan.get("subtasks", []) if isinstance(plan, dict) else []
+        subtask_brief = json.dumps(
+            [{"id": st.get("id"), "desc": st.get("description"),
+              "agent": st.get("suggested_agent")}
+             for st in subtasks if isinstance(st, dict)],
+            ensure_ascii=False,
+        )[:3000]
+        prompt = (
+            "你是需求完整性审计员。下面是问题原文与需求分解计划（子任务列表）。"
+            "请找出问题原文中【明确要求】但子任务列表【未覆盖】的交付物或约束。\n"
+            "只返回 JSON，格式：{\"uncovered\":[\"...\",\"...\"],\"reason\":\"...\"}，"
+            "若无缺口返回 {\"uncovered\":[],\"reason\":\"\"}。\n\n"
+            f"模板: {template}，工作流: {workflow_type}\n"
+            f"问题原文（截断）：\n{problem_text}\n\n"
+            f"子任务列表：\n{subtask_brief}"
+        )
+        resp = await agent.call_llm(
+            [
+                {"role": "system", "content": "You are a requirement coverage auditor. Reply with JSON only."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.2,
+        )
+        content = (resp.get("choices", [{}])[0].get("message", {}).get("content", "")
+                   if isinstance(resp, dict) else "")
+        # 容错解析 JSON（LLM 可能包裹 ```json ... ``` 或附带说明）
+        m = re.search(r"\{.*\}", content, re.DOTALL)
+        payload = json.loads(m.group(0)) if m else {}
+        uncovered = payload.get("uncovered", []) if isinstance(payload, dict) else []
+        if not isinstance(uncovered, list):
+            uncovered = []
+        gaps: List[Dict[str, Any]] = []
+        for item in uncovered[:8]:
+            gaps.append({
+                "severity": "warning",
+                "category": "coverage_gap_llm",
+                "message": f"LLM 语义覆盖缺口: {str(item)[:200]}",
+            })
+        return gaps
+
+    async def _node_data_quality_check(self, state: TaskState) -> TaskState:
+        """数据质量门禁（pre 阶段）：插在 parallel_analysis 与建模 Agent 之间。
+
+        全确定性、Code-as-Truth：复用 DataSchemaExtractor 重新读取文件计算
+        null_count / unique_count / numeric_summary，不信任 data_agent 自报的缺失率，
+        并与之对账（防 LLM 估算/编造）。门禁未通过时阻断建模流程。
+        """
+        from pathlib import Path
+
+        task_id = state["task_id"]
+        logger.info(f"[LangGraph:{task_id}] data_quality_check: 开始数据质量门禁校验")
+
+        try:
+            files = list(state.get("files", []) or [])
+            # 由 _route_after_parallel_analysis 保证仅 files 非空时进入；此处作防御
+            if not files:
+                logger.info(f"[LangGraph:{task_id}] data_quality_check: 无数据文件，跳过门禁")
+                return {**state, "current_step": "data_quality_check"}
+
+            self._update_progress(task_id, state["problem_text"], 32, "数据质量门禁校验中")
+
+            from ..services.data_schema import get_schema_extractor
+            extractor = get_schema_extractor()
+
+            issues: List[Dict[str, Any]] = []
+            per_file_reports: List[Dict[str, Any]] = []
+            metric_candidates = []  # [(指标键, 值)] 用于 check_metric_ranges
+            total_cells = 0
+            total_null = 0
+            fatal = False
+
+            # 不应出现负值的列名关键词
+            non_negative_keywords = (
+                "count", "price", "age", "数量", "价格", "年龄", "金额", "总额",
+            )
+            # 显式指标列名关键词（与 symbolic_auditor.range_rules 对齐）
+            metric_keywords = (
+                "accuracy", "precision", "recall", "f1", "auc", "r2",
+                "r_squared", "sharpe", "max_drawdown", "return_rate",
+            )
+
+            # ===== 步骤 2 文件级门禁（数据缺失检测） + 步骤 3 脏数据检测 =====
+            for fp in files:
+                path = Path(fp)
+                file_name = path.name
+
+                # --- 文件缺失 ---
+                if not path.exists():
+                    issues.append({
+                        "severity": "error", "category": "file_missing", "fatal": True,
+                        "file": str(path),
+                        "message": f"数据文件不存在: {file_name}",
+                    })
+                    fatal = True
+                    per_file_reports.append({
+                        "file": str(path), "file_name": file_name,
+                        "shape": [0, 0], "missing_rate": 1.0,
+                        "columns": [], "issues": ["file_missing"],
+                    })
+                    continue
+
+                try:
+                    size = path.stat().st_size
+                except OSError as st_exc:
+                    issues.append({
+                        "severity": "error", "category": "unreadable", "fatal": True,
+                        "file": str(path),
+                        "message": f"无法读取文件状态: {st_exc}",
+                    })
+                    fatal = True
+                    continue
+
+                # --- 空文件 ---
+                if size == 0:
+                    issues.append({
+                        "severity": "error", "category": "empty_file", "fatal": True,
+                        "file": str(path),
+                        "message": f"数据文件为空（0 字节）: {file_name}",
+                    })
+                    fatal = True
+                    per_file_reports.append({
+                        "file": str(path), "file_name": file_name,
+                        "shape": [0, 0], "missing_rate": 1.0,
+                        "columns": [], "issues": ["empty_file"],
+                    })
+                    continue
+
+                # --- 不支持的类型 ---
+                if path.suffix.lower() not in extractor.SUPPORTED_EXTS:
+                    issues.append({
+                        "severity": "warning", "category": "unsupported_type", "fatal": False,
+                        "file": str(path),
+                        "message": f"不支持的数据文件类型: {path.suffix}",
+                    })
+                    per_file_reports.append({
+                        "file": str(path), "file_name": file_name,
+                        "shape": [0, 0], "missing_rate": 0.0,
+                        "columns": [], "issues": ["unsupported_type"],
+                    })
+                    continue
+
+                # --- 不可读 ---
+                schema = extractor.extract(path)
+                if not schema:
+                    issues.append({
+                        "severity": "error", "category": "unreadable", "fatal": True,
+                        "file": str(path),
+                        "message": f"数据文件无法解析为表格: {file_name}",
+                    })
+                    fatal = True
+                    per_file_reports.append({
+                        "file": str(path), "file_name": file_name,
+                        "shape": [0, 0], "missing_rate": 1.0,
+                        "columns": [], "issues": ["unreadable"],
+                    })
+                    continue
+
+                rows, cols = schema.get("shape", [0, 0])
+                columns = schema.get("columns", []) or []
+                file_null = sum(int(c.get("null_count", 0) or 0) for c in columns)
+                cells = max(rows * cols, 1)
+                missing_rate = file_null / cells
+                total_cells += cells
+                total_null += file_null
+
+                file_issues: List[str] = []
+
+                # 无数据行
+                if rows == 0:
+                    issues.append({
+                        "severity": "error", "category": "empty_data", "fatal": True,
+                        "file": file_name,
+                        "message": f"数据文件无数据行（0 行）: {file_name}",
+                    })
+                    fatal = True
+                    file_issues.append("empty_data")
+
+                for c in columns:
+                    cname = str(c.get("name", ""))
+                    null_count = int(c.get("null_count", 0) or 0)
+                    unique_count = int(c.get("unique_count", 0) or 0)
+
+                    # 全空列
+                    if rows > 0 and null_count >= rows:
+                        issues.append({
+                            "severity": "error", "category": "empty_column", "fatal": True,
+                            "file": file_name, "column": cname,
+                            "message": f"列 '{cname}' 全部为空（{null_count}/{rows}）",
+                        })
+                        fatal = True
+                        file_issues.append("empty_column")
+
+                    # 高缺失：>0.6 致命，>0.3 警告
+                    col_missing = null_count / max(rows, 1)
+                    if rows > 0 and col_missing > 0.6:
+                        issues.append({
+                            "severity": "error", "category": "high_missing", "fatal": True,
+                            "file": file_name, "column": cname,
+                            "message": f"列 '{cname}' 缺失率过高: {col_missing:.1%}",
+                        })
+                        fatal = True
+                        file_issues.append("high_missing")
+                    elif rows > 0 and col_missing > 0.3:
+                        issues.append({
+                            "severity": "warning", "category": "moderate_missing", "fatal": False,
+                            "file": file_name, "column": cname,
+                            "message": f"列 '{cname}' 缺失率偏高: {col_missing:.1%}",
+                        })
+                        file_issues.append("moderate_missing")
+
+                    # 常量列（无信息量）
+                    if rows > 1 and unique_count <= 1:
+                        issues.append({
+                            "severity": "warning", "category": "constant_column", "fatal": False,
+                            "file": file_name, "column": cname,
+                            "message": f"列 '{cname}' 为常量列（唯一值数={unique_count}），无信息量",
+                        })
+                        file_issues.append("constant_column")
+
+                    # 非法负值 + 指标列范围候选（复用 schema 已算出的 numeric_summary）
+                    ns = c.get("numeric_summary")
+                    if isinstance(ns, dict):
+                        cmin = ns.get("min")
+                        cmax = ns.get("max")
+                        cname_lower = cname.lower()
+                        if isinstance(cmin, (int, float)) and cmin < 0 and any(
+                            kw in cname_lower for kw in non_negative_keywords
+                        ):
+                            issues.append({
+                                "severity": "warning", "category": "negative_value", "fatal": False,
+                                "file": file_name, "column": cname,
+                                "message": f"列 '{cname}' 出现非法负值（min={cmin}）",
+                            })
+                            file_issues.append("negative_value")
+                        # 收集指标列的 min/max 候选，交给 check_metric_ranges 做范围校验
+                        if any(kw in cname_lower for kw in metric_keywords):
+                            if isinstance(cmin, (int, float)):
+                                metric_candidates.append((f"{cname}__min", float(cmin)))
+                            if isinstance(cmax, (int, float)):
+                                metric_candidates.append((f"{cname}__max", float(cmax)))
+
+                per_file_reports.append({
+                    "file": str(path), "file_name": file_name,
+                    "shape": [rows, cols],
+                    "missing_rate": round(missing_rate, 4),
+                    "columns": [
+                        {"name": c.get("name"),
+                         "null_count": c.get("null_count"),
+                         "unique_count": c.get("unique_count")}
+                        for c in columns
+                    ],
+                    "issues": file_issues,
+                })
+
+            overall_missing = total_null / max(total_cells, 1)
+
+            # ===== （可选增强）显式指标列范围校验 =====
+            if metric_candidates:
+                try:
+                    from ..services.symbolic_auditor import check_metric_ranges
+                    # check_metric_ranges 忽略元组后两位，仅按内置 range_rules 校验 value
+                    metrics_dict = {k: (v, 0.0, 0.0) for k, v in metric_candidates}
+                    for finding in check_metric_ranges(metrics_dict):
+                        issues.append({
+                            "severity": "warning", "category": "metric_range", "fatal": False,
+                            "message": finding.message,
+                        })
+                except Exception as me:
+                    logger.debug(
+                        f"[LangGraph:{task_id}] data_quality_check: 指标范围校验跳过: {me}"
+                    )
+
+            # ===== 步骤 4：data_agent 自报对账（防 LLM 估算/编造）=====
+            divergences: List[Dict[str, Any]] = []
+            try:
+                results = self._resolve_results(state)
+                data_out = results.get("data_agent", {})
+                reported_by_name: Dict[str, float] = {}
+                if isinstance(data_out, dict):
+                    for a in data_out.get("analyses", []) or []:
+                        if not isinstance(a, dict):
+                            continue
+                        fname = a.get("file_name")
+                        if not fname and a.get("file_path"):
+                            try:
+                                fname = Path(a["file_path"]).name
+                            except Exception:
+                                fname = ""
+                        dq = a.get("data_quality")
+                        if not isinstance(dq, dict):
+                            nested = a.get("analysis")
+                            if isinstance(nested, dict):
+                                dq = nested.get("data_quality")
+                        if isinstance(dq, dict):
+                            mr = dq.get("missing_rate")
+                            if isinstance(mr, (int, float)):
+                                # 兼容百分比（>1）/ 小数（0-1）
+                                reported = float(mr) / 100.0 if float(mr) > 1.0 else float(mr)
+                                reported_by_name[str(fname)] = reported
+
+                for pfr in per_file_reports:
+                    fname = str(pfr.get("file_name"))
+                    recomputed = pfr.get("missing_rate", 0.0)
+                    if not isinstance(recomputed, (int, float)):
+                        continue
+                    reported = reported_by_name.get(fname)
+                    if reported is None:
+                        continue
+                    recomputed_f = float(recomputed)
+                    # 重算值≈0 时退化为绝对差，避免除零
+                    if recomputed_f > 1e-4:
+                        rel_diff = abs(reported - recomputed_f) / recomputed_f
+                    else:
+                        rel_diff = abs(reported - recomputed_f)
+                    if rel_diff > 0.1:
+                        divergences.append({
+                            "file": fname,
+                            "data_agent_missing_rate": round(reported, 4),
+                            "recomputed_missing_rate": round(recomputed_f, 4),
+                            "relative_diff": round(rel_diff, 4),
+                        })
+                        issues.append({
+                            "severity": "warning", "category": "data_agent_divergence",
+                            "fatal": False, "file": fname,
+                            "message": (
+                                f"data_agent 自报缺失率 {reported:.2%} 与重算值 "
+                                f"{recomputed_f:.2%} 偏差过大（相对差 {rel_diff:.1%}）"
+                            ),
+                        })
+            except Exception as div_exc:
+                logger.debug(
+                    f"[LangGraph:{task_id}] data_quality_check: data_agent 对账失败: {div_exc}"
+                )
+
+            # ===== 步骤 5：判定 =====
+            passed = (not fatal) and overall_missing < 0.6
+            report = {
+                "task_id": task_id,
+                "file_count": len(files),
+                "per_file": per_file_reports,
+                "overall_missing_rate": round(overall_missing, 4),
+                "issue_count": len(issues),
+                "issues": issues,
+                "data_agent_divergence": divergences,
+                "passed": passed,
+                "checked_at": datetime.now().isoformat(),
+            }
+
+            # ===== 步骤 6：写回 + 通知 =====
+            ref = self._set_result(state, "data_quality_check", report)
+            wm = self._get_working_memory(task_id)
+            if wm:
+                try:
+                    wm.set_result("data_quality_check", report)
+                except Exception:
+                    pass
+
+            if passed:
+                self._post_chat(
+                    task_id, "data_quality_check",
+                    f"✅ 数据质量门禁通过：{len(files)} 个文件，整体缺失率 "
+                    f"{overall_missing:.1%}，{len(issues)} 个提示",
+                )
+            else:
+                err_count = sum(1 for i in issues if i.get("severity") == "error")
+                self._post_chat(
+                    task_id, "data_quality_check",
+                    f"⚠️ 数据质量门禁未通过：{len(issues)} 个问题（{err_count} 个错误），"
+                    f"建议补充或清洗数据",
+                )
+
+            # ===== 步骤 7：返回（校验问题写回 _quality_issues 列表，无则新增）=====
+            existing_issues = list(state.get("_quality_issues", []) or [])
+            existing_issues.extend(issues)
+
+            new_state: TaskState = {
+                **state,
+                "results": {**state.get("results", {}), **ref},
+                "current_step": "data_quality_check",
+                "_quality_issues": existing_issues,
+            }
+            if not passed:
+                new_state["cannot_solve_report"] = {
+                    "reason": "数据质量门禁未通过",
+                    "issues": [i.get("message", str(i)) for i in issues[:5]],
+                }
+
+            logger.info(
+                f"[LangGraph:{task_id}] data_quality_check: passed={passed}, "
+                f"files={len(files)}, overall_missing={overall_missing:.1%}, "
+                f"issues={len(issues)}, divergences={len(divergences)}"
+            )
+            return new_state
+
+        except Exception as e:
+            logger.warning(
+                f"[LangGraph:{task_id}] data_quality_check 失败，跳过门禁: {e}",
+                exc_info=True,
+            )
+            return state
+
+    async def _node_literature_dedup(self, state: TaskState) -> TaskState:
+        """文献去重节点（pre 阶段）：在 writer 消费 literature 前做最终去重。
+
+        图位置：插入在 figure 与 writer 之间（figure -> literature_dedup -> writer），
+        这样在 writer 消费 literature 前做最终去重；修订路径（results 已有 writer_agent
+        且含 citations）时还能清洗 writer 已有的 citations。
+
+        范式镜像 _node_ast_audit/_node_fact_check：用 _resolve_results/_set_result 做
+        state I/O，_post_chat 通知。复用 reference_verifier 的 _normalize_title() /
+        _title_similarity() 做键归一化，复用 _verify_arxiv 内 re.sub(r"v\\d+$","",...)
+        的 arXiv 版本号剥离惯用法。
+
+        去重键（按优先级）：arxiv_id（剥版本号+小写）/ doi（去前缀+小写）/
+        title（_normalize_title）/ url（去 query+去尾斜杠+小写）。命中任一键即判重复。
+        无强 id（无 arxiv_id 且无 doi）时，对已保留标题调用 _title_similarity，
+        >=0.85 视为同一篇。重复项的非空字段回填进被保留项的空缺（merge），保留
+        richer record，避免丢元数据。
+        """
+        task_id = state["task_id"]
+        try:
+            from ..services.reference_verifier import _normalize_title, _title_similarity
+
+            workflow_type = state.get("workflow_type", "standard")
+            template = state.get("paper_template", "math_modeling")
+
+            # ===== 1) 守卫：quick/code_focused 或 research_agent 结果为空 → 跳过 =====
+            if workflow_type in ("quick", "code_focused"):
+                logger.info(f"[LangGraph:{task_id}] literature_dedup skipped (workflow={workflow_type})")
+                return {**state, "current_step": "literature_dedup_skipped"}
+
+            results = self._resolve_results(state)
+            research_output = results.get("research_agent")
+            if not isinstance(research_output, dict):
+                research_output = {}
+            papers = research_output.get("papers", []) or []
+            methods = research_output.get("methods", []) or []
+
+            if not papers and not methods:
+                logger.info(f"[LangGraph:{task_id}] literature_dedup skipped (research_agent empty)")
+                return {**state, "current_step": "literature_dedup_skipped"}
+
+            self._update_progress(task_id, state["problem_text"], 67, "文献去重中")
+
+            # ===== 规范化键（复用 reference_verifier 的归一化逻辑） =====
+            def _norm_arxiv(raw):
+                if not raw:
+                    return ""
+                x = str(raw).strip().lower()
+                x = re.sub(r"^arxiv\s*:\s*", "", x)
+                return re.sub(r"v\d+$", "", x)  # 复用 _verify_arxiv 版本剥离惯用法
+
+            def _norm_doi(raw):
+                if not raw:
+                    return ""
+                d = str(raw).strip().lower()
+                d = re.sub(r"^https?://(?:dx\.)?doi\.org/", "", d)
+                d = re.sub(r"^doi:\s*", "", d)
+                return d
+
+            def _norm_url(raw):
+                if not raw:
+                    return ""
+                u = str(raw).strip().lower()
+                u = re.sub(r"\?.*$", "", u)  # 去 query string
+                return u.rstrip("/")
+
+            def _register_keys(seen_dict, idx, ka, kd, ku, kt):
+                """把四元组键注册到 seen，指向 kept 中的索引（仅注册非空值）。"""
+                for key_str in (f"arxiv:{ka}", f"doi:{kd}", f"url:{ku}", f"title:{kt}"):
+                    if key_str.split(":", 1)[1] and key_str not in seen_dict:
+                        seen_dict[key_str] = idx
+
+            def _dedup_citations(cits):
+                """对 citation 列表去重，返回 (去重后列表, 移除数)。"""
+                removed = 0
+                if not isinstance(cits, list) or not cits:
+                    return cits, 0
+                seen_c: Dict[str, int] = {}
+                out: List[Any] = []
+                for c in cits:
+                    if not isinstance(c, dict):
+                        out.append(c)
+                        continue
+                    ka = _norm_arxiv(c.get("arxiv_id"))
+                    kd = _norm_doi(c.get("doi"))
+                    kt = _normalize_title(c.get("title", "") or "")
+                    ku = _norm_url(c.get("url"))
+                    hit = None
+                    for _, key_str in (
+                        (f"arxiv:{ka}", "arxiv_id"),
+                        (f"doi:{kd}", "doi"),
+                        (f"url:{ku}", "url"),
+                        (f"title:{kt}", "title"),
+                    ):
+                        if key_str.split(":", 1)[1] and key_str in seen_c:
+                            hit = seen_c[key_str]
+                            break
+                    # 无强 id（无 arxiv_id 且无 doi）→ 标题模糊匹配
+                    if hit is None and not (ka or kd) and kt and out:
+                        ctitle = c.get("title", "") or ""
+                        for i, oc in enumerate(out):
+                            if not isinstance(oc, dict):
+                                continue
+                            ot = _normalize_title(oc.get("title", "") or "")
+                            if ot and _title_similarity(ctitle, oc.get("title", "") or "") >= 0.85:
+                                hit = i
+                                break
+                    if hit is not None:
+                        keeper = out[hit]
+                        for f in ("doi", "venue", "author", "year", "arxiv_id",
+                                  "url", "title", "publisher"):
+                            v = c.get(f)
+                            if v and not keeper.get(f):
+                                keeper[f] = v
+                        removed += 1
+                    else:
+                        out.append(dict(c))
+                        _register_keys(seen_c, len(out) - 1, ka, kd, ku, kt)
+                return out, removed
+
+            # ===== 2-4) papers 去重主循环 =====
+            seen: Dict[str, int] = {}
+            kept: List[Dict[str, Any]] = []
+            kept_titles: List[str] = []
+            duplicates: List[Dict[str, Any]] = []
+
+            for paper in papers:
+                if not isinstance(paper, dict):
+                    continue
+                k_arxiv = _norm_arxiv(paper.get("arxiv_id"))
+                k_doi = _norm_doi(paper.get("doi"))
+                k_title = _normalize_title(paper.get("title", "") or "")
+                k_url = _norm_url(paper.get("url"))
+
+                hit_idx = None
+                hit_reason = ""
+                for label, key_str in (
+                    ("arxiv_id", f"arxiv:{k_arxiv}"),
+                    ("doi", f"doi:{k_doi}"),
+                    ("url", f"url:{k_url}"),
+                    ("title", f"title:{k_title}"),
+                ):
+                    if key_str.split(":", 1)[1] and key_str in seen:
+                        hit_idx = seen[key_str]
+                        hit_reason = label
+                        break
+
+                # 无强 id（无 arxiv_id 且无 doi）→ 标题模糊匹配（捕获大小写/标点/尾句号差异）
+                if hit_idx is None and not (k_arxiv or k_doi) and k_title and kept_titles:
+                    best_sim = 0.0
+                    best_idx = -1
+                    ptitle = paper.get("title", "") or ""
+                    for i, kt in enumerate(kept_titles):
+                        if not kt:
+                            continue
+                        sim = _title_similarity(ptitle, kt)
+                        if sim > best_sim:
+                            best_sim = sim
+                            best_idx = i
+                    if best_sim >= 0.85 and best_idx >= 0:
+                        hit_idx = best_idx
+                        hit_reason = f"title_similarity({best_sim:.2f})"
+
+                if hit_idx is not None:
+                    # 重复：把非空字段回填进被保留项的空缺（merge），保留 richer record
+                    keeper = kept[hit_idx]
+                    for f in ("doi", "venue", "authors", "abstract", "year",
+                              "arxiv_id", "url", "title", "publisher", "author"):
+                        val = paper.get(f)
+                        if val and not keeper.get(f):
+                            keeper[f] = val
+                    # 传递性：注册 keeper 新获得的键，避免后续同 id 漏判
+                    _register_keys(
+                        seen, hit_idx,
+                        _norm_arxiv(keeper.get("arxiv_id")),
+                        _norm_doi(keeper.get("doi")),
+                        _norm_url(keeper.get("url")),
+                        _normalize_title(keeper.get("title", "") or ""),
+                    )
+                    kept_titles[hit_idx] = _normalize_title(keeper.get("title", "") or "")
+                    duplicates.append({
+                        "title": paper.get("title", ""),
+                        "reason": hit_reason,
+                        "merged_into": keeper.get("title", ""),
+                    })
+                else:
+                    kept.append(dict(paper))
+                    idx = len(kept) - 1
+                    _register_keys(seen, idx, k_arxiv, k_doi, k_url, k_title)
+                    kept_titles.append(k_title)
+
+            # ===== 5) methods 去重：按规范化 name 去重，合并 description =====
+            seen_methods: Dict[str, int] = {}
+            deduped_methods: List[Dict[str, Any]] = []
+            method_removed = 0
+            for m in methods:
+                if not isinstance(m, dict):
+                    continue
+                name = m.get("name") or m.get("method_name") or ""
+                k_name = _normalize_title(name) if name else ""
+                if k_name and k_name in seen_methods:
+                    keeper = deduped_methods[seen_methods[k_name]]
+                    desc = m.get("description") or m.get("summary") or ""
+                    if desc:
+                        existing = keeper.get("description", "") or ""
+                        if desc not in existing:
+                            keeper["description"] = (existing + " " + desc).strip() if existing else desc
+                    method_removed += 1
+                else:
+                    deduped_methods.append(dict(m))
+                    if k_name:
+                        seen_methods[k_name] = len(deduped_methods) - 1
+
+            # ===== 6) 修订路径：清洗 writer_agent 已有 citations =====
+            writer_citations_removed = 0
+            ref_writer: Dict[str, Any] = {}
+            writer_output = results.get("writer_agent")
+            has_writer_cits = isinstance(writer_output, dict) and (
+                bool(writer_output.get("citations"))
+                or (isinstance(writer_output.get("paper_memory"), dict)
+                    and bool(writer_output["paper_memory"].get("citations")))
+            )
+            if has_writer_cits:
+                writer_output = dict(writer_output)
+                deduped_cits, r1 = _dedup_citations(writer_output.get("citations"))
+                writer_citations_removed += r1
+                if deduped_cits is not None:
+                    writer_output["citations"] = deduped_cits
+                pm = writer_output.get("paper_memory")
+                if isinstance(pm, dict):
+                    pm = dict(pm)
+                    deduped_pm_cits, r2 = _dedup_citations(pm.get("citations"))
+                    writer_citations_removed += r2
+                    if deduped_pm_cits is not None:
+                        pm["citations"] = deduped_pm_cits
+                    writer_output["paper_memory"] = pm
+                ref_writer = self._set_result(state, "writer_agent", writer_output)
+
+            # ===== 7) 生成报告（结构参考 code_audit.AuditResult / fact_checker report） =====
+            report: Dict[str, Any] = {
+                "enabled": True,
+                "paper_template": template,
+                "original_paper_count": len(papers),
+                "deduped_paper_count": len(kept),
+                "removed_count": len(papers) - len(kept),
+                "duplicates": duplicates,
+                "method_removed": method_removed,
+                "writer_citations_removed": writer_citations_removed,
+                "ran_at": datetime.now().isoformat(),
+            }
+
+            # ===== 8) 回写 research_agent（去重后 papers/methods + 报告） =====
+            updated = {
+                **research_output,
+                "papers": kept,
+                "methods": deduped_methods,
+                "_literature_dedup": report,
+            }
+            ref_research = self._set_result(state, "research_agent", updated)
+            self._set_result(state, "literature_dedup", report)  # 独立存储，供 _resolve_results 读取
+
+            # ===== 校验问题写回 state 的 _quality_issues 列表（无则新增） =====
+            quality_issues: List[str] = list(state.get("_quality_issues", []) or [])
+            if report["removed_count"] > 0:
+                quality_issues.append(
+                    f"literature_dedup: 检测到 {report['removed_count']} 篇重复文献"
+                    f"（共 {report['original_paper_count']} 篇），已合并/移除"
+                )
+            if method_removed > 0:
+                quality_issues.append(f"literature_dedup: 合并 {method_removed} 个重复方法")
+            if writer_citations_removed > 0:
+                quality_issues.append(
+                    f"literature_dedup: 修订路径清理 {writer_citations_removed} 条重复 writer citations"
+                )
+
+            # ===== 9) _post_chat 统计通知 + 返回 =====
+            self._post_chat(
+                task_id, "literature_dedup",
+                f"📚 文献去重完成：{report['original_paper_count']} → {report['deduped_paper_count']} 篇"
+                f"（移除 {report['removed_count']} 篇重复，合并 {method_removed} 个方法"
+                + (f"，清理 {writer_citations_removed} 条重复引用" if writer_citations_removed else "")
+                + "）",
+            )
+            logger.info(
+                f"[LangGraph:{task_id}] literature_dedup: "
+                f"{report['original_paper_count']}→{report['deduped_paper_count']} papers, "
+                f"removed={report['removed_count']}, method_removed={method_removed}, "
+                f"writer_citations_removed={writer_citations_removed}"
+            )
+
+            return {
+                **state,
+                "results": {
+                    **state.get("results", {}),
+                    **ref_research,
+                    **ref_writer,
+                    "literature_dedup": report,
+                },
+                "_quality_issues": quality_issues,
+                "current_step": "literature_dedup_done",
+            }
+        except Exception as exc:
+            logger.warning(f"[LangGraph:{task_id}] literature_dedup failed: {exc}", exc_info=True)
+            return state
+
+
+    async def _node_novelty_check(self, state: TaskState) -> TaskState:
+        """创新点新颖性核查（pre 阶段）：检查 writer 声称的创新点是否已被研究文献覆盖。
+
+        复用 IdeaArchive 的近重复相似度评分器（0.4 标题 + 0.4 方法 + 0.2 新颖性 Jaccard），
+        指向 research_agent 收集的论文语料，闭合"创新点是否已被覆盖"的核查缺口。
+        镜像 _node_fact_check 的提取-比对-报告结构（数字→创新点，solves.json→论文语料）。
+
+        PLACEMENT: 插入 writer → peer_review 之间（writer→novelty_check→peer_review），
+        让 peer_review / review_defect_router 能读到 results["novelty_checker"]。
+        """
+        task_id = state["task_id"]
+        logger.info(f"[LangGraph:{task_id}] novelty_check: 启动创新点覆盖核查")
+        self._update_progress(task_id, state.get("problem_text", ""), 92, "创新点覆盖核查中")
+
+        results = self._resolve_results(state)
+        research = results.get("research_agent", {})
+        papers = research.get("papers", []) if isinstance(research, dict) else []
+        workflow_type = state.get("workflow_type", "standard")
+
+        # ===== 0. 跳过门：文献语料 <2 或 quick/code_focused 工作流 =====
+        if len(papers) < 2 or workflow_type in ("quick", "code_focused"):
+            logger.info(f"[LangGraph:{task_id}] novelty_check: 文献语料<2 / quick工作流，跳过核查")
+            skip_report = {
+                "task_id": task_id,
+                "enabled": True,
+                "passed": True,
+                "skipped": True,
+                "reason": "literature corpus <2 / quick workflow",
+            }
+            self._set_result(state, "novelty_checker", skip_report)
+            return {
+                **state,
+                "results": {**state.get("results", {}), "novelty_checker": skip_report},
+                "current_step": "novelty_check_skipped",
+                "novelty_check_passed": True,
+            }
+
+        try:
+            from ..core.idea_archive import IdeaArchive
+            from ..core.context_compressor import estimate_tokens
+
+            archive = IdeaArchive()  # 仅复用纯相似度方法，不写入 archive
+            COVER_THRESHOLD = 0.7
+            MID_BAND = (0.4, 0.7)
+            CORPUS_TOKEN_BUDGET = 6000
+            MAX_NOVELTY_CHARS = 600
+
+            # ===== 1. 提取 writer 声称的创新点（FactChecker.extract-from-LaTeX 风格）=====
+            writer = results.get("writer_agent", {})
+            latex = writer.get("latex_code", "") if isinstance(writer, dict) else ""
+            abstract = writer.get("abstract", "") if isinstance(writer, dict) else ""
+
+            claims: List[Dict[str, Any]] = []
+
+            # 1a. 结构化创新点：来自 innovation_analysis.innovation_ideas（归一化到 IdeaArchive 的 {title, methodology, novelty} 模式）
+            innovation_analysis = state.get("innovation_analysis") or {}
+            if isinstance(innovation_analysis, dict):
+                for idea in innovation_analysis.get("innovation_ideas", []) or []:
+                    if not isinstance(idea, dict):
+                        continue
+                    claims.append({
+                        "title": idea.get("title", ""),
+                        "methodology": idea.get("methodology", ""),
+                        "novelty": idea.get("novelty", idea.get("expected_contribution", "")),
+                        "source": "innovation_analysis",
+                    })
+
+            # 1b. 从 LaTeX 创新/贡献章节抽取（含 \\item / （1）枚举）
+            section_re = re.compile(r"\\section\*?\{([^}]*)\}")
+            section_hits = list(section_re.finditer(latex))
+            for idx, sm in enumerate(section_hits):
+                sec_title = sm.group(1)
+                if not re.search(r"(创新|贡献|novelty|contribution|模型评价|创新点)", sec_title, re.IGNORECASE):
+                    continue
+                body_start = sm.end()
+                body_end = section_hits[idx + 1].start() if idx + 1 < len(section_hits) else len(latex)
+                body = latex[body_start:body_end]
+                items = re.split(r"\\item\b|\n\s*[（(]\s*[0-9]+\s*[)）]", body)
+                for it in items:
+                    it = it.strip()
+                    if len(it) < 12:
+                        continue
+                    claims.append({
+                        "title": re.sub(r"\s+", " ", it)[:80],
+                        "methodology": it,
+                        "novelty": it,
+                        "source": "writer_latex",
+                    })
+
+            # 1c. 摘要兜底：无任何结构化创新点时，把摘要作为单一 claim
+            if not claims and abstract:
+                claims.append({
+                    "title": re.sub(r"\s+", " ", abstract)[:80],
+                    "methodology": abstract,
+                    "novelty": abstract,
+                    "source": "writer_abstract",
+                })
+
+            if not claims:
+                logger.warning(f"[LangGraph:{task_id}] novelty_check: 未提取到创新点声明，跳过覆盖核查")
+
+            # ===== 2. 构建已知文献语料（token 预算受限，防止 50 篇综述撑爆上下文）=====
+            corpus: List[Dict[str, Any]] = []
+            budget_used = 0
+            for p in papers:
+                if not isinstance(p, dict):
+                    continue
+                entry = {
+                    "title": p.get("title", ""),
+                    "methodology": p.get("methods") or p.get("method") or p.get("key_technique") or "",
+                    "novelty": (p.get("abstract", "") or "")[:MAX_NOVELTY_CHARS],
+                    "arxiv_id": p.get("arxiv_id", ""),
+                    "source": "research_agent",
+                }
+                cost = estimate_tokens(entry)
+                if corpus and budget_used + cost > CORPUS_TOKEN_BUDGET:
+                    break
+                corpus.append(entry)
+                budget_used += cost
+
+            # ===== 3. 覆盖核查：每个 claim 对语料求最大相似度（IdeaArchive._compute_similarity）=====
+            claim_assessments: List[Dict[str, Any]] = []
+            for claim in claims:
+                best_title, best_sim = "", 0.0
+                for paper in corpus:
+                    sim = archive._compute_similarity(
+                        claim.get("title", ""), claim.get("methodology", ""), claim.get("novelty", ""),
+                        paper.get("title", ""), paper.get("methodology", ""), paper.get("novelty", ""),
+                    )
+                    if sim > best_sim:
+                        best_title, best_sim = paper.get("title", ""), sim
+                claim_assessments.append({
+                    "claim": claim,
+                    "best_paper_title": best_title,
+                    "best_sim": best_sim,
+                })
+
+            covered_claims: List[Dict[str, Any]] = [
+                {
+                    "claim": a["claim"].get("title", ""),
+                    "covered_by_paper_title": a["best_paper_title"],
+                    "similarity": a["best_sim"],
+                    "reason": "similarity>=0.7",
+                }
+                for a in claim_assessments
+                if a["best_sim"] >= COVER_THRESHOLD
+            ]
+
+            # ===== 4. 双向检查（镜像 FactChecker.compare 反向）：claim 与文献重叠但该文献未被 \\cite =====
+            try:
+                from .writer_agent import WriterAgent
+                cite_keys = WriterAgent._scan_cite_keys(latex)
+            except Exception:
+                cite_keys = re.findall(r"\\cite[a-z]*\{([^}]+)\}", latex)
+
+            def _is_paper_cited(paper: Dict[str, Any]) -> bool:
+                ax = paper.get("arxiv_id", "")
+                if ax and ax in latex:
+                    return True
+                title_tokens = {t for t in re.findall(r"\w+", paper.get("title", "").lower()) if len(t) > 2}
+                if not title_tokens:
+                    return False
+                for k in cite_keys:
+                    k_tokens = set(re.findall(r"\w+", k.lower()))
+                    if not k_tokens:
+                        continue
+                    inter = len(title_tokens & k_tokens)
+                    if inter >= 2 and inter / len(title_tokens) >= 0.4:
+                        return True
+                return False
+
+            paper_by_title = {pp.get("title", ""): pp for pp in corpus}
+            uncited_overlap: List[Dict[str, Any]] = []
+            for cov in covered_claims:
+                paper_obj = paper_by_title.get(cov.get("covered_by_paper_title", ""))
+                if paper_obj and not _is_paper_cited(paper_obj):
+                    uncited_overlap.append({
+                        "claim": cov.get("claim", ""),
+                        "paper_title": cov.get("covered_by_paper_title", ""),
+                        "similarity": cov.get("similarity", 0.0),
+                        "severity": "error",
+                        "reason": "claim asserts novelty but overlaps an uncited paper",
+                    })
+
+            # ===== 5. LLM tie-break：0.4–0.7 中间带 Jaccard 不可靠时（_node_discuss_approach call_llm 模式）=====
+            mid_claims = [a for a in claim_assessments if MID_BAND[0] <= a["best_sim"] < MID_BAND[1]]
+            llm_agent = None
+            for cand in ("peer_review_agent", "analyzer_agent", "research_agent", "writer_agent"):
+                cand_agent = self.agents.get(cand)
+                if cand_agent and hasattr(cand_agent, "call_llm"):
+                    llm_agent = cand_agent
+                    break
+            for a in mid_claims[:5]:
+                if llm_agent is None:
+                    break
+                prompt = (
+                    "你是创新性评审专家。判断以下创新点是否已被该论文覆盖（方法/思路相同即算覆盖）。\n"
+                    f"创新点: {a['claim'].get('title', '')}\n"
+                    f"创新点方法: {a['claim'].get('methodology', '')[:200]}\n"
+                    f"论文标题: {a['best_paper_title']}\n"
+                    "只输出 JSON: {\"covered\": true/false, \"reason\": \"...\"}"
+                )
+                if estimate_tokens(prompt) > 2000:
+                    prompt = prompt[:4000]
+                try:
+                    resp = await llm_agent.call_llm(
+                        [
+                            {"role": "system", "content": "你是创新性评审专家，只输出合法 JSON。"},
+                            {"role": "user", "content": prompt},
+                        ],
+                        temperature=0.2,
+                    )
+                    content = ""
+                    if isinstance(resp, dict):
+                        content = resp.get("choices", [{}])[0].get("message", {}).get("content", "")
+                    jm = re.search(r"\{.*\}", content, re.DOTALL)
+                    if jm:
+                        verdict = json.loads(jm.group(0))
+                        if verdict.get("covered"):
+                            covered_claims.append({
+                                "claim": a["claim"].get("title", ""),
+                                "covered_by_paper_title": a["best_paper_title"],
+                                "similarity": a["best_sim"],
+                                "reason": f"LLM: {verdict.get('reason', '')}",
+                            })
+                except Exception as llm_exc:
+                    logger.debug(f"[LangGraph:{task_id}] novelty_check LLM tie-break 失败: {llm_exc}")
+
+            # ===== 6. 打分 + 报告（镜像 FactChecker.check 报告结构）=====
+            scores: List[float] = []
+            for a in claim_assessments:
+                dups = [{"similarity": a["best_sim"]}] if a["best_sim"] >= COVER_THRESHOLD else []
+                scores.append(archive._compute_novelty_score(a["claim"], dups))
+            novelty_score = (sum(scores) / len(scores)) if scores else 0.5
+
+            has_error_uncited = any(o.get("severity") == "error" for o in uncited_overlap)
+            passed = (len(covered_claims) == 0) and (not has_error_uncited)
+
+            issues: List[Dict[str, Any]] = []
+            for cov in covered_claims:
+                issues.append({
+                    "severity": "error",
+                    "category": "novelty",
+                    "node": "novelty_check",
+                    "message": f"创新点「{cov.get('claim', '')}」疑似被文献《{cov.get('covered_by_paper_title', '')}》覆盖（相似度 {cov.get('similarity', 0.0):.2f}）",
+                })
+            for o in uncited_overlap:
+                issues.append({
+                    "severity": "error",
+                    "category": "novelty",
+                    "node": "novelty_check",
+                    "message": f"创新点「{o.get('claim', '')}」与未引用文献《{o.get('paper_title', '')}》高度重叠（相似度 {o.get('similarity', 0.0):.2f}）",
+                })
+
+            report = {
+                "task_id": task_id,
+                "enabled": True,
+                "passed": passed,
+                "claim_count": len(claims),
+                "paper_count": len(corpus),
+                "covered_claims": covered_claims,
+                "uncited_overlap": uncited_overlap,
+                "novelty_score": round(novelty_score, 3),
+                "issues": issues,
+                "review_required": not passed,
+            }
+
+            # ===== 7. 写回 state =====
+            self._set_result(state, "novelty_checker", report)
+
+            claims_trace = list(state.get("claims_trace", []) or [])
+            claims_trace.append({
+                "timestamp": datetime.now().isoformat(),
+                "node": "novelty_check",
+                "novelty_score": round(novelty_score, 3),
+                "covered_count": len(covered_claims),
+                "uncited_count": len(uncited_overlap),
+                "review_required": not passed,
+            })
+
+            quality_issues = list(state.get("_quality_issues", []) or [])
+            if not passed:
+                quality_issues.extend(issues)
+
+            if not passed:
+                self._post_chat(
+                    task_id, "novelty_checker",
+                    f"⚠️ 创新点新颖性核查未通过：{len(covered_claims)} 处疑似已被覆盖，"
+                    f"{len(uncited_overlap)} 处未引用重叠，novelty_score={novelty_score:.2f}。"
+                    "建议补充差异化论证或在论文中补引相关文献。",
+                )
+            else:
+                self._post_chat(
+                    task_id, "novelty_checker",
+                    f"✅ 创新点新颖性核查通过：{len(claims)} 个创新点未见覆盖（novelty_score={novelty_score:.2f}）",
+                )
+
+            logger.info(
+                f"[LangGraph:{task_id}] novelty_check: passed={passed} claims={len(claims)} "
+                f"papers={len(corpus)} covered={len(covered_claims)} uncited={len(uncited_overlap)} "
+                f"score={novelty_score:.2f}"
+            )
+
+            return {
+                **state,
+                "results": {**state.get("results", {}), "novelty_checker": report},
+                "claims_trace": claims_trace,
+                "current_step": "novelty_check_done",
+                "novelty_check_passed": passed,
+                "_quality_issues": quality_issues,
+            }
+        except Exception as e:
+            logger.warning(f"[LangGraph:{task_id}] novelty_check 失败: {e}")
+            return {**state, "novelty_check_passed": False, "current_step": "novelty_check_failed"}
+
+    async def _node_method_feasibility(self, state: TaskState) -> TaskState:
+        """pre 阶段方法可行性预评估（建模后、求解前的可行性闸门）。
+
+        逐子问题对 modeler_agent.sub_problem_models 做【确定性检查】+【LLM 裁决】，
+        在 model 上注入 _feasibility（verdict/score/risks/alternative_method/
+        library_matched/rationale）与 _method_swap 建议，避免把明显不可行的方法
+        送入沙箱死亡螺旋浪费迭代。报告写入 results['method_feasibility'] 与
+        method_feasibility_report，并同步黑板与 claims_trace / _quality_issues。
+        """
+        task_id = state["task_id"]
+        state = await self._check_user_input(state)
+
+        template = state.get("paper_template", "math_modeling")
+        workflow_type = state.get("workflow_type", "standard")
+        modeling_agent_name = self._select_modeling_agent(template, workflow_type)
+
+        results = self._resolve_results(state)
+        modeler_output = results.get("modeler_agent", {}) or {}
+        sub_problem_models = (
+            modeler_output.get("sub_problem_models", [])
+            if isinstance(modeler_output, dict) else []
+        )
+
+        # 调研/综述模板或无建模输出 → 直接跳过
+        if not modeling_agent_name or not sub_problem_models:
+            logger.info(
+                f"[LangGraph:{task_id}] method_feasibility: 无建模输出"
+                f"（template={template}, agent={modeling_agent_name}），跳过"
+            )
+            return {
+                **state,
+                "method_feasibility_report": None,
+                "current_step": "method_feasibility_skipped",
+            }
+
+        self._update_progress(task_id, state["problem_text"], 47, "方法可行性预评估中")
+        logger.info(
+            f"[LangGraph:{task_id}] method_feasibility start: "
+            f"{len(sub_problem_models)} 个子问题模型"
+        )
+
+        try:
+            # ===== 上下文准备 =====
+            analyzer_output = results.get("analyzer_agent", {}) or {}
+            data_output = results.get("data_agent", {}) or {}
+            problem_type = (
+                analyzer_output.get("problem_type", "")
+                if isinstance(analyzer_output, dict) else ""
+            )
+            difficulty = (
+                analyzer_output.get("difficulty", "")
+                if isinstance(analyzer_output, dict) else ""
+            )
+            data_files = state.get("files", [])
+            data_insights = (
+                data_output.get("insights", [])
+                if isinstance(data_output, dict) else []
+            )
+            solver_attempts = state.get("solver_attempts", [])
+            error_count = state.get("error_count", 0)
+            metrics_trend = list(state.get("metrics_trend", []))
+
+            # v8.2 死亡螺旋上下文：连续未提升则更保守
+            spiral_conservative = (
+                len(metrics_trend) >= 2 and metrics_trend[-1] <= metrics_trend[-2]
+            )
+
+            # 方法库（不可用时降级跳过 B/E 检查，不阻断）
+            method_lib = None
+            try:
+                from ..core.method_library import get_method_library
+                method_lib = get_method_library()
+            except Exception as lib_exc:
+                logger.warning(
+                    f"[LangGraph:{task_id}] method_library 不可用，"
+                    f"跳过方法库检查: {lib_exc}"
+                )
+
+            # analyzer 子问题 problem_type 映射（按 id 索引）
+            sp_types: Dict[Any, str] = {}
+            sp_list = (
+                analyzer_output.get("sub_problems", [])
+                if isinstance(analyzer_output, dict) else []
+            )
+            for sp in sp_list:
+                if isinstance(sp, dict):
+                    sp_types[sp.get("id")] = sp.get("problem_type", "")
+
+            def _ptype_to_lib_category(ptype: str) -> str:
+                p = (ptype or "").lower()
+                if "优化" in ptype or "规划" in ptype or "optim" in p:
+                    return "optimization"
+                if "预测" in ptype or "forecast" in p or "prediction" in p:
+                    return "prediction"
+                if "分类" in ptype or "classif" in p:
+                    return "classification"
+                if "聚类" in ptype or "cluster" in p:
+                    return "clustering"
+                if "评价" in ptype or "评估" in ptype or "evaluat" in p:
+                    return "evaluation"
+                if "仿真" in ptype or "simulat" in p:
+                    return "simulation"
+                return ""
+
+            # LLM 裁决用 agent：analyzer_agent 优先，回退 modeler_agent
+            llm_agent = (
+                self.agents.get("analyzer_agent")
+                or self.agents.get(modeling_agent_name)
+            )
+
+            per_problem: List[Dict[str, Any]] = []
+            patched_models: List[Dict[str, Any]] = []
+            overall_feasible = True
+            quality_issues = list(state.get("_quality_issues", []))
+            claims_trace = list(state.get("claims_trace", []))
+
+            data_keywords = [
+                "预测", "forecast", "回归", "分类", "时间序列",
+                "time series", "learning", "机器学习", "训练", "predict",
+            ]
+            heuristic_keywords = [
+                "启发式", "heuristic", "近似", "relax", "松弛", "遗传",
+                "ga", "genetic", "模拟退火", "annealing", "元启发",
+                "粒子群", "蚁群", "禁忌搜索",
+            ]
+
+            for idx, model in enumerate(sub_problem_models):
+                if not isinstance(model, dict):
+                    patched_models.append(model)
+                    continue
+
+                sp_id = model.get("sub_problem_id", idx + 1)
+                sp_name = model.get("sub_problem_name", f"子问题{sp_id}")
+                sp_type = (
+                    sp_types.get(sp_id)
+                    or model.get("model_type", "")
+                    or problem_type
+                )
+                model_type = model.get("model_type", "")
+                model_name = model.get("model_name", "")
+                algo = model.get("algorithm", {})
+                if isinstance(algo, dict):
+                    algo_name = algo.get("name", "") or algo.get("description", "")
+                else:
+                    algo_name = str(algo)
+                algo_name = (algo_name or model_name).strip()
+                objective = str(model.get("objective_function", "") or "").strip()
+                constraints = model.get("constraints", []) or []
+                decision_vars = model.get("decision_variables", []) or []
+                var_names = {
+                    str(v.get("name", "")).strip()
+                    for v in decision_vars
+                    if isinstance(v, dict) and v.get("name")
+                }
+
+                risks: List[Dict[str, Any]] = []
+                det_score = 100
+                library_matched = False
+                lib_alternatives: List[str] = []
+
+                # --- A. 数据可得性 ---
+                algo_lower = (algo_name + " " + sp_type + " " + model_name).lower()
+                needs_data = any(kw in algo_lower for kw in data_keywords)
+                if needs_data and not data_files and not data_insights:
+                    risks.append({
+                        "severity": "error", "category": "data",
+                        "message": "预测/学习类方法需要数据，但 files 为空且 data_agent 无 insights",
+                    })
+                    det_score -= 30
+
+                # --- B. 方法-问题一致性（method_library） ---
+                if method_lib is not None:
+                    try:
+                        rec_cat = _ptype_to_lib_category(sp_type or problem_type)
+                        if rec_cat:
+                            recommended = method_lib.recommend_methods(
+                                problem_type=rec_cat
+                            )
+                            lib_alternatives = [
+                                m.name_cn or m.name for m in recommended
+                            ]
+                        if algo_name:
+                            searched = method_lib.search_methods(query=algo_name)
+                            matched = bool(searched)
+                            if not matched:
+                                for m in method_lib.methods.values():
+                                    if algo_name.lower() in (m.name + m.name_cn).lower():
+                                        matched = True
+                                        break
+                            library_matched = matched
+                            if not matched:
+                                risks.append({
+                                    "severity": "warning",
+                                    "category": "method_existence",
+                                    "message": f"提议方法 '{algo_name}' 不在结构化方法库中",
+                                })
+                                det_score -= 10
+                    except Exception as b_exc:
+                        logger.warning(
+                            f"[LangGraph:{task_id}] method_feasibility B 检查异常: {b_exc}"
+                        )
+
+                # --- C. 目标-约束自洽性 ---
+                if not objective or len(objective) < 5:
+                    risks.append({
+                        "severity": "error", "category": "objective",
+                        "message": "目标函数缺失或过短",
+                    })
+                    det_score -= 20
+                else:
+                    for c in constraints:
+                        cexpr = (
+                            c.get("expression", c.get("name", ""))
+                            if isinstance(c, dict) else str(c)
+                        )
+                        for sym in re.findall(r'\$([A-Za-z_]\w*)\$', str(cexpr)):
+                            if var_names and sym not in var_names:
+                                risks.append({
+                                    "severity": "warning",
+                                    "category": "constraint_var",
+                                    "message": f"约束引用未定义符号 ${sym}$",
+                                })
+                                det_score -= 5
+
+                # --- D. 复杂度-难度-历史失败匹配 ---
+                is_optimization = (
+                    "优化" in sp_type or "规划" in sp_type
+                    or "optim" in model_type.lower()
+                )
+                has_heuristic = any(
+                    kw in algo_name.lower() for kw in heuristic_keywords
+                )
+                if difficulty == "困难" and is_optimization and not has_heuristic:
+                    risks.append({
+                        "severity": "warning", "category": "complexity",
+                        "message": "困难优化问题未采用启发式/近似/松弛方法，求解可能不可行",
+                    })
+                    det_score -= 10
+                if solver_attempts and error_count >= 2:
+                    risks.append({
+                        "severity": "warning", "category": "prior_failure",
+                        "message": f"历史求解失败（error_count={error_count}），建议方法降级",
+                    })
+                    det_score -= 15
+
+                # --- E. 依赖可用性 ---
+                if method_lib is not None and library_matched:
+                    try:
+                        dep_method = None
+                        for m in method_lib.methods.values():
+                            if algo_name and algo_name.lower() in (m.name + m.name_cn).lower():
+                                dep_method = m
+                                break
+                        if dep_method and dep_method.dependencies:
+                            import importlib.util
+                            for dep in dep_method.dependencies:
+                                try:
+                                    if importlib.util.find_spec(dep) is None:
+                                        risks.append({
+                                            "severity": "warning",
+                                            "category": "dependency",
+                                            "message": f"依赖包 {dep} 未安装",
+                                        })
+                                        det_score -= 5
+                                except Exception:
+                                    pass
+                    except Exception as e_exc:
+                        logger.warning(
+                            f"[LangGraph:{task_id}] method_feasibility E 检查异常: {e_exc}"
+                        )
+
+                det_score = max(0, det_score)
+
+                # ===== LLM 综合裁决（仿 _multi_agent_vote） =====
+                verdict = "conditional"
+                score_delta = 0
+                llm_risks: List[str] = []
+                alternative_method = ""
+                rationale = ""
+                degraded = False
+
+                try:
+                    if llm_agent is not None:
+                        prompt = (
+                            "你是数学建模方法可行性评审专家。对以下【子问题建模方案】做可行性预评估。\n"
+                            "严格要求：宁可保守判定为 conditional/infeasible，禁止仅因方法名看起来高级就判 feasible；"
+                            "只有当方法、数据、目标-约束均自洽且有落地路径时才判 feasible。\n\n"
+                            f"子问题：{sp_name}\n"
+                            f"问题类型：{sp_type}\n"
+                            f"提议模型：{model_name}（{model_type}）\n"
+                            f"算法：{algo_name}\n"
+                            f"目标函数：{objective[:200]}\n"
+                            f"决策变量：{', '.join(list(var_names)[:10])}\n"
+                            f"数据可得性：{'有数据文件/insights' if (data_files or data_insights) else '无数据'}\n"
+                            f"难度：{difficulty}\n"
+                            f"方法库推荐备选：{', '.join(lib_alternatives) if lib_alternatives else '无'}\n"
+                            f"确定性检查已发现风险：{json.dumps(risks, ensure_ascii=False)}\n"
+                            f"历史求解失败：{'是(error_count=' + str(error_count) + ')' if (solver_attempts and error_count >= 2) else '否'}\n\n"
+                            "只返回 JSON（不要其他文字）：\n"
+                            '{"verdict":"feasible|conditional|infeasible",'
+                            '"score_delta":-20到+10的整数,'
+                            '"risks":["风险1","风险2"],'
+                            '"alternative_method":"备选方法名或空",'
+                            '"rationale":"一句话理由"}'
+                        )
+                        resp = await llm_agent.call_llm(
+                            messages=[
+                                {"role": "system", "content": "You are a strict mathematical-modeling feasibility reviewer. Return ONLY JSON."},
+                                {"role": "user", "content": prompt},
+                            ],
+                            temperature=0.1,
+                        )
+                        content = (
+                            resp.get("choices", [{}])[0]
+                            .get("message", {}).get("content", "")
+                        )
+                        extractor = getattr(llm_agent, "extract_json", None)
+                        parsed = (
+                            extractor(content) if callable(extractor) else None
+                        )
+                        if not parsed:
+                            try:
+                                parsed = json.loads(content)
+                            except Exception:
+                                parsed = None
+                        if isinstance(parsed, dict):
+                            v = str(parsed.get("verdict", "conditional")).lower()
+                            verdict = v if v in ("feasible", "conditional", "infeasible") else "conditional"
+                            try:
+                                score_delta = int(parsed.get("score_delta", 0))
+                            except Exception:
+                                score_delta = 0
+                            raw_risks = parsed.get("risks", [])
+                            llm_risks = [str(r) for r in raw_risks if r] if isinstance(raw_risks, list) else []
+                            alternative_method = str(parsed.get("alternative_method", "") or "")
+                            rationale = str(parsed.get("rationale", "") or "")
+                        else:
+                            degraded = True
+                    else:
+                        degraded = True
+                except Exception as llm_exc:
+                    logger.warning(
+                        f"[LangGraph:{task_id}] method_feasibility LLM 裁决失败"
+                        f" (sp{sp_id})，降级为确定性裁决: {llm_exc}"
+                    )
+                    degraded = True
+
+                # 降级裁决：仅确定性（死亡螺旋上下文更保守）
+                if degraded:
+                    if spiral_conservative:
+                        verdict = (
+                            "infeasible" if det_score < 70
+                            else "conditional" if det_score < 85
+                            else "feasible"
+                        )
+                    else:
+                        verdict = (
+                            "infeasible" if det_score < 60
+                            else "conditional" if det_score < 80
+                            else "feasible"
+                        )
+
+                # 合并 risks
+                all_risks = list(risks)
+                for r in llm_risks:
+                    all_risks.append({
+                        "severity": "warning", "category": "llm", "message": r,
+                    })
+
+                feasibility_score = max(0, det_score + score_delta)
+                final_alt = (
+                    alternative_method
+                    or (lib_alternatives[0] if lib_alternatives else "")
+                )
+                if verdict == "infeasible":
+                    overall_feasible = False
+
+                # 写回 model 标注
+                patched = {**model}
+                patched["_feasibility"] = {
+                    "verdict": verdict,
+                    "score": feasibility_score,
+                    "deterministic_score": det_score,
+                    "risks": all_risks,
+                    "alternative_method": final_alt,
+                    "library_matched": library_matched,
+                    "rationale": rationale or ("降级裁决（LLM 不可用）" if degraded else ""),
+                    "_degraded": degraded,
+                }
+                if verdict == "infeasible" and final_alt:
+                    patched["_method_swap"] = {
+                        "from": algo_name or model_name, "to": final_alt,
+                    }
+                patched_models.append(patched)
+
+                per_problem.append({
+                    "sub_problem_id": sp_id,
+                    "sub_problem_name": sp_name,
+                    "model_name": model_name,
+                    "algorithm": algo_name,
+                    "verdict": verdict,
+                    "score": feasibility_score,
+                    "risks": all_risks,
+                    "alternative_method": final_alt,
+                    "library_matched": library_matched,
+                    "degraded": degraded,
+                })
+
+                # claims_trace 追加每子问题裁决
+                claims_trace.append({
+                    "timestamp": datetime.now().isoformat(),
+                    "node": "method_feasibility",
+                    "sub_problem_id": sp_id,
+                    "verdict": verdict,
+                    "score": feasibility_score,
+                    "library_matched": library_matched,
+                    "alternative_method": final_alt,
+                    "rationale": rationale,
+                })
+
+                # _quality_issues 写回（无则新增）
+                if verdict in ("infeasible", "conditional"):
+                    risk_msgs = [
+                        r.get("message", str(r)) if isinstance(r, dict) else str(r)
+                        for r in all_risks[:3]
+                    ]
+                    quality_issues.append({
+                        "node": "method_feasibility",
+                        "severity": "error" if verdict == "infeasible" else "warning",
+                        "sub_problem_id": sp_id,
+                        "category": "method_feasibility",
+                        "message": (
+                            f"[{sp_name}] 方法可行性={verdict}（score={feasibility_score}）："
+                            + "; ".join(risk_msgs)
+                        ),
+                    })
+
+            # ===== 汇总报告 =====
+            n_feasible = sum(1 for p in per_problem if p["verdict"] == "feasible")
+            n_conditional = sum(1 for p in per_problem if p["verdict"] == "conditional")
+            n_infeasible = sum(1 for p in per_problem if p["verdict"] == "infeasible")
+
+            report = {
+                "task_id": task_id,
+                "overall_feasible": overall_feasible,
+                "per_problem": per_problem,
+                "assessed_at": datetime.now().isoformat(),
+                "summary": {
+                    "n_feasible": n_feasible,
+                    "n_conditional": n_conditional,
+                    "n_infeasible": n_infeasible,
+                    "spiral_conservative": spiral_conservative,
+                },
+            }
+
+            # 写回 results：method_feasibility 报告 + patched modeler_agent
+            ref_mf = self._set_result(state, "method_feasibility", report)
+            patched_modeler_output = {
+                **modeler_output, "sub_problem_models": patched_models,
+            }
+            ref_modeler = self._set_result(state, "modeler_agent", patched_modeler_output)
+
+            # 黑板同步
+            wm = self._get_working_memory(task_id)
+            if wm:
+                try:
+                    wm.set_result("method_feasibility", report)
+                    wm.set_result("modeler_agent", patched_modeler_output)
+                except Exception as wm_exc:
+                    logger.debug(
+                        f"[LangGraph:{task_id}] method_feasibility 黑板同步失败: {wm_exc}"
+                    )
+
+            # 汇报用户
+            self._post_chat(
+                task_id, "coordinator",
+                f"方法可行性预评估完成：可行 {n_feasible}，有条件 {n_conditional}，"
+                f"不可行 {n_infeasible}"
+                + ("（存在不可行方法，建议降级或更换）" if n_infeasible else ""),
+            )
+
+            logger.info(
+                f"[LangGraph:{task_id}] method_feasibility done: "
+                f"feasible={n_feasible} conditional={n_conditional} "
+                f"infeasible={n_infeasible} overall={overall_feasible}"
+            )
+
+            return {
+                **state,
+                "results": {**state.get("results", {}), **ref_mf, **ref_modeler},
+                "method_feasibility_report": report,
+                "claims_trace": claims_trace,
+                "_quality_issues": quality_issues,
+                "current_step": "method_feasibility_done",
+            }
+        except Exception as e:
+            logger.warning(f"[LangGraph:{task_id}] method_feasibility 节点异常: {e}")
+            return state
+
+    async def _node_context_compression(self, state: TaskState) -> TaskState:
+        """上下文压缩节点（图里显式触发的唯一入口，插在 figure → writer 之间）。
+
+        范式与 _node_fact_check 复用 get_fact_checker().check()、_node_ast_audit 复用
+        audit_and_patch() 一致：本节点只做图编排层薄封装——
+        解析 __ref__（_resolve_results）→ 调 ContextCompressor.maybe_compress（原地压缩）
+        → 把压缩后副本回写 result_store（_set_result）→ 防御性校验 protected 字段存活
+        → 记录统计。不新写任何压缩算法。
+
+        LLM caller 缺失时压缩器自动降级 L2 截断；累计 token 低于阈值时 level_used='none'、
+        agents_compressed=[]，节点不写回不通知（幂等：压缩后结果回落到阈值以下，重复触发为空操作）。
+        """
+        task_id = state["task_id"]
+        logger.info(
+            f"[LangGraph:{task_id}] context_compression_node: start "
+            f"(template={state.get('paper_template')}, workflow={state.get('workflow_type')})"
+        )
+
+        try:
+            self._update_progress(task_id, state.get("problem_text", ""), 67, "上下文压缩中")
+
+            # 1) 解析结果：把 __ref__ 还原成真实 agent 输出 dict
+            #    注意 store.get 每次返回反序列化副本，故必须回写才让 writer/fact_check 看到
+            results = self._resolve_results(state)
+
+            # 2) 取压缩器单例 + token 估计器
+            from ..core.context_compressor import get_compressor, estimate_tokens
+            compressor = get_compressor()
+
+            # 3) 选 LLM caller（用于 L1 摘要；缺失则压缩器自动降级 L2 截断，仍真实做事）
+            #    优先 peer_review_agent / writer_agent，其次任一有 callable call_llm 的 agent
+            llm_caller = None
+            priority = ["peer_review_agent", "writer_agent"]
+            ordered_names = priority + [n for n in self.agents if n not in priority]
+            for name in ordered_names:
+                agent_obj = self.agents.get(name)
+                call = getattr(agent_obj, "call_llm", None) if agent_obj is not None else None
+                if callable(call):
+                    llm_caller = call
+                    break
+
+            # 4) 预快照：protected 字段 token（写回后存活校验，防压缩误删交付物）+ 总 token（不变量校验）
+            protected_fields = ("latex_code", "numerical_results", "key_findings")
+            pre_protected: Dict[str, Dict[str, int]] = {}  # agent_name -> {field: tokens}
+            pre_tokens: Dict[str, int] = {}                # agent_name -> total tokens
+            for name, out in results.items():
+                if isinstance(out, dict):
+                    pre_tokens[name] = estimate_tokens(out)
+                    snap: Dict[str, int] = {}
+                    for pf in protected_fields:
+                        if pf in out:
+                            snap[pf] = estimate_tokens(out[pf])
+                    if snap:
+                        pre_protected[name] = snap
+
+            # 5) 执行压缩（原地修改 results 副本；返回 CompressionStats）
+            #    丢弃 DROPPABLE_FIELDS(_contract/_raw_output/_fabrication_check 等)、截断超长
+            #    字符串/大 list、对超大非 protected 字段做 LLM 摘要或 L2 硬截断；
+            #    PROTECTED_FIELDS(latex_code/numerical_results/key_findings/...) 永不裁剪。
+            #    _fabrication_flags/_fabrication_score 不在 DROPPABLE_FIELDS，故下游
+            #    fact_check 的防编造检测不受影响。
+            stats = compressor.maybe_compress(task_id, results, llm_caller=llm_caller)
+
+            # 6) 写回结果存储（resolve 出来的是副本，必须回写 store）
+            ref_update: Dict[str, Any] = {}
+            written_back: List[str] = []
+            seen: set = set()
+            for entry in stats.agents_compressed:
+                base = entry.split("(")[0]  # "writer_agent(L1)" -> "writer_agent"
+                if base in seen:
+                    continue
+                seen.add(base)
+                if base in results and isinstance(results[base], dict):
+                    ref_update.update(self._set_result(state, base, results[base]))
+                    written_back.append(base)
+
+            # 7) 防御性校验：protected 字段存活（防压缩误删交付物）
+            quality_issues: List[Dict[str, Any]] = []
+            revoked: List[str] = []
+            for agent_name in written_back:
+                post_out = results.get(agent_name)
+                if not isinstance(post_out, dict):
+                    continue
+                pre_fields = pre_protected.get(agent_name, {})
+                bad = False
+                for pf, pre_tok in pre_fields.items():
+                    if pf not in post_out:
+                        quality_issues.append({
+                            "node": "context_compression_node",
+                            "category": "protected_field_lost",
+                            "agent": agent_name,
+                            "field": pf,
+                            "message": f"压缩误删 protected 字段 {pf}，已撤销该 agent 写回",
+                        })
+                        logger.error(
+                            f"[LangGraph:{task_id}] context_compression: protected field "
+                            f"{pf} lost for {agent_name}, revoking writeback"
+                        )
+                        bad = True
+                        break
+                    post_tok = estimate_tokens(post_out[pf])
+                    if post_tok != pre_tok:
+                        quality_issues.append({
+                            "node": "context_compression_node",
+                            "category": "protected_field_changed",
+                            "agent": agent_name,
+                            "field": pf,
+                            "message": (
+                                f"protected 字段 {pf} token 变化 {pre_tok}→{post_tok}，"
+                                f"已撤销该 agent 写回"
+                            ),
+                        })
+                        logger.error(
+                            f"[LangGraph:{task_id}] context_compression: protected field "
+                            f"{pf} token changed for {agent_name} "
+                            f"({pre_tok}->{post_tok}), revoking writeback"
+                        )
+                        bad = True
+                        break
+                if bad:
+                    revoked.append(agent_name)
+            # 撤销被判定误删的 agent 写回（不污染交付物）
+            for agent_name in revoked:
+                ref_update.pop(agent_name, None)
+
+            # 不变量校验
+            if stats.saved_tokens < 0:
+                quality_issues.append({
+                    "node": "context_compression_node",
+                    "category": "invariant_violation",
+                    "message": f"saved_tokens={stats.saved_tokens} < 0",
+                })
+                logger.warning(
+                    f"[LangGraph:{task_id}] context_compression: saved_tokens<0 ({stats.saved_tokens})"
+                )
+            if stats.compressed_tokens > stats.original_tokens:
+                quality_issues.append({
+                    "node": "context_compression_node",
+                    "category": "invariant_violation",
+                    "message": (
+                        f"compressed_tokens={stats.compressed_tokens} > "
+                        f"original_tokens={stats.original_tokens}"
+                    ),
+                })
+                logger.warning(
+                    f"[LangGraph:{task_id}] context_compression: compressed>original "
+                    f"({stats.compressed_tokens}>{stats.original_tokens})"
+                )
+
+            # 8) 通知（仅当真正压缩了）
+            if stats.saved_tokens > 0:
+                self._post_chat(
+                    task_id, "context_compressor",
+                    f"🗜️ 上下文压缩：{stats.original_tokens}→{stats.compressed_tokens} tokens"
+                    f"（level={stats.level_used}, {len(stats.agents_compressed)} agents）",
+                )
+                current_step = "context_compression_node"
+            else:
+                # 低于阈值 / 无可压缩内容：幂等跳过，不通知
+                logger.info(
+                    f"[LangGraph:{task_id}] context_compression: no compression needed "
+                    f"(level={stats.level_used}, saved={stats.saved_tokens})"
+                )
+                current_step = "context_compression_skipped"
+
+            # 9) 序列化统计
+            stats_dict = {
+                "original_tokens": stats.original_tokens,
+                "compressed_tokens": stats.compressed_tokens,
+                "saved_tokens": stats.saved_tokens,
+                "level_used": stats.level_used,
+                "agents_compressed": list(stats.agents_compressed),
+                "ratio": stats.ratio(),
+                "compressed_at": datetime.now().isoformat(),
+            }
+
+            # 校验问题写回 state 的 _quality_issues 列表（无则新增）
+            quality_issues_full: List[Dict[str, Any]] = list(state.get("_quality_issues") or [])
+            quality_issues_full.extend(quality_issues)
+
+            logger.info(
+                f"[LangGraph:{task_id}] context_compression: done "
+                f"({stats.original_tokens}->{stats.compressed_tokens}, level={stats.level_used}, "
+                f"agents={len(stats.agents_compressed)}, written_back={len(ref_update)}, "
+                f"revoked={len(revoked)}, issues={len(quality_issues)})"
+            )
+
+            # 10) 返回
+            return {
+                **state,
+                "results": {**state.get("results", {}), **ref_update},
+                "context_compression_stats": stats_dict,
+                "_quality_issues": quality_issues_full,
+                "current_step": current_step,
+            }
+        except Exception as exc:
+            logger.warning(
+                f"[LangGraph:{task_id}] context_compression failed: {exc}", exc_info=True
+            )
+            return state
+
+    @staticmethod
+    def _audit_code_style(code_files: List[Dict[str, Any]]):
+        """代码风格一致性审计（仅标准库 ast/tokenize/re，可复现不注水）。
+
+        跨文件检查命名/导入顺序/docstring/引号/缩进/行尾，产出与 ast_audit 同构的
+        AuditResult（issues 为 AuditIssue 列表），并对每个文件做不会改变语义的安全
+        归一化（strip 行尾空白 + 单尾换行 + CRLF→LF）。命名/导入重排仅报告不自动改写。
+
+        Returns:
+            (AuditResult, patched_files): 审计结果 + 归一化后的 code_files（同序）。
+        """
+        import ast
+        import io
+        import re as _re
+        import tokenize
+        from ..core.code_audit import AuditResult, AuditIssue
+
+        def _classify(name: str):
+            # PascalCase：首字母大写且含小写字母（排除全大写常量）
+            if _re.match(r'^[A-Z][A-Za-z0-9]*$', name) and any(c.islower() for c in name):
+                return 'PascalCase'
+            if _re.match(r'^[a-z][a-z0-9_]*$', name):
+                return 'snake_case'
+            if _re.match(r'^[a-z][A-Za-z0-9]*$', name) and any(c.isupper() for c in name):
+                return 'camelCase'
+            return None  # 全大写常量等不纳入多数派统计
+
+        def _norm(code: str) -> str:
+            code = code.replace('\r\n', '\n').replace('\r', '\n')
+            code = '\n'.join(ln.rstrip() for ln in code.split('\n'))
+            return code.rstrip('\n') + '\n'
+
+        issues = []
+        all_names = []       # (filename, name, cls, line) 用于全局多数派
+        file_names = []      # idx -> [(name, cls, line)]
+        file_quotes = []     # idx -> (single, double)
+        trees = []           # idx -> tree or None
+
+        # ===== 第一遍：AST 解析 + 收集命名分类 + 引号计数 =====
+        for idx, cf in enumerate(code_files):
+            code = cf.get("code", "") if isinstance(cf, dict) else ""
+            filename = (cf.get("filename") if isinstance(cf, dict) else None) or f"file_{idx}"
+            if not isinstance(code, str) or not code.strip():
+                file_names.append([]); file_quotes.append((0, 0)); trees.append(None); continue
+            try:
+                tree = ast.parse(code)
+            except SyntaxError as e:
+                issues.append(AuditIssue(
+                    line=getattr(e, 'lineno', 0) or 0, severity="error", category="style_syntax",
+                    message=f"[{filename}] 语法错误，无法做风格审计: {e.msg}",
+                    suggestion="修复语法错误后重试",
+                ))
+                file_names.append([]); file_quotes.append((0, 0)); trees.append(None); continue
+
+            trees.append(tree)
+            names_here = []
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                    cls = _classify(node.name)
+                    if cls:
+                        all_names.append((filename, node.name, cls, node.lineno))
+                        names_here.append((node.name, cls, node.lineno))
+                elif isinstance(node, ast.Assign):
+                    for tgt in node.targets:
+                        if isinstance(tgt, ast.Name):
+                            cls = _classify(tgt.id)
+                            if cls:
+                                all_names.append((filename, tgt.id, cls, tgt.lineno))
+                                names_here.append((tgt.id, cls, tgt.lineno))
+            file_names.append(names_here)
+
+            single = double = 0
+            try:
+                for tok in tokenize.generate_tokens(io.StringIO(code).readline):
+                    if tok.type == tokenize.STRING:
+                        core = tok.string[_re.match(r'^[rbfuRBFU]*', tok.string).end():]
+                        if core.startswith("'"):
+                            single += 1
+                        elif core.startswith('"'):
+                            double += 1
+            except (tokenize.TokenError, IndentationError, SyntaxError):
+                pass
+            file_quotes.append((single, double))
+
+        # ===== 全局多数派：命名风格 + 引号风格 =====
+        style_counter = {'snake_case': 0, 'camelCase': 0, 'PascalCase': 0}
+        for _, _, cls, _ in all_names:
+            style_counter[cls] = style_counter.get(cls, 0) + 1
+        majority_style = max(style_counter, key=style_counter.get) if sum(style_counter.values()) > 0 else None
+        total_single = sum(q[0] for q in file_quotes)
+        total_double = sum(q[1] for q in file_quotes)
+        majority_quote = ("single" if total_single >= total_double else "double") if (total_single + total_double) > 0 else None
+
+        # ===== 第二遍：逐文件生成 issues =====
+        for idx, cf in enumerate(code_files):
+            tree = trees[idx]
+            if tree is None:
+                continue
+            code = cf.get("code", "") if isinstance(cf, dict) else ""
+            filename = (cf.get("filename") if isinstance(cf, dict) else None) or f"file_{idx}"
+
+            # 1. 命名一致性（偏离全局多数派 → error）
+            if majority_style:
+                dev = [(n, c, ln) for (n, c, ln) in file_names[idx] if c != majority_style]
+                if dev:
+                    sample = ", ".join(n for n, _, _ in dev[:3])
+                    issues.append(AuditIssue(
+                        line=dev[0][2], severity="error", category="style_naming",
+                        message=f"[{filename}] 命名偏离全局多数派({majority_style})：{sample}{' 等' if len(dev) > 3 else ''}",
+                        suggestion=f"统一为 {majority_style} 命名风格（仅报告，不自动改写）",
+                    ))
+
+            # 2. 导入顺序（E402 + 组内字母序 → warning）
+            imports = []
+            first_code = None
+            for node in tree.body:
+                if isinstance(node, (ast.Import, ast.ImportFrom)):
+                    imports.append(node)
+                    continue
+                if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+                    continue  # 模块 docstring
+                if isinstance(node, ast.If):
+                    continue  # if __name__ == "__main__" 块
+                if first_code is None:
+                    first_code = node.lineno
+            if first_code is not None:
+                late = [i for i in imports if i.lineno > first_code]
+                if late:
+                    issues.append(AuditIssue(
+                        line=late[0].lineno, severity="warning", category="style_import_order",
+                        message=f"[{filename}] 导入出现在代码之后（PEP8 E402 类）",
+                        suggestion="将所有 import 移到文件顶部（模块 docstring 之后）",
+                    ))
+            preamble = [i for i in imports if first_code is None or i.lineno < first_code]
+            seq = []
+            for i in preamble:
+                if isinstance(i, ast.Import):
+                    for a in i.names:
+                        seq.append(a.name.lower())
+                else:
+                    mod = i.module or ''
+                    for a in i.names:
+                        seq.append((mod + '.' + a.name if mod else a.name).lower())
+            if seq and seq != sorted(seq):
+                issues.append(AuditIssue(
+                    line=preamble[0].lineno, severity="warning", category="style_import_order",
+                    message=f"[{filename}] 导入未按字母序排列",
+                    suggestion="按字母序排列 import 语句（仅报告，不自动改写）",
+                ))
+
+            # 3. 文档字符串（公开符号缺失 → warning）
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and not node.name.startswith('_'):
+                    if not ast.get_docstring(node):
+                        kind = '类' if isinstance(node, ast.ClassDef) else '函数'
+                        issues.append(AuditIssue(
+                            line=node.lineno, severity="warning", category="style_docstring",
+                            message=f"[{filename}] 公开{kind} '{node.name}' 缺少 docstring",
+                            suggestion="为公开符号添加文档字符串",
+                        ))
+
+            # 4. 引号风格一致性（偏离全局多数派 → warning）
+            if majority_quote:
+                s, d = file_quotes[idx]
+                if s + d > 0:
+                    dom = "single" if s >= d else "double"
+                    if dom != majority_quote:
+                        issues.append(AuditIssue(
+                            line=1, severity="warning", category="style_quotes",
+                            message=f"[{filename}] 引号风格偏离全局多数派({majority_quote})：单 {s} / 双 {d}",
+                            suggestion=f"统一为 {'单' if majority_quote == 'single' else '双'}引号（仅报告，不自动改写）",
+                        ))
+
+            # 5. 缩进一致性（tab/space 混用或单位不一 → error）
+            has_tab = has_space = False
+            widths = set()
+            for line in code.splitlines():
+                leading = line[:len(line) - len(line.lstrip(' \t'))]
+                if '\t' in leading:
+                    has_tab = True
+                sp = leading.count(' ')
+                if sp:
+                    has_space = True
+                    widths.add(sp)
+            indent_bad = False
+            if has_tab and has_space:
+                indent_bad = True
+            elif has_space and not has_tab:
+                pos = sorted(w for w in widths if w > 0)
+                if pos:
+                    base = pos[0]
+                    if any(w % base != 0 for w in pos):
+                        indent_bad = True
+            if indent_bad:
+                issues.append(AuditIssue(
+                    line=1, severity="error", category="style_indent",
+                    message=f"[{filename}] 缩进不一致（tab/space 混用或缩进单位不统一）",
+                    suggestion="统一使用 4 空格缩进，禁止 tab/space 混用",
+                ))
+
+            # 6. 行尾空白/缺尾换行/CRLF（→ warning）
+            flags = []
+            if '\r\n' in code or '\r' in code:
+                flags.append("CRLF 行尾")
+            for line in code.splitlines(keepends=False):
+                if line != line.rstrip():
+                    flags.append("行尾空白")
+                    break
+            if code and not code.endswith('\n'):
+                flags.append("缺尾换行")
+            if flags:
+                issues.append(AuditIssue(
+                    line=1, severity="warning", category="style_lineend",
+                    message=f"[{filename}] 行尾问题：{'、'.join(flags)}",
+                    suggestion="strip 行尾空白 + 单尾换行 + CRLF→LF（已自动归一化）",
+                ))
+
+        # ===== 计分（与 audit_code 一致：error×15 + warning×5） =====
+        err = sum(1 for i in issues if i.severity == "error")
+        warn = sum(1 for i in issues if i.severity == "warning")
+        score = max(0, 100 - err * 15 - warn * 5)
+        passed = err == 0
+        parts = []
+        if err:
+            parts.append(f"{err}个严重问题")
+        if warn:
+            parts.append(f"{warn}个警告")
+        summary = "通过" if not parts else f"发现{', '.join(parts)}"
+        result = AuditResult(passed=passed, issues=issues, score=score, summary=summary)
+
+        # ===== 安全归一化 patch（仅语义无关变换；命名/导入重排不自动改写） =====
+        patched_files = []
+        for cf in code_files:
+            if isinstance(cf, dict):
+                code = cf.get("code", "")
+                if isinstance(code, str) and code:
+                    patched_files.append({**cf, "code": _norm(code), "description": f"风格归一化后(score={score})"})
+                else:
+                    patched_files.append(cf)
+            else:
+                patched_files.append(cf)
+        return result, patched_files
+
+    async def _node_code_style_check(self, state: TaskState) -> TaskState:
+        """代码风格一致性检查节点（mid 阶段，缺陷：代码风格不一致）。
+
+        镜像 _node_ast_audit 的结构与 _set_result 回写约定：按 paper_template 分支解析
+        coder_agent / solver_agent 的【全部】code_files（风格一致性是跨文件问题），用标准库
+        ast/tokenize/re 做可复现审计（不引入外部 linter），安全归一化后回写，设置
+        code_style_passed 标志，并将校验问题写回 state._quality_issues。
+        """
+        task_id = state["task_id"]
+        logger.info(f"[LangGraph:{task_id}] code_style_check: 开始代码风格一致性检查")
+
+        try:
+            results = self._resolve_results(state)
+            template = state.get("paper_template", "math_modeling")
+            ccf_a = {"ieee_conference", "neurips_2024", "acm_sigconf", "springer_lncs", "research_paper"}
+
+            # 按模板分支解析代码来源（收集全部 code_files，非仅第 0 个）
+            if template in ccf_a:
+                source_output = results.get("coder_agent", {})
+                source_key = "coder_agent"
+                code_files = list(source_output.get("code_files", [])) if isinstance(source_output, dict) else []
+            else:
+                source_output = results.get("solver_agent", {})
+                source_key = "solver_agent"
+                code_files = []
+                solutions = source_output.get("sub_problem_solutions", []) if isinstance(source_output, dict) else []
+                for sol in solutions:
+                    sol_code_files = sol.get("code_files", []) if isinstance(sol, dict) else []
+                    code_files.extend(sol_code_files)
+
+            if not code_files:
+                logger.info(f"[LangGraph:{task_id}] code_style_check: 无代码文件，跳过")
+                return {**state, "code_style_passed": False, "current_step": "code_style_check_skipped"}
+
+            self._update_progress(task_id, state["problem_text"], 55, "代码风格一致性检查中")
+
+            # 真实校验 + 安全归一化
+            audit_result, patched_files = self._audit_code_style(code_files)
+            normalized = any(
+                isinstance(pcf, dict) and isinstance(ocf, dict) and pcf.get("code") != ocf.get("code")
+                for pcf, ocf in zip(patched_files, code_files)
+            )
+            issue_dicts = [
+                {"line": i.line, "severity": i.severity, "category": i.category,
+                 "message": i.message, "suggestion": i.suggestion}
+                for i in audit_result.issues
+            ]
+
+            # 回写：镜像 _node_ast_audit 的 results 回写范式
+            if template in ccf_a:
+                updated_output = {
+                    **source_output,
+                    "code_files": patched_files,
+                    "code_style_audit": {
+                        "passed": audit_result.passed,
+                        "score": audit_result.score,
+                        "issues": issue_dicts,
+                        "summary": audit_result.summary,
+                        "normalized": normalized,
+                    },
+                }
+                ref_update = self._set_result(state, source_key, updated_output)
+            else:
+                # 非 CCF-A：按原顺序把 patched_files 写回各 sub_problem_solutions 的 code_files
+                updated_solutions = []
+                ptr = 0
+                for sol in source_output.get("sub_problem_solutions", []) if isinstance(source_output, dict) else []:
+                    sol_cf = sol.get("code_files", []) if isinstance(sol, dict) else []
+                    if not sol_cf:
+                        updated_solutions.append(sol)
+                        continue
+                    n = len(sol_cf)
+                    new_cf = patched_files[ptr:ptr + n]
+                    if len(new_cf) != n:  # 数量不一致则保留原文件（防御）
+                        new_cf = sol_cf
+                    ptr += n
+                    updated_solutions.append({**sol, "code_files": new_cf})
+                updated_output = {
+                    **source_output,
+                    "sub_problem_solutions": updated_solutions,
+                    "code_style_audit": {
+                        "passed": audit_result.passed,
+                        "score": audit_result.score,
+                        "issues": issue_dicts,
+                        "summary": audit_result.summary,
+                        "normalized": normalized,
+                    },
+                }
+                ref_update = self._set_result(state, source_key, updated_output)
+
+            # 校验问题写回 state._quality_issues（无则新增）
+            quality_issues = list(state.get("_quality_issues", []))
+            for iss in audit_result.issues:
+                quality_issues.append({
+                    "stage": "code_style_check",
+                    "severity": iss.severity,
+                    "category": iss.category,
+                    "line": iss.line,
+                    "message": iss.message,
+                    "suggestion": iss.suggestion,
+                    "task_id": task_id,
+                })
+
+            # 通知
+            if audit_result.passed:
+                self._post_chat(task_id, "code_style_agent", f"代码风格检查通过（score={audit_result.score}）")
+            else:
+                self._post_chat(task_id, "code_style_agent", f"代码风格检查未通过（score={audit_result.score}）：{audit_result.summary}")
+
+            logger.info(
+                f"[LangGraph:{task_id}] code_style_check: passed={audit_result.passed} "
+                f"score={audit_result.score} issues={len(audit_result.issues)} normalized={normalized}"
+            )
+
+            return {
+                **state,
+                "results": {**state.get("results", {}), **ref_update},
+                "code_style_passed": audit_result.passed,
+                "_quality_issues": quality_issues,
+                "current_step": "code_style_check_done",
+            }
+        except Exception as e:
+            logger.warning(f"[LangGraph:{task_id}] code_style_check 失败: {e}", exc_info=True)
+            return state
+
+    async def _node_reproducibility_check(self, state: TaskState) -> TaskState:
+        """方法可复现性审查（补全"审查核心缺失"，对所有模板通用）。
+
+        前置 _node_fact_check 已物化 final/main.tex + final/solves.json 并产出
+        fact_checker 报告，本节点直接消费，补上 CCF-A 之外原本缺失的审查核心。
+        5 项检查全部基于现有确定性工具/正则，非空壳：
+        1. 代码审计复检（core/code_audit.audit_code）拦截硬编码指标——数值无法由运行代码复现
+        2. 随机种子可复现性（正则判定 seed 设置）
+        3. 论文声称方法↔代码实现匹配（writer paper_memory.model_names vs 代码）
+        4. 声明↔日志追溯表（services/claims_traceability，填充 state.claims_trace）
+        5. 一键复现 Bundle（core/reproducibility_bundle，此前仅 CCF-A 调用，本节点对所有模板生效）
+        """
+        task_id = state["task_id"]
+        project_name = state.get("project_name")
+        template = state.get("paper_template", "math_modeling")
+        try:
+            output_dir = get_project_output_dir(project_name)
+        except Exception:
+            output_dir = None
+
+        self._update_progress(task_id, state["problem_text"], 88, "方法可复现性审查中")
+        logger.info(f"[LangGraph:{task_id}] reproducibility_check: 开始方法可复现性审查 (template={template})")
+
+        try:
+            results = self._resolve_results(state)
+            writer_output = results.get("writer_agent") or {}
+            solver_output = results.get("solver_agent") or {}
+            experiment_output = results.get("experimentation_agent") or {}
+            fact_report = results.get("fact_checker") or {}
+
+            paper_memory = writer_output.get("paper_memory", {}) if isinstance(writer_output, dict) else {}
+            key_claims = paper_memory.get("key_claims", []) if isinstance(paper_memory, dict) else []
+            model_names = paper_memory.get("model_names", []) if isinstance(paper_memory, dict) else []
+            sub_solutions = solver_output.get("sub_problem_solutions", []) if isinstance(solver_output, dict) else []
+
+            report: Dict[str, Any] = {"enabled": True, "passed": True, "issues": [], "checks": []}
+            issues: List[str] = report["issues"]
+            severe_count = 0  # 严重问题计数（不一致/不可复现/硬编码/无证据/无代码）
+
+            # ===== 取最终代码（与 ast_audit 节点同款取法）=====
+            ccf_a = {"ieee_conference", "neurips_2024", "acm_sigconf", "springer_lncs", "research_paper"}
+            final_code = ""
+            if template in ccf_a:
+                coder_output = results.get("coder_agent") or {}
+                code_files = coder_output.get("code_files", []) if isinstance(coder_output, dict) else []
+                if code_files:
+                    final_code = code_files[0].get("code", "") or ""
+            if not final_code:
+                for sol in sub_solutions:
+                    sol_code_files = sol.get("code_files", []) if isinstance(sol, dict) else []
+                    if sol_code_files:
+                        final_code = "\n\n".join(
+                            cf.get("code", "") for cf in sol_code_files if isinstance(cf, dict)
+                        )
+                        break
+            if not final_code and isinstance(experiment_output, dict):
+                exp_code_files = experiment_output.get("code_files", []) or []
+                if exp_code_files:
+                    final_code = exp_code_files[0].get("code", "") or ""
+
+            # ===== 审查核心-1: 代码审计复检（拦截硬编码指标）=====
+            audit_check: Dict[str, Any] = {"name": "code_audit", "passed": True, "score": 100, "summary": ""}
+            if not final_code:
+                issues.append("无可复现代码")
+                report["passed"] = False
+                severe_count += 1
+                audit_check.update(passed=False, score=0, summary="无可复现代码")
+            else:
+                try:
+                    from ..core.code_audit import audit_code
+                    audit_result = audit_code(final_code, task_type="general")
+                    hardcoded = [
+                        i for i in audit_result.issues
+                        if getattr(i, "category", "") == "hardcoded_metric"
+                    ]
+                    audit_check.update(
+                        passed=audit_result.passed and not hardcoded,
+                        score=audit_result.score,
+                        summary=audit_result.summary,
+                        hardcoded_count=len(hardcoded),
+                    )
+                    if hardcoded:
+                        report["passed"] = False
+                        for hi in hardcoded:
+                            issues.append(f"运行代码无法复现该数值: {getattr(hi, 'message', str(hi))}")
+                            severe_count += 1
+                except Exception as e:
+                    logger.warning(f"[LangGraph:{task_id}] reproducibility_check code_audit failed: {e}")
+                    audit_check.update(passed=False, score=0, summary=f"代码审计异常: {e}")
+            report["checks"].append(audit_check)
+
+            # ===== 审查核心-2: 随机种子可复现性 =====
+            seed_set = bool(re.search(
+                r"(?:np\.random\.seed|random\.seed|torch\.manual_seed|tf\.random\.set_seed)\s*\(",
+                final_code,
+            ))
+            training_keywords = ("fit(", "train(", "epoch", "backward", "optimizer.step", "loss.backward")
+            has_training = any(kw in final_code for kw in training_keywords)
+            seed_check: Dict[str, Any] = {
+                "name": "random_seed", "passed": True, "seed_set": seed_set, "has_training": has_training,
+            }
+            if has_training and not seed_set:
+                issues.append("训练代码未设置随机种子，结果不可复现")
+                report["passed"] = False
+                seed_check["passed"] = False
+                severe_count += 1
+            report["checks"].append(seed_check)
+
+            # ===== 审查核心-3: 方法↔代码一致性 =====
+            described_methods = [m for m in model_names if isinstance(m, str) and len(m) >= 3]
+            # 从 modeling agent (proposed_method.algorithm) 提取算法名做同样匹配
+            modeling_output = results.get("algorithm_engineer_agent") or results.get("modeler_agent") or {}
+            if isinstance(modeling_output, dict):
+                proposed = modeling_output.get("proposed_method")
+                if isinstance(proposed, dict):
+                    alg = proposed.get("algorithm")
+                    if isinstance(alg, dict):
+                        an = alg.get("name", "")
+                        if isinstance(an, str) and len(an) >= 3:
+                            described_methods.append(an)
+                    elif isinstance(alg, str) and len(alg) >= 3:
+                        described_methods.append(alg)
+                    pm_name = proposed.get("name", "")
+                    if isinstance(pm_name, str) and len(pm_name) >= 3:
+                        described_methods.append(pm_name)
+                for m in modeling_output.get("sub_problem_models", []) or []:
+                    if not isinstance(m, dict):
+                        continue
+                    a = m.get("algorithm")
+                    if isinstance(a, dict):
+                        an = a.get("name", "")
+                        if isinstance(an, str) and len(an) >= 3:
+                            described_methods.append(an)
+                    mn = m.get("model_name", "")
+                    if isinstance(mn, str) and len(mn) >= 3:
+                        described_methods.append(mn)
+
+            orphan: List[str] = []
+            if described_methods and final_code:
+                code_lower = final_code.lower()
+                for m in described_methods:
+                    ml = m.lower()
+                    if ml not in code_lower and ml.replace(" ", "") not in code_lower:
+                        orphan.append(m)
+            method_check: Dict[str, Any] = {
+                "name": "method_code_consistency",
+                "passed": len(orphan) == 0,
+                "described_methods": list(dict.fromkeys(described_methods))[:10],
+                "orphan_methods": orphan[:5],
+            }
+            if orphan:
+                # warning：记入 checks 提示人工，不直接 fail report
+                issues.append("论文声称的方法在代码中无实现: " + ", ".join(orphan[:5]))
+            report["checks"].append(method_check)
+
+            # ===== 审查核心-4: 声明↔日志追溯表 =====
+            trace_rows_dict: List[Dict[str, Any]] = list(state.get("claims_trace", []) or [])
+            try:
+                from ..services.claims_traceability import (
+                    build_claims_traceability, save_claims_traceability,
+                )
+                fact_issues = fact_report.get("issues", []) or []
+                provenance: List[Dict[str, Any]] = []
+                for sol in sub_solutions:
+                    if not isinstance(sol, dict):
+                        continue
+                    for cf in (sol.get("code_files") or []):
+                        if isinstance(cf, dict):
+                            provenance.append({"code_path": cf.get("path", "")})
+                if isinstance(experiment_output, dict):
+                    for cf in (experiment_output.get("code_files") or []):
+                        if isinstance(cf, dict):
+                            provenance.append({"code_path": cf.get("path", "")})
+                trace = build_claims_traceability(
+                    task_id,
+                    key_claims=key_claims,
+                    solve_results=sub_solutions,
+                    experiment_output=experiment_output if isinstance(experiment_output, dict) else {},
+                    provenance_records=provenance,
+                    fact_check_issues=fact_issues,
+                )
+                trace_rows_dict = [r.to_dict() for r in trace.rows]
+                trace_summary = dict(trace.summary) if isinstance(trace.summary, dict) else {}
+                report["claims_traceability"] = trace_summary
+
+                mismatch = trace_summary.get("mismatch", 0)
+                missing_evidence = trace_summary.get("missing_evidence", 0)
+                coverage = trace_summary.get("coverage", 0.0)
+                if isinstance(mismatch, (int, float)) and mismatch > 0:
+                    issues.append(f"{mismatch} 处声明↔日志数值不一致")
+                    report["passed"] = False
+                    severe_count += 1
+                if (isinstance(coverage, (int, float)) and coverage < 0.5
+                        and isinstance(missing_evidence, (int, float)) and missing_evidence > 0):
+                    issues.append(f"声明追溯覆盖率{coverage:.0%}，{missing_evidence} 处无证据")
+                    severe_count += 1
+
+                if output_dir:
+                    save_claims_traceability(trace, output_dir / "final")
+            except Exception as e:
+                logger.warning(f"[LangGraph:{task_id}] reproducibility_check claims_traceability failed: {e}")
+                report["claims_traceability"] = {"error": str(e)}
+
+            # ===== 审查核心-5: 一键复现 Bundle（对所有模板生效）=====
+            try:
+                from ..core.reproducibility_bundle import get_reproducibility_bundle
+                experiment_result = experiment_output.get("experiment_result", {}) if isinstance(experiment_output, dict) else {}
+                if not isinstance(experiment_result, dict):
+                    experiment_result = {}
+                bundle_payload = {
+                    "dataset_info": experiment_result.get("dataset_info", {}) or {},
+                    "aggregated": experiment_result.get("metrics") or experiment_result.get("aggregated"),
+                    "raw_batch": experiment_result.get("raw_batch"),
+                }
+                bundle = get_reproducibility_bundle().create_bundle(
+                    bundle_payload, task_id, project_name,
+                )
+                report["reproducibility_bundle"] = {
+                    "bundle_id": bundle.get("bundle_id"),
+                    "bundle_path": bundle.get("bundle_path"),
+                    "env_lock": bool(bundle.get("env_lock")),
+                    "data_hash": bool(bundle.get("data_hash")),
+                    "reproduction_steps": len(bundle.get("reproduction_steps", []) or []),
+                    "error": bundle.get("error"),
+                }
+                if bundle.get("error"):
+                    issues.append(f"复现bundle生成失败:{bundle.get('error')}")
+            except Exception as e:
+                logger.warning(f"[LangGraph:{task_id}] reproducibility_check bundle failed: {e}")
+                report["reproducibility_bundle"] = {"error": str(e)}
+                issues.append(f"复现bundle生成失败:{e}")
+
+            # ===== 收尾 =====
+            report["checked_at"] = datetime.now().isoformat()
+            other_count = max(0, len(issues) - severe_count)
+            report["score"] = max(0, 100 - 20 * severe_count - 5 * other_count)
+
+            # 持久化报告
+            if output_dir and issues:
+                try:
+                    report_path = output_dir / "final" / "reproducibility_report.json"
+                    report_path.parent.mkdir(parents=True, exist_ok=True)
+                    report_path.write_text(
+                        json.dumps(report, ensure_ascii=False, indent=2, default=str),
+                        encoding="utf-8",
+                    )
+                    logger.info(f"[LangGraph:{task_id}] reproducibility_check report saved to {report_path}")
+                except Exception as disk_exc:
+                    logger.warning(f"[LangGraph:{task_id}] reproducibility_check report save failed: {disk_exc}")
+
+            # 通知用户
+            emoji = "✅" if report["passed"] else "⚠️"
+            self._post_chat(
+                task_id, "reproducibility_check",
+                f"{emoji} 方法可复现性审查：发现{len(issues)}个问题，复现bundle已生成"
+                f"（score={report['score']}，passed={report['passed']}）"
+                + ("\n" + "\n".join(f"  - {s}" for s in issues[:5]) if issues else ""),
+            )
+
+            # 外部 store 持久化
+            ref_update = self._set_result(state, "reproducibility_check", report)
+
+            # 校验问题写回 state 的 _quality_issues 列表（无则新增）
+            quality_issues = list(state.get("_quality_issues", []) or [])
+            for iss in issues:
+                entry = f"[reproducibility_check] {iss}"
+                if entry not in quality_issues:
+                    quality_issues.append(entry)
+
+            logger.info(
+                f"[LangGraph:{task_id}] reproducibility_check done: passed={report['passed']} "
+                f"score={report['score']} issues={len(issues)} severe={severe_count} "
+                f"bundle={'ok' if report.get('reproducibility_bundle', {}).get('bundle_id') else 'n/a'}"
+            )
+
+            return {
+                **state,
+                "results": {**state.get("results", {}), **ref_update},
+                "claims_trace": trace_rows_dict,
+                "current_step": "reproducibility_check_done",
+                "_quality_issues": quality_issues,
+            }
+        except Exception as e:
+            logger.warning(f"[LangGraph:{task_id}] reproducibility_check 失败: {e}", exc_info=True)
+            return {**state, "current_step": "reproducibility_check_failed"}
+
+    async def _node_formula_validity_check(self, state: TaskState) -> TaskState:
+        """post 阶段：LaTeX 公式有效性校验（report-only，不改写论文）。
+
+        复用 services/formula_validator.FormulaValidator 对 writer 产出的 latex_code 做确定性
+        数学段校验（环境配对 / 定界符平衡 / 退化公式 / 错位对齐符，可选编译验证），结果落盘
+        final/formula_validity_report.json、回写 state._quality_issues，并写入外部结果 store。
+        """
+        task_id = state["task_id"]
+        logger.info(f"[LangGraph:{task_id}] formula_validity_check: start")
+
+        # guard（defensive getattr：兼容 LangGraphConfig 未显式声明字段的情况）
+        if not getattr(self.cfg, "enable_formula_validity_check", True):
+            logger.info(f"[LangGraph:{task_id}] formula_validity_check: disabled by config, skip")
+            return {**state, "current_step": "formula_validity_skipped"}
+
+        try:
+            # 1. 取 writer 产出的 latex_code（dict 校验）
+            results = self._resolve_results(state)
+            writer_output = results.get("writer_agent") or {}
+            if not isinstance(writer_output, dict):
+                writer_output = {}
+            latex_code = writer_output.get("latex_code", "") or ""
+            if not latex_code.strip():
+                logger.info(f"[LangGraph:{task_id}] formula_validity_check: no latex_code, skip")
+                return {**state, "current_step": "formula_validity_skipped"}
+
+            # 2. 进度
+            self._update_progress(task_id, state["problem_text"], 85, "LaTeX 公式有效性校验中")
+
+            # 3. 校验（复用 AuditReport/AuditFinding 容器与打分：error -15 / warning -5）
+            from ..services.formula_validator import get_formula_validator
+            compile_check = bool(getattr(self.cfg, "formula_compile_check", False))
+            report = get_formula_validator().validate(latex_code, compile_check=compile_check)
+
+            findings = [
+                {
+                    "severity": f.severity,
+                    "category": f.category,
+                    "message": f.message,
+                    "location": f.location,
+                    "expected": f.expected,
+                    "actual": f.actual,
+                }
+                for f in report.findings
+            ]
+            seg_count = int(getattr(report, "segment_count", 0))
+            error_count = sum(1 for f in findings if f["severity"] == "error")
+            warning_count = sum(1 for f in findings if f["severity"] == "warning")
+            report_dict: Dict[str, Any] = {
+                "enabled": True,
+                "passed": bool(report.passed),
+                "score": max(0.0, float(report.score)),
+                "segment_count": seg_count,
+                "error_count": error_count,
+                "warning_count": warning_count,
+                "findings": findings,
+            }
+
+            # 4. 落盘（与 fact_check 一致：异常仅 warn，不阻断）
+            saved_path = "final/formula_validity_report.json"
+            try:
+                output_dir = get_project_output_dir(state.get("project_name"))
+                report_path = output_dir / "final" / "formula_validity_report.json"
+                report_path.parent.mkdir(parents=True, exist_ok=True)
+                report_path.write_text(
+                    json.dumps(report_dict, ensure_ascii=False, indent=2, default=str),
+                    encoding="utf-8",
+                )
+                saved_path = str(report_path.relative_to(output_dir))
+                logger.info(f"[LangGraph:{task_id}] formula_validity_check: report saved to {report_path}")
+            except Exception as disk_exc:
+                logger.warning(f"[LangGraph:{task_id}] formula_validity_check report save failed: {disk_exc}")
+
+            # 5. 写回外部结果 store（ref 引用）
+            ref_update = self._set_result(state, "formula_validity", report_dict)
+
+            # 6. 通知（passed / failed 两态）
+            if report.passed:
+                self._post_chat(
+                    task_id, "coordinator",
+                    f"✅ LaTeX 公式有效性校验通过（score={report_dict['score']:.0f}，{seg_count} 个公式段）",
+                )
+            else:
+                top3 = "; ".join(
+                    f"[{f['location']}] {f['message']}" for f in findings[:3]
+                )
+                self._post_chat(
+                    task_id, "coordinator",
+                    f"⚠️ 公式校验发现 {error_count} 错误/{warning_count} 警告："
+                    f"{top3} 报告已存 {saved_path}",
+                )
+
+            # 7. 写回 state._quality_issues（无则新增，保留已有项）
+            quality_issues = list(state.get("_quality_issues") or [])
+            for f in findings:
+                quality_issues.append({
+                    "source": "formula_validity_check",
+                    "severity": f["severity"],
+                    "category": f["category"],
+                    "location": f["location"],
+                    "message": f["message"],
+                })
+
+            logger.info(
+                f"[LangGraph:{task_id}] formula_validity_check: passed={report.passed} "
+                f"score={report_dict['score']:.0f} errors={error_count} warnings={warning_count} "
+                f"segments={seg_count}"
+            )
+
+            return {
+                **state,
+                "results": {**state.get("results", {}), **ref_update},
+                "formula_validity_passed": bool(report.passed),
+                "_quality_issues": quality_issues,
+                "current_step": "formula_validity_check",
+            }
+        except Exception as e:
+            logger.warning(f"[LangGraph:{task_id}] formula_validity_check 失败: {e}")
+            return state
+
+
+    async def _node_table_consistency_check(self, state: TaskState) -> TaskState:
+        """Post 阶段：表格内部一致性校验（报告型节点，镜像 _node_fact_check）。
+
+        解析 writer 产物 final/main.tex 中的所有 tabular 环境，校验：
+        (a) 列数一致性；(b) 数值列识别；(c) 合计/总计行求和（复用 symbolic_auditor.check_table_sums）
+        与平均行内联均值校验；(d) 百分比列（复用 check_percentages）；(e) 重复行。
+        只校验 + 落盘 + 通知，不重写 LaTeX。问题写回 state["_quality_issues"]。
+        """
+        task_id = state["task_id"]
+        logger.info(f"[LangGraph:{task_id}] table_consistency_check 开始")
+        try:
+            # 1. 取参
+            project_name = state.get("project_name")
+            template = state.get("paper_template", "math_modeling")
+            results = self._resolve_results(state)
+            writer_output = results.get("writer_agent") or {}
+            latex_code = (
+                writer_output.get("latex_code", "")
+                if isinstance(writer_output, dict)
+                else ""
+            )
+
+            # 2. 早退：无 latex_code
+            if not latex_code:
+                report = {
+                    "enabled": True,
+                    "passed": True,
+                    "skipped": "no latex_code",
+                    "tables_checked": 0,
+                    "issues": [],
+                }
+                self._set_result(state, "table_consistency_checker", report)
+                logger.info(f"[LangGraph:{task_id}] table_consistency: 无 latex_code，跳过")
+                return {
+                    **state,
+                    "results": {**state.get("results", {}), "table_consistency_checker": report},
+                    "current_step": "table_consistency_check_skipped",
+                }
+
+            # 3. 进度
+            self._update_progress(task_id, state["problem_text"], 82, "表格内部一致性校验中")
+
+            # 复用设计指定的工具
+            from dataclasses import asdict
+            from ..services.symbolic_auditor import (
+                AuditFinding,
+                check_table_sums,
+                check_percentages,
+            )
+
+            # 4. 解析所有 tabular 环境
+            tables = self._extract_latex_tables(latex_code)
+            logger.info(f"[LangGraph:{task_id}] table_consistency: 解析到 {len(tables)} 张表")
+
+            # 5. 逐表校验
+            findings: List[AuditFinding] = []
+            for table in tables:
+                location = table["location"]
+                n_cols = table["n_cols"]
+                rows = table["rows"]
+                if not rows:
+                    continue
+
+                # (a) 列数一致性（必查）
+                if n_cols > 0:
+                    for r_idx, row in enumerate(rows):
+                        if len(row) != n_cols:
+                            findings.append(AuditFinding(
+                                severity="error",
+                                category="column_mismatch",
+                                message=f"第 {r_idx + 1} 行单元格数 {len(row)} 与列规格 {n_cols} 不一致",
+                                location=f"{location}:row{r_idx + 1}",
+                            ))
+                else:
+                    # 列规格无法解析，跳过该表后续结构化校验
+                    continue
+
+                headers = rows[0]
+                # 建立列数据（按列收集单元格文本，与 rows 对齐）
+                col_cells: List[List[str]] = [[] for _ in range(n_cols)]
+                for row in rows:
+                    for j in range(min(len(row), n_cols)):
+                        col_cells[j].append(row[j])
+
+                # 唯一列名（表头文本，回退 col{j}）
+                col_keys: Dict[int, str] = {}
+                used_keys: set = set()
+                for j in range(n_cols):
+                    base = (
+                        headers[j].strip()
+                        if j < len(headers) and headers[j].strip()
+                        else f"col{j + 1}"
+                    )
+                    key = base
+                    k = 1
+                    while key in used_keys:
+                        key = f"{base}_{k}"
+                        k += 1
+                    used_keys.add(key)
+                    col_keys[j] = key
+
+                # (b) 数值列识别：body（去表头）多数单元格可解析为 float
+                numeric_parsed: Dict[int, List[Optional[float]]] = {}
+                for j in range(n_cols):
+                    cells = col_cells[j]
+                    parsed = [self._try_parse_float(c) for c in cells]
+                    body = parsed[1:] if len(parsed) > 1 else parsed
+                    if body and sum(1 for v in body if v is not None) >= max(1, len(body) // 2):
+                        numeric_parsed[j] = parsed
+
+                # 识别合计/平均行（首格匹配关键词）
+                total_row_idx = None
+                avg_row_idx = None
+                for r_idx, row in enumerate(rows):
+                    first = row[0].strip() if row else ""
+                    if re.search(r"合计|总计|Total|Sum", first, re.IGNORECASE):
+                        total_row_idx = r_idx
+                    elif re.search(r"平均|Average|Mean", first, re.IGNORECASE):
+                        avg_row_idx = r_idx
+
+                # (c) 合计/总计行求和（仅在有总计行时调用，避免误判最后一行为合计）
+                if total_row_idx is not None and total_row_idx != 0:
+                    sum_data: Dict[str, List[float]] = {}
+                    for j, parsed in numeric_parsed.items():
+                        values: List[float] = []
+                        for r_idx in range(len(rows)):
+                            if r_idx == total_row_idx or r_idx == avg_row_idx:
+                                continue
+                            v = parsed[r_idx] if r_idx < len(parsed) else None
+                            if v is not None:
+                                values.append(v)
+                        total_v = parsed[total_row_idx] if total_row_idx < len(parsed) else None
+                        if total_v is not None:
+                            values.append(total_v)
+                        if len(values) >= 2:
+                            sum_data[col_keys[j]] = values
+                    if sum_data:
+                        for f in check_table_sums(sum_data):
+                            f.location = f"{location}:{f.location}"
+                            findings.append(f)
+
+                    # 平均行内联均值校验（symbolic_auditor 无均值规则，自行容差判定）
+                    if avg_row_idx is not None and avg_row_idx != 0:
+                        for j, parsed in numeric_parsed.items():
+                            body_vals: List[float] = []
+                            for r_idx in range(len(rows)):
+                                if r_idx == 0 or r_idx == avg_row_idx or r_idx == total_row_idx:
+                                    continue
+                                v = parsed[r_idx] if r_idx < len(parsed) else None
+                                if v is not None:
+                                    body_vals.append(v)
+                            avg_cell = parsed[avg_row_idx] if avg_row_idx < len(parsed) else None
+                            if body_vals and avg_cell is not None:
+                                expected_mean = sum(body_vals) / len(body_vals)
+                                tol = max(0.01, abs(expected_mean) * 0.01)
+                                if abs(expected_mean - avg_cell) > tol:
+                                    findings.append(AuditFinding(
+                                        severity="warning",
+                                        category="sum_mismatch",
+                                        message=(
+                                            f"列 '{col_keys[j]}' 平均值不一致: "
+                                            f"实际均值={expected_mean:.4f}, 表中平均={avg_cell:.4f}"
+                                        ),
+                                        location=location,
+                                        expected=expected_mean,
+                                        actual=avg_cell,
+                                    ))
+
+                # (d) 百分比列（表头含关键词 或 body 全列以 % 结尾）
+                for j in range(n_cols):
+                    cells = col_cells[j]
+                    header_text = headers[j] if j < len(headers) else ""
+                    is_pct = False
+                    if header_text and re.search(r"占比|比例|百分比|率|分布", header_text):
+                        is_pct = True
+                    else:
+                        body_vals_txt = [
+                            c for r_idx, c in enumerate(cells) if r_idx != 0 and c.strip()
+                        ]
+                        if body_vals_txt and all(c.strip().endswith("%") for c in body_vals_txt):
+                            is_pct = True
+                    if is_pct:
+                        pct_vals: List[float] = []
+                        for r_idx in range(len(rows)):
+                            if r_idx == 0 or r_idx == total_row_idx or r_idx == avg_row_idx:
+                                continue
+                            v = self._try_parse_float(cells[r_idx] if r_idx < len(cells) else None)
+                            if v is not None:
+                                pct_vals.append(v)
+                        if pct_vals:
+                            for f in check_percentages(pct_vals):
+                                f.location = location
+                                findings.append(f)
+
+                # (e) 重复行
+                seen_rows: set = set()
+                for r_idx, row in enumerate(rows):
+                    if r_idx == 0:
+                        continue
+                    key = tuple(c.strip() for c in row)
+                    if key in seen_rows:
+                        findings.append(AuditFinding(
+                            severity="warning",
+                            category="duplicate_row",
+                            message=f"第 {r_idx + 1} 行与之前的行内容完全重复",
+                            location=f"{location}:row{r_idx + 1}",
+                        ))
+                    else:
+                        seen_rows.add(key)
+
+            # 6. 汇总 report
+            stats = {
+                "column_mismatch": sum(1 for f in findings if f.category == "column_mismatch"),
+                "sum_mismatch": sum(1 for f in findings if f.category == "sum_mismatch"),
+                "percentage": sum(1 for f in findings if f.category == "percentage"),
+                "duplicate_row": sum(1 for f in findings if f.category == "duplicate_row"),
+            }
+            error_count = sum(1 for f in findings if f.severity == "error")
+            report = {
+                "enabled": True,
+                "task_id": task_id,
+                "paper_template": template,
+                "tables_checked": len(tables),
+                "issues": [asdict(f) for f in findings],
+                "passed": error_count == 0,
+                "stats": stats,
+            }
+
+            # 7. 落盘 + 通知（镜像 fact_check）
+            if project_name:
+                try:
+                    output_dir = get_project_output_dir(project_name)
+                    report_path = output_dir / "final" / "table_consistency_report.json"
+                    report_path.parent.mkdir(parents=True, exist_ok=True)
+                    report_path.write_text(
+                        json.dumps(report, ensure_ascii=False, indent=2, default=str),
+                        encoding="utf-8",
+                    )
+                    logger.info(f"[LangGraph:{task_id}] table_consistency report saved to {report_path}")
+                except Exception as disk_exc:
+                    logger.warning(f"[LangGraph:{task_id}] table_consistency report save failed: {disk_exc}")
+
+            if report["passed"]:
+                self._post_chat(
+                    task_id, "coordinator",
+                    f"✅ 表格内部一致性校验通过：{len(tables)} 张表",
+                )
+            else:
+                preview = [
+                    f"{f.category}@{f.location}: {f.message}"
+                    for f in findings
+                    if f.severity == "error"
+                ][:5]
+                self._post_chat(
+                    task_id, "coordinator",
+                    f"⚠️ 表格内部一致性校验发现问题（共 {len(findings)} 处，其中 error {error_count} 处）：\n"
+                    + ("\n".join(f"  - {s}" for s in preview) if preview else "")
+                    + "\n报告已保存至 final/table_consistency_report.json，请人工审核后修正。",
+                )
+
+            # 校验问题写回 state 的 _quality_issues 列表（无则新增）
+            quality_issues = list(state.get("_quality_issues", []))
+            for f in findings:
+                quality_issues.append({
+                    "checker": "table_consistency",
+                    "severity": f.severity,
+                    "category": f.category,
+                    "message": f.message,
+                    "location": f.location,
+                })
+
+            self._set_result(state, "table_consistency_checker", report)
+            logger.info(
+                f"[LangGraph:{task_id}] table_consistency_check done: "
+                f"tables={len(tables)} findings={len(findings)} passed={report['passed']}"
+            )
+            return {
+                **state,
+                "results": {**state.get("results", {}), "table_consistency_checker": report},
+                "_quality_issues": quality_issues,
+                "current_step": "table_consistency_check",
+            }
+        except Exception as e:
+            logger.warning(f"[LangGraph:{task_id}] table_consistency_check 异常: {e}", exc_info=True)
+            return state
+
+    # ------------------------------------------------------------------
+    # 表格内部一致性校验 — 辅助纯函数（便于单测）
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _count_tabular_columns(spec: str) -> int:
+        """从 tabular 列规格字符串计算列数。
+
+        示例: "|c|c|l|r|" → 4 ; "|>{\\centering}p{2cm}|c|" → 2 ; "*{3}{c}" → 3
+        """
+        if not spec:
+            return 0
+        s = spec.strip()
+        # 展开 *{n}{spec} 重复形式（spec 可含嵌套花括号）
+        star_re = re.compile(r"\*\s*\{\s*(\d+)\s*\}\s*\{")
+        while True:
+            m = star_re.search(s)
+            if not m:
+                break
+            content, after = LangGraphOrchestrator._extract_braced_at(s, m.end() - 1)
+            s = s[: m.start()] + (content * int(m.group(1))) + s[after:]
+        # 去掉 @{...} >{...} <{...}
+        s = re.sub(r"@\s*\{[^{}]*\}", "", s)
+        s = re.sub(r">\s*\{[^{}]*\}", "", s)
+        s = re.sub(r"<\s*\{[^{}]*\}", "", s)
+        # p{..} m{..} b{..} 各占 1 列（宽度参数不含花括号）
+        s = re.sub(r"[pmbPMB]\s*\{[^{}]*\}", "C", s)
+        # 去掉竖线分隔
+        s = s.replace("|", "")
+        # 剩余字母字符即为列类型（c/l/r/…）
+        return sum(1 for ch in s if ch.isalpha())
+
+    @staticmethod
+    def _extract_braced_at(text: str, pos: int) -> tuple:
+        """text[pos] == '{'，返回 (花括号内内容, 闭合花括号后位置)。
+
+        支持 \\{ \\} 转义（不计入深度）；不平衡时返回 (剩余内容, len(text))。
+        """
+        n = len(text)
+        if pos >= n or text[pos] != "{":
+            return "", pos
+        depth = 0
+        i = pos
+        while i < n:
+            ch = text[i]
+            if ch == "\\" and i + 1 < n:
+                i += 2
+                continue
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    return text[pos + 1: i], i + 1
+            i += 1
+        return text[pos + 1:], n
+
+    @staticmethod
+    def _parse_brace_groups(text: str, pos: int) -> tuple:
+        """从 pos 开始解析连续的 {...} 平衡花括号组，返回 (内容列表, 结束位置)。"""
+        groups: List[str] = []
+        i = pos
+        n = len(text)
+        while i < n:
+            while i < n and text[i] in " \t\r\n":
+                i += 1
+            if i < n and text[i] == "{":
+                content, after = LangGraphOrchestrator._extract_braced_at(text, i)
+                groups.append(content)
+                i = after
+            else:
+                break
+        return groups, i
+
+    @staticmethod
+    def _extract_latex_tables(latex_code: str) -> List[Dict[str, Any]]:
+        """从 LaTeX 源码中提取所有 tabular/tabular*/tabularx 环境并解析。
+
+        返回每张表：{"col_spec": str, "n_cols": int, "rows": List[List[str]],
+                   "caption": str, "location": "table{i+1}"}
+        """
+        tables: List[Dict[str, Any]] = []
+        env_re = re.compile(r"\\begin\{(tabular\*|tabularx|tabular)\}")
+        pos = 0
+        idx = 0
+        while True:
+            m = env_re.search(latex_code, pos)
+            if not m:
+                break
+            env = m.group(1)
+            args, after = LangGraphOrchestrator._parse_brace_groups(latex_code, m.end())
+            # 列规格是最后一个花括号组（tabular*/tabularx 的第一组是宽度）
+            col_spec_raw = args[-1] if args else ""
+            end_re = re.compile(r"\\end\{" + re.escape(env) + r"\}")
+            end_m = end_re.search(latex_code, after)
+            if not end_m:
+                pos = m.end()
+                continue
+            body = latex_code[after: end_m.start()]
+
+            # 提取最近的 \\caption{...}（表格浮动体内）
+            caption = ""
+            win_start = max(0, m.start() - 1500)
+            win_end = min(len(latex_code), end_m.end() + 500)
+            cap_m = re.search(r"\\caption\s*\{", latex_code[win_start:win_end])
+            if cap_m:
+                brace_pos = win_start + cap_m.end() - 1
+                cap_content, _ = LangGraphOrchestrator._extract_braced_at(latex_code, brace_pos)
+                caption = cap_content.strip()
+
+            tables.append({
+                "col_spec": col_spec_raw,
+                "n_cols": LangGraphOrchestrator._count_tabular_columns(col_spec_raw),
+                "rows": LangGraphOrchestrator._parse_tabular_rows(body),
+                "caption": caption,
+                "location": f"table{idx + 1}",
+            })
+            idx += 1
+            pos = end_m.end()
+        return tables
+
+    @staticmethod
+    def _parse_tabular_rows(body: str) -> List[List[str]]:
+        """按 \\\\ 拆行，去 hline/toprule/midrule/bottomrule/cline，按未转义 & 拆单元格。"""
+        rows: List[List[str]] = []
+        # 行分隔符 \\\\ （可能带 \\\\[length]）
+        parts = re.split(r"\\\\(?:\s*\[[^\]]*\])?", body)
+        for part in parts:
+            row = re.sub(
+                r"\\(?:hline|toprule|midrule|bottomrule|cline\s*\{[^}]*\})\s*", "", part
+            ).strip()
+            if not row:
+                continue
+            rows.append(LangGraphOrchestrator._split_cells(row))
+        return rows
+
+    @staticmethod
+    def _split_cells(row: str) -> List[str]:
+        """按未转义的 & 拆分单元格，剥离 \\multicolumn{}{}{}/\\multirow 包裹。"""
+        cells: List[str] = []
+        current: List[str] = []
+        i = 0
+        n = len(row)
+        while i < n:
+            ch = row[i]
+            if ch == "\\" and i + 1 < n:
+                # 转义序列（含 \&），原样保留两字符
+                current.append(ch)
+                current.append(row[i + 1])
+                i += 2
+                continue
+            if ch == "&":
+                cells.append(LangGraphOrchestrator._unwrap_multicolumn("".join(current).strip()))
+                current = []
+                i += 1
+                continue
+            current.append(ch)
+            i += 1
+        cells.append(LangGraphOrchestrator._unwrap_multicolumn("".join(current).strip()))
+        return cells
+
+    @staticmethod
+    def _unwrap_multicolumn(cell: str) -> str:
+        """剥离 \\multicolumn{n}{align}{content} / \\multirow{n}{w}{content} 包裹，返回 content。"""
+        cell = cell.strip()
+        for cmd in ("multicolumn", "multirow"):
+            m = re.match(r"\\" + cmd + r"\s*\{", cell)
+            if m:
+                groups, _ = LangGraphOrchestrator._parse_brace_groups(cell, m.end() - 1)
+                if len(groups) >= 3:
+                    return groups[2].strip()
+                if groups:
+                    return groups[-1].strip()
+                return cell
+        return cell
+
+    @staticmethod
+    def _try_parse_float(text: Any) -> Optional[float]:
+        """尝试把单元格文本解析为 float，容许 % 后缀、千分逗号、科学计数、$ $ 包裹。"""
+        if text is None:
+            return None
+        s = str(text).strip()
+        if not s:
+            return None
+        s = s.replace("$", "").replace("\\,", "").replace("\\%", "%")
+        s = re.sub(r"\\text\{([^}]*)\}", r"\1", s).strip()
+        if not s:
+            return None
+        s = s.rstrip("%").strip().replace(",", "").strip("()[]")
+        try:
+            return float(s)
+        except ValueError:
+            return None
+
+    async def _node_figure_caption_check(self, state: TaskState) -> TaskState:
+        r"""图表说明与正文一致性校验（post 阶段）。
+
+        在 writer 产出 LaTeX（含 \caption）之后、最终 summary 之前，校验：
+        1) 正文 \includegraphics 与 figure_agent 生成清单的结构对齐；
+        2) caption 中数字与 solver 求解结果对账（复用 FactChecker）；
+        3) caption 与所在段落正文的趋势/语义方向是否矛盾（CJK bigram Jaccard）；
+        4) caption 中对比声明与指标范围是否合法（复用 symbolic_auditor）。
+        对可安全修补的缺 caption / 占位 caption 自动合成回写 writer_agent.latex_code
+        并同步磁盘 final/main.tex；语义级矛盾不自动改，仅记录并标记需人工审核。
+        """
+        task_id = state["task_id"]
+        logger.info(f"[LangGraph:{task_id}] figure_caption_check: start")
+        # 新增 state 字段 _quality_issues：无则新建，聚合各节点校验问题
+        quality_issues: List[Dict[str, Any]] = list(state.get("_quality_issues", []) or [])
+
+        try:
+            # 0. 前置
+            state = await self._check_user_input(state)
+            problem_text = state.get("problem_text", "")
+            self._update_progress(task_id, problem_text, 88, "图表说明一致性校验中")
+            results = self._resolve_results(state)
+
+            writer_output = results.get("writer_agent") or {}
+            latex_code = writer_output.get("latex_code", "") if isinstance(writer_output, dict) else ""
+            figure_output = results.get("figure_agent") or {}
+            figures = figure_output.get("figures", []) if isinstance(figure_output, dict) else []
+
+            if not latex_code or not figures:
+                logger.info(f"[LangGraph:{task_id}] figure_caption_check: empty latex_code or figures, skipping")
+                return {**state, "current_step": "figure_caption_check_skipped", "_quality_issues": quality_issues}
+
+            from pathlib import Path
+
+            def _stem(p: str) -> str:
+                try:
+                    return Path(p or "").stem
+                except Exception:
+                    return (p or "")
+
+            # 1. 解析 LaTeX figure 环境
+            figure_block_re = re.compile(r"\\begin\{figure\*?\}(?s:.*?)\\end\{figure\*?\}")
+            includegraphics_re = re.compile(r"\\includegraphics(?:\[[^\]]*\])?\{([^}]+)\}")
+            label_re = re.compile(r"\\label\{([^}]+)\}")
+            # 支持 \caption[短标题]{长标题} 与 \caption{标题}（允许一层嵌套花括号）
+            caption_re = re.compile(r"\\caption(?:\[[^\]]*\])?\{((?:[^{}]|\{[^{}]*\})*)\}")
+            ref_re = re.compile(r"\\(?:c?ref)\{([^}]+)\}")
+            section_re = re.compile(r"\\(?:sub)*section\{([^}]*)\}")
+
+            captions: List[Dict[str, Any]] = []
+            for bi, m in enumerate(figure_block_re.finditer(latex_code)):
+                block = m.group(0)
+                ig = includegraphics_re.search(block)
+                lb = label_re.search(block)
+                cap_m = caption_re.search(block)
+                cap_text = cap_m.group(1).strip() if cap_m else ""
+                captions.append({
+                    "block_index": bi,
+                    "block_start": m.start(),
+                    "block_end": m.end(),
+                    "block_text": block,
+                    "includegraphics_path": ig.group(1).strip() if ig else "",
+                    "figure_file_basename": _stem(ig.group(1)) if ig else "",
+                    "label": lb.group(1).strip() if lb else "",
+                    "caption_text": cap_text,
+                })
+            ref_keys = set()
+            for rm in ref_re.finditer(latex_code):
+                for k in rm.group(1).split(","):
+                    ref_keys.add(k.strip())
+
+            # figure_agent 可能合并了 plan 的 title/description（_node_figure 一行级小改后可用，缺失则降级）
+            plan_figs: List[Any] = []
+            if isinstance(figure_output, dict):
+                pf = figure_output.get("plan_figures") or figure_output.get("figure_plan", {})
+                if isinstance(pf, dict):
+                    plan_figs = pf.get("figures", [])
+                elif isinstance(pf, list):
+                    plan_figs = pf
+            fig_meta: Dict[str, Dict[str, Any]] = {}
+            for pf in plan_figs:
+                if not isinstance(pf, dict):
+                    continue
+                key = pf.get("id") or pf.get("figure_id") or _stem(pf.get("figure_path", ""))
+                if key:
+                    fig_meta[key] = pf
+
+            issues: List[Dict[str, Any]] = []
+
+            # 2. 结构一致性——caption 与 figure_agent 生成清单对齐
+            latex_basenames = {c["figure_file_basename"] for c in captions if c["figure_file_basename"]}
+            agent_map: Dict[str, Dict[str, Any]] = {}
+            for fig in figures:
+                if not isinstance(fig, dict):
+                    continue
+                b = _stem(fig.get("figure_path", "")) or fig.get("figure_id", "")
+                if b:
+                    agent_map[b] = fig
+
+            # (a) 正文引用了某 includegraphics 但 figure_agent 未生成
+            for c in captions:
+                b = c["figure_file_basename"]
+                if b and b not in agent_map:
+                    issues.append({
+                        "severity": "error", "category": "structure_missing",
+                        "figure_id": c.get("label") or b,
+                        "message": f"正文引用图表 {b}，但 figure_agent 未生成该文件",
+                        "suggestion": "检查 \\includegraphics 路径或重新生成该图表",
+                    })
+            # (b) figure_agent 生成成功但正文未 includegraphics → 孤立图表
+            for b, fig in agent_map.items():
+                if fig.get("success") and b not in latex_basenames:
+                    issues.append({
+                        "severity": "warning", "category": "orphan_figure",
+                        "figure_id": fig.get("figure_id", b),
+                        "message": f"figure_agent 生成成功 {b}，但正文未 \\includegraphics 引用",
+                        "suggestion": "在正文中插入该图表或确认无需展示",
+                    })
+
+            PLACEHOLDER_CAPTIONS = {"图表标题", "图标题", "figure", "caption", "xxx", "...", "标题", "图", ""}
+
+            def _is_placeholder(t: str) -> bool:
+                t = (t or "").strip()
+                if not t or len(t) <= 2:
+                    return True
+                return t.lower() in {x.lower() for x in PLACEHOLDER_CAPTIONS}
+
+            # (c) includegraphics 无对应 \caption 或 caption 为空/占位符
+            for c in captions:
+                if not c["caption_text"] or _is_placeholder(c["caption_text"]):
+                    issues.append({
+                        "severity": "warning", "category": "missing_caption",
+                        "figure_id": c.get("label") or c["figure_file_basename"],
+                        "message": "图表缺少有效说明（caption 为空或占位符）",
+                        "suggestion": "为该图表补充描述性 caption",
+                    })
+
+            # 3. 数值一致性——复用 FactChecker：caption 数字 vs solver 求解结果
+            fc = get_fact_checker()
+            solver_output = results.get("solver_agent") or {}
+            solves = solver_output.get("sub_problem_solutions", []) if isinstance(solver_output, dict) else []
+            solve_numbers = fc.extract_numbers_from_solves(solves) if solves else {}
+
+            if solve_numbers:
+                for c in captions:
+                    ct = c["caption_text"]
+                    if not ct:
+                        continue
+                    cap_numbers: Dict[str, float] = {}
+                    for nm in fc.NUMBER_RE.finditer(ct):
+                        try:
+                            val = float(nm.group(0))
+                        except ValueError:
+                            continue
+                        ctx = ct[max(0, nm.start() - 20):nm.end() + 20].replace("\n", " ").strip()[:40]
+                        cap_numbers[ctx] = val
+                    if not cap_numbers:
+                        continue
+                    for iss in fc.compare(cap_numbers, solve_numbers, threshold=0.05):
+                        msg = iss.message if hasattr(iss, "message") else str(iss)
+                        issues.append({
+                            "severity": "error", "category": "caption_numeric",
+                            "figure_id": c.get("label") or c["figure_file_basename"],
+                            "message": f"图表说明数字与求解结果不符：{msg}",
+                            "suggestion": "核对 caption 中数字与 solver 输出一致",
+                        })
+
+            # 把已 resolve 的 fact_checker 报告中、上下文命中 caption 片段的项升级为 caption 级 error
+            fact_report = results.get("fact_checker") or {}
+            if isinstance(fact_report, dict):
+                for iss in fact_report.get("issues", []):
+                    if not isinstance(iss, dict):
+                        continue
+                    ctx = iss.get("latex_key", "")
+                    if not ctx:
+                        continue
+                    for c in captions:
+                        ct = c["caption_text"]
+                        if ct and (ctx in ct or ct[:24] in ctx):
+                            issues.append({
+                                "severity": "error", "category": "caption_numeric",
+                                "figure_id": c.get("label") or c["figure_file_basename"],
+                                "message": f"图表说明数字对账失败：{iss.get('message', ctx)}",
+                                "suggestion": "依据求解结果修正 caption 数字",
+                            })
+                            break
+
+            # 4. 方向/语义一致性——caption 与所在段落正文比对
+            POS_TREND = {"上升", "增加", "提高", "improve", "better", "优于", "增长", "提升", "改善", "增强"}
+            NEG_TREND = {"下降", "减少", "降低", "decline", "worse", "劣于", "减弱", "恶化", "衰退", "下滑"}
+
+            def _has_trend(text: str, words) -> bool:
+                tl = text.lower()
+                return any(w.lower() in tl for w in words)
+
+            def _cjk_bigrams(text: str) -> set:
+                cjk = re.findall(r"[一-鿿]", text)
+                return {cjk[i] + cjk[i + 1] for i in range(len(cjk) - 1)}
+
+            def _jaccard(a: set, b: set) -> float:
+                if not a or not b:
+                    return 0.0
+                inter = len(a & b)
+                return inter / len(a | b) if inter else 0.0
+
+            section_positions = [(sm.start(), sm.group(1)) for sm in section_re.finditer(latex_code)]
+
+            for c in captions:
+                ct = c["caption_text"]
+                if not ct:
+                    continue
+                # 取块前最近 \section/\subsection 起点到块尾的正文片段（讨论该图的上下文）
+                frag_start = c["block_start"]
+                for sp, _ in reversed(section_positions):
+                    if sp < c["block_start"]:
+                        frag_start = sp
+                        break
+                discuss_pre = latex_code[frag_start:c["block_start"]]
+                discuss_post = latex_code[c["block_end"]:c["block_end"] + 500]
+                discuss_text = discuss_pre + " " + discuss_post
+
+                # 趋势词冲突检测：caption 与正文片段方向相反且两处都含数字
+                cap_pos = _has_trend(ct, POS_TREND)
+                cap_neg = _has_trend(ct, NEG_TREND)
+                frag_pos = _has_trend(discuss_text, POS_TREND)
+                frag_neg = _has_trend(discuss_text, NEG_TREND)
+                if (fc.NUMBER_RE.search(ct) and fc.NUMBER_RE.search(discuss_text) and
+                        ((cap_pos and frag_neg) or (cap_neg and frag_pos))):
+                    issues.append({
+                        "severity": "error", "category": "trend_conflict",
+                        "figure_id": c.get("label") or c["figure_file_basename"],
+                        "message": "图表说明与正文趋势描述矛盾",
+                        "suggestion": "统一 caption 与正文的增/降趋势表述",
+                    })
+
+                # CJK bigram Jaccard：caption 与(图表 title+description+正文片段)相似度
+                meta = fig_meta.get(c["figure_file_basename"]) or fig_meta.get(c.get("label", ""))
+                ref_text = " ".join(filter(None, [
+                    meta.get("title", "") if isinstance(meta, dict) else "",
+                    meta.get("description", "") if isinstance(meta, dict) else "",
+                    discuss_text,
+                ]))
+                if ref_text:
+                    sim = _jaccard(_cjk_bigrams(ct), _cjk_bigrams(ref_text))
+                    if sim < 0.05 and not _is_placeholder(ct):
+                        issues.append({
+                            "severity": "warning", "category": "weak_relevance",
+                            "figure_id": c.get("label") or c["figure_file_basename"],
+                            "message": f"caption 主题与图表/正文弱相关（相似度 {sim:.2f}）",
+                            "suggestion": "使 caption 更贴合图表实际内容",
+                        })
+
+            # 5. 对比/范围声明——复用 symbolic_auditor
+            try:
+                from ..services.symbolic_auditor import check_comparison_claims, check_metric_ranges
+                metric_name_re = re.compile(
+                    r"(accuracy|准确率|精确率|precision|recall|f1|auc|rmse|mse|mae|r2|r_squared|sharpe|max_drawdown|return_rate)",
+                    re.IGNORECASE)
+                comp_re = re.compile(
+                    r"([一-鿿\w]{1,30})\s*(?:优于|超过|outperform|better\s+than)\s*([一-鿿\w]{1,30})",
+                    re.IGNORECASE)
+
+                for c in captions:
+                    ct = c["caption_text"]
+                    if not ct:
+                        continue
+                    fig_id = c.get("label") or c["figure_file_basename"]
+                    nums = []
+                    for nm in fc.NUMBER_RE.finditer(ct):
+                        try:
+                            nums.append(float(nm.group(0)))
+                        except ValueError:
+                            continue
+                    # 对比声明：组装 comparison_claims
+                    cap_lower = ct.lower()
+                    metric_name = "loss" if any(w in cap_lower for w in ["误差", "loss", "error", "mse", "rmse", "mae", "max_drawdown"]) else "accuracy"
+                    claims = []
+                    for cm in comp_re.finditer(ct):
+                        claims.append({
+                            "method_a": cm.group(1), "method_b": cm.group(2),
+                            "metric": metric_name,
+                            "value_a": nums[0] if nums else None,
+                            "value_b": nums[1] if len(nums) > 1 else None,
+                            "claim": "A优于B",
+                        })
+                    for f in check_comparison_claims(claims):
+                        issues.append({
+                            "severity": f.severity, "category": "comparison",
+                            "figure_id": fig_id, "message": f.message,
+                            "suggestion": "修正对比声明的数值方向",
+                        })
+                    # 指标范围：caption 内含指标名的数字组装 metrics dict
+                    metrics: Dict[str, Any] = {}
+                    for mm in metric_name_re.finditer(ct):
+                        mname = mm.group(1)
+                        nmatch = fc.NUMBER_RE.search(ct[mm.end():])
+                        if nmatch:
+                            try:
+                                metrics[mname] = (float(nmatch.group(0)), 0.0, 1.0)
+                            except ValueError:
+                                pass
+                    for f in check_metric_ranges(metrics):
+                        issues.append({
+                            "severity": f.severity, "category": "range",
+                            "figure_id": fig_id, "message": f.message,
+                            "suggestion": "确认指标值在合理范围内",
+                        })
+            except Exception as sa_exc:
+                logger.warning(f"[LangGraph:{task_id}] symbolic_auditor 不可用，跳过对比/范围校验: {sa_exc}")
+
+            # 6. 自动修补（仅修可安全修的：缺 caption / 占位 caption）
+            auto_patched = 0
+            patched = False
+            new_parts: List[str] = []
+            last_pos = 0
+            for c in captions:
+                new_parts.append(latex_code[last_pos:c["block_start"]])
+                block = c["block_text"]
+                fig = agent_map.get(c["figure_file_basename"])
+                meta = fig_meta.get(c["figure_file_basename"]) or fig_meta.get(c.get("label", ""))
+                if (not c["caption_text"] or _is_placeholder(c["caption_text"])) and (fig or meta):
+                    title = (meta.get("title") if isinstance(meta, dict) else "") or \
+                            (fig.get("figure_id") if isinstance(fig, dict) else "") or f"fig_{c['block_index'] + 1}"
+                    desc = (meta.get("description") if isinstance(meta, dict) else "") or ""
+                    if not desc:
+                        for sp, sname in section_positions:
+                            if sp < c["block_start"]:
+                                desc = sname
+                            else:
+                                break
+                    synth = f"图{c['block_index'] + 1}：{title}" + (f"（{desc}）" if desc else "")
+                    if caption_re.search(block):
+                        patched_block = caption_re.sub(lambda _mm: r"\caption{" + synth + "}", block, count=1)
+                    else:
+                        patched_block = re.sub(
+                            r"\\end\{figure\*?\}",
+                            lambda mm: r"\caption{" + synth + "}\n" + mm.group(0),
+                            block, count=1)
+                    if patched_block != block:
+                        block = patched_block
+                        auto_patched += 1
+                        patched = True
+                new_parts.append(block)
+                last_pos = c["block_end"]
+            new_parts.append(latex_code[last_pos:])
+            new_latex = "".join(new_parts)
+
+            writer_ref: Dict[str, Any] = {}
+            if patched and new_latex != latex_code:
+                try:
+                    writer_output["latex_code"] = new_latex
+                    writer_output["_caption_auto_patched"] = True
+                    writer_ref = self._set_result(state, "writer_agent", writer_output)
+                    # 同步磁盘 final/main.tex（取自 _node_compliance_check 范式）
+                    output_dir = get_project_output_dir(state.get("project_name"))
+                    final_tex = output_dir / "final" / "main.tex"
+                    final_tex.parent.mkdir(parents=True, exist_ok=True)
+                    final_tex.write_text(new_latex, encoding="utf-8")
+                    papers_tex = output_dir / "papers" / f"paper_{task_id}.tex"
+                    if papers_tex.exists():
+                        papers_tex.write_text(new_latex, encoding="utf-8")
+                    logger.info(f"[LangGraph:{task_id}] figure_caption_check: auto-patched {auto_patched} captions, wrote {final_tex}")
+                except Exception as disk_exc:
+                    logger.warning(f"[LangGraph:{task_id}] caption auto-patch disk write failed: {disk_exc}")
+
+            # 7. 产出 report
+            error_count = sum(1 for i in issues if i.get("severity") == "error")
+            passed = error_count == 0
+            report = {
+                "task_id": task_id,
+                "enabled": True,
+                "passed": passed,
+                "issue_count": len(issues),
+                "error_count": error_count,
+                "issues": issues,
+                "checked_captions": len(captions),
+                "checked_figures": len(figures),
+                "auto_patched": auto_patched,
+                "ref_keys": sorted(ref_keys),
+            }
+            self._set_result(state, "figure_caption_check", report)
+
+            # 校验问题写回 state 的 _quality_issues 列表
+            for i in issues:
+                quality_issues.append({
+                    "node": "figure_caption_check",
+                    "severity": i.get("severity"),
+                    "category": i.get("category"),
+                    "figure_id": i.get("figure_id"),
+                    "message": i.get("message"),
+                })
+
+            # claims_trace 追加一条 caption_check trace entry
+            claims_trace = list(state.get("claims_trace", []) or [])
+            claims_trace.append({
+                "timestamp": datetime.now().isoformat(),
+                "node": "figure_caption_check",
+                "issue_count": len(issues),
+                "auto_patched": auto_patched,
+                "sample_issues": issues[:3],
+            })
+
+            # 持久化 report 到 final/figure_caption_check_report.json（仿 fact_check）
+            try:
+                output_dir = get_project_output_dir(state.get("project_name"))
+                report_path = output_dir / "final" / "figure_caption_check_report.json"
+                report_path.parent.mkdir(parents=True, exist_ok=True)
+                report_path.write_text(
+                    json.dumps(report, ensure_ascii=False, indent=2, default=str),
+                    encoding="utf-8")
+            except Exception as disk_exc:
+                logger.warning(f"[LangGraph:{task_id}] figure_caption_check report save failed: {disk_exc}")
+
+            current_step = "figure_caption_check_done" if passed else "figure_caption_check_review_required"
+            self._post_chat(
+                task_id, "coordinator",
+                f"{'✅' if passed else '⚠️'} 图表说明校验：{len(issues)} 处问题/已自动修补 {auto_patched} 处"
+                + ("" if passed else "，存在需人工审核的语义矛盾"),
+            )
+            logger.info(
+                f"[LangGraph:{task_id}] figure_caption_check done: issues={len(issues)} "
+                f"errors={error_count} auto_patched={auto_patched} passed={passed}")
+
+            merged_results = {**state.get("results", {}), "figure_caption_check": report, **writer_ref}
+            return {
+                **state,
+                "results": merged_results,
+                "claims_trace": claims_trace,
+                "_quality_issues": quality_issues,
+                "current_step": "figure_caption_check_done",
+            }
+        except Exception as exc:
+            logger.warning(f"[LangGraph:{task_id}] figure_caption_check 失败: {exc}", exc_info=True)
+            return {**state, "current_step": "figure_caption_check_failed", "_quality_issues": quality_issues}
+
+    async def _node_citation_density_check(self, state: TaskState) -> TaskState:
+        """引用密度合理性校验（post 阶段，纯规则，不调 LLM）。
+
+        插入位置：fact_check → citation_density_check → compliance_check。
+        fact_check 已把 writer 的 latex_code 预写到 final/main.tex，本节点优先读
+        内存中已 resolve 的 writer_agent 输出，避免磁盘时序依赖。复用
+        WriterAgent._scan_cite_keys 提取 \\cite key，复用
+        ConsistencyChecker._check_citation_usage 检测孤立 bib 条目。
+        """
+        task_id = state["task_id"]
+        logger.info(f"[LangGraph:{task_id}] citation_density_check: start")
+        try:
+            from .writer_agent import WriterAgent
+            from ..services.consistency_checker import get_consistency_checker
+
+            # ===== 1. 前置读取与短路 =====
+            results = self._resolve_results(state)
+            writer_output = results.get("writer_agent", {}) or {}
+            if not isinstance(writer_output, dict):
+                writer_output = {}
+            latex_code = writer_output.get("latex_code", "") or ""
+            if not latex_code:
+                logger.info(f"[LangGraph:{task_id}] citation_density_check: writer 无 latex_code，跳过")
+                return {**state, "current_step": "citation_density_check_skipped"}
+
+            citations_top = writer_output.get("citations", []) or \
+                (writer_output.get("paper_memory", {}) or {}).get("citations", [])
+            if not isinstance(citations_top, list):
+                citations_top = []
+            chapters = writer_output.get("chapters", []) or []
+            if not isinstance(chapters, list):
+                chapters = []
+            research_papers = ((results.get("research_agent", {}) or {}).get("papers", [])) or []
+            if not isinstance(research_papers, list):
+                research_papers = []
+
+            template = state.get("paper_template", "math_modeling") or "math_modeling"
+            workflow_type = state.get("workflow_type", "standard") or "standard"
+            project_name = state.get("project_name")
+
+            self._update_progress(task_id, state.get("problem_text", ""), 82, "引用密度校验中")
+
+            # ===== 2. 全文被引 key 全集（去重保序）+ bib key 全集 =====
+            all_cited_keys = WriterAgent._scan_cite_keys(latex_code)
+            total_cited = len(all_cited_keys)
+            bib_keys = {
+                c.get("key") for c in citations_top
+                if isinstance(c, dict) and c.get("key")
+            }
+            total_bib = len(citations_top)
+
+            # ===== 3. 逐章节提取引用（latex 优先，回退 chapter.citations） =====
+            core_ids = {"modeling", "result_analysis", "reliability", "empirical", "results"}
+            per_chapter_count: Dict[str, int] = {}
+            core_cite_count = 0
+            core_has_numeric = False
+            max_count = 0
+            max_chapter_id = ""
+
+            def _chapter_keys(ch: Dict[str, Any]) -> set:
+                # 组装后的 chapters 可能省略 latex，回退到 chapter.citations 的 key
+                lx = ch.get("latex", "") or ""
+                if lx:
+                    return set(WriterAgent._scan_cite_keys(lx))
+                return {
+                    c.get("key") for c in ch.get("citations", [])
+                    if isinstance(c, dict) and c.get("key")
+                }
+
+            for ch in chapters:
+                if not isinstance(ch, dict):
+                    continue
+                ch_id = str(ch.get("id") or ch.get("title") or "")
+                keys = _chapter_keys(ch)
+                per_chapter_count[ch_id] = len(keys)
+                if ch_id in core_ids:
+                    core_cite_count += len(keys)
+                    lx = ch.get("latex", "") or ""
+                    if lx and re.search(r"\d", lx):
+                        core_has_numeric = True
+                if len(keys) > max_count:
+                    max_count = len(keys)
+                    max_chapter_id = ch_id
+
+            max_chapter_share = (max_count / total_cited) if total_cited > 0 else 0.0
+
+            # ===== 4. 正文字数粗估 → 引用密度/千字 =====
+            body_text = re.sub(r"\\[a-zA-Z]+\{[^}]*\}", "", latex_code)
+            body_chars = len(body_text)
+            cite_per_1k = total_cited / max(body_chars / 1000, 1)
+
+            # ===== 5. 孤立 bib（复用 consistency_checker）+ 悬空引用 =====
+            orphan_issues = get_consistency_checker()._check_citation_usage(
+                latex_code, citations_top
+            )
+            orphan_count = len(orphan_issues)
+            orphan_rate = orphan_count / max(total_bib, 1)
+            dangling = [k for k in all_cited_keys if k not in bib_keys]
+            dangling_count = len(dangling)
+
+            # ===== 6. 模板感知阈值（硬编码真实规则，可复现） =====
+            ccf_a = {"neurips_2024", "ieee_conference", "acm_sigconf",
+                     "springer_lncs", "research_paper"}
+            if (template in {"research_survey", "research_review", "literature_review"}
+                    or workflow_type in {"deep_research", "survey"}):
+                min_refs, min_cite_per_1k = 25, 1.5
+            elif template in ccf_a or workflow_type == "research_paper":
+                min_refs, min_cite_per_1k = 15, 1.0
+            elif template == "financial_analysis":
+                min_refs, min_cite_per_1k = 8, 0.8
+            elif template in {"math_modeling", "coursework"}:
+                min_refs, min_cite_per_1k = 5, 0.5
+            else:
+                min_refs, min_cite_per_1k = 5, 0.5
+            max_share_threshold = 0.6
+            orphan_rate_threshold = 0.3
+
+            # ===== 7. 生成 issues（带 severity/category/location/message） =====
+            issues: List[Dict[str, Any]] = []
+
+            def _add(severity: str, category: str, location: str, message: str) -> None:
+                issues.append({
+                    "severity": severity,
+                    "category": category,
+                    "location": location,
+                    "message": message,
+                })
+
+            if total_bib < min_refs:
+                _add("warning", "citation_volume", "bibliography",
+                     f"参考文献数 {total_bib} 低于 {template} 期望下限 {min_refs}")
+            if cite_per_1k < min_cite_per_1k:
+                _add("warning", "citation_density", "body",
+                     f"引用密度 {cite_per_1k:.2f}/千字 低于阈值 {min_cite_per_1k}")
+            if max_chapter_share > max_share_threshold and max_chapter_id:
+                _add("warning", "citation_concentration", max_chapter_id,
+                     f"引用过度集中于 {max_chapter_id}（占比 {max_chapter_share:.0%}），疑似引用堆砌")
+            if core_cite_count == 0 and core_has_numeric:
+                _add("warning", "citation_missing", "core_sections",
+                     "建模/结果核心章节零引用，关键声明缺少来源支撑")
+            if orphan_rate > orphan_rate_threshold and total_bib > 0:
+                _add("warning", "citation_orphan", "bibliography",
+                     f"{orphan_count}/{total_bib} 条参考文献未被正文引用")
+            if dangling_count > 0:
+                preview = ", ".join(dangling[:5])
+                _add("warning", "citation_dangling", "body",
+                     f"正文引用 {dangling_count} 个 key 在 bib 中缺失：{preview}")
+            if (research_papers and len(research_papers) >= min_refs
+                    and total_bib < min_refs * 0.8):
+                _add("info", "citation_underuse", "bibliography",
+                     f"检索到 {len(research_papers)} 篇文献但仅引用 {total_bib}，可补充引用")
+
+            warning_count = sum(1 for i in issues if i["severity"] == "warning")
+            passed = warning_count == 0 and total_bib >= min_refs
+
+            report = {
+                "task_id": task_id,
+                "template": template,
+                "workflow_type": workflow_type,
+                "stats": {
+                    "total_cited": total_cited,
+                    "total_bib": total_bib,
+                    "cite_per_1k": round(cite_per_1k, 4),
+                    "orphan_rate": round(orphan_rate, 4),
+                    "dangling_count": dangling_count,
+                    "per_chapter_count": per_chapter_count,
+                    "max_chapter_share": round(max_chapter_share, 4),
+                    "core_cite_count": core_cite_count,
+                },
+                "issues": issues,
+                "issue_count": warning_count,
+                "passed": passed,
+            }
+
+            # ===== 8. 持久化与通知（复用 fact_check 范式） =====
+            try:
+                output_dir = get_project_output_dir(project_name)
+                report_path = output_dir / "final" / "citation_density_report.json"
+                report_path.parent.mkdir(parents=True, exist_ok=True)
+                report_path.write_text(
+                    json.dumps(report, ensure_ascii=False, indent=2, default=str),
+                    encoding="utf-8",
+                )
+                logger.info(f"[LangGraph:{task_id}] citation_density_check: report saved to {report_path}")
+            except Exception as disk_exc:
+                logger.warning(f"[LangGraph:{task_id}] citation_density_check 报告写盘失败: {disk_exc}")
+
+            ref_update = self._set_result(state, "citation_density_check", report)
+            if passed:
+                self._post_chat(
+                    task_id, "coordinator",
+                    f"✅ 引用密度合理：引用 {total_cited}，密度 {cite_per_1k:.2f}/千字",
+                )
+            else:
+                warn_msgs = [i["message"] for i in issues if i["severity"] == "warning"][:3]
+                top3 = "\n".join(f"  - {m}" for m in warn_msgs)
+                self._post_chat(
+                    task_id, "coordinator",
+                    f"⚠️ 引用密度问题：{warning_count} 项，报告已存 final/citation_density_report.json\n"
+                    + top3,
+                )
+
+            logger.info(
+                f"[LangGraph:{task_id}] citation_density_check done: "
+                f"passed={passed} cited={total_cited} bib={total_bib} "
+                f"density={cite_per_1k:.2f}/千字 issues={warning_count}"
+            )
+
+            # ===== 9. 校验问题写回 state._quality_issues（无则新增） =====
+            quality_issues = list(state.get("_quality_issues", []) or [])
+            for iss in issues:
+                quality_issues.append({
+                    "node": "citation_density_check",
+                    "severity": iss["severity"],
+                    "category": iss["category"],
+                    "location": iss["location"],
+                    "message": iss["message"],
+                })
+
+            return {
+                **state,
+                "results": {**state.get("results", {}), **ref_update},
+                "_quality_issues": quality_issues,
+                "current_step": "citation_density_check_done",
+            }
+        except Exception as e:
+            logger.warning(f"[LangGraph:{task_id}] citation_density_check 失败: {e}")
+            return state
+
+    async def _node_reference_completeness(self, state: TaskState) -> TaskState:
+        """参考文献完整性审计节点（post 阶段交付物质量门）。
+
+        与 _node_fact_check 平级，紧接 fact_check 之后运行。审计正文 \\cite{} 与
+        参考文献注册表的一致性，复用 services/reference_verifier 做存在性验真，
+        并以 research_agent 真实检索池为 ground-truth 做防编造交叉校验。
+
+        四类缺陷：
+          - dangling: 正文引用了但 bib 缺条目（编译会 undefined）
+          - orphans:  bib 有条目但正文未引用
+          - incomplete: 条目残缺（缺 title+author / 占位 / 无 year 且无 doi/arxiv/url）
+          - suspected_fabricated: 声称是文献却无法验证且不在真实检索池（疑似编造）
+
+        任何异常都降级放行，不阻塞 summary。
+        """
+        task_id = state["task_id"]
+        logger.info(f"[LangGraph:{task_id}] reference_completeness: 开始审计参考文献完整性")
+        self._update_progress(task_id, state.get("problem_text", ""), 85, "参考文献完整性审计中")
+        results = self._resolve_results(state)
+
+        # 1) 解析输入
+        writer_output = results.get("writer_agent") or {}
+        if not isinstance(writer_output, dict):
+            writer_output = {}
+        latex_code = writer_output.get("latex_code", "") or ""
+        if not latex_code:
+            logger.info(f"[LangGraph:{task_id}] reference_completeness: 无 LaTeX 内容，跳过审计")
+            return {**state, "current_step": "reference_completeness_skipped"}
+
+        research_output = results.get("research_agent") or {}
+        research_papers = research_output.get("papers", []) if isinstance(research_output, dict) else []
+
+        try:
+            # 2) 物化 main.tex（自包含，防 fact_check 被跳过时空转）
+            output_dir = None
+            try:
+                output_dir = get_project_output_dir(state.get("project_name"))
+                final_dir = output_dir / "final"
+                final_dir.mkdir(parents=True, exist_ok=True)
+                final_tex = final_dir / "main.tex"
+                if not final_tex.exists():
+                    final_tex.write_text(latex_code, encoding="utf-8")
+                    logger.info(f"[LangGraph:{task_id}] reference_completeness: 物化 {final_tex}")
+            except Exception as disk_exc:
+                logger.warning(f"[LangGraph:{task_id}] reference_completeness: main.tex 物化失败: {disk_exc}")
+
+            # 3) 提取正文实际引用的 key 集合（复用 WriterAgent._scan_cite_keys）
+            agent = self.agents.get("writer_agent")
+            if agent is not None and hasattr(agent, "_scan_cite_keys"):
+                used_keys = agent._scan_cite_keys(latex_code)
+            else:
+                used_keys = []
+                _seen_keys: set = set()
+                for m in re.finditer(r"\\cite[a-z]*\{([^}]+)\}", latex_code):
+                    for k in m.group(1).split(","):
+                        k = k.strip()
+                        if k and k not in _seen_keys:
+                            _seen_keys.add(k)
+                            used_keys.append(k)
+            used_keys_set = set(used_keys)
+
+            # 4) 构建参考文献注册表（合并三处来源，按 key 去重）
+            def _entry_key(entry: Dict[str, Any], idx: int) -> str:
+                k = (entry.get("key") or "").strip()
+                if k:
+                    return k
+                title = (entry.get("title") or "").strip()
+                year = str(entry.get("year") or "").strip()
+                if title or year:
+                    base = re.sub(r"[^\w]+", "_", f"{title}_{year}".strip("_")).strip("_").lower()
+                    return base or f"ref_{idx}"
+                return f"ref_{idx}"
+
+            raw_entries: List[Dict[str, Any]] = []
+            raw_entries.extend(writer_output.get("citations", []) or [])
+            paper_memory = writer_output.get("paper_memory", {})
+            if isinstance(paper_memory, dict):
+                raw_entries.extend(paper_memory.get("citations", []) or [])
+            chapters = writer_output.get("chapters", []) or []
+            for ch in chapters:
+                if isinstance(ch, dict):
+                    raw_entries.extend([c for c in (ch.get("citations", []) or []) if isinstance(c, dict)])
+
+            registry: Dict[str, Dict[str, Any]] = {}
+            for idx, entry in enumerate(raw_entries):
+                if not isinstance(entry, dict):
+                    continue
+                key = _entry_key(entry, idx)
+                if key not in registry:
+                    registry[key] = entry
+
+            total = len(registry)
+            logger.info(
+                f"[LangGraph:{task_id}] reference_completeness: 正文引用 {len(used_keys)} 个 key, "
+                f"注册表 {total} 条"
+            )
+
+            # 5) 计算四类缺陷
+            # (a) dangling: 正文引用但注册表查不到
+            dangling = [k for k in used_keys if k not in registry]
+            # (b) orphans: 注册表有但正文未引用
+            orphans = [k for k in registry if k not in used_keys_set]
+
+            # (c) incomplete: 残缺条目
+            incomplete: List[str] = []
+            for key, entry in registry.items():
+                has_title = bool((entry.get("title") or "").strip())
+                has_author = bool((entry.get("author") or "").strip())
+                has_year = bool(str(entry.get("year") or "").strip())
+                has_doi = bool((entry.get("doi") or "").strip())
+                has_arxiv = bool((entry.get("arxiv_id") or "").strip())
+                has_url = bool((entry.get("url") or "").strip())
+                if entry.get("_placeholder"):
+                    incomplete.append(key)
+                elif not has_title and not has_author:
+                    incomplete.append(key)
+                elif not has_year and not has_doi and not has_arxiv and not has_url:
+                    incomplete.append(key)
+
+            # (d) unverified / suspected_fabricated
+            # 优先复用 writer 已写入的 _verified 缓存；仅对缺失标志的子集调用验真
+            to_verify = [e for e in registry.values() if e.get("_verified") is None]
+            if to_verify:
+                try:
+                    from ..services.reference_verifier import verify_all_references
+                    verify_results = await verify_all_references(
+                        to_verify, max_concurrent=5, check_title=True
+                    )
+                    for entry, vr in zip(to_verify, verify_results):
+                        entry["_verified"] = bool(vr.verified)
+                        if not vr.verified:
+                            entry["_verify_error"] = vr.error
+                except Exception as verify_exc:
+                    logger.warning(
+                        f"[LangGraph:{task_id}] reference_completeness: 参考文献验真失败（降级跳过）: {verify_exc}"
+                    )
+
+            # 防编造交叉校验：把 research_papers 归一化为 ground-truth 池
+            pool_titles: set = set()
+            pool_arxiv: set = set()
+            pool_doi: set = set()
+            for p in research_papers or []:
+                if not isinstance(p, dict):
+                    continue
+                t = (p.get("title") or "").strip()
+                if t:
+                    nt = re.sub(r"[^\w\s]", "", t.lower())
+                    nt = re.sub(r"\s+", " ", nt).strip()
+                    if nt:
+                        pool_titles.add(nt)
+                aid = (p.get("arxiv_id") or "").strip()
+                if aid:
+                    pool_arxiv.add(re.sub(r"v\d+$", "", aid))
+                d = (p.get("doi") or "").strip().lower()
+                if d:
+                    pool_doi.add(d)
+
+            def _in_research_pool(entry: Dict[str, Any]) -> bool:
+                t = (entry.get("title") or "").strip()
+                if t:
+                    nt = re.sub(r"[^\w\s]", "", t.lower())
+                    nt = re.sub(r"\s+", " ", nt).strip()
+                    if nt and nt in pool_titles:
+                        return True
+                aid = (entry.get("arxiv_id") or "").strip()
+                if aid and re.sub(r"v\d+$", "", aid) in pool_arxiv:
+                    return True
+                d = (entry.get("doi") or "").strip().lower()
+                if d and d in pool_doi:
+                    return True
+                return False
+
+            suspected_fabricated: List[str] = []
+            for key, entry in registry.items():
+                if entry.get("_verified") is False:
+                    in_pool = _in_research_pool(entry)
+                    has_author = bool((entry.get("author") or "").strip())
+                    has_year = bool(str(entry.get("year") or "").strip())
+                    is_kb = entry.get("_source_type") == "knowledge_base"
+                    if not in_pool and (has_author or has_year) and not is_kb:
+                        suspected_fabricated.append(key)
+
+            # 6) 评分
+            verified_count = sum(1 for e in registry.values() if e.get("_verified") is True)
+            verified_ratio = round(verified_count / total, 4) if total else 1.0
+
+            score = 100
+            score -= 20 * len(dangling)
+            score -= 20 * len(suspected_fabricated)
+            score -= 5 * len(incomplete)
+            score -= 3 * len(orphans)
+            score = max(0, score)
+            passed = (len(dangling) == 0) and (len(suspected_fabricated) == 0) and (verified_ratio >= 0.6)
+
+            # per_entry 状态汇总
+            per_entry = []
+            for key, entry in registry.items():
+                if key in dangling:
+                    status = "dangling"
+                elif key in suspected_fabricated:
+                    status = "suspected_fabricated"
+                elif key in incomplete:
+                    status = "incomplete"
+                elif key in orphans:
+                    status = "orphan"
+                elif entry.get("_verified") is True:
+                    status = "verified"
+                else:
+                    status = "unverified"
+                per_entry.append({
+                    "key": key,
+                    "status": status,
+                    "source": entry.get("_source_type") or entry.get("venue") or "",
+                })
+
+            report = {
+                "task_id": task_id,
+                "total": total,
+                "used_count": len(used_keys),
+                "dangling": dangling,
+                "orphans": orphans,
+                "incomplete": incomplete,
+                "suspected_fabricated": suspected_fabricated,
+                "per_entry": per_entry,
+                "verified_ratio": verified_ratio,
+                "score": score,
+                "passed": passed,
+            }
+
+            # 回写 writer 结果（标记可疑条目，只标记不删，避免破坏 LaTeX）
+            writer_output["_reference_audit"] = report
+            for key in suspected_fabricated:
+                if key in registry:
+                    registry[key]["_suspected_fabricated"] = True
+            for key in orphans:
+                if key in registry:
+                    registry[key]["_orphan"] = True
+            self._set_result(state, "writer_agent", writer_output)
+            self._set_result(state, "reference_completeness", report)
+
+            # 落盘报告
+            if output_dir is not None:
+                try:
+                    report_dir = output_dir / "final"
+                    report_dir.mkdir(parents=True, exist_ok=True)
+                    report_path = report_dir / "reference_completeness_report.json"
+                    report_path.write_text(
+                        json.dumps(report, ensure_ascii=False, indent=2, default=str),
+                        encoding="utf-8",
+                    )
+                    logger.info(f"[LangGraph:{task_id}] reference_completeness: 报告已保存 {report_path}")
+                except Exception as disk_exc:
+                    logger.warning(f"[LangGraph:{task_id}] reference_completeness: 报告落盘失败: {disk_exc}")
+
+            # 通知
+            if passed:
+                self._post_chat(
+                    task_id, "reference_completeness",
+                    f"✅ 参考文献完整性通过: {total} 篇, 已验证 {verified_count} 篇",
+                )
+            else:
+                self._post_chat(
+                    task_id, "reference_completeness",
+                    f"⚠️ 参考文献完整性告警: 悬空 {len(dangling)} / 疑似编造 {len(suspected_fabricated)} / "
+                    f"残缺 {len(incomplete)}, 报告见 final/reference_completeness_report.json",
+                )
+
+            # 追加 claims_trace
+            trace = list(state.get("claims_trace", []) or [])
+            trace.append({
+                "timestamp": datetime.now().isoformat(),
+                "node": "reference_completeness",
+                "passed": passed,
+                "score": score,
+                "dangling": len(dangling),
+                "suspected_fabricated": len(suspected_fabricated),
+            })
+
+            # 校验问题写回 state 的 _quality_issues 列表（无则新增）
+            quality_issues = list(state.get("_quality_issues") or [])
+            for key in dangling:
+                quality_issues.append({
+                    "node": "reference_completeness",
+                    "task_id": task_id,
+                    "severity": "error",
+                    "category": "dangling_reference",
+                    "key": key,
+                    "message": f"悬空引用: 正文 \\cite{{{key}}} 在参考文献注册表中找不到对应条目",
+                })
+            for key in suspected_fabricated:
+                quality_issues.append({
+                    "node": "reference_completeness",
+                    "task_id": task_id,
+                    "severity": "error",
+                    "category": "suspected_fabricated_reference",
+                    "key": key,
+                    "message": f"疑似编造文献: {key} 无法验证且不在真实检索池中",
+                })
+            for key in incomplete:
+                quality_issues.append({
+                    "node": "reference_completeness",
+                    "task_id": task_id,
+                    "severity": "warning",
+                    "category": "incomplete_reference",
+                    "key": key,
+                    "message": f"残缺参考文献条目: {key} 缺少关键字段（title/author/year/doi/arxiv/url）",
+                })
+            for key in orphans:
+                quality_issues.append({
+                    "node": "reference_completeness",
+                    "task_id": task_id,
+                    "severity": "warning",
+                    "category": "orphan_reference",
+                    "key": key,
+                    "message": f"孤立参考文献: {key} 已列入 bib 但正文未引用",
+                })
+
+            logger.info(
+                f"[LangGraph:{task_id}] reference_completeness: passed={passed} score={score} "
+                f"dangling={len(dangling)} suspected_fabricated={len(suspected_fabricated)} "
+                f"incomplete={len(incomplete)} orphans={len(orphans)} verified={verified_count}/{total}"
+            )
+
+            return {
+                **state,
+                "results": {**state.get("results", {}), "reference_completeness": report},
+                "claims_trace": trace,
+                "_quality_issues": quality_issues,
+                "current_step": "reference_completeness",
+            }
+        except Exception as e:
+            logger.warning(f"[LangGraph:{task_id}] reference_completeness 失败: {e}", exc_info=True)
+            return state
+
+    async def _node_terminology_consistency(self, state: TaskState) -> TaskState:
+        """术语统一性校验节点（post 阶段，非破坏性只读）。
+
+        图位置：fact_check → terminology_consistency → compliance_check。
+        校验对象：writer_agent 终稿的 latex_code（在 peer_review 定稿、fact_check 数值对账之后，
+        compliance_check 改写文本之前），为非破坏性只读校验。
+
+        复用 backend/app/services/consistency_checker.py::get_consistency_checker().check()
+        做术语对偶冲突 / 模型名漏提及 / 引用孤立 / 摘要↔结论数字一致性；
+        并自实现符号一致性 + 缩略语一致性（补 ConsistencyChecker._check_symbol_consistency 空缺）。
+        校验结果非破坏性写回 results.terminology_consistency，并追加到 state._quality_issues。
+        异常时降级放行，绝不阻塞主流程。
+        """
+        task_id = state["task_id"]
+        logger.info(f"[LangGraph:{task_id}] terminology_consistency: 开始术语统一性校验")
+
+        workflow_type = state.get("workflow_type", "standard")
+        results = self._resolve_results(state)
+        writer_output = results.get("writer_agent") or {}
+        if not isinstance(writer_output, dict):
+            writer_output = {}
+        latex_code = writer_output.get("latex_code", "") or writer_output.get("latex", "")
+
+        # 1. 守卫：无 latex 或 quick/code_focused 模式跳过
+        if not latex_code or workflow_type in ("quick", "code_focused"):
+            logger.info(
+                f"[LangGraph:{task_id}] terminology_consistency: 跳过"
+                f"（latex_empty={not latex_code}, workflow={workflow_type}）"
+            )
+            return {**state, "current_step": "terminology_consistency_skipped"}
+
+        self._update_progress(task_id, state.get("problem_text", ""), 86, "术语统一性校验中")
+
+        project_name = state.get("project_name")
+        try:
+            output_dir = get_project_output_dir(project_name)
+        except Exception:
+            output_dir = None
+
+        paper_memory = writer_output.get("paper_memory") or {}
+        if not isinstance(paper_memory, dict):
+            paper_memory = {}
+        chapters = writer_output.get("chapters") or []
+        citations = writer_output.get("citations") or []
+        modeler_output = results.get("modeler_agent") or {}
+        if not isinstance(modeler_output, dict):
+            modeler_output = {}
+
+        try:
+            from ..services.consistency_checker import get_consistency_checker
+
+            # 2. 构建权威术语表 G（合并 paper_memory + modeler）
+            glossary: Dict[str, str] = {}  # term -> 来源章节
+            for term, chap in (paper_memory.get("terminology") or {}).items():
+                if term:
+                    glossary[term] = str(chap) if chap else "paper_memory.terminology"
+            for glyph, info in (paper_memory.get("symbols") or {}).items():
+                if not glyph:
+                    continue
+                src = (info.get("chapter") if isinstance(info, dict) else None) or "paper_memory.symbols"
+                glossary[glyph] = src
+            for bucket in ("model_names", "algorithms", "datasets", "metrics"):
+                for name in (paper_memory.get(bucket) or []):
+                    if name and name not in glossary:
+                        glossary[name] = f"paper_memory.{bucket}"
+            for m in (modeler_output.get("sub_problem_models") or []):
+                if not isinstance(m, dict):
+                    continue
+                mn = m.get("model_name")
+                if mn and mn not in glossary:
+                    glossary[mn] = "modeler.model_name"
+                alg = m.get("algorithm") or {}
+                if isinstance(alg, dict) and alg.get("name"):
+                    glossary.setdefault(alg["name"], "modeler.algorithm.name")
+                for dv in (m.get("decision_variables") or []):
+                    if isinstance(dv, dict) and dv.get("name"):
+                        glossary.setdefault(dv["name"], "modeler.decision_variables")
+
+            # 3. 复用 ConsistencyChecker（terminology 对偶冲突 / 模型名漏提及 / 引用孤立 / 摘要↔结论数字）
+            chapter_summaries = [
+                {"id": c.get("id"), "title": c.get("title"), "summary": c.get("summary", "")}
+                for c in chapters if isinstance(c, dict)
+            ]
+            report = get_consistency_checker().check(
+                task_id=task_id,
+                latex_code=latex_code,
+                chapter_summaries=chapter_summaries,
+                paper_memory=paper_memory,
+                bib_entries=citations,
+                solver_numerical_results=None,
+            )
+            report_dict = report.to_dict()
+            node_issues: List[Dict[str, Any]] = list(report_dict.get("issues") or [])
+
+            # 4. 自实现符号一致性（补 ConsistencyChecker._check_symbol_consistency 空缺）
+            symbol_defs: Dict[str, List[tuple]] = {}  # glyph -> [(meaning, location)]
+            # 4a. "符号说明"表格行（含 & 且含 $...$）
+            for raw_line in latex_code.split("\n"):
+                line = raw_line.strip()
+                if "&" not in line or "$" not in line:
+                    continue
+                sym_match = re.search(r"\$([^$]+)\$", line)
+                if not sym_match:
+                    continue
+                glyph = sym_match.group(1).strip()
+                parts = line.split("&", 1)
+                meaning = parts[1].strip().rstrip("\\").strip() if len(parts) > 1 else ""
+                meaning = meaning.split("&")[0].strip()
+                if glyph and meaning:
+                    symbol_defs.setdefault(glyph, []).append((meaning, "符号说明表"))
+            # 4b. 行内定义："称/记/设/令 $X$ 为/表示/代表 …"
+            inline_pat = re.compile(r"(?:称|记|设|令)\s*\$([^$]+)\$\s*(?:为|表示|代表)([^，。,;\n\\]{1,30})")
+            for m in inline_pat.finditer(latex_code):
+                glyph = m.group(1).strip()
+                meaning = m.group(2).strip()
+                if glyph and meaning:
+                    symbol_defs.setdefault(glyph, []).append((meaning, "行内定义"))
+            # 4c. 同一 glyph ≥2 个不同 meaning → 冲突
+            for glyph, defs in symbol_defs.items():
+                meanings = {d[0] for d in defs}
+                if len(defs) >= 2 and len(meanings) >= 2:
+                    detail = "；".join(f"{d[1]}: {d[0]}" for d in defs[:3])
+                    node_issues.append({
+                        "category": "symbol",
+                        "severity": "high",
+                        "location": "全文",
+                        "message": f"符号 ${glyph}$ 含义冲突：{detail}",
+                    })
+
+            # 5. 缩略语一致性
+            acronym_defs: Dict[str, List[str]] = {}  # acronym -> [expansions]
+            # 5a. 中文全称（…）ABC"
+            for m in re.finditer(r"([一-龥]{2,12})\s*[（(]\s*([A-Z]{2,8})\s*[）)]", latex_code):
+                expansion, acr = m.group(1).strip(), m.group(2).strip()
+                acronym_defs.setdefault(acr, []).append(expansion)
+            # 5a2. 英文缩略语（中文全称）"ABC（卷积神经网络）"
+            for m in re.finditer(r"\b([A-Z]{2,8})\s*[（(]\s*([一-龥]{2,12})\s*[）)]", latex_code):
+                acr, expansion = m.group(1).strip(), m.group(2).strip()
+                acronym_defs.setdefault(acr, []).append(expansion)
+            # 5b. 英文全称 "ABC (Full Name)"
+            for m in re.finditer(r"\b([A-Z]{2,8})\s*[（(]\s*([A-Za-z][A-Za-z\s]{2,40})\s*[）)]", latex_code):
+                acr, expansion = m.group(1).strip(), m.group(2).strip()
+                acronym_defs.setdefault(acr, []).append(expansion)
+            # 5c. 全称不一致
+            for acr, expansions in acronym_defs.items():
+                unique = list(dict.fromkeys(e for e in expansions if e))
+                if len(unique) >= 2:
+                    node_issues.append({
+                        "category": "acronym",
+                        "severity": "high",
+                        "location": "全文",
+                        "message": f"缩略语 {acr} 全称不一致：{unique[0]} vs {unique[1]}",
+                    })
+            # 5d. 使用但从未定义（≥2 次以降噪，过滤常见英文/编号噪声，限 10 条）
+            common_noise = {"THE", "AND", "FOR", "WITH", "FROM", "THIS", "THAT", "ARE", "BUT", "NOT", "ALL", "USE", "USING", "FIG", "TAB"}
+            acr_counts: Dict[str, int] = {}
+            for acr in re.findall(r"\b([A-Z]{2,8})\b", latex_code):
+                acr_counts[acr] = acr_counts.get(acr, 0) + 1
+            undefined_count = 0
+            for acr, cnt in acr_counts.items():
+                if acr in common_noise or acr in acronym_defs:
+                    continue
+                if cnt >= 2 and undefined_count < 10:
+                    node_issues.append({
+                        "category": "acronym",
+                        "severity": "medium",
+                        "location": "全文",
+                        "message": f"缩略语 {acr} 出现 {cnt} 次但未给出全称定义。",
+                    })
+                    undefined_count += 1
+
+            # 6. 术语表覆盖校验：登记术语/符号/模型名未出现在最终正文（限 20 条）
+            coverage_count = 0
+            for term, src in glossary.items():
+                if term and len(term) >= 2 and term not in latex_code and coverage_count < 20:
+                    node_issues.append({
+                        "category": "terminology",
+                        "severity": "low",
+                        "location": "glossary",
+                        "message": f"登记术语/符号 '{term}'（来源 {src}）未出现在最终正文，可能写作时遗漏。",
+                    })
+                    coverage_count += 1
+
+            # 7. 合并报告
+            stats = {
+                "terminology": sum(1 for i in node_issues if i.get("category") == "terminology"),
+                "symbol": sum(1 for i in node_issues if i.get("category") == "symbol"),
+                "acronym": sum(1 for i in node_issues if i.get("category") == "acronym"),
+                "model_name": sum(1 for i in node_issues if i.get("category") == "model_name"),
+                "citation": sum(1 for i in node_issues if i.get("category") == "citation"),
+                "conclusion": sum(1 for i in node_issues if i.get("category") == "conclusion"),
+            }
+            has_high = any(i.get("severity") == "high" for i in node_issues)
+            final_report = {
+                "enabled": True,
+                "passed": not has_high,
+                "issue_count": len(node_issues),
+                "stats": stats,
+                "issues": node_issues,
+                "glossary_size": len(glossary),
+            }
+
+            # 8. 持久化（镜像 fact_check 做法，写 final/terminology_consistency_report.json）
+            if output_dir:
+                try:
+                    report_path = output_dir / "final" / "terminology_consistency_report.json"
+                    report_path.parent.mkdir(parents=True, exist_ok=True)
+                    report_path.write_text(
+                        json.dumps(final_report, ensure_ascii=False, indent=2, default=str),
+                        encoding="utf-8",
+                    )
+                    logger.info(f"[LangGraph:{task_id}] terminology_consistency: 报告已保存 {report_path}")
+                except Exception as disk_exc:
+                    logger.warning(f"[LangGraph:{task_id}] terminology_consistency 报告保存失败: {disk_exc}")
+
+            # 6. 写回 state._quality_issues（无则新增）
+            quality_issues = list(state.get("_quality_issues") or [])
+            for iss in node_issues:
+                quality_issues.append({"stage": "terminology_consistency", "task_id": task_id, **iss})
+
+            # 9. 通知：未通过则列前 5 条 high/medium issue，通过则提示
+            high_count = sum(1 for i in node_issues if i.get("severity") == "high")
+            medium_count = sum(1 for i in node_issues if i.get("severity") == "medium")
+            if high_count or medium_count:
+                notable = [i for i in node_issues if i.get("severity") in ("high", "medium")][:5]
+                summary_lines = "\n".join(
+                    f"  - [{i.get('severity', '')}/{i.get('category', '')}] {i.get('message', '')}"
+                    for i in notable
+                )
+                self._post_chat(
+                    task_id, "coordinator",
+                    f"⚠️ 术语一致性检查发现 {final_report['issue_count']} 个问题"
+                    f"（高危 {high_count}，中危 {medium_count}）。\n"
+                    + (summary_lines + "\n" if summary_lines else "")
+                    + "报告已保存至 final/terminology_consistency_report.json，请人工审核。",
+                )
+            else:
+                self._post_chat(task_id, "coordinator", "✅ 术语一致性检查通过")
+
+            # 10. 写回 results（ref 方式，标准范式）+ _quality_issues + current_step
+            ref_update = self._set_result(state, "terminology_consistency", final_report)
+            logger.info(
+                f"[LangGraph:{task_id}] terminology_consistency: passed={final_report['passed']} "
+                f"issues={final_report['issue_count']} glossary={final_report['glossary_size']}"
+            )
+
+            return {
+                **state,
+                "results": {**state.get("results", {}), **ref_update},
+                "_quality_issues": quality_issues,
+                "current_step": "terminology_consistency_done",
+            }
+
+        except Exception as exc:
+            logger.warning(
+                f"[LangGraph:{task_id}] terminology_consistency 失败（降级放行）: {exc}",
+                exc_info=True,
+            )
+            return {**state, "current_step": "terminology_consistency_failed"}
+
+    async def _node_structure_coherence_check(self, state: TaskState) -> TaskState:
+        """post 阶段·章节连贯性确定性闸门（插入 peer_review accept → fact_check 之间）。
+
+        定位为 peer_review（语义性 LLM 评审）的确定性补充：peer_review 易漏判
+        结构性缺陷（缺章/悬空引用/数字自相矛盾），本节点用确定性规则 + 符号审计兜底。
+        新增 TaskState.structure_coherence_passed: bool（沿用 ast_audit_passed 范式）。
+        """
+        task_id = state["task_id"]
+        logger.info(f"[LangGraph:{task_id}] structure_coherence_check start")
+
+        results = self._resolve_results(state)
+        template = state.get("paper_template", "math_modeling")
+        workflow_type = state.get("workflow_type", "standard")
+        use_critique = state.get("use_critique", True)
+        writer_output = results.get("writer_agent") or {}
+        if not isinstance(writer_output, dict):
+            writer_output = {}
+        latex_code = writer_output.get("latex_code", "") or ""
+
+        # ===== 层 0 · 前置闸门 =====
+        if (
+            workflow_type in ("quick", "code_focused")
+            or not use_critique
+            or not writer_output
+            or not latex_code
+        ):
+            logger.info(
+                f"[LangGraph:{task_id}] structure_coherence skipped "
+                f"(workflow={workflow_type}, use_critique={use_critique}, has_latex={bool(latex_code)})"
+            )
+            self._post_chat(task_id, "coordinator", "ℹ️ 章节连贯性校验跳过（快速/代码模式或无论文输出）")
+            return {
+                **state,
+                "current_step": "structure_coherence_skipped",
+                "structure_coherence_passed": True,
+            }
+
+        self._update_progress(task_id, state.get("problem_text", ""), 82, "章节连贯性校验中")
+
+        try:
+            # ----- 局部确定性工具 -----
+            def _norm_title(t: str) -> str:
+                t = (t or "").strip()
+                t = re.sub(r"^\d+([\.、]\d+)*\s*", "", t)
+                return t.strip()
+
+            def _section_of(ctx: str) -> str:
+                cl = (ctx or "").lower()
+                if "abstract" in cl or "摘要" in (ctx or ""):
+                    return "abstract"
+                if any(k in cl for k in ("result", "结果", "实验", "experiment")):
+                    return "results"
+                return "other"
+
+            def _extract_section_body(title_substr: str) -> str:
+                pat = (
+                    r"\\section\{[^}]*" + re.escape(title_substr) + r"[^}]*\}"
+                    r"(.*?)(?=\\section|\\end\{document\})"
+                )
+                m = re.search(pat, latex_code, re.DOTALL | re.IGNORECASE)
+                return m.group(1) if m else ""
+
+            def _parse_json_lenient(content: str) -> Dict[str, Any]:
+                content = (content or "").strip()
+                if content.startswith("```"):
+                    lines = content.splitlines()
+                    if lines and lines[0].startswith("```"):
+                        lines = lines[1:]
+                    if lines and lines[-1].strip() == "```":
+                        lines = lines[:-1]
+                    content = "\n".join(lines).strip()
+                s = content.find("{")
+                e = content.rfind("}")
+                if s != -1 and e != -1 and e > s:
+                    try:
+                        return json.loads(content[s:e + 1])
+                    except Exception:
+                        return {}
+                return {}
+
+            missing_chapters: List[str] = []
+            dangling_refs: List[str] = []
+            dangling_cites: List[str] = []
+            symbol_issues: List[Dict[str, Any]] = []
+            numeric_clashes: List[Dict[str, Any]] = []
+            llm_issues: List[Dict[str, Any]] = []
+
+            # ===== 层 1 · 确定性结构校验（无 LLM）=====
+            # 1a. 章节完整性与顺序（writer 内部 _global_consistency_check 只看 summary，不校验 LaTeX 真实结构）
+            from ..agents.writer_agent import _resolve_chapter_plan, WriterAgent
+            plan = _resolve_chapter_plan(template) or []
+            found_sections = re.findall(r"\\section\{([^}]*)\}", latex_code)
+            found_norm = [_norm_title(t) for t in found_sections]
+            plan_titles: List[str] = []
+            for ch in plan:
+                if isinstance(ch, dict) and ch.get("section_level", 0) >= 1:
+                    plan_titles.append(_norm_title(ch.get("title", "")))
+            prev_idx = -1
+            order_mismatch = False
+            for pt in plan_titles:
+                if not pt:
+                    continue
+                idx = None
+                for i, fn in enumerate(found_norm):
+                    if fn and (pt == fn or pt in fn or fn in pt):
+                        idx = i
+                        break
+                if idx is None:
+                    missing_chapters.append(pt)
+                    continue
+                if idx < prev_idx:
+                    order_mismatch = True
+                prev_idx = max(prev_idx, idx)
+
+            # 1b. 悬空交叉引用（引用了不存在的 label）
+            labels: set = set()
+            for m in re.finditer(r"\\label\{([^}]*)\}", latex_code):
+                for k in m.group(1).split(","):
+                    k = k.strip()
+                    if k:
+                        labels.add(k)
+            refs: set = set()
+            for m in re.finditer(r"\\(?:ref|eqref|autoref)\{([^}]*)\}", latex_code):
+                for k in m.group(1).split(","):
+                    k = k.strip()
+                    if k:
+                        refs.add(k)
+            dangling_refs = sorted(refs - labels)
+
+            # 1c. 悬空文献引用（复用 WriterAgent._scan_cite_keys 静态方法）
+            cite_keys = set(WriterAgent._scan_cite_keys(latex_code))
+            citations = writer_output.get("citations", []) if isinstance(writer_output.get("citations"), list) else []
+            defined_cites = {
+                c.get("key") for c in citations
+                if isinstance(c, dict) and c.get("key")
+            }
+            dangling_cites = sorted(cite_keys - defined_cites)
+
+            # 1d. 符号一致性（符号在正文使用却未在符号说明章定义）
+            paper_memory = writer_output.get("paper_memory", {})
+            symbols = paper_memory.get("symbols", {}) if isinstance(paper_memory, dict) else {}
+            notation_body = ""
+            for kw in ("符号说明", "符号", "Notation", "notation", "Symbols", "Nomenclature"):
+                notation_body = _extract_section_body(kw)
+                if notation_body:
+                    break
+            for sym, info in (symbols or {}).items():
+                if not isinstance(sym, str):
+                    continue
+                if sym in latex_code and sym not in notation_body:
+                    symbol_issues.append({
+                        "symbol": sym,
+                        "severity": "warning",
+                        "category": "symbol_undefined",
+                        "message": f"符号 '{sym}' 在正文使用但未在符号说明章节中定义",
+                    })
+
+            # ===== 层 2 · 数值/声明一致性（复用 symbolic_auditor + fact_checker）=====
+            from ..services.fact_checker import get_fact_checker
+            from ..services.symbolic_auditor import (
+                check_comparison_claims, check_metric_ranges, audit_experiment_results,
+            )
+            nums = get_fact_checker().extract_numbers_from_latex(latex_code) or {}
+
+            # 2a. 跨章数字一致性（摘要 vs 结果，同一语义数字相对差异>5% → error）
+            abstract_nums = [(c, v) for c, v in nums.items() if _section_of(c) == "abstract"]
+            result_nums = [(c, v) for c, v in nums.items() if _section_of(c) == "results"]
+            for ctx_a, va in abstract_nums:
+                for ctx_b, vb in result_nums:
+                    base = max(abs(va), abs(vb), 1e-9)
+                    same_domain = (va <= 1.0 and vb <= 1.0) or (va > 1.0 and vb > 1.0)
+                    if same_domain and abs(va - vb) / base > 0.05:
+                        numeric_clashes.append({
+                            "severity": "error",
+                            "category": "numeric_clash",
+                            "message": (
+                                f"摘要与结果数字不一致: {va} vs {vb} (相对差异>5%) "
+                                f"— '{ctx_a.strip()[:30]}' / '{ctx_b.strip()[:30]}'"
+                            ),
+                        })
+                        break
+
+            # 2b. 对比声明一致性（"X 优于 Y" 后跟两处数值 → 喂 check_comparison_claims）
+            comparison_claims: List[Dict[str, Any]] = []
+            for m in re.finditer(
+                r"([\w一-龥\-]{2,30})\s*(?:优于|好于|超越|胜过|outperform\w*|better than)\s*([\w一-龥\-]{2,30})",
+                latex_code,
+            ):
+                method_a, method_b = m.group(1).strip(), m.group(2).strip()
+                window = latex_code[m.end():m.end() + 120]
+                wlow = window.lower()
+                metric = "accuracy"
+                if any(k in wlow for k in ("loss", "mse", "mae", "rmse", "error", "误差", "损失")):
+                    metric = "loss"
+                found_nums = re.findall(r"-?\d+\.?\d*", window)
+                if len(found_nums) >= 2:
+                    try:
+                        comparison_claims.append({
+                            "method_a": method_a,
+                            "method_b": method_b,
+                            "metric": metric,
+                            "value_a": float(found_nums[0]),
+                            "value_b": float(found_nums[1]),
+                            "claim": "A优于B",
+                        })
+                    except ValueError:
+                        pass
+
+            # 2c. 指标范围（accuracy>1 等，喂 check_metric_ranges）
+            metrics: Dict[str, Any] = {}
+            metric_patterns = {
+                "accuracy": [r"accuracy\s*[=:：]?\s*(\d+\.?\d*)", r"准确率\s*[=:：]?\s*(\d+\.?\d*)"],
+                "precision": [r"precision\s*[=:：]?\s*(\d+\.?\d*)", r"精确率\s*[=:：]?\s*(\d+\.?\d*)"],
+                "f1_score": [r"f1[ _]?score\s*[=:：]?\s*(\d+\.?\d*)", r"f1\s*[=:：]?\s*(\d+\.?\d*)"],
+                "auc": [r"\bauc\s*[=:：]?\s*(\d+\.?\d*)"],
+            }
+            for name, pats in metric_patterns.items():
+                for pat in pats:
+                    mm = re.search(pat, latex_code, re.IGNORECASE)
+                    if mm:
+                        try:
+                            metrics[name] = (float(mm.group(1)), 0.0, 1.0)
+                        except ValueError:
+                            pass
+                        break
+
+            # 2d. 综合符号审计（复用 symbolic_auditor 三个函数）
+            cc_findings = check_comparison_claims(comparison_claims) if comparison_claims else []
+            mr_findings = check_metric_ranges(metrics) if metrics else []
+            report_sym = audit_experiment_results(numbers=nums or None)
+            sym_findings: List[Any] = list(cc_findings) + list(mr_findings)
+            if report_sym is not None:
+                sym_findings.extend(report_sym.findings)
+            comparison_contradictions = [f for f in sym_findings if getattr(f, "category", "") == "comparison"]
+
+            # ===== 层 3 · LLM 过渡连贯性审计（token 预算受限，缺口填补）=====
+            from ..core.context_compressor import estimate_tokens
+            chapters = writer_output.get("chapters", []) if isinstance(writer_output.get("chapters"), list) else []
+            summaries = [
+                {"title": c.get("title", ""), "summary": c.get("summary", "")}
+                for c in chapters if isinstance(c, dict)
+            ]
+            writer_self_issues = writer_output.get("consistency_issues", []) if isinstance(writer_output.get("consistency_issues"), list) else []
+            existing_issues_text = "\n".join(
+                str((i.get("description") or i.get("message") or i) if isinstance(i, dict) else i)
+                for i in writer_self_issues
+            )
+            token_cost = estimate_tokens(summaries) + estimate_tokens(existing_issues_text)
+            llm_budget = 8000
+            raw_issues: List[Dict[str, Any]] = []
+            llm_ran = False
+            if token_cost < llm_budget:
+                agent = self.agents.get("peer_review_agent") or self.agents.get("research_agent")
+                if agent is not None:
+                    plan_order = "\n".join(
+                        f"{i + 1}. {c.get('title', '')}" for i, c in enumerate(chapters)
+                    )
+                    summaries_text = "\n\n".join(
+                        f"【{s['title']}】\n{s['summary']}" for s in summaries
+                    )
+                    prompt = (
+                        "【章节过渡与逻辑主线审计】\n"
+                        "只评价章节之间的过渡句、逻辑承接、逻辑主线是否连贯，不要评价文笔或用词。\n\n"
+                        f"期望章节顺序：\n{plan_order}\n\n"
+                        f"各章节摘要：\n{summaries_text}\n\n"
+                        f"writer 自检已发现的问题（请勿重复）：\n{existing_issues_text or '（无）'}\n\n"
+                        "返回 JSON：\n"
+                        '{"issues":[{"type":"transition","severity":"warning",'
+                        '"description":"...","affected_chapters":["..."],"suggestion":"..."}]}'
+                    )
+                    try:
+                        resp = await agent.call_llm(
+                            messages=[
+                                {"role": "system", "content": "你是学术论文结构连贯性审稿人，只关注章节过渡与逻辑主线。"},
+                                {"role": "user", "content": prompt},
+                            ],
+                            temperature=0.2,
+                        )
+                        content = (
+                            resp.get("choices", [{}])[0].get("message", {}).get("content", "{}")
+                            if isinstance(resp, dict) else "{}"
+                        )
+                        parsed = _parse_json_lenient(content)
+                        raw_issues = parsed.get("issues", []) if isinstance(parsed, dict) else []
+                        llm_ran = True
+                    except Exception as llm_exc:
+                        logger.warning(f"[LangGraph:{task_id}] structure_coherence LLM 审计失败: {llm_exc}")
+                        raw_issues = []
+            # 与 writer 自检去重合并（避免重复告警）
+            existing_descs = {
+                str((i.get("description") or i.get("message") or "")).strip().lower()[:60]
+                for i in writer_self_issues if isinstance(i, dict)
+            }
+            raw_count = len(raw_issues)
+            for li in raw_issues:
+                if not isinstance(li, dict):
+                    continue
+                d = str(li.get("description", "")).strip().lower()[:60]
+                if d and d in existing_descs:
+                    continue
+                llm_issues.append(li)
+
+            # ===== 层 4 · 汇总与路由信号 =====
+            findings: List[Dict[str, Any]] = []
+            for mc in missing_chapters:
+                findings.append({"severity": "error", "category": "missing_chapter", "message": f"缺失章节: {mc}"})
+            if order_mismatch:
+                findings.append({"severity": "warning", "category": "order_mismatch", "message": "章节顺序与模板规划不一致"})
+            for dr in dangling_refs:
+                findings.append({"severity": "error", "category": "dangling_ref", "message": f"悬空交叉引用: \\ref{{{dr}}} 无对应 \\label"})
+            for dc in dangling_cites:
+                findings.append({"severity": "warning", "category": "dangling_cite", "message": f"悬空文献引用: \\cite{{{dc}}} 未在 references 中定义"})
+            findings.extend(symbol_issues)
+            for f in sym_findings:
+                findings.append({"severity": f.severity, "category": f.category, "message": f.message})
+            findings.extend(numeric_clashes)
+            for li in llm_issues:
+                findings.append({
+                    "severity": li.get("severity", "warning"),
+                    "category": li.get("type", "transition"),
+                    "message": li.get("description", ""),
+                    "suggestion": li.get("suggestion", ""),
+                })
+
+            error_count = sum(1 for f in findings if f.get("severity") == "error")
+            warning_count = sum(1 for f in findings if f.get("severity") == "warning")
+            passed = error_count == 0
+            score = max(0, 100 - error_count * 15 - warning_count * 5)
+
+            report: Dict[str, Any] = {
+                "task_id": task_id,
+                "template": template,
+                "passed": passed,
+                "score": score,
+                "finding_count": len(findings),
+                "missing_chapters": missing_chapters,
+                "order_mismatch": order_mismatch,
+                "dangling_refs": dangling_refs,
+                "dangling_cites": dangling_cites,
+                "symbol_issues": symbol_issues,
+                "numeric_clashes": numeric_clashes,
+                "comparison_contradictions": [
+                    {"severity": f.severity, "category": f.category, "message": f.message}
+                    for f in comparison_contradictions
+                ],
+                "llm_issues": llm_issues,
+                "writer_self_issues_merged": bool(llm_ran and len(llm_issues) < raw_count),
+                "findings": findings,
+            }
+
+            ref_update = self._set_result(state, "structure_coherence", report)
+            new_results = {**state.get("results", {}), **ref_update}
+
+            # claims_trace（沿用 _route_peer_review 的 v8.1 追溯范式）
+            trace_entry = {
+                "timestamp": datetime.now().isoformat(),
+                "step": "structure_coherence",
+                "coherence_passed": passed,
+                "finding_count": len(findings),
+                "defect_breakdown": {
+                    "missing_chapters": len(missing_chapters),
+                    "dangling_refs": len(dangling_refs),
+                    "dangling_cites": len(dangling_cites),
+                    "symbol_issues": len(symbol_issues),
+                    "numeric_clashes": len(numeric_clashes),
+                    "comparison_contradictions": len(comparison_contradictions),
+                    "llm_issues": len(llm_issues),
+                    "errors": error_count,
+                    "warnings": warning_count,
+                },
+            }
+            claims_trace = list(state.get("claims_trace", []))
+            claims_trace.append(trace_entry)
+
+            # 校验问题写回 state._quality_issues（无则新增）
+            quality_issues = list(state.get("_quality_issues", []))
+            for f in findings:
+                quality_issues.append({
+                    "source": "structure_coherence",
+                    "severity": f.get("severity", "warning"),
+                    "category": f.get("category", ""),
+                    "message": f.get("message", ""),
+                })
+
+            # 结构性回环：失败 + 可修订 → findings 转 review_feedback 写回 writer/peer_review 结果
+            revision_count = writer_output.get("_revision_count", 0) or state.get("revision_count", 0)
+            needs_revision = (not passed) and use_critique and revision_count < 3 and error_count > 0
+            if needs_revision:
+                suggested_edits = [
+                    {"location": f.get("category", ""), "suggestion": f.get("message", "")}
+                    for f in findings
+                ]
+                issues_list = [f.get("message", "") for f in findings]
+                review_feedback = {
+                    "recommendation": "revise",
+                    "overall_score": round(score / 20.0, 2),
+                    "scores": {},
+                    "comments": {"major": issues_list, "minor": []},
+                    "suggested_edits": suggested_edits,
+                    "issues": issues_list,
+                    "instruction": (
+                        f"章节连贯性校验发现 {error_count} 处严重问题（score={score}），"
+                        f"请根据以下 {len(suggested_edits)} 条结构/数字问题定向修订："
+                    ),
+                }
+                updated_writer = {**writer_output, "_pending_structure_revisions": review_feedback}
+                self._result_store.set(task_id, "writer_agent", updated_writer)
+                new_results["writer_agent"] = _ref_key("writer_agent")
+                pr = results.get("peer_review_agent")
+                if isinstance(pr, dict):
+                    synth_pr = {
+                        **pr,
+                        "recommendation": "revise",
+                        "overall_score": max(1, min(4, round(score / 25.0))),
+                        "suggested_edits": suggested_edits,
+                        "comments": {"major": issues_list, "minor": []},
+                        "scores": pr.get("scores", {}),
+                        "_structure_coherence_synthesized": True,
+                    }
+                    self._result_store.set(task_id, "peer_review_agent", synth_pr)
+                    new_results["peer_review_agent"] = _ref_key("peer_review_agent")
+                logger.info(
+                    f"[LangGraph:{task_id}] structure_coherence FAILED → 回环 writer 定向修订 "
+                    f"(revision_count={revision_count}, score={score})"
+                )
+
+            if passed:
+                self._post_chat(
+                    task_id, "coordinator",
+                    f"✅ 章节连贯性校验通过（{len(findings)} 处问题，score={score}）",
+                )
+            else:
+                self._post_chat(
+                    task_id, "coordinator",
+                    f"⚠️ 章节连贯性问题：缺章 {len(missing_chapters)}/悬空引用 {len(dangling_refs)}/"
+                    f"数字矛盾 {len(numeric_clashes)}（共 {len(findings)} 处，score={score}）",
+                )
+
+            logger.info(
+                f"[LangGraph:{task_id}] structure_coherence_check done: "
+                f"passed={passed}, score={score}, findings={len(findings)} "
+                f"(errors={error_count}, warnings={warning_count}), needs_revision={needs_revision}"
+            )
+
+            return {
+                **state,
+                "results": new_results,
+                "current_step": "structure_coherence_check",
+                "structure_coherence_passed": passed,
+                "claims_trace": claims_trace,
+                "_quality_issues": quality_issues,
+            }
+        except Exception as e:
+            logger.warning(f"[LangGraph:{task_id}] structure_coherence_check 异常: {e}", exc_info=True)
+            return {**state, "current_step": "structure_coherence_check", "structure_coherence_passed": True}
+
+    async def _node_abstract_quality_check(self, state: TaskState) -> TaskState:
+        """摘要完整性校验（位于 writer 与 peer_review 之间）。
+
+        检查 writer 产出的摘要是否：
+          1) 非空且无占位符；
+          2) 字数落在模板要求的区间内；
+          3) 覆盖全部子问题（按 id/序号/名称点名）；
+          4) 覆盖 solver.numerical_results 的关键数值（复用 FactChecker 做容差匹配）；
+          5) 提及 modeler 的多数模型/方法。
+
+        数字来源全部为 solver.numerical_results，不编造；必要时将缺失数值追加到摘要末尾。
+        失败时 fail-forward（不阻塞主流程），校验问题写回 state._quality_issues。
+        """
+        task_id = state["task_id"]
+        logger.info(f"[LangGraph:{task_id}] abstract_quality_check: start")
+        try:
+            results = self._resolve_results(state)
+            writer_output = results.get("writer_agent", {}) or {}
+            abstract = writer_output.get("abstract", "") if isinstance(writer_output, dict) else ""
+            template = state.get("paper_template", "math_modeling")
+            sub_problems = state.get("sub_problems", []) or []
+            revision_count = state.get("revision_count", 0)
+
+            self._update_progress(task_id, state.get("problem_text", ""), 72, "摘要完整性校验中")
+
+            issues: List[Dict[str, Any]] = []
+            score = 100.0
+
+            # Check1 非空 & 无占位符
+            placeholders = ["待补充", "XXX", "TODO", "（摘要待补充）", "内容待补充", "待填写", "[摘要]"]
+            found_ph = [p for p in placeholders if p in abstract]
+            if not abstract or len(abstract) < 50:
+                issues.append({"severity": "error", "category": "empty",
+                               "message": "摘要为空或过短(<50字)"})
+                score -= 30
+            if found_ph:
+                issues.append({"severity": "error", "category": "placeholder",
+                               "message": f"摘要含占位符: {found_ph}"})
+                score -= 20
+
+            # Check2 字数范围（按模板）
+            ranges = {"math_modeling": (300, 1000), "coursework": (200, 800),
+                      "financial_analysis": (200, 800), "research_survey": (300, 1200)}
+            lo, hi = ranges.get(template, (300, 1000))
+            n = len(abstract)
+            if n < lo:
+                issues.append({"severity": "warning", "category": "length",
+                               "message": f"摘要 {n} 字 < 下限 {lo}"})
+                score -= 10
+            elif n > hi:
+                issues.append({"severity": "warning", "category": "length",
+                               "message": f"摘要 {n} 字 > 上限 {hi}"})
+                score -= 5
+
+            # Check3 子问题覆盖：每个子问题是否在摘要中被点名
+            cn_num = ["一", "二", "三", "四", "五", "六", "七", "八"]
+            covered: List[Any] = []
+            missing_sp: List[Any] = []
+            for sp in sub_problems:
+                sp_id = sp.get("id")
+                name = sp.get("name", sp.get("description", ""))
+                # idx 支持整数 id 与可解析为整数的 id
+                idx = None
+                if isinstance(sp_id, int) and 1 <= sp_id <= 8:
+                    idx = sp_id - 1
+                else:
+                    try:
+                        sid = int(sp_id)
+                        if 1 <= sid <= 8:
+                            idx = sid - 1
+                    except (TypeError, ValueError):
+                        idx = None
+                pats = [f"问题{sp_id}", f"问题 {sp_id}",
+                        f"第{cn_num[idx]}问" if idx is not None else "",
+                        f"针对问题{sp_id}", f"针对问题 {sp_id}"]
+                hit = any(p and p in abstract for p in pats) or (bool(name) and name[:4] in abstract)
+                (covered if hit else missing_sp).append(sp_id)
+            if sub_problems and missing_sp:
+                ratio = len(covered) / len(sub_problems)
+                sev = "error" if ratio < 0.8 else "warning"
+                issues.append({"severity": sev, "category": "coverage",
+                               "message": f"摘要未覆盖 {len(missing_sp)}/{len(sub_problems)} 个子问题: {missing_sp}"})
+                score -= 20 if sev == "error" else 8
+
+            # Check4 数值结果覆盖 —— 复用 FactChecker（不编造）
+            fc = get_fact_checker()
+            solver_output = results.get("solver_agent", {}) or {}
+            solves = solver_output.get("sub_problem_solutions", []) if isinstance(solver_output, dict) else []
+            abstract_numbers = fc.extract_numbers_from_latex(abstract)  # Dict[ctx, value]
+            key_nums: List[tuple] = []
+            for sol in solves:
+                # 兼容两种结构：sol.numerical_results 与 sol.results.numerical_results
+                nr = sol.get("numerical_results")
+                if not isinstance(nr, dict) or not nr:
+                    res = sol.get("results", {})
+                    nr = res.get("numerical_results", {}) if isinstance(res, dict) else {}
+                if not isinstance(nr, dict):
+                    nr = {}
+                for k, v in nr.items():
+                    if isinstance(v, (int, float)) and not isinstance(v, bool) and abs(v) < 1e9 and k != "状态":
+                        key_nums.append((str(k), float(v)))
+            missing_nums = [(k, v) for k, v in key_nums
+                            if not any(fc._relative_diff(v, av) <= 0.05
+                                       for av in abstract_numbers.values())]
+            if key_nums and missing_nums:
+                mr = len(missing_nums) / len(key_nums)
+                sev = "error" if mr > 0.5 else "warning"
+                issues.append({"severity": sev, "category": "numerical",
+                               "message": f"摘要缺失 {len(missing_nums)}/{len(key_nums)} 个关键数值: {[k for k, _ in missing_nums[:5]]}"})
+                score -= 20 if sev == "error" else 8
+
+            # Check5 方法/模型提及
+            modeler_output = results.get("modeler_agent", {}) or {}
+            models = modeler_output.get("sub_problem_models", []) if isinstance(modeler_output, dict) else []
+            missing_methods: List[str] = []
+            for m in models:
+                mname = m.get("model_name", "") or m.get("model_type", "")
+                alg = m.get("algorithm", {})
+                alg_name = alg.get("name", "") if isinstance(alg, dict) else str(alg)
+                tokens = [t for t in [mname, alg_name] if t]
+                if tokens and not any(t in abstract for t in tokens):
+                    missing_methods.append(mname or alg_name)
+            if models and len(missing_methods) > len(models) * 0.5:
+                issues.append({"severity": "warning", "category": "method",
+                               "message": f"摘要未提及多数模型/方法: {missing_methods[:5]}"})
+                score -= 8
+
+            score = max(0.0, score)
+            hard_fail_cats = {"empty", "placeholder"}
+            passed = score >= 70 and not any(
+                i["severity"] == "error" and i["category"] in (hard_fail_cats | {"coverage", "numerical"})
+                for i in issues
+            )
+
+            # 自动补全：把缺失的关键数值追加到摘要末尾（数字全部来自 solver.numerical_results，不编造）
+            abstract_patched = abstract
+            supplemented = False
+            if missing_nums and not passed and len(abstract) < hi:
+                supplement = "主要结果：" + "；".join(f"{k}={v:g}" for k, v in missing_nums[:6]) + "。"
+                abstract_patched = abstract.rstrip("。") + "。" + supplement
+                supplemented = True
+
+            # 写回 writer_agent（含质量报告 + 补全后摘要），供下游 peer_review/fact_check 使用
+            updated = dict(writer_output) if isinstance(writer_output, dict) else {}
+            if supplemented:
+                updated["abstract"] = abstract_patched
+            updated["_abstract_quality"] = {
+                "score": round(score, 1), "passed": passed, "issues": issues,
+                "coverage": {"covered": len(covered), "total": len(sub_problems), "missing": missing_sp},
+                "numerical": {"key_total": len(key_nums), "missing": len(missing_nums)},
+                "supplemented": supplemented, "revision_count": revision_count,
+                "checked_at": datetime.now().isoformat(),
+            }
+            ref_update = self._set_result(state, "writer_agent", updated)
+
+            # 校验问题写回 state._quality_issues（无则新增）
+            quality_issues = list(state.get("_quality_issues", []))
+            quality_issues.append({
+                "node": "abstract_quality_check",
+                "task_id": task_id,
+                "passed": passed,
+                "score": round(score, 1),
+                "issues": issues,
+                "supplemented": supplemented,
+                "checked_at": datetime.now().isoformat(),
+            })
+
+            self._post_chat(
+                task_id, "abstract_check",
+                f"{'✅' if passed else '⚠️'} 摘要完整性{'通过' if passed else '不达标'} (score={score:.0f})"
+                + (f"，已自动补全 {len(missing_nums)} 个数值" if supplemented else "")
+            )
+            logger.info(
+                f"[LangGraph:{task_id}] abstract_quality_check: passed={passed}, "
+                f"score={score:.1f}, issues={len(issues)}, supplemented={supplemented}"
+            )
+
+            return {
+                **state,
+                "results": {**state.get("results", {}), **ref_update},
+                "current_step": "abstract_quality_check_done",
+                "abstract_quality_passed": passed,
+                "_quality_issues": quality_issues,
+            }
+        except Exception as exc:
+            # 校验本身异常 → fail-forward，不阻塞主流程，不因 checker 崩溃打回 writer
+            logger.warning(f"[LangGraph:{task_id}] abstract_quality_check failed: {exc}", exc_info=True)
+            return {**state, "current_step": "abstract_quality_check_failed", "abstract_quality_passed": True}
+
+    async def _node_final_polish(self, state: TaskState) -> TaskState:
+        """终稿润色：确定性 LaTeX 修正 + 悬空引用清理 + 数值护栏 + 可选 LLM 润色。
+
+        位于 fact_check -> compliance_check 之后、summary 之前，保证润色基于已过
+        数值核查与（金融模板）已清洗的文本。元数据写回 writer_agent 结果，沿用
+        compliance_check 范式；校验问题追加到 state["_quality_issues"]。
+        """
+        task_id = state["task_id"]
+        logger.info(f"[LangGraph:{task_id}] final_polish: 终稿润色开始")
+        try:
+            results = self._resolve_results(state)
+            writer_output = results.get("writer_agent", {}) or {}
+            if not isinstance(writer_output, dict):
+                writer_output = {}
+            # compliance_check 若已写回 _compliance_cleaned 文本，此处天然取到清洗后版本
+            latex = writer_output.get("latex_code", "")
+            if not latex:
+                logger.info(f"[LangGraph:{task_id}] final_polish: 无 LaTeX 稿件，跳过润色")
+                return {**state, "current_step": "final_polish_skipped"}
+
+            self._update_progress(task_id, state["problem_text"], 88, "终稿润色中")
+            template = state.get("paper_template", "math_modeling")
+            report: Dict[str, Any] = {
+                "deterministic_fixes": [],
+                "citation_issues": [],
+                "numeric_guard": None,
+                "llm_polish": None,
+            }
+
+            # ===== Step 2: 确定性 LaTeX 修正（无 LLM，纯正则/计数）=====
+            polished, fixes = self._polish_latex_deterministic(latex)
+            report["deterministic_fixes"] = fixes
+
+            # ===== Step 3: 引用清洗（复用 writer_agent._scan_cite_keys）=====
+            agent = self.agents.get("writer_agent")
+            cite_keys = []
+            if agent is not None and hasattr(agent, "_scan_cite_keys"):
+                cite_keys = agent._scan_cite_keys(polished)
+            citations_src = writer_output.get("citations")
+            if not citations_src:
+                citations_src = (writer_output.get("paper_memory", {}) or {}).get("citations", [])
+            bib_keys = {
+                c.get("key") for c in (citations_src or [])
+                if isinstance(c, dict) and c.get("key")
+            }
+            dangling = [k for k in cite_keys if k not in bib_keys]
+            if dangling:
+                polished = self._strip_dangling_cites(polished, dangling)
+                report["citation_issues"] = dangling
+
+            # ===== Step 4: 数值完整性护栏（复用 get_fact_checker）=====
+            fc = get_fact_checker()
+            try:
+                output_dir = get_project_output_dir(state.get("project_name"))
+            except Exception:
+                output_dir = None
+            solves = self._load_solves(output_dir, results)
+            latex_nums = fc.extract_numbers_from_latex(polished)
+            solve_nums = fc.extract_numbers_from_solves(solves)
+            drift = [
+                i for i in fc.compare(latex_nums, solve_nums, 0.05)
+                if i.relative_diff is None or i.relative_diff > 0.05
+            ]
+            baseline = (results.get("fact_checker", {}) or {}).get("issue_count", 0)
+            drift_count = len(drift)
+            # passed：无漂移 且 未在 fact_check 基线之外新增漂移
+            numeric_passed = (drift_count == 0) and (drift_count <= baseline)
+            report["numeric_guard"] = {
+                "drift_count": drift_count,
+                "passed": numeric_passed,
+                "baseline_issue_count": baseline,
+            }
+
+            # ===== Step 5: 可选 LLM 润色（use_critique 闸门 + 必须过数值护栏）=====
+            if state.get("use_critique", True) and numeric_passed:
+                try:
+                    llm_polished = await self._llm_polish_abstract(polished, writer_output, template)
+                    if llm_polished and llm_polished != polished:
+                        if self._numbers_unchanged(polished, llm_polished, fc):
+                            polished = llm_polished
+                            report["llm_polish"] = "applied"
+                        else:
+                            report["llm_polish"] = "reverted(numeric drift)"
+                    else:
+                        report["llm_polish"] = "skipped(no change)"
+                except Exception as e:
+                    report["llm_polish"] = f"failed:{e}"
+                    logger.warning(f"[LangGraph:{task_id}] final_polish LLM 润色失败: {e}")
+            else:
+                report["llm_polish"] = "skipped(guard/critique off)"
+
+            # ===== 写回 writer_agent 结果（镜像 compliance_check）=====
+            updated = {
+                **writer_output,
+                "latex_code": polished,
+                "_final_polished": True,
+                "_polish_report": report,
+                "_polished_at": datetime.now().isoformat(),
+            }
+            ref_update = self._set_result(state, "writer_agent", updated)
+
+            # ===== 落盘：final/main.tex 与 papers/paper_{task_id}.tex 同步 =====
+            try:
+                if output_dir is not None:
+                    final_dir = output_dir / "final"
+                    final_dir.mkdir(parents=True, exist_ok=True)
+                    (final_dir / "main.tex").write_text(polished, encoding="utf-8")
+                    papers_dir = output_dir / "papers"
+                    papers_dir.mkdir(parents=True, exist_ok=True)
+                    (papers_dir / f"paper_{task_id}.tex").write_text(polished, encoding="utf-8")
+                    logger.info(f"[LangGraph:{task_id}] final_polish: 已同步润色稿到磁盘")
+            except Exception as disk_exc:
+                logger.warning(f"[LangGraph:{task_id}] final_polish 磁盘回写失败: {disk_exc}")
+
+            # ===== 校验问题写回 state._quality_issues（无则新增）=====
+            quality_issues: List[Dict[str, Any]] = list(state.get("_quality_issues", []) or [])
+            for f in fixes:
+                if f.get("severity") in ("error", "warning"):
+                    quality_issues.append({
+                        "stage": "final_polish",
+                        "category": f.get("category", "latex"),
+                        "severity": f.get("severity"),
+                        "detail": f.get("detail", ""),
+                    })
+            if dangling:
+                quality_issues.append({
+                    "stage": "final_polish", "category": "dangling_cite",
+                    "detail": f"{len(dangling)} 处悬空引用已清理: {', '.join(dangling[:5])}",
+                })
+            if not numeric_passed:
+                quality_issues.append({
+                    "stage": "final_polish", "category": "numeric_drift",
+                    "detail": f"数值护栏告警：drift_count={drift_count}, baseline={baseline}",
+                })
+
+            self._post_chat(
+                task_id, "final_polish",
+                f"✨ 终稿润色完成：{len(fixes)} 处格式修正，{len(dangling)} 处悬空引用清理，"
+                f"数值护栏{'通过' if report['numeric_guard'].get('passed') else '告警'}，"
+                f"LLM润色={report['llm_polish']}",
+            )
+            logger.info(
+                f"[LangGraph:{task_id}] final_polish: 完成 fixes={len(fixes)} "
+                f"dangling={len(dangling)} drift={drift_count} llm={report['llm_polish']}"
+            )
+
+            return {
+                **state,
+                "results": {**state.get("results", {}), **ref_update},
+                "_quality_issues": quality_issues,
+                "current_step": "final_polish_done",
+            }
+        except Exception as e:
+            logger.warning(f"[LangGraph:{task_id}] final_polish 失败: {e}", exc_info=True)
+            return {**state, "current_step": "final_polish_failed"}
+
+    # ------------------------------------------------------------------
+    # 节点辅助方法（紧邻 _save_output_files 之后）
+    # ------------------------------------------------------------------
+
+    def _polish_latex_deterministic(self, latex: str) -> Tuple[str, List[Dict[str, Any]]]:
+        """确定性 LaTeX 修正（无 LLM，纯正则/计数）。
+
+        返回 (polished, fixes)：fixes 为每处修正的记录 dict。
+        (a) 中文引号规范：``...'' -> " "、`...' -> ' '（仅中文上下文）；
+        (b) 去重 \\end{document}（只保留最后1个）、去重连续 \\maketitle；
+        (c) 压缩 ≥3 连续空行为 2；
+        (d) 环境配对校验：统计 \\begin{env}/\\end{env} 数量，不匹配记入 fixes。
+        """
+        fixes: List[Dict[str, Any]] = []
+        if not latex:
+            return latex, fixes
+        cjk = re.compile(r"[一-鿿]")
+        polished = latex
+
+        # (a) 中文引号规范——先处理双引号 ``...'' ，再处理单引号 `...'
+        def _dbl(m: re.Match) -> str:
+            pre = polished[max(0, m.start() - 30):m.start()]
+            post = polished[m.end():min(len(polished), m.end() + 30)]
+            if cjk.search(pre) or cjk.search(post):
+                fixes.append({
+                    "category": "chinese_quote", "severity": "warning",
+                    "detail": f"``...'' -> 中文双引号: {m.group(1)[:30]}",
+                })
+                return f"“{m.group(1)}”"
+            return m.group(0)
+        polished = re.sub(r"``(.+?)''", _dbl, polished, flags=re.DOTALL)
+
+        def _sgl(m: re.Match) -> str:
+            pre = polished[max(0, m.start() - 30):m.start()]
+            post = polished[m.end():min(len(polished), m.end() + 30)]
+            if cjk.search(pre) or cjk.search(post):
+                fixes.append({
+                    "category": "chinese_quote", "severity": "warning",
+                    "detail": f"`...' -> 中文单引号: {m.group(1)[:30]}",
+                })
+                return f"‘{m.group(1)}’"
+            return m.group(0)
+        polished = re.sub(r"(?<!`)`([^'\n]+?)'(?!')", _sgl, polished)
+
+        # (b) 去重 \end{document}（只保留最后1个）
+        end_docs = list(re.finditer(r"\\end\{document\}", polished))
+        if len(end_docs) > 1:
+            for m in reversed(end_docs[:-1]):
+                polished = polished[:m.start()] + polished[m.end():]
+            fixes.append({
+                "category": "dup_end_document", "severity": "warning",
+                "detail": f"removed {len(end_docs) - 1} duplicate \\end{{document}}",
+            })
+        # 去重连续 \maketitle
+        polished, n = re.subn(r"(\\maketitle\s*){2,}", r"\1", polished)
+        if n:
+            fixes.append({
+                "category": "dup_maketitle", "severity": "info",
+                "detail": f"dedup {n} block(s) of consecutive \\maketitle",
+            })
+
+        # (c) 压缩 ≥3 连续空行（>=4 个换行）为 2（3 个换行）
+        polished, n = re.subn(r"\n{4,}", "\n\n\n", polished)
+        if n:
+            fixes.append({
+                "category": "blank_lines", "severity": "info",
+                "detail": f"compressed {n} block(s) of >=3 consecutive blank lines",
+            })
+
+        # (d) 环境配对校验
+        envs = ["abstract", "table", "tabular", "figure", "equation",
+                "align", "thebibliography", "appendices"]
+        for env in envs:
+            begins = len(re.findall(r"\\begin\{" + re.escape(env) + r"\}", polished))
+            ends = len(re.findall(r"\\end\{" + re.escape(env) + r"\}", polished))
+            if begins != ends:
+                fixes.append({
+                    "category": "env_mismatch", "severity": "error",
+                    "detail": f"\\begin{{{env}}}={begins} vs \\end{{{env}}}={ends}",
+                })
+        return polished, fixes
+
+    def _strip_dangling_cites(self, latex: str, dangling: List[str]) -> str:
+        """移除/收紧 \\cite{...} 中无 bib 条目的悬空引用 key。
+
+        \\cite{a,b,c} 中移除 dangling key，保留有效 key；若全部悬空则删除整个 \\cite。
+        """
+        if not latex or not dangling:
+            return latex
+        dangling_set = set(dangling)
+
+        def _filter(m: re.Match) -> str:
+            cmd = m.group(1)
+            keys = [k.strip() for k in m.group(2).split(",") if k.strip()]
+            kept = [k for k in keys if k not in dangling_set]
+            if not kept:
+                return ""
+            return f"{cmd}{{{','.join(kept)}}}"
+
+        return re.sub(r"(\\cite[a-z]*)\{([^}]+)\}", _filter, latex)
+
+    def _load_solves(self, output_dir, results: Dict[str, Any]) -> Any:
+        """加载 solves：优先 final/solves.json，回退 solver_agent.sub_problem_solutions。"""
+        if output_dir is not None:
+            solves_file = output_dir / "final" / "solves.json"
+            if not solves_file.exists():
+                solves_file = output_dir / "solves.json"
+            if solves_file.exists():
+                try:
+                    return json.loads(solves_file.read_text(encoding="utf-8"))
+                except Exception as e:
+                    logger.warning(f"_load_solves: failed to read {solves_file}: {e}")
+        solver_output = results.get("solver_agent") or {}
+        if isinstance(solver_output, dict):
+            return solver_output.get("sub_problem_solutions", [])
+        return []
+
+    async def _llm_polish_abstract(self, polished: str, writer_output: Dict[str, Any], template: str) -> str:
+        """受限 LLM 润色：只许修摘要/标题/错别字/表述，禁改数字与 \\cite。
+
+        用 writer_agent.call_llm 发一个受限 prompt，解析返回 JSON 的 latex_code。
+        异常向上抛出，由调用方捕获记为 failed。
+        """
+        agent = self.agents.get("writer_agent")
+        if agent is None:
+            return polished
+        abstract = writer_output.get("abstract", "") or ""
+        title = writer_output.get("title", "") or ""
+        prompt = (
+            "你是学术论文终稿润色助手。只允许做以下受限修改：\n"
+            "1. 润色摘要(abstract)与标题(title)的中文表述、修正错别字；\n"
+            "2. 改善行文流畅度与用词准确性。\n"
+            "严禁改动任何数字、\\cite 引用、公式、表格数据、图表内容。\n\n"
+            f"当前标题：{title}\n"
+            f"当前摘要：{abstract}\n"
+            f"当前 LaTeX 全文：\n{polished}\n\n"
+            "返回 JSON：{{\"latex_code\": \"润色后的完整LaTeX源代码\"}}"
+        )
+        messages = [
+            {"role": "system", "content": "你是严谨的论文润色编辑，只做表述层面优化，绝不改动数字与引用。"},
+            {"role": "user", "content": prompt},
+        ]
+        response = await agent.call_llm(messages=messages, temperature=0.2)
+        content = response.get("choices", [{}])[0].get("message", {}).get("content", "")
+        parsed = agent._extract_json(content) if hasattr(agent, "_extract_json") else {}
+        new_latex = parsed.get("latex_code", "") if isinstance(parsed, dict) else ""
+        new_latex = (new_latex or "").strip()
+        return new_latex if new_latex else polished
+
+    def _numbers_unchanged(self, before: str, after: str, fc) -> bool:
+        """判定润色前后 LaTeX 数字集合是否一致（防 LLM 引入数据漂移/造假）。"""
+        try:
+            before_nums = set(fc.extract_numbers_from_latex(before).values())
+            after_nums = set(fc.extract_numbers_from_latex(after).values())
+            return before_nums == after_nums
+        except Exception:
+            return False
+
+
+    # ------------------------------------------------------------------
     # Graph 构建
     # ------------------------------------------------------------------
     def _build_graph(self) -> StateGraph:
@@ -1630,6 +7202,24 @@ class LangGraphOrchestrator:
         builder.add_node("ast_audit_node", self._node_ast_audit)
         builder.add_node("sandbox_execution_node", self._node_sandbox_execution)
         builder.add_node("reviewer_reflection_node", self._node_reviewer_reflection)
+        # v8.4: 17 个新节点（pre/mid/post 阶段质量门与审查）
+        builder.add_node("requirement_validation", self._node_requirement_validation)  # pre: 需求分解后不验完整性
+        builder.add_node("data_quality_check", self._node_data_quality_check)  # pre: 数据缺失/脏数据无门禁
+        builder.add_node("literature_dedup", self._node_literature_dedup)  # pre: 文献重复风险
+        builder.add_node("novelty_check", self._node_novelty_check)  # pre: 创新点是否已被覆盖
+        builder.add_node("method_feasibility", self._node_method_feasibility)  # pre: 方法可行性预评估
+        builder.add_node("context_compression_node", self._node_context_compression)  # mid: 上下文压缩未在图里显式触发
+        builder.add_node("code_style_check", self._node_code_style_check)  # mid: 代码风格不一致
+        builder.add_node("reproducibility_check", self._node_reproducibility_check)  # mid: 方法可复现性（审查核心缺失）
+        builder.add_node("formula_validity_check", self._node_formula_validity_check)  # post: LaTeX 公式有效性
+        builder.add_node("table_consistency_check", self._node_table_consistency_check)  # post: 表格内部一致性
+        builder.add_node("figure_caption_check", self._node_figure_caption_check)  # post: 图表说明与正文一致
+        builder.add_node("citation_density_check", self._node_citation_density_check)  # post: 引用密度合理性
+        builder.add_node("reference_completeness", self._node_reference_completeness)  # post: 参考文献完整性
+        builder.add_node("terminology_consistency", self._node_terminology_consistency)  # post: 术语统一性
+        builder.add_node("structure_coherence_check", self._node_structure_coherence_check)  # post: 章节连贯性
+        builder.add_node("abstract_quality_check", self._node_abstract_quality_check)  # post: 摘要完整性
+        builder.add_node("final_polish", self._node_final_polish)  # post: 终稿润色
         # 注意：data、research、innovation 节点已移除（由 parallel_analysis 内部并行调用）
 
         # 入口
@@ -1747,7 +7337,8 @@ class LangGraphOrchestrator:
         # 非 CCF-A 模板: iterative_solver → ast_audit → sandbox → figure → writer
         # 注：iterative_solver 的路由已在上方统一定义（_route_after_solver）
         builder.add_edge("coder_agent_node", "ast_audit_node")  # CCF-A: coder → ast_audit
-        builder.add_edge("ast_audit_node", "sandbox_execution_node")  # 所有模板: ast_audit → sandbox
+        builder.add_edge("ast_audit_node", "code_style_check")  # mid: 代码风格检查（旁路接入 sandbox 链）
+        builder.add_edge("code_style_check", "sandbox_execution_node")  # 所有模板: ast_audit → code_style → sandbox
         builder.add_conditional_edges(
             "sandbox_execution_node",
             self._route_after_sandbox,
@@ -1765,9 +7356,26 @@ class LangGraphOrchestrator:
             },
         )
 
-        builder.add_edge("figure", "writer")
-        builder.add_edge("writer", "peer_review")
-        builder.add_edge("fact_check", "compliance_check")  # v8.0: fact_check → compliance_check → summary
+        # v8.4: figure → context_compression → literature_dedup → method_feasibility → writer（旁路接入，不进条件路由）
+        builder.add_edge("figure", "context_compression_node")
+        builder.add_edge("context_compression_node", "literature_dedup")
+        builder.add_edge("literature_dedup", "method_feasibility")
+        builder.add_edge("method_feasibility", "writer")
+        # v8.4: writer → [10 个 post 质量门] → novelty_check → peer_review（替换原 writer→peer_review）
+        builder.add_edge("writer", "formula_validity_check")
+        builder.add_edge("formula_validity_check", "table_consistency_check")
+        builder.add_edge("table_consistency_check", "figure_caption_check")
+        builder.add_edge("figure_caption_check", "citation_density_check")
+        builder.add_edge("citation_density_check", "reference_completeness")
+        builder.add_edge("reference_completeness", "terminology_consistency")
+        builder.add_edge("terminology_consistency", "structure_coherence_check")
+        builder.add_edge("structure_coherence_check", "abstract_quality_check")
+        builder.add_edge("abstract_quality_check", "final_polish")
+        builder.add_edge("final_polish", "novelty_check")
+        builder.add_edge("novelty_check", "peer_review")
+        # v8.4: fact_check → reproducibility_check → compliance_check → summary（旁路接入可复现性审查）
+        builder.add_edge("fact_check", "reproducibility_check")
+        builder.add_edge("reproducibility_check", "compliance_check")  # v8.0: fact_check → reproducibility → compliance_check → summary
         builder.add_edge("compliance_check", "summary")
         builder.add_edge("cannot_solve", "summary")
         builder.add_edge("summary", END)
@@ -1776,8 +7384,10 @@ class LangGraphOrchestrator:
         # 改为自循环：等待用户输入后重新评估 peer_review
         builder.add_edge("wait_user", "peer_review")
 
-        # requirement_decomposition → preflight_decision（始终进入）
-        builder.add_edge("requirement_decomposition", "preflight_decision")
+        # v8.4: requirement_decomposition → requirement_validation → data_quality_check → preflight_decision
+        builder.add_edge("requirement_decomposition", "requirement_validation")
+        builder.add_edge("requirement_validation", "data_quality_check")
+        builder.add_edge("data_quality_check", "preflight_decision")
 
         return builder.compile()
 

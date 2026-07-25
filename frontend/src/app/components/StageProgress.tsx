@@ -1,6 +1,7 @@
 'use client';
 
 import { cn } from '@/lib/utils';
+import { nodeLabel } from '@/lib/constants';
 
 interface Stage {
   id: string;
@@ -47,7 +48,7 @@ export default function StageProgress({ stages, memoryPool, currentStep }: Stage
         <span className="text-[1rem] text-[#F8FAFC] font-semibold">📊 五阶段流水线</span>
         <span className="text-[0.875rem] text-[#94A3B8]">
           {completedCount}/{stages.length} 阶段完成
-          {currentStep && ` · 当前: ${currentStep}`}
+          {currentStep && ` · 当前: ${nodeLabel(currentStep)}`}
         </span>
       </div>
 

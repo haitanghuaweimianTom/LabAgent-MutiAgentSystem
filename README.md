@@ -46,7 +46,7 @@ LabAgent automates the entire academic paper production pipeline:
 | **SHA-256 Data Provenance** | Full-chain hash tracking for tamper-proof results |
 | **AST Anti-Fabrication** | Detect hardcoded metrics (`accuracy = 0.95`), block fake outputs |
 | **Code Quality Fixes** | Fixed debug endpoint, unified versions, added CI/CD, rate limiting |
-| **Bug Finder Agent** | Qwen2.5-Coder-1.5B QLoRA fine-tuned, local inference code error diagnosis (11 types, 100% accuracy) |
+| **Bug Finder Agent** | Qwen2.5-Coder-1.5B QLoRA fine-tuned, local inference code error diagnosis (14 types, 97.1% accuracy on a leakage-free 138-sample strict eval) |
 | **ML Training Pipeline** | Complete model training pipeline: data collection → augmentation → QLoRA training → evaluation |
 
 ---
@@ -489,7 +489,7 @@ pre-commit run --all-files
 - AST safety shell: auto-inject try-except + cuda.empty_cache() + gc.collect()
 - Progressive jailbreak circuit breaker: dynamic mode switching based on metrics trend
 - Dual-responsibility AST audit: anti-fabrication + anti-crash in single pass
-- **Bug Finder Agent**: Qwen2.5-Coder-1.5B QLoRA fine-tuned, 11-class error diagnosis with 100% accuracy
+- **Bug Finder Agent**: Qwen2.5-Coder-1.5B QLoRA fine-tuned, 14-class error diagnosis with 97.1% accuracy (leakage-free 138-sample strict eval; see ml/results/COMPARISON.md)
 - **ML Training Pipeline**: Complete data collection → augmentation → QLoRA training → evaluation workflow
 - Project renamed to **LabAgent**
 - Code quality: fixed debug endpoint, unified versions, added CI/CD, rate limiting

@@ -1,9 +1,31 @@
 """Token 预算管理 — 防止多智能体上下文爆炸。"""
 import logging
 from dataclasses import dataclass, field
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
+
+
+# ==================== tiktoken 精确计数（回退粗估）====================
+try:
+    import tiktoken  # type: ignore
+
+    _TB_ENCODER: Any = None
+
+    def _tb_encoder() -> Any:
+        global _TB_ENCODER
+        if _TB_ENCODER is None:
+            _TB_ENCODER = tiktoken.get_encoding("cl100k_base")
+        return _TB_ENCODER
+
+    def _tb_count(text: str) -> int:
+        try:
+            return len(_tb_encoder().encode(text))
+        except Exception:
+            return max(1, int(len(text) * 0.6))
+except Exception:  # tiktoken 未安装
+    def _tb_count(text: str) -> int:
+        return max(1, int(len(text) * 0.6))
 
 
 class ContextOverflowError(Exception):
@@ -129,12 +151,10 @@ class TokenBudgetManager:
             )
 
     def estimate_tokens(self, text: str) -> int:
-        """简单估算 tokens（中文字符 1:1，英文词 1:1.3）。"""
+        """精确估算 tokens：优先 tiktoken(cl100k_base)，回退字符粗估。"""
         if not text:
             return 0
-        # 粗略估算：先按字符数，再按常见中英文比例
-        chars = len(text)
-        return max(1, int(chars * 0.6))
+        return _tb_count(text)
 
     def clip_text(self, text: str, max_tokens: int, suffix: str = "\n...[已裁剪]") -> str:
         """将文本裁剪到指定 token 预算内。"""

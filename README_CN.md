@@ -46,7 +46,7 @@ LabAgent 自动化整个学术论文生产流程：
 | **SHA-256 数据溯源** | 全链路数据哈希追踪，确保结果不可篡改 |
 | **AST 防造假** | 检测硬编码指标（`accuracy = 0.95`），拦截伪造输出 |
 | **代码质量修复** | 修复 debug 端点、统一版本号、添加 CI/CD、速率限制 |
-| **Bug Finder Agent** | Qwen2.5-Coder-1.5B QLoRA 微调，本地推理代码错误诊断（11类，准确率100%） |
+| **Bug Finder Agent** | Qwen2.5-Coder-1.5B QLoRA 微调，本地推理代码错误诊断（14类，分类准确率97.1%，无泄露138样本严格评测） |
 | **ML 训练模块** | 完整的模型训练流水线：数据收集 → 增强 → QLoRA 训练 → 评估 |
 
 ---
@@ -489,7 +489,7 @@ pre-commit run --all-files
 - AST 安全壳：自动注入 try-except + cuda.empty_cache() + gc.collect()
 - 渐进式越狱熔断：基于指标趋势的动态模式切换
 - AST 双重职责审计：防造假 + 防崩溃一次完成
-- **Bug Finder Agent**：Qwen2.5-Coder-1.5B QLoRA 微调，11类错误诊断准确率100%
+- **Bug Finder Agent**：Qwen2.5-Coder-1.5B QLoRA 微调，14类错误诊断准确率97.1%（无泄露138样本严格评测，详见 ml/results/COMPARISON.md）
 - **ML 训练流水线**：数据收集 → 增强 → QLoRA 训练 → 评估完整流程
 - 项目更名为 **LabAgent**
 - 代码质量：修复 debug 端点、统一版本号、添加 CI/CD、速率限制

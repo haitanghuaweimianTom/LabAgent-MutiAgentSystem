@@ -106,13 +106,18 @@ ml/
 LabAgent：基于 RLHF 对齐与领域微调的多智能体学术论文生成系统（个人项目）
 
 • 设计 10 阶段多智能体 Pipeline（LangGraph, 15 Agents），实现问题描述→可提交论文的全自动生成
-• 训练 Bug Finder Agent（Qwen2.5-Coder-1.5B, QLoRA SFT），实现代码错误 7 类自动分类（Acc 87%）+ 
-  行级定位（Acc 78%）+ 结构化修复建议，与大模型协同将代码修复成功率从 52% 提升至 74%
+• 训练 Bug Finder Agent（Qwen2.5-Coder-1.5B, QLoRA SFT），在无泄露 138 样本测试集上做严格 JSON 评测，
+  错误分类准确率 81.9%→97.1%、结构化标签一致性（严格精确匹配）9.4%→88.4%、valid_json 100%、
+  推理延迟 1356ms→1035ms；无灾难性遗忘（基座做对的类微调后仍全对，弱类 ValueError/ZeroDivision 修复）
 • 训练论文质量 Reward Model（Qwen2.5-1.5B, DPO），替代 prompt-based 评估，Spearman ρ 提升 31%
 • 微调 Cross-Encoder Reranker 构建三阶段检索管线，MRR@10 提升 65%
 • 将执行重试策略建模为 Contextual Bandit（LinUCB），平均重试减少 32%
 • 构建完整评估体系（pass@k / 数值准确率 / 引用真实率 / 消融实验）
 ```
+
+> ⚠️ 数据真实性说明：Bug Finder 一行的所有数字均为独立复测落盘值（见 `ml/results/COMPARISON.md`，
+> 严格评测脚本 `ml/evaluation/eval_bug_finder_strict.py`，零泄露划分 `ml/prepare_clean_split.py`）。
+> Reward Model / Reranker / LinUCB 三行的数字为项目文档自述值，本次未独立复测，面试时若被追问需讲清评估口径。
 
 ### 面试高频问题
 
@@ -123,12 +128,15 @@ A: 三个原因：
 2. **延迟**：<100ms vs 2-5s
 3. **结构化输出**：微调后格式一致，大模型输出不稳定
 
-**Q: 数据只有 800 条够吗？**
+**Q: 数据只有几百条够吗？**
 
 A: 够用，因为：
 1. 1.5B 模型容量有限，不需要海量数据
-2. 错误类型是有限集合（7 类），分类任务数据效率高
-3. 做了充分的数据增强（变量名替换、错误迁移、合成数据）
+2. 错误类型是有限集合（14 类），分类任务数据效率高
+3. 做了充分的数据增强：除 LLM 合成外，额外**实际执行会报错的 Python 代码**捕获真实 traceback
+   （`ml/data_collection/synthesize_real_tracebacks.py`），保证真实行号与异常消息
+4. 实测：765 条训练数据，3 个 epoch 后内部验证集（76 样本）即达 76/76=100%，
+   无泄露测试集（138 样本）准确率 97.1%
 
 **Q: DPO 只有 500 pairs 效果能好吗？**
 

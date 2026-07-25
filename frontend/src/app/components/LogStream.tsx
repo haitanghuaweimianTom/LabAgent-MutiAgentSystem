@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Terminal, ChevronDown, ChevronUp, Trash2 } from 'lucide-react'
 import { apiBase } from '@/lib/api'
-import { TEAM_COLORS } from '@/lib/constants'
+import { TEAM_COLORS, nodeLabel } from '@/lib/constants'
 import { cn } from '@/lib/utils'
 
 interface LogEntry {
@@ -66,7 +66,7 @@ export default function LogStream({ taskId, className }: LogStreamProps) {
               id: logIdRef.current++,
               timestamp: new Date().toISOString(),
               level: 'info',
-              message: `[${d.current_step}]`,
+              message: `[${nodeLabel(d.current_step)}]`,
             },
           ])
         }

@@ -66,3 +66,64 @@ export const TAB_META: Record<string, { title: string; subtitle: string }> = {
   environment: { title: '环境管理', subtitle: 'Conda / Venv 管理' },
   settings: { title: '系统设置', subtitle: 'Provider / MCP / 知识库' },
 };
+
+/**
+ * LangGraph 节点名（current_step / phase 字段）→ 中文显示名映射。
+ * 覆盖全部 40 个图节点（含 v8.4 新增 17 个质检/增强节点）。
+ * 后端 current_step 可能是英文节点名，也可能是中文文案（如"数据质量门禁校验中"）；
+ * 前端用 nodeLabel() 统一翻译，找不到则 fallback 原值。
+ */
+export const NODE_LABELS: Record<string, string> = {
+  // 原有 23 节点
+  requirement_decomposition: '需求分解',
+  preflight_decision: '预检决策',
+  analyzer: '问题分析',
+  parallel_analysis: '并行分析',
+  discuss_approach: '方案讨论',
+  modeler: '数学建模',
+  algorithm_engineer: '算法设计',
+  financial_analyst: '金融建模',
+  iterative_solver: '算法求解',
+  writer: '论文写作',
+  peer_review: '同行评议',
+  experiment: '实验设计',
+  figure: '科研绘图',
+  fact_check: '事实核查',
+  compliance_check: '合规审查',
+  summary: '总结归档',
+  cannot_solve: '无法求解',
+  self_collect: '数据自采',
+  wait_user: '等待用户',
+  coder_agent_node: '代码生成',
+  ast_audit_node: 'AST 审计',
+  sandbox_execution_node: '沙箱执行',
+  reviewer_reflection_node: '审稿反思',
+  // v8.4 新增 17 节点
+  requirement_validation: '需求校验',
+  data_quality_check: '数据质量检查',
+  literature_dedup: '文献去重',
+  novelty_check: '创新性核查',
+  method_feasibility: '方法可行性评估',
+  context_compression_node: '上下文压缩',
+  code_style_check: '代码风格检查',
+  reproducibility_check: '可复现性审查',
+  formula_validity_check: '公式有效性校验',
+  table_consistency_check: '表格一致性校验',
+  figure_caption_check: '图表说明校验',
+  citation_density_check: '引用密度校验',
+  reference_completeness: '参考文献完整性',
+  terminology_consistency: '术语一致性校验',
+  structure_coherence_check: '章节连贯性校验',
+  abstract_quality_check: '摘要质量校验',
+  final_polish: '终稿润色',
+};
+
+/**
+ * 把后端传来的 current_step/phase 翻译成中文显示名。
+ * 先查 NODE_LABELS；命中则返回中文节点名；未命中则原样返回
+ *（后端有时直接传中文文案如"数据质量门禁校验中"，此时原样显示即可）。
+ */
+export function nodeLabel(step: string | undefined | null): string {
+  if (!step) return '';
+  return NODE_LABELS[step] ?? step;
+}
