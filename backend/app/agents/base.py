@@ -1260,6 +1260,7 @@ class BaseAgent(ABC):
                 if not is_conn_err or attempt == max_retries:
                     raise
                 delay = base_delay * (2 ** attempt)  # 2,4,8,16
+                import asyncio  # 局部导入（与 base.py 其他函数风格一致）
                 logger.warning(
                     f"[{self.name}] LLM 调用连接异常，{delay}s 后重试 "
                     f"({attempt + 1}/{max_retries}): {str(e)[:120]}"

@@ -377,6 +377,15 @@ class ResearchAgent(BaseAgent):
                     if name in mcp_mgr.servers:
                         server_name = name
                         break
+            elif tool_name == "code_search":
+                # v8.4.3 T2: 代码/实现检索——通用网页搜索 + site 限定（GitHub/CSDN/StackOverflow）
+                for name in ["web_search", "bing_search", "brave_search"]:
+                    if name in mcp_mgr.servers:
+                        server_name = name
+                        break
+                # 在 query 前缀加 site 限定（支持 site: 语法的搜索引擎生效；不支持则多带关键词也无害）
+                code_query = query[:150]
+                mcp_tool_args = {"query": f"site:github.com OR site:csdn.net OR site:stackoverflow.com {code_query}"}
             elif tool_name in ("paper_search", "arxiv_search", "scholar_search"):
                 # 优先使用 arxiv_server（返回结构化真实数据，可验证）
                 if "arxiv_server" in mcp_mgr.servers:
@@ -453,10 +462,33 @@ class ResearchAgent(BaseAgent):
             logger.warning(f"MCP search failed: {e}")
             return None
 
+    @staticmethod
+    def _is_searchable_query(query: str) -> bool:
+        """v8.4.3 查询质量门：拒绝空/过短/数字坐标主导的查询，避免无效联网。
+
+        典型反例：把题目原文（含坐标列表、纯数值）当 query 塞给 arXiv，既慢又搜不到。
+        """
+        if not query or not isinstance(query, str):
+            return False
+        q = query.strip()
+        if len(q) < 8:
+            return False
+        # 数字占比过高 → 多为坐标/数值列表，不可作为搜索关键词
+        digits = sum(c.isdigit() for c in q)
+        if digits / len(q) > 0.4:
+            return False
+        return True
+
     async def execute(self, task_input: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
         action = task_input.get("action", "search")
         query = task_input.get("query", context.get("problem_text", ""))
         logger.info(f"ResearchAgent action={action}, query={query[:80]}")
+
+        # v8.4.3: 读取多智能体投票决策（T1/T2 门控）
+        decision = context.get("research_decision") or {}
+        allow_t0 = decision.get("allow_t0", True)    # T0 永远放行（向后兼容无 decision 时默认 True）
+        allow_t1 = decision.get("allow_t1", True)     # T1 论文检索需投票放行
+        allow_t2 = decision.get("allow_t2", False)    # T2 代码检索需投票+复杂任务放行
 
         # 步骤1：尝试使用 MCP 工具进行真实搜索
         mcp_result: Optional[str] = None
@@ -464,25 +496,38 @@ class ResearchAgent(BaseAgent):
         mcp_search_used = False
         mcp_server_used: Optional[str] = None
 
-        if action in ("search", "deep_search", "search_background", "search_methods"):
+        if action in ("search", "deep_search", "search_background", "search_methods", "code_search"):
+            # 工具分层：T0=web_search(永远放行) T1=arxiv/paper_search(需 allow_t1) T2=code_search(需 allow_t2)
             if action == "search_methods":
-                mcp_result = await self._call_mcp_search(query, tool_name="paper_search")
+                tool_name, tier = "paper_search", "T1"
             elif action == "search_background":
-                mcp_result = await self._call_mcp_search(query, tool_name="web_search")
-            else:
-                # search / deep_search 默认走 arXiv 真实学术检索
-                mcp_result = await self._call_mcp_search(query, tool_name="arxiv_search")
+                tool_name, tier = "web_search", "T0"
+            elif action == "code_search":
+                tool_name, tier = "code_search", "T2"
+            else:  # search / deep_search 默认走 arXiv 真实学术检索
+                tool_name, tier = "arxiv_search", "T1"
 
-            if mcp_result:
-                mcp_search_used = True
-                logger.info(f"MCP search returned {len(mcp_result)} chars")
-                # 仅对学术搜索 action 解析真实论文
-                if action in ("search", "deep_search", "search_methods"):
-                    verified_papers = self._parse_arxiv_papers(mcp_result, query)
-                    logger.info(f"Verified papers from MCP: {len(verified_papers)}")
-                    # 【新增】用 Semantic Scholar 批量增强元数据
-                    if verified_papers:
-                        verified_papers = await self._enrich_with_semantic_scholar(verified_papers)
+            # 门控：T0 永远放行；T1 需 allow_t1；T2 需 allow_t2
+            gate_ok = (tier == "T0" and allow_t0) or (tier == "T1" and allow_t1) or (tier == "T2" and allow_t2)
+            # query 质量门：拒绝空/过短/数字坐标主导的查询，避免无效联网（如纯坐标列表当 query）
+            if gate_ok and not self._is_searchable_query(query):
+                logger.info(f"ResearchAgent: query 质量不足({tier})，跳过检索: {query[:60]}")
+                gate_ok = False
+
+            if gate_ok:
+                mcp_result = await self._call_mcp_search(query, tool_name=tool_name)
+                if mcp_result:
+                    mcp_search_used = True
+                    logger.info(f"MCP search({tier}) returned {len(mcp_result)} chars")
+                    # 仅对学术搜索 action 解析真实论文
+                    if action in ("search", "deep_search", "search_methods"):
+                        verified_papers = self._parse_arxiv_papers(mcp_result, query)
+                        logger.info(f"Verified papers from MCP: {len(verified_papers)}")
+                        # 【新增】用 Semantic Scholar 批量增强元数据
+                        if verified_papers:
+                            verified_papers = await self._enrich_with_semantic_scholar(verified_papers)
+            else:
+                logger.info(f"ResearchAgent: {tier}({tool_name}) 未通过门控，跳过（allow_t1={allow_t1}, allow_t2={allow_t2}）")
 
         # 步骤1.5：相关性评分与 Top-K 过滤
         top_k = task_input.get("top_k", 10)

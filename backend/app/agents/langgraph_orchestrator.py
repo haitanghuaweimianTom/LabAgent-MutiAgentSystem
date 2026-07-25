@@ -151,6 +151,8 @@ class TaskState(TypedDict, total=False):
     # ===== v8.3: Contextual Bandit 自适应决策 =====
     bandit_action_id: int  # Bandit 上次选择的动作 ID
     bandit_context: List[float]  # Bandit 上次的上下文特征向量
+    # ===== v8.4.3: 多智能体投票决策（是否联网检索论文/代码）=====
+    research_decision: Optional[Dict[str, Any]]  # 投票结果：{allow_t0,allow_t1,allow_t2,tally,voters,round1,...}
 
 
 @dataclass
@@ -780,7 +782,14 @@ class LangGraphOrchestrator:
     _PROBLEM_TYPES_NO_DATA = {"网络", "物理", "仿真", "测量", "综合"}
 
     # 不需要 research_agent（已知领域或纯方法论）
-    _PROBLEM_TYPES_NO_RESEARCH = {"物理", "测量"}
+    _PROBLEM_TYPES_NO_RESEARCH = {
+        "物理", "测量",
+        # v8.4.2: 扩展"无需文献检索"的问题类型——纯建模/算法题靠数学方法即可，
+        # 强制走 MCP 联网搜文献既慢又易因搜索超时拖垮任务（如 TSP/运筹/线性规划）。
+        "优化",   # TSP/路径规划/线性规划/整数规划——纯数学建模，不需文献支撑
+        "仿真",   # 仿真建模——基于机理/数值方法，通常不需文献
+        "未知",   # 类型不明时不过度搜索，避免无效联网
+    }
 
     @classmethod
     def _should_skip_data(cls, problem_type: str, has_data_files: bool) -> bool:
@@ -799,6 +808,226 @@ class LangGraphOrchestrator:
         if problem_type in cls._PROBLEM_TYPES_NO_RESEARCH:
             return True
         return False
+
+    # ------------------------------------------------------------------
+    # v8.4.3: 多智能体投票决策节点（research_vote）
+    # ------------------------------------------------------------------
+    # T0（维基/百度百科/普通网页）默认放行，无需投票；
+    # T1（arXiv 论文 MCP）需过半数投票放行；
+    # T2（GitHub/CSDN 代码检索）仅复杂任务且过半数投票放行。
+    # 快路径：纯建模/仿真/物理类问题类型直接 no-research，0 次 LLM 调用。
+    # 降级：投票 LLM 调用失败→回退白名单 _should_skip_research，不卡死任务。
+    _VOTER_DESC = {
+        "analyzer_agent": "题目本质分析者：判断该题是否需要外部文献/前沿知识支撑",
+        "modeler_agent": "建模消费者：判断建模是否需要方法/算法参考",
+        "peer_review_agent": "严谨审查者：判断论文无引用支撑是否站不住脚",
+        "writer_agent": "写作视角：判断论文论述是否需要文献/代码佐证",
+        "financial_analyst_agent": "金融视角：判断金融风险分析是否需要前沿方法/数据源",
+        "algorithm_engineer_agent": "算法视角：判断是否需要检索算法实现参考",
+        "coordinator": "全局视角：综合任务目标判断检索必要性",
+    }
+    # 复杂任务模板/工作流（触发 5 人大 panel + 开放 T2 代码检索）
+    _COMPLEX_TEMPLATES = {"financial_analysis", "research_survey", "frontier_academic"}
+    _COMPLEX_WORKFLOWS = {"deep_research", "research_paper"}
+
+    async def _node_research_vote(self, state: TaskState) -> TaskState:
+        """多智能体投票：是否联网检索论文(T1)/代码(T2)。analyzer 后、parallel_analysis 前。"""
+        import asyncio
+
+        state = await self._check_user_input(state)
+        task_id = state["task_id"]
+        bus = get_event_bus()
+        bus.emit_phase_change(task_id, "research_vote", "研究决策投票：多智能体讨论是否联网检索")
+        self._update_progress(task_id, state["problem_text"], 18, "研究决策投票中")
+
+        problem_text = state["problem_text"]
+        analyzer_out = self._resolve_results(state).get("analyzer_agent", {}) or {}
+        problem_type = analyzer_out.get("problem_type", "未知")
+        template = state.get("paper_template", "math_modeling")
+        workflow = state.get("workflow_type", "standard")
+
+        # ---- 快路径：纯建模/已知领域 → 0 LLM，直接 no-research ----
+        if self._should_skip_research(problem_type, workflow):
+            decision = {
+                "allow_t0": True, "allow_t1": False, "allow_t2": False,
+                "mode": "fast_path",
+                "reason": f"问题类型={problem_type}，纯建模/已知领域，无需文献检索",
+                "tally": {"t1": "0/0 (快路径)", "t2": "0/0 (快路径)"},
+                "voters": [], "round1": [],
+            }
+            logger.info(f"[LangGraph:{task_id}] research_vote: fast_path (problem_type={problem_type}) → no research")
+            self._post_chat(task_id, "coordinator", f"研究决策：问题类型「{problem_type}」为纯建模/已知领域，跳过文献检索")
+            bus.emit_agent_complete(task_id, "research_vote", "research_vote", "快路径：无需文献检索")
+            return {**state, "research_decision": decision, "current_step": "research_vote_done"}
+
+        # ---- 复杂度判定 → panel 规模 ----
+        is_complex = (template in self._COMPLEX_TEMPLATES) or (workflow in self._COMPLEX_WORKFLOWS)
+        base_pool = ["analyzer_agent", "modeler_agent", "peer_review_agent"]
+        extra_pool = ["writer_agent", "financial_analyst_agent", "algorithm_engineer_agent", "coordinator"]
+        voters = [(r, self._VOTER_DESC.get(r, r)) for r in base_pool if r in self.agents]
+        if is_complex:
+            for r in extra_pool:
+                if r in self.agents and r not in [v[0] for v in voters] and len(voters) < 5:
+                    voters.append((r, self._VOTER_DESC.get(r, r)))
+        if not voters:
+            # 无可用选民 → 保守放行 T1（维持原行为），不卡死
+            decision = {"allow_t0": True, "allow_t1": True, "allow_t2": False,
+                        "mode": "no_voters_fallback", "reason": "无可用选民，保守放行 T1"}
+            logger.warning(f"[LangGraph:{task_id}] research_vote: 无可用选民，回退放行 T1")
+            return {**state, "research_decision": decision, "current_step": "research_vote_done"}
+
+        majority = len(voters) // 2 + 1
+        panel_desc = f"{len(voters)}人panel（{'复杂任务' if is_complex else '普通任务'}，过半需{majority}票）"
+
+        # ---- Round 1：讨论（并行，各自给立场+理由）----
+        round1_thunks = [self._voter_discuss(r, d, problem_text, problem_type, template, is_complex)
+                         for r, d in voters]
+        round1_results = await asyncio.gather(*round1_thunks, return_exceptions=True)
+        round1 = []
+        for (role, desc), res in zip(voters, round1_results):
+            if isinstance(res, Exception) or not isinstance(res, dict):
+                round1.append({"role": role, "stance_t1": "unknown", "stance_t2": "unknown",
+                               "reason": f"讨论失败: {str(res)[:80] if isinstance(res, Exception) else '空'}"})
+            else:
+                round1.append({"role": role, **res})
+        round1_brief = "\n".join(
+            f"- {r['role']}: T1={r.get('stance_t1','?')} T2={r.get('stance_t2','?')}（{r.get('reason','')[:80]}）"
+            for r in round1
+        )
+
+        # ---- Round 2：投票（并行，看到 round1 后正式投票）----
+        round2_thunks = [self._voter_vote(r, d, problem_text, problem_type, template, is_complex, round1_brief)
+                        for r, d in voters]
+        round2_results = await asyncio.gather(*round2_thunks, return_exceptions=True)
+        votes_t1, votes_t2 = 0, 0
+        voter_records = []
+        for (role, desc), res in zip(voters, round2_results):
+            rec = {"role": role}
+            if isinstance(res, Exception) or not isinstance(res, dict):
+                rec.update({"vote_t1": "error", "vote_t2": "error", "reason": str(res)[:80] if isinstance(res, Exception) else "空"})
+            else:
+                v1 = str(res.get("vote_t1", "no")).strip().lower() in ("yes", "true", "1", "是", "y")
+                v2 = str(res.get("vote_t2", "no")).strip().lower() in ("yes", "true", "1", "是", "y")
+                rec.update({"vote_t1": "yes" if v1 else "no", "vote_t2": "yes" if v2 else "no",
+                            "reason": str(res.get("reason", ""))[:120]})
+                if v1:
+                    votes_t1 += 1
+                if v2:
+                    votes_t2 += 1
+            voter_records.append(rec)
+
+        allow_t1 = votes_t1 >= majority
+        allow_t2 = votes_t2 >= majority and is_complex  # T2 仅复杂任务且过半
+
+        decision = {
+            "allow_t0": True,  # T0 永远放行
+            "allow_t1": allow_t1,
+            "allow_t2": allow_t2,
+            "mode": "vote",
+            "panel": panel_desc,
+            "is_complex": is_complex,
+            "majority": majority,
+            "tally": {"t1": f"{votes_t1}/{len(voters)}", "t2": f"{votes_t2}/{len(voters)}"},
+            "voters": voter_records,
+            "round1": round1,
+        }
+        t1_verdict = "✅放行" if allow_t1 else "❌否决"
+        t2_verdict = "✅放行" if allow_t2 else "❌否决"
+        logger.info(
+            f"[LangGraph:{task_id}] research_vote: {panel_desc} | "
+            f"T1={votes_t1}/{len(voters)}({t1_verdict}) T2={votes_t2}/{len(voters)}({t2_verdict})"
+        )
+        self._post_chat(task_id, "coordinator",
+            f"研究决策投票完成（{panel_desc}）：论文检索 T1={votes_t1}/{len(voters)}{t1_verdict}，"
+            f"代码检索 T2={votes_t2}/{len(voters)}{t2_verdict}")
+        bus.emit_agent_complete(task_id, "research_vote", "research_vote",
+            f"T1={votes_t1}/{len(voters)}({t1_verdict}) T2={votes_t2}/{len(voters)}({t2_verdict})")
+        return {**state, "research_decision": decision, "current_step": "research_vote_done"}
+
+    async def _voter_discuss(self, role: str, desc: str, problem_text: str,
+                             problem_type: str, template: str, is_complex: bool) -> Dict[str, Any]:
+        """Round 1：选民给出初步立场+理由。"""
+        agent = self._get_voter_agent(role)
+        if not agent:
+            return {"stance_t1": "unknown", "stance_t2": "unknown", "reason": f"agent {role} 不可用"}
+        prompt = (
+            f"你是数学建模多Agent系统中的【{role}】，职责：{desc}。\n"
+            f"当前任务：\n- 问题：{problem_text[:500]}\n- 问题类型：{problem_type}\n"
+            f"- 论文模板：{template}\n- 是否复杂任务：{'是' if is_complex else '否'}\n\n"
+            f"请从你的角色视角判断：本任务是否需要 (a) 联网检索学术论文 T1（arXiv）？"
+            f"(b) 联网检索代码/实现 T2（GitHub/CSDN，仅复杂任务有意义）？\n"
+            f"给出你的初步立场和1-2句理由。严格输出JSON："
+            f'{{"stance_t1": "yes|no", "stance_t2": "yes|no", "reason": "你的理由"}}'
+        )
+        try:
+            resp = await agent._call_llm_once([{"role": "user", "content": prompt}], temperature=0.2, tools=None)
+            content = resp.get("choices", [{}])[0].get("message", {}).get("content", "{}")
+            data = self._extract_json_obj(content)
+            return {"stance_t1": data.get("stance_t1", "unknown"),
+                    "stance_t2": data.get("stance_t2", "unknown"),
+                    "reason": str(data.get("reason", ""))}
+        except Exception as e:
+            return {"stance_t1": "unknown", "stance_t2": "unknown", "reason": f"LLM 调用失败: {str(e)[:80]}"}
+
+    async def _voter_vote(self, role: str, desc: str, problem_text: str,
+                          problem_type: str, template: str, is_complex: bool,
+                          round1_brief: str) -> Dict[str, Any]:
+        """Round 2：看到 round1 后正式投票（可参考或反对其他 Agent 观点）。"""
+        agent = self._get_voter_agent(role)
+        if not agent:
+            return {"vote_t1": "no", "vote_t2": "no", "reason": f"agent {role} 不可用"}
+        prompt = (
+            f"你是数学建模多Agent系统中的【{role}】，职责：{desc}。\n"
+            f"当前任务：\n- 问题：{problem_text[:400]}\n- 问题类型：{problem_type} | "
+            f"模板：{template} | 复杂任务：{'是' if is_complex else '否'}\n\n"
+            f"其他Agent的初步讨论：\n{round1_brief}\n\n"
+            f"现在请正式投票（可参考也可反对其他Agent的观点）：\n"
+            f"T1=是否联网检索学术论文(arXiv)？ T2=是否联网检索代码/实现(GitHub/CSDN)？"
+            f"（T2仅复杂任务有意义）\n严格输出JSON："
+            f'{{"vote_t1": "yes|no", "vote_t2": "yes|no", "reason": "1句理由"}}'
+        )
+        try:
+            resp = await agent._call_llm_once([{"role": "user", "content": prompt}], temperature=0.2, tools=None)
+            content = resp.get("choices", [{}])[0].get("message", {}).get("content", "{}")
+            return self._extract_json_obj(content)
+        except Exception as e:
+            return {"vote_t1": "no", "vote_t2": "no", "reason": f"LLM 调用失败: {str(e)[:80]}"}
+
+    def _get_voter_agent(self, role: str):
+        """获取选民对应的 agent 实例（用其 _call_llm_once 调 LLM）。coordinator 无独立 agent 时借用 analyzer。"""
+        if role == "coordinator":
+            return self.agents.get("coordinator") or self.agents.get("analyzer_agent")
+        return self.agents.get(role)
+
+    @staticmethod
+    def _extract_json_obj(text: str) -> Dict[str, Any]:
+        """从 LLM 输出中提取首个 JSON 对象（容忍前后文案 + markdown 代码块）。"""
+        if not text:
+            return {}
+        import json as _json
+        s = text.strip()
+        # 去 markdown 代码块
+        if s.startswith("```"):
+            s = s.split("```", 2)
+            s = s[1] if len(s) > 1 else text
+            if s.startswith("json"):
+                s = s[4:]
+        # 找第一个 {...}
+        start = s.find("{")
+        if start < 0:
+            return {}
+        depth = 0
+        for i in range(start, len(s)):
+            if s[i] == "{":
+                depth += 1
+            elif s[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    try:
+                        return _json.loads(s[start:i + 1])
+                    except Exception:
+                        return {}
+        return {}
 
     # ------------------------------------------------------------------
     # HITL: 用户输入检查
@@ -7181,6 +7410,7 @@ class LangGraphOrchestrator:
         builder.add_node("requirement_decomposition", self._node_requirement_decomposition)
         builder.add_node("preflight_decision", self._node_preflight_decision)
         builder.add_node("analyzer", self._node_analyzer)
+        builder.add_node("research_vote", self._node_research_vote)  # v8.4.3: 多智能体投票决策（是否联网检索论文/代码）
         builder.add_node("parallel_analysis", self._node_parallel_analysis)  # v7.1: 并行分析（内部调用 data/research/innovation）
         builder.add_node("discuss_approach", self._node_discuss_approach)
         builder.add_node("modeler", self._node_modeler)
@@ -7268,17 +7498,11 @@ class LangGraphOrchestrator:
             },
         )
 
-        # 条件边：analyzer → v7.1 并行分析（data+research+innovation 同时执行）
-        # v7.2 fix: skip_to_modeling 也走 parallel_analysis 节点（它会自动选择正确的建模 Agent）
-        # 注意：data、research、innovation 不再作为独立图节点，由 parallel_analysis 内部并行调用
-        builder.add_conditional_edges(
-            "analyzer",
-            self._route_after_analyzer_parallel,
-            {
-                "parallel": "parallel_analysis",
-                "skip_to_modeling": "parallel_analysis",  # 修复：不再硬编码 modeler
-            },
-        )
+        # 条件边：analyzer → research_vote（v8.4.3: 多智能体投票决策是否联网检索）
+        # 投票节点内部含快路径（纯建模题 0 LLM）与降级（LLM 失败回退白名单），
+        # 无论 analyzer 结论如何都先过投票节点，再进并行分析。
+        builder.add_edge("analyzer", "research_vote")
+        builder.add_edge("research_vote", "parallel_analysis")
 
         # 并行分析 → 条件路由到建模 Agent
         builder.add_conditional_edges(
@@ -7641,6 +7865,19 @@ class LangGraphOrchestrator:
             search_actions = ["search", "search_background", "search_methods"]
         else:
             search_actions = ["search"]
+
+        # v8.4.3: 多智能体投票决策门控——T1 被否决时退做 T0 网页背景（用户认可 T0 无需投票）
+        decision = state.get("research_decision") or {}
+        allow_t1 = decision.get("allow_t1", True)
+        allow_t2 = decision.get("allow_t2", False)
+        if not allow_t1:
+            # T1 论文检索被投票否决：用 T0 网页背景替代，避免空跑
+            search_actions = ["search_background" if a in ("search", "search_methods") else a for a in search_actions]
+            logger.info(f"[LangGraph:{task_id}] research: T1 被投票否决，退做 T0 网页背景")
+        # T2 代码检索（仅复杂任务且投票放行才追加）
+        if allow_t2:
+            search_actions.append("code_search")
+            logger.info(f"[LangGraph:{task_id}] research: T2 代码检索已放行，追加 code_search action")
 
         for action in search_actions:
             try:
@@ -9275,6 +9512,7 @@ print(json.dumps({{"accuracy": round(acc, 4)}}))
             "requirement_plan": state.get("requirement_plan"),  # 需求分解结果（所有Agent可读）
             "innovation_analysis": state.get("innovation_analysis"),  # 创新发现（所有Agent可读）
             "task_summary": state.get("task_summary"),  # 任务总结（所有Agent可读）
+            "research_decision": state.get("research_decision"),  # v8.4.3: 投票决策（T1/T2 门控）
         }
 
         # 用户反馈注入

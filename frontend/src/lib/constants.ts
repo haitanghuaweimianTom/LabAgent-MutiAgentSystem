@@ -78,6 +78,7 @@ export const NODE_LABELS: Record<string, string> = {
   requirement_decomposition: '需求分解',
   preflight_decision: '预检决策',
   analyzer: '问题分析',
+  research_vote: '研究决策投票',
   parallel_analysis: '并行分析',
   discuss_approach: '方案讨论',
   modeler: '数学建模',
