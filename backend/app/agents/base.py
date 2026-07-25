@@ -1218,7 +1218,13 @@ class BaseAgent(ABC):
         temperature: Optional[float] = None,
         tools: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
-        """单次 LLM 调用，统一路由到 UnifiedLLMClient。"""
+        """单次 LLM 调用，统一路由到 UnifiedLLMClient。
+
+        v8.4.1: 撞连接异常（火山方舟等 Anthropic 兼容端点间歇断连）时
+        带指数退避重试，避免单次网络抖动直接判失败导致整个 agent 链路雪崩。
+        重试仅针对连接类异常（ConnectError/ConnectionError/网络），业务错误
+        （4xx 鉴权/参数）不重试，防止熔断器被刷爆。
+        """
         provider = self._get_current_provider()
 
         # kimi-for-coding 等模型只支持 temperature=1
@@ -1228,14 +1234,39 @@ class BaseAgent(ABC):
             temp = temperature if temperature is not None else self.temperature
 
         client = get_unified_llm_client()
-        return await client.chat_completion(
-            provider=provider,
-            messages=messages,
-            model=self.model,
-            temperature=temp,
-            max_tokens=self.effective_max_tokens,
-            tools=tools,
-        )
+
+        max_retries = 4  # 共 1+4=5 次
+        base_delay = 2.0  # 2/4/8/16 秒指数退避
+        last_exc: Optional[Exception] = None
+        for attempt in range(max_retries + 1):
+            try:
+                return await client.chat_completion(
+                    provider=provider,
+                    messages=messages,
+                    model=self.model,
+                    temperature=temp,
+                    max_tokens=self.effective_max_tokens,
+                    tools=tools,
+                )
+            except Exception as e:
+                last_exc = e
+                msg = str(e).lower()
+                # 仅对连接类/网络类异常重试（业务错误如 401/400 不重试）
+                is_conn_err = any(k in msg for k in (
+                    "connection", "connect", "timed out", "timeout",
+                    "network is unreachable", "all connection attempts failed",
+                    "remoteendresponseerror", "eof", "reset by peer",
+                ))
+                if not is_conn_err or attempt == max_retries:
+                    raise
+                delay = base_delay * (2 ** attempt)  # 2,4,8,16
+                logger.warning(
+                    f"[{self.name}] LLM 调用连接异常，{delay}s 后重试 "
+                    f"({attempt + 1}/{max_retries}): {str(e)[:120]}"
+                )
+                await asyncio.sleep(delay)
+        # 理论不可达
+        raise last_exc if last_exc else RuntimeError("LLM 调用失败")
 
     async def _react_loop(
         self,

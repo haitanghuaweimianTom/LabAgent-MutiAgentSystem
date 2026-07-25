@@ -597,10 +597,24 @@ class ResearchAgent(BaseAgent):
                 "paper_source": "arxiv",
             }
 
-        # 步骤5：搜索失败，终止流程
-        error_msg = f"研究搜索失败：所有搜索路径（MCP + LLM）均失败，无法获取真实研究资料 (action={action})"
-        logger.error(f"[research_agent] {error_msg}")
-        raise RuntimeError(error_msg)
+        # 步骤5：MCP + LLM 均失败，优雅降级返回空结果而非终止整个任务
+        # v8.4.1: 原实现 raise RuntimeError 会让整个 LangGraph 任务 cannot_solve，
+        # 但很多题目（如纯 TSP 建模）根本不需要外部文献，modeler 可基于自身知识建模。
+        # 改为返回空 research 结果，让下游 modeler/solver 继续，不因检索失败而中断。
+        logger.warning(
+            f"[research_agent] MCP + LLM 均失败 (action={action})，"
+            f"降级返回空结果，下游将基于模型自身知识继续（适用于不依赖文献的建模题）"
+        )
+        return {
+            "papers": [],
+            "datasets": [],
+            "methods": [],
+            "summary": "研究检索暂不可用（MCP 搜索超时且 LLM 调用失败），下游将基于模型自身知识继续",
+            "mcp_search_used": False,
+            "verified_paper_count": 0,
+            "paper_source": "none",
+            "degraded": True,
+        }
 
     # ====================================================================
     # v6.0: 跨论文研究空白识别

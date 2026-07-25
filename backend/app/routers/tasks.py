@@ -1701,7 +1701,14 @@ async def pause_task(task_id: str):
 
 @router.post("/{task_id}/resume")
 async def resume_task(task_id: str):
-    """恢复任务"""
+    """恢复任务。
+
+    v8.4.1: 修复 resume 对"系统重启后的 interrupted 任务"无效的缺陷。
+    原实现只解除内存暂停标记（_task_paused=False），对执行循环已死的
+    interrupted 任务无意义——任务被标 running 但实际不执行。
+    现在从 meta 重建 workflow 参数，真正重新拉起 _run_workflow 后台执行。
+    对正常 paused 任务保持原行为（解暂停标记让存活循环继续）。
+    """
     from ..core.task_persistence import load_task_metadata
     meta = load_task_metadata(task_id)
     if not meta:
@@ -1717,7 +1724,40 @@ async def resume_task(task_id: str):
         progress=meta.get("progress", 0),
         current_step="继续执行",
     )
+
+    # 解除内存暂停标记（对 paused 任务有效）
     orch.resume_task(task_id)
+
+    # v8.4.1: 对 interrupted/无存活循环的任务，重新拉起执行
+    # 判断依据：TaskManager 里没有该 task 的活跃 task（重启后清空）
+    from ..core.task_manager import get_task_manager
+    task_mgr = get_task_manager()
+    has_live_task = task_id in getattr(task_mgr, "_tasks", {}) and \
+        getattr(task_mgr._tasks.get(task_id), "_asyncio_task", None) is not None and \
+        not getattr(task_mgr._tasks.get(task_id), "_asyncio_task", None).done()
+
+    if not has_live_task:
+        # 从 meta 重建 workflow 参数，真正重启执行（checkpoint 会恢复已完成的节点状态）
+        try:
+            import asyncio
+            loop = asyncio.get_event_loop()
+            loop.create_task(_run_workflow(
+                task_id,
+                meta.get("problem_text", ""),
+                None,  # workflow（None 让 orchestrator 走默认）
+                meta.get("data_files", []) or [],
+                meta.get("mode", "auto"),
+                meta.get("project_name"),
+                meta.get("knowledge_base_ids") or ([meta["knowledge_base_id"]] if meta.get("knowledge_base_id") else None),
+                meta.get("template", "math_modeling"),
+                meta.get("workflow_type", "standard"),
+                meta.get("preflight_report"),
+                meta.get("use_critique", True),
+            ))
+            logger.info(f"Task {task_id}: interrupted 任务已重新拉起执行 (resume)")
+        except Exception as e:
+            logger.error(f"Task {task_id}: resume 重新拉起执行失败: {e}")
+            raise HTTPException(status_code=500, detail=f"恢复执行失败: {e}")
 
     return {"task_id": task_id, "status": "running", "message": "任务已恢复", "paused_data_keys": list(paused_data.keys())}
 
