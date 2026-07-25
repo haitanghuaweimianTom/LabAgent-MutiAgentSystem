@@ -106,6 +106,10 @@ class _PreflightLLMClient(BaseAgent):
 
     name = "preflight_llm_client"
     default_llm_backend = ""
+    # v8.4.4: Preflight 只做模板/工作流分类决策，不需要知识库检索。
+    # 跳过 KB 注入，避免遍历全部 KB 建 embedding（59个KB串行建引擎会
+    # 阻塞事件循环数分钟，导致 submit 超时 + 后续 LLM 调用发不出）。
+    skip_kb_injection: bool = True
 
     def get_system_prompt(self) -> str:
         return (

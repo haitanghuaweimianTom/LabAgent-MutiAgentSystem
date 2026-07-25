@@ -306,6 +306,19 @@ class KnowledgeManager:
             logger.warning(f"[KnowledgeManager] 混合检索引擎创建失败: {e}")
             return None
 
+    async def get_hybrid_engine_async(self, base_id: str) -> Optional[HybridSearchEngine]:
+        """async 版 _get_hybrid_engine：把 add_documents（含 SentenceTransformer encode）
+        卸到线程池，避免在 asyncio 事件循环线程上同步阻塞并发 LLM 调用。
+
+        v8.4.4: 与 _inject_knowledge_context / _collect_kb_sources_for_citations 配套，
+        search 路径全链路卸线程池，根治 embedding 阻塞事件循环。
+        """
+        import asyncio
+        if base_id in self._hybrid_engines:
+            return self._hybrid_engines[base_id]
+        # 同步构建放线程池；构建内部会写 _hybrid_engines 缓存
+        return await asyncio.to_thread(self._get_hybrid_engine, base_id)
+
     def _rebuild_kb_vectors(self, base: KnowledgeBaseConfig, kb: Any) -> None:
         """重建知识库的向量索引（批量添加以确保 TF-IDF 词汇表完整）"""
         kb.clear()
@@ -680,6 +693,12 @@ class KnowledgeManager:
                 "retrieval_method": "tfidf",
             })
         return output
+
+    async def search_async(self, base_id: str, query: str, top_k: int = 5, min_score: float = 0.0) -> List[Dict[str, Any]]:
+        """async 版 search：引擎构建 + 检索（含 SentenceTransformer encode）全部卸到线程池，
+        避免阻塞 asyncio 事件循环。v8.4.4"""
+        import asyncio
+        return await asyncio.to_thread(self.search, base_id, query, top_k, min_score)
 
     def query_context(self, base_id: str, query: str, top_k: int = 3, max_chars: int = 1500) -> str:
         """查询并返回格式化上下文"""

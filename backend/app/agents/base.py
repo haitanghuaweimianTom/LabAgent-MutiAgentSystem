@@ -799,6 +799,10 @@ class BaseAgent(ABC):
                 if results:
                     return self._format_knowledge_context(results, f"KB={target_id}")
 
+            # v8.4.4: 自动遍历全局 KB 仅 opt-in（避免纯建模题无脑遍历 59 个 KB 建引擎拖垮每轮 call_llm）
+            if not getattr(self, "use_global_kb", False):
+                return ""
+
             # 优先级 3: 自动选（项目私有 + 全局公共）
             eff_project = project_name or self._task_project_name
             if eff_project:
@@ -1084,7 +1088,12 @@ class BaseAgent(ABC):
         # ===== 注入知识库上下文 =====
         last_content = messages[-1].get("content", "")
         query_text = last_content if isinstance(last_content, str) else ""
-        kb_context = await self._inject_knowledge_context(query_text)
+        # v8.4.4: 可跳过 KB 注入（如 preflight 仅做分类决策，不需要 KB 检索，
+        # 避免遍历全部 KB 建 embedding 阻塞事件循环）
+        if getattr(self, "skip_kb_injection", False):
+            kb_context = ""
+        else:
+            kb_context = await self._inject_knowledge_context(query_text)
         if kb_context:
             allowed = budget_mgr.remaining("knowledge_context")
             if budget_mgr.estimate_tokens(kb_context) > allowed:
