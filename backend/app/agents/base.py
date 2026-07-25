@@ -758,7 +758,7 @@ class BaseAgent(ABC):
             "intent": intent,
         }
 
-    def _inject_knowledge_context(
+    async def _inject_knowledge_context(
         self,
         query_text: str,
         top_k: int = 3,
@@ -769,6 +769,8 @@ class BaseAgent(ABC):
         """查询知识库并返回上下文文本（静默失败）
 
         v6.0: 使用混合检索引擎（语义 + BM25），支持来源追踪。
+        v8.4.4: 改为 async，km.search（含 SentenceTransformer encode）卸到线程池，
+        避免在事件循环线程上同步阻塞，导致并发 LLM 调用 TCP/TLS 握手挂起。
 
         优先级：
           1. base_ids / self._knowledge_base_ids（多 KB，按 KB 均分 max_chars）
@@ -776,6 +778,7 @@ class BaseAgent(ABC):
           3. 自动选（项目私有 + 全局公共，由 query_context_for_task 处理）
           4. 全部 KB（旧兜底）
         """
+        import asyncio
         try:
             from ..core.knowledge_manager import get_knowledge_manager
             km = get_knowledge_manager()
@@ -783,28 +786,32 @@ class BaseAgent(ABC):
             # 优先级 1: 多 KB
             effective_ids = base_ids or self._knowledge_base_ids
             if effective_ids:
-                results = self._search_knowledge_bases(km, effective_ids, query_text, top_k, project_name)
+                results = await asyncio.to_thread(
+                    self._search_knowledge_bases, km, effective_ids, query_text, top_k, project_name)
                 if results:
                     return self._format_knowledge_context(results, "多 KB")
 
             # 优先级 2: 单 KB（向后兼容）
             target_id = base_id or self._knowledge_base_id
             if target_id:
-                results = self._search_knowledge_bases(km, [target_id], query_text, top_k, project_name)
+                results = await asyncio.to_thread(
+                    self._search_knowledge_bases, km, [target_id], query_text, top_k, project_name)
                 if results:
                     return self._format_knowledge_context(results, f"KB={target_id}")
 
             # 优先级 3: 自动选（项目私有 + 全局公共）
             eff_project = project_name or self._task_project_name
             if eff_project:
-                results = self._search_knowledge_bases(km, None, query_text, top_k, project_name)
+                results = await asyncio.to_thread(
+                    self._search_knowledge_bases, km, None, query_text, top_k, project_name)
                 if results:
                     return self._format_knowledge_context(results, f"project={eff_project}")
 
             # 优先级 4: 全部 KB（旧兜底）
             all_results = []
             for bid in km._bases:
-                results = self._search_knowledge_bases(km, [bid], query_text, top_k, project_name)
+                results = await asyncio.to_thread(
+                    self._search_knowledge_bases, km, [bid], query_text, top_k, project_name)
                 all_results.extend(results)
             if all_results:
                 # 按分数排序，取 top_k
@@ -1077,7 +1084,7 @@ class BaseAgent(ABC):
         # ===== 注入知识库上下文 =====
         last_content = messages[-1].get("content", "")
         query_text = last_content if isinstance(last_content, str) else ""
-        kb_context = self._inject_knowledge_context(query_text)
+        kb_context = await self._inject_knowledge_context(query_text)
         if kb_context:
             allowed = budget_mgr.remaining("knowledge_context")
             if budget_mgr.estimate_tokens(kb_context) > allowed:

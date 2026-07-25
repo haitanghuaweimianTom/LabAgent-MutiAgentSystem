@@ -65,16 +65,20 @@ class HybridSearchEngine:
                         del os.environ[var]
 
                 from sentence_transformers import SentenceTransformer
-                self._semantic_model = SentenceTransformer('all-MiniLM-L6-v2')
-                logger.info("[HybridSearch] 语义模型已加载")
+                # v8.4.4: 强制 CPU 推理。GPU 显存被 Bug Finder 等服务占满后，
+                # MiniLM 反复 CUDA OOM 重试，每次重试都在 asyncio 事件循环线程上
+                # 同步阻塞数秒，导致并发 LLM 调用的 TCP/TLS 握手挂起→同毫秒全失败。
+                # all-MiniLM-L6-v2 体积小，CPU 编码足够快，改走 CPU 彻底根治 OOM 风暴。
+                self._semantic_model = SentenceTransformer('all-MiniLM-L6-v2', device='cpu')
+                logger.info("[HybridSearch] 语义模型已加载 (CPU 模式，避免 GPU OOM 阻塞事件循环)")
             except Exception as e:
                 logger.warning(f"[HybridSearch] 语义模型加载失败: {e}")
-        
+
         if self.use_reranker and self._reranker is None:
             try:
                 from sentence_transformers import CrossEncoder
-                self._reranker = CrossEncoder(self.reranker_model_name)
-                logger.info("[HybridSearch] 重排序模型已加载")
+                self._reranker = CrossEncoder(self.reranker_model_name, device='cpu')
+                logger.info("[HybridSearch] 重排序模型已加载 (CPU 模式)")
             except Exception as e:
                 logger.warning(f"[HybridSearch] 重排序模型加载失败: {e}")
     

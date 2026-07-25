@@ -1055,7 +1055,7 @@ class WriterAgent(BaseAgent):
         )
 
         # v6.1: 从知识库搜索结果中提取来源，添加到 citations（论文末尾参考文献）
-        kb_citation_count = self._collect_kb_sources_for_citations(paper_memory, problem_text)
+        kb_citation_count = await self._collect_kb_sources_for_citations(paper_memory, problem_text)
         if kb_citation_count:
             logger.info(f"[WriterAgent] KB sources added to citations: {kb_citation_count} entries")
 
@@ -1695,7 +1695,7 @@ class WriterAgent(BaseAgent):
 
         return memory
 
-    def _collect_kb_sources_for_citations(
+    async def _collect_kb_sources_for_citations(
         self,
         paper_memory: Dict[str, Any],
         query_text: str,
@@ -1704,7 +1704,11 @@ class WriterAgent(BaseAgent):
 
         论文正文不显示来源标签（[来源: KB名称]），但在末尾参考文献列表中标注。
         返回新添加的 citation 数量。
+
+        v8.4.4: 改为 async，km.search（含 SentenceTransformer encode）卸到线程池，
+        避免在事件循环线程上同步阻塞并发 LLM 调用。
         """
+        import asyncio
         try:
             from ..core.knowledge_manager import get_knowledge_manager
             km = get_knowledge_manager()
@@ -1715,7 +1719,7 @@ class WriterAgent(BaseAgent):
         # 遍历所有知识库，搜索相关内容
         for bid, base in km._bases.items():
             try:
-                results = km.search(bid, query_text, top_k=3)
+                results = await asyncio.to_thread(km.search, bid, query_text, 3)
                 for r in results:
                     title = r.get("title", "")
                     source = r.get("source", "")
