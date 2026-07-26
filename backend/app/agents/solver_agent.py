@@ -1582,7 +1582,7 @@ class SolverAgent(BaseAgent):
             raw_code = None
 
             try:
-                response = await self.call_llm(messages=messages, temperature=0.3)
+                response = await self.call_llm(messages=messages, temperature=0.3, context=context)
                 content = response.get("choices", [{}])[0].get("message", {}).get("content", "{}")
 
                 # 尝试从JSON中提取code_files
@@ -1786,7 +1786,7 @@ class SolverAgent(BaseAgent):
         result = None
 
         try:
-            response = await self.call_llm(messages=messages)
+            response = await self.call_llm(messages=messages, context=context)
             content = response.get("choices", [{}])[0].get("message", {}).get("content", "{}")
 
             # 尝试JSON解析
@@ -2092,7 +2092,7 @@ class SolverAgent(BaseAgent):
         requirements: List[str] = []
 
         try:
-            response = await self.call_llm(messages=messages, temperature=0.2)
+            response = await self.call_llm(messages=messages, temperature=0.2, context=context)
             content = response.get("choices", [{}])[0].get("message", {}).get("content", "{}")
 
             # 解析 JSON

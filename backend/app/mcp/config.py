@@ -11,6 +11,7 @@
 
 import json
 import logging
+import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -25,6 +26,10 @@ logger = logging.getLogger(__name__)
 
 # 尝试定位 uvx；若不在 PATH 中则回退到命令名，由调用方/系统 PATH 解析
 _UVX_CMD = shutil.which("uvx") or "uvx"
+
+# 内置 code_tools 服务器脚本与工作目录（绝对路径，避免相对路径导致服务器启动失败）
+_CODE_TOOLS_SCRIPT = str(Path(__file__).parent / "code_tools_server.py")
+_CODE_TOOLS_WORKSPACE = str(Path(__file__).parent.parent / "data" / "workspace")
 
 
 class MCPServerConfig(BaseModel):
@@ -86,6 +91,15 @@ class MCPManager:
             install_source=InstallSource.BUILTIN,
             is_trusted=True,
         ),
+        "code_tools": MCPServerConfig(
+            name="code_tools",
+            command=sys.executable,
+            args=[_CODE_TOOLS_SCRIPT, _CODE_TOOLS_WORKSPACE],
+            description="代码执行 + 文件读写工具（内置 Python MCP 服务器，替代脆弱的 npx filesystem）",
+            tags=["code", "filesystem"],
+            install_source=InstallSource.BUILTIN,
+            is_trusted=True,
+        ),
     }
 
     # 内置工具到服务器的映射
@@ -97,10 +111,10 @@ class MCPManager:
         "arxiv_download": "arxiv_server",
         "arxiv_abstract": "arxiv_server",
         "arxiv_citation": "arxiv_server",
-        "file_read": "file_system",
-        "file_write": "file_system",
-        "code_execute": "file_system",
-        "latex_compile": "file_system",
+        "file_read": "code_tools",
+        "file_write": "code_tools",
+        "code_execute": "code_tools",
+        "latex_compile": "code_tools",
     }
 
     def __init__(self):
@@ -139,6 +153,25 @@ class MCPManager:
         except Exception as e:
             logger.error(f"Failed to load MCP config: {e}")
             self._load_default_config()
+
+        # 始终合并内置服务器（自愈）：配置文件可能是在新内置服务器加入前保存的
+        # （如 code_tools），这里把 BUILTIN_SERVERS 中尚未被文件覆盖的服务器补齐，
+        # 确保 code_execute/file_read/file_write 等始终有可用的 code_tools 服务器。
+        self._merge_builtin_servers()
+
+    def _merge_builtin_servers(self) -> None:
+        """把 BUILTIN_SERVERS 中未被自定义配置覆盖的服务器合并进 self.servers，
+        并把 BUILTIN_TOOLS 中尚未在 self.tools 注册的工具补齐（指向内置服务器）。"""
+        for name, cfg in self.BUILTIN_SERVERS.items():
+            if name not in self.servers:
+                self.servers[name] = cfg
+        for tool_name, server_name in self.BUILTIN_TOOLS.items():
+            if tool_name not in self.tools:
+                self.tools[tool_name] = MCPToolConfig(
+                    name=tool_name,
+                    server=server_name,
+                    description=f"内置工具: {tool_name}",
+                )
 
     def _load_standard_mcp_config(self, config: Dict[str, Any]) -> None:
         """加载标准 MCP JSON 配置"""

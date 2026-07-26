@@ -9610,6 +9610,8 @@ print(json.dumps({{"accuracy": round(acc, 4)}}))
             "task_summary": state.get("task_summary"),  # 任务总结（所有Agent可读）
             "research_decision": state.get("research_decision"),  # v8.4.3: 投票决策（T1/T2 门控）
             "working_memory": self._get_working_memory(state["task_id"]),  # v8.4.6: 注入共享黑板，agent 可读
+            # v8.4.7: 全模板注入 problem_type（之前仅 research_survey 设），让历史经验教训能按问题类型召回
+            "problem_type": (results.get("analyzer_agent") or {}).get("problem_type", "") if isinstance(results.get("analyzer_agent"), dict) else "",
         }
 
         # 用户反馈注入

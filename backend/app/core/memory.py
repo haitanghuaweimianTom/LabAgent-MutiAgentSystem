@@ -380,7 +380,7 @@ class LessonsMemory:
     # 支持的分类体系
     CATEGORIES = {
         "method_selection", "data_processing", "modeling", "solving",
-        "writing", "experiment_design", "template_specific",
+        "writing", "experiment_design", "template_specific", "failure",
     }
 
     def __init__(self):
@@ -549,9 +549,29 @@ class LessonsMemory:
         )
         return results[:top_k]
 
-    def get_context_text(self, problem_type: str = "", top_k: int = 5) -> str:
-        """获取格式化的经验上下文（注入 Agent prompt）"""
-        lessons = self.query(problem_type=problem_type, top_k=top_k)
+    def get_context_text(
+        self,
+        problem_type: str = "",
+        top_k: int = 5,
+        problem_text: str = "",
+        increment: bool = True,
+    ) -> str:
+        """获取格式化的经验上下文（注入 Agent prompt）。
+
+        传入 ``problem_text`` 时走 :meth:`retrieve_relevant`：按 problem_text 关键词
+        兜底匹配（即使 problem_type 为空或与历史条目不同也能召回相关经验），
+        并自增 ``use_count`` + 持久化 → 让"越用越准"的学习闭环真正转起来。
+        不传 ``problem_text`` 时退回 :meth:`query`（仅 problem_type 精确匹配，不自增）。
+        """
+        if problem_text:
+            lessons = self.retrieve_relevant(
+                problem_text=problem_text,
+                problem_type=problem_type,
+                top_k=top_k,
+                increment=increment,
+            )
+        else:
+            lessons = self.query(problem_type=problem_type, top_k=top_k)
         if not lessons:
             return ""
 
@@ -716,6 +736,49 @@ class MemoryManager:
                         success=True,
                         source_task=task_id,
                     )
+                # 求解降级到 HTTP API 代码生成（5 次重试失败）—— 记录为失败经验，避免重复踩坑
+                if s.get("_degraded") and s.get("_degraded_by") == "http_api_coder_fallback":
+                    sp_name = s.get("sub_problem_name", "")
+                    self._lessons.add_lesson(
+                        category="solving",
+                        content=f"求解代码 5 次重试失败，降级到 HTTP API 生成（子问题：{sp_name}）。"
+                                f"下次可优先检查数据 schema/模型约束是否清晰，减少 LLM 代码生成失败。",
+                        problem_type=problem_type,
+                        success=False,
+                        source_task=task_id,
+                        impact_score=7,
+                    )
+
+        # ===== 失败/降级经验（success=False）—— 跨任务最该积累的是"什么不行" =====
+        # 从质量报告的降级标记中提取
+        quality_report = result.get("_quality_report", {})
+        if isinstance(quality_report, dict):
+            for item in (quality_report.get("degraded_items", []) or [])[:20]:
+                agent = item.get("agent", "unknown")
+                reason = item.get("reason", "") or item.get("path", "")
+                if reason:
+                    self._lessons.add_lesson(
+                        category="failure",
+                        content=f"{agent} 环节降级：{str(reason)[:200]}",
+                        problem_type=problem_type,
+                        success=False,
+                        source_task=task_id,
+                        impact_score=6,
+                    )
+
+        # cannot_solve_report：记录无法求解的根本原因
+        cannot_solve = result.get("cannot_solve_report")
+        if isinstance(cannot_solve, dict) and cannot_solve:
+            reason = cannot_solve.get("reason", "") or cannot_solve.get("summary", "") or str(cannot_solve)[:200]
+            if reason:
+                self._lessons.add_lesson(
+                    category="failure",
+                    content=f"任务无法求解：{str(reason)[:200]}",
+                    problem_type=problem_type,
+                    success=False,
+                    source_task=task_id,
+                    impact_score=8,
+                )
 
         self._lessons.save()
         logger.info(f"MemoryManager extracted lessons from task {task_id}")

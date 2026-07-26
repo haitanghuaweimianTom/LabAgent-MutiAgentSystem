@@ -1002,7 +1002,11 @@ class BaseAgent(ABC):
             from ..core.memory import get_memory_manager
             mm = get_memory_manager()
             problem_type = context.get("problem_type", "")
-            lesson_ctx = mm.get_lessons().get_context_text(problem_type=problem_type, top_k=5)
+            problem_text = context.get("problem_text", "")
+            # 传 problem_text → 走 retrieve_relevant：关键词兜底匹配 + use_count 自增闭环
+            lesson_ctx = mm.get_lessons().get_context_text(
+                problem_type=problem_type, top_k=5, problem_text=problem_text,
+            )
             if lesson_ctx:
                 parts.append(lesson_ctx)
         except Exception as e:
@@ -1721,9 +1725,66 @@ class BaseAgent(ABC):
 
         对于关键工具提供本地替代实现，确保系统不会因 MCP 服务不可用而完全中断。
         """
+        # code_execute fallback: 直接用子进程执行 Python（与 code_tools MCP 服务器行为一致）
+        if tool_name in ("code_execute", "python_execute"):
+            code = args.get("code", "")
+            if code:
+                import tempfile
+                import sys as _sys
+                tmp_path = None
+                try:
+                    fd, tmp_path = tempfile.mkstemp(prefix="_mcp_exec_", suffix=".py")
+                    with os.fdopen(fd, "w", encoding="utf-8") as f:
+                        f.write(code)
+                    env = os.environ.copy()
+                    result = subprocess.run(
+                        [_sys.executable, tmp_path],
+                        capture_output=True,
+                        text=True,
+                        encoding="utf-8",
+                        errors="replace",
+                        timeout=120,
+                        env=env,
+                    )
+                    out = result.stdout or ""
+                    if result.stderr:
+                        out += (("\n" if out else "") + "[stderr]\n" + result.stderr)
+                    out = (out or f"(无输出, exit={result.returncode})").strip()
+                    if len(out) > 8000:
+                        out = out[:8000] + f"\n...[输出已截断，共 {len(out)} 字符]"
+                    logger.info(f"[{self.name}] code_execute fallback: exit={result.returncode} out_len={len(out)}")
+                    return f"[exit={result.returncode}]\n{out}"
+                except subprocess.TimeoutExpired:
+                    return "code_execute fallback failed: 执行超时（120秒）"
+                except Exception as e:
+                    logger.warning(f"[{self.name}] code_execute fallback failed: {e}")
+                    return f"code_execute fallback failed: {e}"
+                finally:
+                    if tmp_path:
+                        try:
+                            os.unlink(tmp_path)
+                        except Exception:
+                            pass
+
+        # file_read fallback: 直接读本地文件
+        if tool_name == "file_read":
+            file_path = args.get("path", "") or args.get("file_path", "")
+            if file_path:
+                try:
+                    from pathlib import Path
+                    content = Path(file_path).read_text(encoding="utf-8", errors="replace")
+                    if len(content) > 8000:
+                        content = content[:8000] + f"\n...[输出已截断，共 {len(content)} 字符]"
+                    logger.info(f"[{self.name}] file_read fallback: read {len(content)} chars from {file_path}")
+                    return content
+                except Exception as e:
+                    logger.warning(f"[{self.name}] file_read fallback failed: {e}")
+                    return f"file_read fallback failed: {e}"
+
         # file_write fallback: 直接写入本地文件
         if tool_name == "file_write":
-            file_path = args.get("file_path", "")
+            # LLM 实际传 path（见 mcp_tools.py schema）；兼容 file_path
+            file_path = args.get("path", "") or args.get("file_path", "")
             content = args.get("content", "")
             if file_path and content:
                 try:
