@@ -1779,7 +1779,12 @@ class SolverAgent(BaseAgent):
 {data_context or '（无数据文件）'}
 {schema_context}
 
-请生成完整可运行的Python求解代码，包括数据处理、求解、可视化等步骤。"""
+请生成完整可运行的Python求解代码，包括数据处理、求解、可视化等步骤。
+
+【输出格式（必须严格遵守）】
+只输出一个 Python 代码块，用 ```python 和 ``` 包围，包含完整可运行代码（含所有 import）。
+代码末尾用 json.dumps() 打印结果 JSON（含 success、关键数值如最优解/目标值）。
+不要输出任何解释、说明、分析或前后缀文字——只输出代码块本身。"""
 
         messages = [
             {"role": "system", "content": self.get_system_prompt()},
@@ -1808,6 +1813,37 @@ class SolverAgent(BaseAgent):
 
             if not raw_code:
                 raw_code = _extract_code_from_response(content)
+
+            # 自修复：LLM 偶尔返回散文/说明而非代码块（doubao 输出不稳定），
+            # 强制要求"只输出代码块"再试一次，避免误判"未返回有效代码"导致 5 次重试+降级。
+            if not raw_code:
+                logger.warning(f"[{self.name}] 首次代码生成未解析到代码，触发自修复重试（content前120字: {content[:120]!r}）")
+                repair_msg = [
+                    {"role": "system", "content": self.get_system_prompt()},
+                    {"role": "user", "content": prompt},
+                    {"role": "assistant", "content": content[:2000]},
+                    {"role": "user", "content": "你上面的回复没有包含可执行的 Python 代码块。请重新生成，"
+                                       "严格只输出一个 ```python 代码块（含所有 import，末尾用 json.dumps 打印结果），"
+                                       "不要任何解释、说明或前后缀文字。"},
+                ]
+                try:
+                    resp2 = await self.call_llm(messages=repair_msg, context=context, tools=[])
+                    content2 = resp2.get("choices", [{}])[0].get("message", {}).get("content", "")
+                    try:
+                        parsed2 = self.extract_json(content2)
+                        if parsed2:
+                            code_files2 = parsed2.get("code_files", [])
+                            if code_files2 and isinstance(code_files2, list):
+                                raw_code = code_files2[0].get("code", "")
+                                result = parsed2
+                    except:
+                        pass
+                    if not raw_code:
+                        raw_code = _extract_code_from_response(content2)
+                    if raw_code:
+                        logger.info(f"[{self.name}] 自修复重试成功解析到代码（{len(raw_code)} 字符）")
+                except Exception as e:
+                    logger.warning(f"[{self.name}] 自修复重试调用失败: {e}")
 
         except Exception as e:
             logger.error(f"SolverAgent LLM失败: {e}")
