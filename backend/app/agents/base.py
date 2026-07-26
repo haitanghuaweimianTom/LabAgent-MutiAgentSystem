@@ -169,7 +169,12 @@ class BaseAgent(ABC):
 
         # 从指定的 Provider 获取 API 配置（如果指定了 provider_id 或缺少 api_key/api_host）
         self._provider_auth_field: str = ""
-        if self.provider_id or not self.api_key or not self.api_base_url:
+        # v8.4.5: 占位符凭证视为“未设置”。settings 默认 api_key='your_api_key_here'
+        # 与 api_base_url='https://api.openai.com/v1' 都是 truthy 字符串但并非真实凭证；
+        # make_agent 又把 settings.api_base_url 透传给所有 agent。若不识别占位符，下方
+        # 条件不触发 provider 解析，agent 会拿占位符 key 去连 api.openai.com（国内被墙）
+        # → connect 8s 超时 → 空 ConnectTimeout，表现为“整进程连不上 LLM”。
+        if self.provider_id or self._credential_is_placeholder():
             self._resolve_provider_config()
 
         self._claude_model = settings.claude_model
@@ -220,6 +225,28 @@ class BaseAgent(ABC):
             return ToolDef(tool_def)
         return None
 
+    # v8.4.5: 已知的占位符凭证 —— 这些值 truthy 但非真实凭证，应触发 provider 解析。
+    _PLACEHOLDER_API_KEYS = frozenset({
+        "", "your_api_key_here", "your-api-key", "your_api_key",
+        "your_api_key_xxx", "sk-xxx", "xxx", "none", "null",
+    })
+    _PLACEHOLDER_BASE_URLS = frozenset({
+        "", "https://api.openai.com/v1",
+    })
+
+    def _credential_is_placeholder(self) -> bool:
+        """判断当前 api_key/api_base_url 是否为未配置的占位符。
+
+        占位符情形（任一成立即视为未配置，需解析 provider）：
+          - api_key 为空或已知占位符串
+          - api_base_url 为空或 OpenAI 默认地址（国内通常被墙，且说明用户未自定义）
+        真实凭证（如已配置的 ARK key/自定义 host）不在此列，将直接使用。
+        """
+        return (
+            self.api_key in self._PLACEHOLDER_API_KEYS
+            or self.api_base_url in self._PLACEHOLDER_BASE_URLS
+        )
+
     def _resolve_provider_config(self) -> None:
         """从当前指定的 Provider（或全局默认）解析 API 配置"""
         from ..core.provider_config import get_custom_provider, get_default_provider
@@ -228,6 +255,22 @@ class BaseAgent(ABC):
             provider = get_custom_provider(self.provider_id)
         if not provider:
             provider = get_default_provider()
+        # v8.4.5: 指定的 provider 缺凭证（如 MiniMax 未填 key）时，回退到默认 provider，
+        # 而不是停留在 make_agent 透传的 settings.api_base_url（默认 https://api.openai.com/v1，
+        # 国内被墙）—— 否则该 agent 的所有 LLM 调用会 ConnectTimeout 8s 失败。
+        if provider and not (provider.get("api_key") and provider.get("api_host")):
+            default_p = get_default_provider()
+            if (
+                default_p
+                and default_p.get("api_key")
+                and default_p.get("api_host")
+                and default_p.get("id") != provider.get("id")
+            ):
+                logger.warning(
+                    f"[{self.name}] Provider {provider.get('name')} 缺少 api_key 或 api_host，"
+                    f"回退到默认 Provider {default_p.get('name')}"
+                )
+                provider = default_p
         if provider and provider.get("api_key") and provider.get("api_host"):
             self.api_key = provider["api_key"]
             self.api_base_url = provider["api_host"]

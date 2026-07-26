@@ -21,6 +21,13 @@ logger = logging.getLogger(__name__)
 # 标题相似度阈值
 TITLE_SIMILARITY_THRESHOLD = 0.8
 
+# v8.4.5: 参考文献验真统一超时 —— connect=5s 快速失败，防止个别 DOI/arXiv/URL
+# 主机不响应时干等 OS SYN 重传 ~136s 拖垮 event loop 上的 ARK LLM 调用。
+# read=15s 给 CrossRef/arXiv API 正常响应留余量。
+_VERIFY_TIMEOUT = httpx.Timeout(connect=5.0, read=15.0, write=5.0, pool=5.0)
+# 单次验真整体上限（含重定向多次握手），兜底任何单条文献卡死。
+_VERIFY_PER_REF_CAP = 20.0
+
 
 @dataclass
 class VerificationResult:
@@ -56,7 +63,7 @@ async def _verify_doi(doi: str, client: httpx.AsyncClient) -> VerificationResult
     """通过CrossRef API验证DOI"""
     try:
         url = f"https://api.crossref.org/works/{quote(doi, safe='')}"
-        resp = await client.get(url, timeout=10.0)
+        resp = await client.get(url, timeout=_VERIFY_TIMEOUT)
         if resp.status_code == 200:
             data = resp.json()
             api_title = ""
@@ -86,7 +93,7 @@ async def _verify_arxiv(arxiv_id: str, client: httpx.AsyncClient) -> Verificatio
     # 尝试 arXiv API
     try:
         url = f"http://export.arxiv.org/api/query?id_list={clean_id}"
-        resp = await client.get(url, timeout=10.0)
+        resp = await client.get(url, timeout=_VERIFY_TIMEOUT)
         if resp.status_code == 200:
             text = resp.text
             if "<entry>" in text:
@@ -104,7 +111,7 @@ async def _verify_arxiv(arxiv_id: str, client: httpx.AsyncClient) -> Verificatio
     # 回退: Semantic Scholar
     try:
         url = f"https://api.semanticscholar.org/graph/v1/paper/ARXIV:{clean_id}?fields=title"
-        resp = await client.get(url, timeout=10.0)
+        resp = await client.get(url, timeout=_VERIFY_TIMEOUT)
         if resp.status_code == 200:
             data = resp.json()
             api_title = data.get("title", "")
@@ -122,7 +129,7 @@ async def _verify_arxiv(arxiv_id: str, client: httpx.AsyncClient) -> Verificatio
 async def _verify_url(url: str, client: httpx.AsyncClient) -> VerificationResult:
     """HTTP HEAD请求验证URL存在性"""
     try:
-        resp = await client.head(url, timeout=10.0, follow_redirects=True)
+        resp = await client.head(url, timeout=_VERIFY_TIMEOUT, follow_redirects=True)
         accessible = resp.status_code < 400
         return VerificationResult(
             verified=accessible,
@@ -155,6 +162,7 @@ async def verify_reference(
                 del os.environ[var]
         client = httpx.AsyncClient(
             headers={"User-Agent": "MathModel-System/1.0 (reference verification)"},
+            timeout=_VERIFY_TIMEOUT,
             follow_redirects=True,
             proxy=None,
         )
@@ -222,7 +230,15 @@ async def verify_all_references(
 
     async def _bounded_verify(ref):
         async with semaphore:
-            return await verify_reference(ref, check_title=check_title)
+            try:
+                # v8.4.5: 单条文献整体上限，兜底重定向多次握手累积超时，避免一条卡死拖住整批。
+                # 共享下方 client（连接复用 + 集中有界池），不再每条自建 client。
+                return await asyncio.wait_for(
+                    verify_reference(ref, client=client, check_title=check_title),
+                    timeout=_VERIFY_PER_REF_CAP,
+                )
+            except asyncio.TimeoutError:
+                return VerificationResult(verified=False, source="error", error="验证超时")
 
     # 清除 SOCKS 代理
     import os
@@ -232,18 +248,23 @@ async def verify_all_references(
 
     async with httpx.AsyncClient(
         headers={"User-Agent": "MathModel-System/1.0 (reference verification)"},
+        timeout=_VERIFY_TIMEOUT,
         follow_redirects=True,
         proxy=None,
     ) as client:
+        # v8.4.5: 并发 gather（受 semaphore 限流），替代原串行循环——
+        # 串行时 N 条 × 单条超时 会长时间占用连接，并发后总墙钟大幅缩短，
+        # 减少 event loop 上与 ARK LLM 调用争用网络栈的窗口。
+        tasks = [_bounded_verify(ref) for ref in refs]
+        gathered = await asyncio.gather(*tasks, return_exceptions=True)
         results = []
-        for ref in refs:
-            try:
-                result = await verify_reference(ref, client=client, check_title=check_title)
-                results.append(result)
-            except Exception as e:
+        for ref, r in zip(refs, gathered):
+            if isinstance(r, Exception):
                 results.append(VerificationResult(
-                    verified=False, source="error", error=str(e)
+                    verified=False, source="error", error=str(r)
                 ))
+            else:
+                results.append(r)
 
     verified_count = sum(1 for r in results if r.verified)
     total_count = len(results)

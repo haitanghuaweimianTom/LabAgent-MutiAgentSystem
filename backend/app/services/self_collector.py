@@ -202,7 +202,7 @@ async def collect_urls(
                     urls, source_query, target_dir, max_size_mb, timeout_sec
                 )
             async with httpx.AsyncClient(
-                timeout=timeout_sec,
+                timeout=httpx.Timeout(timeout_sec, connect=8.0, pool=5.0),
                 follow_redirects=True,
                 headers={"User-Agent": "MathModel-MutiAgent/5.3 (+self-collector)"},
             ) as client:

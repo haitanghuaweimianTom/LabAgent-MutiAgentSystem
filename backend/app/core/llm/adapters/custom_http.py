@@ -57,7 +57,8 @@ class CustomHTTPAdapter(BaseAdapter):
 
     async def _http_get(self, request: LLMRequest, url: str, headers: Dict[str, str]) -> Dict[str, Any]:
         timeout = self._default_timeout(request)
-        async with httpx.AsyncClient(timeout=timeout, proxy=None) as client:
+        # v8.4.5: connect=8s 快速失败（同 _http_post），避免握手挂起干等 OS SYN。
+        async with httpx.AsyncClient(timeout=httpx.Timeout(timeout, connect=8.0, pool=5.0), proxy=None) as client:
             response = await client.get(url, headers=headers)
             response.raise_for_status()
             return response.json()

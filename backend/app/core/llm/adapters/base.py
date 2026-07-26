@@ -91,9 +91,14 @@ class BaseAdapter(ABC):
         timeout = self._default_timeout(request)
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         limits = httpx.Limits(max_connections=50, max_keepalive_connections=20)
+        # v8.4.5: 显式 connect 超时 —— 防止 ARK TCP 握手挂起时干等 OS SYN 重传
+        # (~136s) 才失败。connect=8s 快速失败 → 触发下方已有重试，避免单次卡死
+        # 连带 event loop 上其它 LLM 调用（4 次重试×136s≈9 分钟 analyzer 卡死根因）。
+        # read/write 仍用 t（LLM 生成可慢，但握手不能慢）。
+        post_timeout = lambda t: httpx.Timeout(t, connect=8.0, pool=5.0)
 
         async def _post(t: float) -> httpx.Response:
-            async with httpx.AsyncClient(timeout=t, limits=limits, proxy=None) as client:
+            async with httpx.AsyncClient(timeout=post_timeout(t), limits=limits, proxy=None) as client:
                 return await client.post(url, headers=headers, content=body)
 
         try:
@@ -124,7 +129,15 @@ class BaseAdapter(ABC):
 
     def _handle_exception(self, request: LLMRequest, exc: Exception) -> None:
         """Log and raise a clean RuntimeError for unexpected failures."""
-        logger.error(f"[{self.provider_type}] call failed: {exc}")
+        # v8.4.5 诊断：记录异常类型/repr/url，空 str 异常（如 ConnectTimeout）不再黑盒。
+        try:
+            host = self._strip_base_url(request.api_host())
+        except Exception:
+            host = "?"
+        logger.error(
+            f"[{self.provider_type}] call failed: type={type(exc).__name__} "
+            f"repr={exc!r} host={host}"
+        )
         raise RuntimeError(f"[{self.provider_type}] call failed: {exc}") from exc
 
     @staticmethod

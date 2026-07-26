@@ -147,7 +147,7 @@ class PaperReader:
             return None
 
         try:
-            async with httpx.AsyncClient(timeout=self.config.download_timeout, follow_redirects=True) as client:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(self.config.download_timeout, connect=8.0, pool=5.0), follow_redirects=True) as client:
                 resp = await client.get(pdf_url)
                 resp.raise_for_status()
                 content = resp.content

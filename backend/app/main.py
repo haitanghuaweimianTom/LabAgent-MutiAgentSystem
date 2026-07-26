@@ -92,6 +92,22 @@ async def lifespan(app: FastAPI):
     global _app_start_time
     _app_start_time = time.time()
     logger.info("数学建模多Agent系统 启动中...")
+    # v8.4.5: 扩大 asyncio 默认 executor 线程池。
+    # httpx 的 getaddrinfo（DNS 解析）与所有 asyncio.to_thread / run_in_executor
+    # 卸载点（embedding/KB 检索/Claude Code CLI 子进程/self_collector 下载/结果校验）
+    # 共用此默认线程池。池过小（默认 min(32, cpu+4)≈8）时，少数挂起的 CLI/下载调用
+    # （timeout 高达 180-300s）会占满线程，导致 httpx 的 DNS 解析排不上队 —— 表现为
+    # ARK LLM 连接连 SYN 都发不出（ss 看不到到 ARK 的连接），全部 LLM 调用以空
+    # ConnectTimeout 失败、且整个进程级“连不上 ARK”而新进程秒连。
+    # 扩容到 64，保证 getaddrinfo 永远有空闲线程，LLM 调用不被拖垮。
+    try:
+        import asyncio as _asyncio
+        from concurrent.futures import ThreadPoolExecutor as _TPE
+        _loop = _asyncio.get_running_loop()
+        _loop.set_default_executor(_TPE(max_workers=64, thread_name_prefix="async-exec"))
+        logger.info("asyncio 默认 executor 已扩容至 max_workers=64")
+    except Exception as _exec_exc:
+        logger.warning(f"设置默认 executor 失败（不影响启动）: {_exec_exc}")
     # 确保所有必要目录存在
     from .core.paths import ensure_dirs
     ensure_dirs()
