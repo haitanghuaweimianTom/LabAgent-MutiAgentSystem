@@ -1491,7 +1491,11 @@ class WriterAgent(BaseAgent):
         last_error = None
         for attempt in range(3):
             try:
-                response = await self.call_llm(messages=messages, max_react_iterations=12)
+                # 章节生成走结构化 JSON 返回，禁用 ReAct 工具注入（否则自动注入
+                # arxiv_abstract/web_search → LLM 反复搜论文 → paper_reader 每篇
+                # 新建 KB → 卡死在 KB 构建循环，0 LLM 论文生成）。引用由 prompt
+                # 提供的 paper_memory.citations 决定，不需要章节内实时搜。
+                response = await self.call_llm(messages=messages, max_react_iterations=0, tools=[])
                 content = response.get("choices", [{}])[0].get("message", {}).get("content", "{}")
                 parsed = self._extract_json(content)
 
@@ -1563,7 +1567,8 @@ class WriterAgent(BaseAgent):
         ]
 
         try:
-            response = await self.call_llm(messages=messages, max_react_iterations=12)
+            # critique 也禁用 ReAct 工具（同 _generate_chapter，避免 KB 构建循环）
+            response = await self.call_llm(messages=messages, max_react_iterations=0, tools=[])
             content = response.get("choices", [{}])[0].get("message", {}).get("content", "{}")
             critique = self._extract_json(content)
 
@@ -1988,7 +1993,8 @@ class WriterAgent(BaseAgent):
         ]
 
         try:
-            response = await self.call_llm(messages=messages, temperature=0.2)
+            # 全局一致性检查走结构化返回，禁用 ReAct 工具（避免 KB 构建循环）
+            response = await self.call_llm(messages=messages, temperature=0.2, tools=[])
             content = response.get("choices", [{}])[0].get("message", {}).get("content", "{}")
             parsed = self._extract_json(content)
             issues = parsed.get("issues", []) if parsed else []
