@@ -8189,6 +8189,13 @@ class LangGraphOrchestrator:
                     sp_attempts.append(output)
                     all_attempts.append(output)
 
+                    _v = (harness.get("validation") or {})
+                    logger.info(
+                        f"[LangGraph:{task_id}] solver sp{sp_id} harness: exec_success={output.get('execution_success')} "
+                        f"passed={harness.get('passed')} valid={_v.get('valid')} manifest_valid={harness.get('manifest_valid')} "
+                        f"errors={_v.get('error_count')} issues={[i.get('type')+':'+str(i.get('message',''))[:50] for i in (_v.get('issues') or [])[:4]]}"
+                    )
+
                     if output.get("execution_success") and harness.get("passed"):
                         sp_success = True
                         all_solutions.append({**output, "sub_problem_id": sp_id, "sub_problem_name": sp_name})
