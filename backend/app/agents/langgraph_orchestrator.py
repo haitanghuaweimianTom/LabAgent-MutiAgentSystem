@@ -879,8 +879,17 @@ class LangGraphOrchestrator:
         majority = len(voters) // 2 + 1
         panel_desc = f"{len(voters)}人panel（{'复杂任务' if is_complex else '普通任务'}，过半需{majority}票）"
 
+        # v8.4.6: 投票上下文——注入共享黑板 + problem_type，让选民走 call_llm 时
+        # 能读到 WorkingMemory 黑板 + Lessons 跨任务经验 + 自身 AgentProfile
+        # （原 _call_llm_once 裸调绕过全部记忆注入）。
+        voter_context = {
+            "problem_type": problem_type,
+            "template": template,
+            "working_memory": self._get_working_memory(task_id),
+        }
+
         # ---- Round 1：讨论（并行，各自给立场+理由）----
-        round1_thunks = [self._voter_discuss(r, d, problem_text, problem_type, template, is_complex)
+        round1_thunks = [self._voter_discuss(r, d, problem_text, problem_type, template, is_complex, voter_context)
                          for r, d in voters]
         round1_results = await asyncio.gather(*round1_thunks, return_exceptions=True)
         round1 = []
@@ -896,7 +905,7 @@ class LangGraphOrchestrator:
         )
 
         # ---- Round 2：投票（并行，看到 round1 后正式投票）----
-        round2_thunks = [self._voter_vote(r, d, problem_text, problem_type, template, is_complex, round1_brief)
+        round2_thunks = [self._voter_vote(r, d, problem_text, problem_type, template, is_complex, round1_brief, voter_context)
                         for r, d in voters]
         round2_results = await asyncio.gather(*round2_thunks, return_exceptions=True)
         votes_t1, votes_t2 = 0, 0
@@ -945,7 +954,8 @@ class LangGraphOrchestrator:
         return {**state, "research_decision": decision, "current_step": "research_vote_done"}
 
     async def _voter_discuss(self, role: str, desc: str, problem_text: str,
-                             problem_type: str, template: str, is_complex: bool) -> Dict[str, Any]:
+                             problem_type: str, template: str, is_complex: bool,
+                             context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Round 1：选民给出初步立场+理由。"""
         agent = self._get_voter_agent(role)
         if not agent:
@@ -960,7 +970,13 @@ class LangGraphOrchestrator:
             f'{{"stance_t1": "yes|no", "stance_t2": "yes|no", "reason": "你的理由"}}'
         )
         try:
-            resp = await agent._call_llm_once([{"role": "user", "content": prompt}], temperature=0.2, tools=None)
+            # v8.4.6: 走 call_llm（带 context）→ 接入 AgentProfile + Lessons + 共享黑板记忆。
+            # 原 _call_llm_once 裸调绕过全部记忆注入，选民完全"失忆"。
+            resp = await agent.call_llm(
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.2,
+                context=context,
+            )
             content = resp.get("choices", [{}])[0].get("message", {}).get("content", "{}")
             data = self._extract_json_obj(content)
             return {"stance_t1": data.get("stance_t1", "unknown"),
@@ -971,7 +987,8 @@ class LangGraphOrchestrator:
 
     async def _voter_vote(self, role: str, desc: str, problem_text: str,
                           problem_type: str, template: str, is_complex: bool,
-                          round1_brief: str) -> Dict[str, Any]:
+                          round1_brief: str,
+                          context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Round 2：看到 round1 后正式投票（可参考或反对其他 Agent 观点）。"""
         agent = self._get_voter_agent(role)
         if not agent:
@@ -987,7 +1004,12 @@ class LangGraphOrchestrator:
             f'{{"vote_t1": "yes|no", "vote_t2": "yes|no", "reason": "1句理由"}}'
         )
         try:
-            resp = await agent._call_llm_once([{"role": "user", "content": prompt}], temperature=0.2, tools=None)
+            # v8.4.6: 走 call_llm（带 context）→ 接入记忆（AgentProfile + Lessons + 黑板）。
+            resp = await agent.call_llm(
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.2,
+                context=context,
+            )
             content = resp.get("choices", [{}])[0].get("message", {}).get("content", "{}")
             return self._extract_json_obj(content)
         except Exception as e:
@@ -8231,6 +8253,14 @@ class LangGraphOrchestrator:
             if not sp_success:
                 # 达到迭代上限 → 多 Agent 投票
                 if len(all_attempts) >= self.cfg.max_solver_iterations:
+                    # v8.4.6: 5次重试都失败 → 降级 HTTP API 代码生成（写文件+执行+3次迭代修复），不降级模板
+                    http_sol = await self._solver_http_fallback(
+                        agent, task_id, sp_id, sp_name, sp, model_for_sp, state, i, len(sub_problems)
+                    )
+                    if http_sol is not None:
+                        all_solutions.append(http_sol)
+                        continue
+                    # HTTP 降级也失败 → 多 Agent 投票
                     vote = await self._multi_agent_vote(state, sp_attempts[-1], all_attempts)
                     if vote == "retry" and escalation < self.cfg.max_solver_escalations:
                         escalation += 1
@@ -8262,6 +8292,72 @@ class LangGraphOrchestrator:
 
         self._post_chat(task_id, "solver_agent", f"全部 {len(sub_problems)} 个子问题求解完成")
         return {**state, "results": {**state.get("results", {}), **ref_update}, "solver_attempts": all_attempts, "escalation_count": escalation, "current_step": "solver_done"}
+
+    async def _solver_http_fallback(
+        self, agent, task_id: str, sp_id: int, sp_name: str,
+        sp: Dict[str, Any], model_for_sp: Dict[str, Any],
+        state: TaskState, idx: int, total: int,
+    ) -> Optional[Dict[str, Any]]:
+        """v8.4.6: solver 5次重试失败后，降级 HTTP API 代码生成（非模板代码）。
+
+        调 agent._call_claude_coder_http：call_llm 生成代码 + 写文件 + 执行 + 3次迭代修复。
+        产出代码（无论执行是否成功）→ 返回 solution dict；彻底无代码 → 返回 None（上层走多 Agent 投票）。
+        """
+        try:
+            from .solver_agent import CLAUDE_CODER_SYSTEM
+            from ..core.paths import get_project_output_dir
+            import os as _os
+            import json as _json
+            workspace = str(get_project_output_dir(state.get("project_name")))
+            http_prompt = (
+                "请为以下数学建模子问题生成可直接运行的 Python 求解代码。\n\n"
+                f"## 子问题\n名称：{sp_name}\n描述：{sp.get('description', '')[:300]}\n\n"
+                f"## 问题背景\n{state['problem_text'][:800]}\n\n"
+                f"## 模型\n{_json.dumps(model_for_sp, ensure_ascii=False)[:800]}\n\n"
+                "## 输出要求\n返回 JSON：{\"code\":\"完整Python代码(含import,末尾用json.dumps打印结果)\","
+                "\"key_findings\":[],\"numerical_results\":{},\"interpretation\":\"\"}"
+            )
+            http_res = await agent._call_claude_coder_http(
+                task_description=http_prompt,
+                system_instruction=CLAUDE_CODER_SYSTEM,
+                workspace_dir=workspace,
+                timeout=300,
+            )
+            code = http_res.get("code", "")
+            if not code:
+                logger.warning(f"[LangGraph:{task_id}] solver sp{sp_id} HTTP 降级未产出代码")
+                return None
+            ok = http_res.get("success", False)
+            sol = {
+                "sub_problem_id": sp_id,
+                "sub_problem_name": sp_name,
+                "model": model_for_sp,
+                "code_files": [{
+                    "filename": _os.path.basename(http_res.get("file_path", "solver_http.py")),
+                    "language": "python",
+                    "code": code,
+                    "description": f"HTTP API 代码生成（5次重试后降级，{'执行成功' if ok else '执行失败'}）",
+                    "executed": ok,
+                }],
+                "results": {
+                    "key_findings": http_res.get("key_findings", []),
+                    "numerical_results": http_res.get("numerical_results", {}),
+                    "interpretation": http_res.get("interpretation", ""),
+                },
+                "execution_success": ok,
+                "execution_attempts": http_res.get("attempts", 1),
+                "execution_error": http_res.get("execution_stderr", ""),
+                "_degraded": True,
+                "_degraded_by": "http_api_coder_fallback",
+                "_degraded_reason": "solver 5次重试失败，HTTP API 降级生成代码",
+            }
+            self._post_chat(task_id, "solver_agent",
+                f"[{idx+1}/{total}] {sp_name} 5次重试失败，HTTP API 降级生成代码（{'成功' if ok else '代码已生成但执行失败'}）")
+            logger.info(f"[LangGraph:{task_id}] solver sp{sp_id} HTTP 降级: success={ok}")
+            return sol
+        except Exception as exc:
+            logger.warning(f"[LangGraph:{task_id}] solver sp{sp_id} HTTP 降级异常: {exc}")
+            return None
 
     async def _run_harness(self, sol_result: Dict[str, Any]) -> Dict[str, Any]:
         """综合 Harness 评判。"""
@@ -9513,6 +9609,7 @@ print(json.dumps({{"accuracy": round(acc, 4)}}))
             "innovation_analysis": state.get("innovation_analysis"),  # 创新发现（所有Agent可读）
             "task_summary": state.get("task_summary"),  # 任务总结（所有Agent可读）
             "research_decision": state.get("research_decision"),  # v8.4.3: 投票决策（T1/T2 门控）
+            "working_memory": self._get_working_memory(state["task_id"]),  # v8.4.6: 注入共享黑板，agent 可读
         }
 
         # 用户反馈注入
@@ -9772,10 +9869,18 @@ print(json.dumps({{"accuracy": round(acc, 4)}}))
             pass
 
     def _get_working_memory(self, task_id: str):
-        """获取任务的 WorkingMemory 黑板。"""
+        """获取任务的 WorkingMemory 黑板。
+
+        v8.4.6: 原代码调 mm.get_task_memory(task_id)——MemoryManager 没有此方法
+        （正确方法为 get_working / create_task_memory），被 try/except 吞掉后永远
+        返回 None，导致 12 处 wm.set_result/add_* 全是死代码、共享黑板形同虚设。
+        修复：优先 get_working，未创建则 create_task_memory 兜底。
+        """
         try:
             mm = get_memory_manager()
-            wm, _ = mm.get_task_memory(task_id)
+            wm = mm.get_working(task_id)
+            if wm is None:
+                wm, _ = mm.create_task_memory(task_id)
             return wm
         except Exception:
             return None

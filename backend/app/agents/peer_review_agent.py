@@ -137,7 +137,7 @@ class PeerReviewAgent(BaseAgent):
         # 但内部推荐意见仍按 1-5 分制
         try:
             user_prompt = self._build_user_prompt(latex_code, chapter_summaries, threshold)
-            raw_text = await self._call_llm_review(user_prompt)
+            raw_text = await self._call_llm_review(user_prompt, context)
             review = self._parse_review(raw_text)
             return {
                 "scores": review["scores"],
@@ -189,13 +189,14 @@ class PeerReviewAgent(BaseAgent):
         )
         return "\n".join(parts)
 
-    async def _call_llm_review(self, user_prompt: str) -> str:
+    async def _call_llm_review(self, user_prompt: str, context: Optional[Dict[str, Any]] = None) -> str:
         try:
             messages = [
                 {"role": "system", "content": self.get_system_prompt()},
                 {"role": "user", "content": user_prompt},
             ]
-            response = await self.call_llm(messages=messages, temperature=0.2)
+            # v8.4.6: 传 context → 接入 AgentProfile + Lessons + 共享黑板记忆
+            response = await self.call_llm(messages=messages, temperature=0.2, context=context)
             if isinstance(response, dict):
                 choices = response.get("choices", [])
                 if choices:

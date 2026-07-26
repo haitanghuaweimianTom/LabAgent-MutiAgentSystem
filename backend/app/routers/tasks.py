@@ -19,6 +19,7 @@ from ..agents import (
     SolverAgent, WriterAgent, DataAgent, AlgorithmEngineerAgent,
     FinancialAnalystAgent,
 )
+from ..agents.peer_review_agent import PeerReviewAgent  # v8.4.6: 注册同行评议 Agent（接入记忆池）
 from ..config import get_settings
 from ..core.chat_room import get_chat_room
 from ..core.runtime_config import get_runtime_api_key
@@ -140,6 +141,7 @@ def get_orchestrator() -> Orchestrator:
             "solver_agent": make_agent(SolverAgent, "solver_agent",
                 mcp_tools=get_agent_mcp_tools("solver_agent")),
             "writer_agent": make_agent(WriterAgent, "writer_agent"),
+            "peer_review_agent": make_agent(PeerReviewAgent, "peer_review_agent"),  # v8.4.6: 接入记忆池
         }
         _orchestrator = Orchestrator(agents=agents)
     return _orchestrator
