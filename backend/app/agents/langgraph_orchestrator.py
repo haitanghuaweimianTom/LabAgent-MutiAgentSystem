@@ -8201,7 +8201,7 @@ class LangGraphOrchestrator:
                     logger.info(
                         f"[LangGraph:{task_id}] solver sp{sp_id} harness: exec_success={output.get('execution_success')} "
                         f"passed={harness.get('passed')} valid={_v.get('valid')} manifest_valid={harness.get('manifest_valid')} "
-                        f"errors={_v.get('error_count')} issues={[i.get('type')+':'+str(i.get('message',''))[:50] for i in (_v.get('issues') or [])[:4]]}"
+                        f"errors={_v.get('error_count')} issues={[(i.get('type') or '?')+':'+str(i.get('message',''))[:50] for i in (_v.get('issues') or [])[:4]]}"
                     )
 
                     if output.get("execution_success") and harness.get("passed"):
