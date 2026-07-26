@@ -99,6 +99,12 @@ CLAUDE_CODER_SYSTEM = """你是一个专业的算法工程师，擅长用 Python
 【代码要求】
 - 代码必须是完整可运行的，包含所有 import
 - 必须在代码末尾用 json.dumps() 将结果打印为 JSON 格式
+- **json.dumps 序列化要求（常见错误！）**：结果字典里不能含 numpy 数组/标量/矩阵等非 JSON 原生类型。
+  打印前必须转换：numpy 数组用 `.tolist()`，numpy 标量用 `float()`/`int()`，
+  例如 `result = {"min_cost": float(cost), "solution": arr.tolist()}`；numpy 矩阵同理 `.tolist()`。
+  否则 json.dumps 抛 TypeError: Object of type ndarray is not JSON serializable → 执行失败。
+- 变量命名：最终 json.dumps 的结果对象必须先定义（如 `result = {...}` 再 `print(json.dumps(result))`），
+  不要引用未定义变量。
 - 如果代码有错误需要自己修正（最多修正3次）
 
 【输出格式（必须以JSON格式返回，不要有任何其他文字）】
