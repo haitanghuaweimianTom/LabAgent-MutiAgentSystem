@@ -1336,7 +1336,9 @@ class SolverAgent(BaseAgent):
                     {"role": "system", "content": CLAUDE_CODER_SYSTEM},
                     {"role": "user", "content": user_content},
                 ]
-                response = await self.call_llm(messages=messages, temperature=0.3)
+                # 代码生成走结构化 JSON 返回，禁用 ReAct 工具注入（否则 LLM 用 file_write/
+                # code_execute 工具交互而不返回 _run_code_with_autofix 期望的 JSON 代码）
+                response = await self.call_llm(messages=messages, temperature=0.3, tools=[])
                 content = response.get("choices", [{}])[0].get("message", {}).get("content", "")
 
                 raw_code = _extract_code_from_response(content)

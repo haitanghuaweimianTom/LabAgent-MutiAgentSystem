@@ -556,7 +556,9 @@ class BaseAgent(ABC):
             ]
 
             try:
-                response = await self.call_llm(messages=messages, temperature=0.3)
+                # 代码生成走结构化 JSON 返回，禁用 ReAct 工具注入（否则 LLM 用 file_write/
+                # code_execute 工具交互而不返回 JSON 代码 → 解析失败 → "LLM 未返回有效代码"）
+                response = await self.call_llm(messages=messages, temperature=0.3, tools=[])
                 content = ""
                 if isinstance(response, dict):
                     content = response.get("choices", [{}])[0].get("message", {}).get("content", "")
