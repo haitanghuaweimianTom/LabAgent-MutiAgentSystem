@@ -1849,8 +1849,14 @@ class SolverAgent(BaseAgent):
             logger.error(f"SolverAgent LLM失败: {e}")
             raise RuntimeError(f"求解代码生成失败：LLM 调用异常 ({e})") from e
 
-        if not result or not raw_code:
-            raise RuntimeError(f"求解代码生成失败：LLM 未返回有效代码 (sub_problem={sub_problem.get('name', '')})")
+        # 即使 call_llm 未返回可解析代码（doubao 输出不稳定，常返回散文而非代码块），
+        # 也交给 _run_code_with_autofix（CLI/HTTP）从问题上下文重新生成+执行，
+        # 而非直接 raise 触发 5 次重试+降级。这样每次 _solve_single 都有两次代码生成机会。
+        if not isinstance(result, dict):
+            result = {}
+        if not raw_code:
+            raw_code = ""
+            logger.info(f"[{self.name}] call_llm 未返回可解析代码，交给 _run_code_with_autofix(CLI/HTTP) 重新生成 (sp={sp_name})")
 
         # 真正执行代码（通过 Claude CLI 全自动）
         project_name = context.get("project_name") if context else None
