@@ -6,6 +6,13 @@ for _var in ("ALL_PROXY", "all_proxy", "HTTPS_PROXY", "https_proxy", "HTTP_PROXY
     if _val and "socks" in _val.lower():
         del os.environ[_var]
 
+# 限制 BLAS/OMP 线程数为 1：solver 子进程跑 numpy/scipy 时 OpenBLAS 默认开多线程，
+# 在内存压力下线程缓冲区分配失败 → "OpenBLAS error: Memory allocation still failed
+# after 10 retries, giving up" → 代码执行必败。设为 1 显著降低内存占用、修复此错。
+# 在模块加载时设，所有 subprocess(sandbox/CLI/code_tools) 均继承。
+for _blas_var in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS"):
+    os.environ.setdefault(_blas_var, "1")
+
 import logging
 import time
 from contextlib import asynccontextmanager
