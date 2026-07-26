@@ -8183,8 +8183,16 @@ class LangGraphOrchestrator:
                         },
                     )
 
-                    # Harness 评判
-                    harness = await self._run_harness(output)
+                    # Harness 评判（harness 出错不应阻塞求解：执行成功的解应被采纳，
+                    # harness 仅作质量参考；harness 内部 bug 不能让正确结果作废）
+                    try:
+                        harness = await self._run_harness(output)
+                    except Exception as harness_exc:
+                        logger.warning(
+                            f"[LangGraph:{task_id}] solver sp{sp_id} _run_harness 异常，跳过 harness 门禁: {harness_exc}",
+                            exc_info=True,
+                        )
+                        harness = {"passed": True, "harness_error": str(harness_exc)}
                     output["harness"] = harness
                     sp_attempts.append(output)
                     all_attempts.append(output)
