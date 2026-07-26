@@ -1722,7 +1722,16 @@ class WriterAgent(BaseAgent):
 
         added = 0
         # 遍历所有知识库，搜索相关内容
-        for bid, base in km._bases.items():
+        # 但跳过临时 task_kb_* 基（之前 paper_reader.process_papers 为每篇论文建一个，
+        # 会堆积几十个 → 每个都要重建混合检索引擎 → 卡死在 KB 构建循环、0 LLM 论文生成）。
+        # writer 只从项目级/全局 KB 取引用来源。
+        bases_to_search = [
+            (bid, base) for bid, base in km._bases.items()
+            if not getattr(base, "name", "").startswith("task_kb_")
+        ]
+        # 进一步限量：避免遍历过多基导致超时
+        bases_to_search = bases_to_search[:5]
+        for bid, base in bases_to_search:
             try:
                 results = await asyncio.to_thread(km.search, bid, query_text, 3)
                 for r in results:
