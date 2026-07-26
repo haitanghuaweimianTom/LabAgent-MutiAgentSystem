@@ -82,16 +82,22 @@ class ResultValidator:
         if 0 < abs_val < 1e-12:
             self.issues.append(ValidationIssue("warning", "magnitude", f"字段 {path} 数值过小 ({value})", path))
 
-        # 概率/比例字段检查
+        # 概率/比例字段检查（用词边界/分隔，避免子串误匹配：如 "iterations" 含 "ratio"）
         lower_key = key.lower()
-        if any(k in lower_key for k in ["概率", "比例", "percentage", "percent", "ratio", "accuracy", "r2", "precision", "recall", "f1", "auc"]):
+        # 把 key 按非字母数字（含点号）切分，再做整词匹配
+        import re as _re
+        _tokens = set(_re.split(r"[^a-z0-9]+", lower_key))
+        _ratio_keywords = {"概率", "比例", "percentage", "percent", "ratio",
+                           "accuracy", "r2", "precision", "recall", "f1", "auc", "prob", "rate"}
+        if _tokens & _ratio_keywords or lower_key.endswith("_ratio") or lower_key.endswith("ratio") or "percentage" in lower_key:
             if abs_val > 1.0:
                 self.issues.append(ValidationIssue("error", "range", f"概率/比例字段 {path} 超过 1.0 ({value})", path))
             if abs_val < 0:
                 self.issues.append(ValidationIssue("error", "range", f"概率/比例字段 {path} 为负数 ({value})", path))
 
-        # 准确率/精确率/召回率/F1 特殊检查
-        if any(k in lower_key for k in ["accuracy", "精确率", "precision", "recall", "召回率", "f1", "auc"]):
+        # 准确率/精确率/召回率/F1 特殊检查（整词匹配）
+        _metric_keywords = {"accuracy", "precision", "recall", "f1", "auc"}
+        if _tokens & _metric_keywords or any(k in lower_key for k in ["精确率", "召回率"]):
             if abs_val > 1.0:
                 self.issues.append(ValidationIssue("error", "range", f"指标 {path} 不能大于 1.0 ({value})", path))
             if abs_val < 0:
