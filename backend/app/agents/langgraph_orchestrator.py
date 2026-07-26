@@ -8223,7 +8223,7 @@ class LangGraphOrchestrator:
                     )
 
                 except Exception as exc:
-                    logger.error(f"[LangGraph:{task_id}] solver sp{sp_id} attempt {attempt+1} failed: {exc}")
+                    logger.error(f"[LangGraph:{task_id}] solver sp{sp_id} attempt {attempt+1} failed: {exc}", exc_info=True)
                     sp_attempts.append({"error": str(exc), "execution_success": False})
 
             # v6.0: 代码自动演化 —— 求解成功后迭代改进代码
