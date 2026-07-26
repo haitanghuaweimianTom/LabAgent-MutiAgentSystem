@@ -972,10 +972,19 @@ class BaseAgent(ABC):
         # 1. 黑板上下文（角色过滤后的）
         working = context.get("working_memory")
         if working:
-            agent_ctx = working.get_context_for_agent(self.name, max_tokens=max_tokens)
-            if agent_ctx.get("agent_results"):
+            try:
+                agent_ctx = working.get_context_for_agent(self.name, max_tokens=max_tokens)
+            except Exception as e:
+                logger.debug(f"[{self.name}] get_context_for_agent 失败，跳过黑板注入: {e}")
+                agent_ctx = {}
+            if not isinstance(agent_ctx, dict):
+                agent_ctx = {}
+            # 防御：agent_results 可能被某 agent 写成 str（非 dict），.items() 会抛
+            # "'str' object has no attribute 'items'" → 整个 call_llm 崩。强制 isinstance 守卫。
+            agent_results = agent_ctx.get("agent_results")
+            if isinstance(agent_results, dict) and agent_results:
                 result_summary = ", ".join(
-                    f"{k}: {str(v)[:80]}" for k, v in agent_ctx["agent_results"].items() if k != self.name
+                    f"{k}: {str(v)[:80]}" for k, v in agent_results.items() if k != self.name
                 )
                 parts.append(f"\n\n## 【共享黑板状态】\n其他 Agent 的结果：{result_summary}")
 
