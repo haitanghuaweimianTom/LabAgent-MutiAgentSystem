@@ -9836,6 +9836,19 @@ print(json.dumps({{"accuracy": round(acc, 4)}}))
             state.get("workflow_type") == "standard"
             and (not writer_ok or not solver_ok)
         )
+        # 修正：pre 阶段数据质量门禁（data_quality_check）只发"建议补充数据"警告，
+        # 不应让已成功产出论文+求解+交付的任务被标 failed。只要 writer/solver 都在，
+        # pre 阶段的 cannot_solve_report（reason="数据质量门禁未通过"）降级为质量警告，
+        # 任务仍标 completed，并在 error 字段备注数据质量问题（供前端展示）。
+        data_quality_warn = (
+            cannot_solve
+            and isinstance(cannot_solve, dict)
+            and cannot_solve.get("reason") == "数据质量门禁未通过"
+        )
+        if data_quality_warn and writer_ok and solver_ok:
+            # pre 阶段数据质量警告，但完整流水线已产出 → 不算失败
+            cannot_solve = None
+            critical_missing = False
         error_msg = ""
         if cannot_solve:
             error_msg = str(cannot_solve.get("reason", "无法求解"))
@@ -9846,6 +9859,11 @@ print(json.dumps({{"accuracy": round(acc, 4)}}))
             if not solver_ok:
                 missing.append("solver_agent")
             error_msg = f"关键 Agent 缺失: {', '.join(missing)}"
+        elif data_quality_warn:
+            # 数据质量警告但任务完成 → 备注到 error 字段（非失败）
+            error_msg = "数据质量警告（任务已完成）: " + str(
+                cannot_solve.get("issues", ["数据质量门禁未通过"]) if isinstance(cannot_solve, dict) else "数据质量门禁未通过"
+            )
 
         # v7.2: 检查是否需要暂停（should_pause 标志）
         should_pause = state.get("should_pause", False)
