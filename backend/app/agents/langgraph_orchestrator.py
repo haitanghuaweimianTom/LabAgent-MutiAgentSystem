@@ -8368,7 +8368,11 @@ class LangGraphOrchestrator:
         validation = get_result_validator().validate(numerical, {})
 
         cross = []
+        cross_is_placeholder = True  # TODO(B1): 接入真实 secondary baseline 后改为 False
         try:
+            # 占位 secondary = primary×0.95（无真实对照方法），与 primary 永远差 5%
+            # → 必然 diverged。在没有真实 secondary 之前，cross-check 只作信息性输出，
+            # 不参与 passed 判定，否则会否决所有正确结果（如 min_cost=85 被判 diverged）。
             cross = await get_cross_validator().cross_check(
                 "primary", numerical,
                 "secondary_estimate", {k: v * 0.95 for k, v in numerical.items() if isinstance(v, (int, float))},
@@ -8386,10 +8390,13 @@ class LangGraphOrchestrator:
         except Exception as exc:
             logger.debug(f"CodeManifest validation skipped: {exc}")
 
+        # 占位 cross-check（无真实 secondary baseline）不参与否决；接入真 baseline 后
+        # 把 cross_is_placeholder 改为 False，diverged 才会否决结果。
+        cross_ok = cross_is_placeholder or all(not getattr(c, "diverged", False) for c in cross)
         passed = (
             validation.get("valid", False)
             and manifest_valid
-            and all(not getattr(c, "diverged", False) for c in cross)
+            and cross_ok
         )
 
         return {
