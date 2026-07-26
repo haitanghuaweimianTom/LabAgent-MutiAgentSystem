@@ -1582,7 +1582,9 @@ class SolverAgent(BaseAgent):
             raw_code = None
 
             try:
-                response = await self.call_llm(messages=messages, temperature=0.3, context=context)
+                # 代码生成走结构化 JSON 返回，禁用 ReAct 工具注入（否则 LLM 用 file_write/
+                # code_execute 工具交互而不返回 _solve_sequential 期望的 JSON 代码 → "未返回有效代码"）
+                response = await self.call_llm(messages=messages, temperature=0.3, context=context, tools=[])
                 content = response.get("choices", [{}])[0].get("message", {}).get("content", "{}")
 
                 # 尝试从JSON中提取code_files
@@ -1786,7 +1788,9 @@ class SolverAgent(BaseAgent):
         result = None
 
         try:
-            response = await self.call_llm(messages=messages, context=context)
+            # 代码生成走结构化 JSON 返回，禁用 ReAct 工具注入（否则 LLM 用 file_write/
+            # code_execute 工具交互而不返回 _solve_single 期望的 JSON 代码 → "未返回有效代码"）
+            response = await self.call_llm(messages=messages, context=context, tools=[])
             content = response.get("choices", [{}])[0].get("message", {}).get("content", "{}")
 
             # 尝试JSON解析
@@ -2092,7 +2096,9 @@ class SolverAgent(BaseAgent):
         requirements: List[str] = []
 
         try:
-            response = await self.call_llm(messages=messages, temperature=0.2, context=context)
+            # 代码生成走结构化 JSON 返回，禁用 ReAct 工具注入（否则 LLM 用 file_write/
+            # code_execute 工具交互而不返回 _solve_all 期望的 JSON 代码 → "未返回有效代码"）
+            response = await self.call_llm(messages=messages, temperature=0.2, context=context, tools=[])
             content = response.get("choices", [{}])[0].get("message", {}).get("content", "{}")
 
             # 解析 JSON
