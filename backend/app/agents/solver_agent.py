@@ -1877,6 +1877,19 @@ class SolverAgent(BaseAgent):
         exec_result = exec_info.get("execution_result", {})
         if exec_result.get("success"):
             exec_output = exec_result.get("output", {})
+            # exec_output 可能是代码 stdout 的 JSON 字符串（CLI/HTTP 路径都返回 str），
+            # 必须先 json.loads 成 dict，否则 isinstance(dict) 失败 → numerical_results
+            # 始终为空 → harness 判 "数值结果为空" valid=False → 正确解被否决重试。
+            if isinstance(exec_output, str):
+                s = exec_output.strip()
+                # 代码 stdout 可能含前后日志，取最后一个完整 JSON 对象
+                if s.rfind("{") != -1 and s.find("{") != -1:
+                    try:
+                        exec_output = json.loads(s[s.find("{"):s.rfind("}") + 1])
+                    except json.JSONDecodeError:
+                        exec_output = {}
+                else:
+                    exec_output = {}
             if isinstance(exec_output, dict):
                 if "numerical_results" not in result:
                     result["numerical_results"] = {}
