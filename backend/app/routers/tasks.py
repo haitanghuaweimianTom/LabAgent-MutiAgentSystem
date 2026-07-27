@@ -291,8 +291,12 @@ async def submit_task(req: TaskCreateRequest):
         )
 
     # 5. 无数据或数据不足 → 尝试自主搜集（用户允许时）
+    # v8.4.5: 条件从「data_adequacy==MISSING 且 allow」改为「allow 且无数据」。
+    # 因 preflight 已把 standard 等工作流的 missing 降级为 sufficient（门禁放行），
+    # 此处若仍依赖 MISSING 会导致 self_collect 分支永不触发，金融选题的 akshare
+    # 采集无法执行。改为：用户选了 self_collect 且没上传数据，就尝试采集。
     allow_self_collect = req.data_source in ("self_collect", "upload_and_collect")
-    if preflight_report.data_adequacy == DataAdequacy.MISSING and allow_self_collect:
+    if allow_self_collect and not data_files:
         save_task_metadata(
             task_id=task_id,
             problem_text=req.problem_text,
@@ -320,6 +324,8 @@ async def submit_task(req: TaskCreateRequest):
                     ),
                     task_id=task_id,
                     project_name=project_name,
+                    problem_text=req.problem_text,
+                    problem_type=preflight_report.problem_type,
                 )
                 if success:
                     # 将搜集到的文件加入 data_files，供后续工作流使用
@@ -341,12 +347,15 @@ async def submit_task(req: TaskCreateRequest):
                 logger.warning(f"Task {task_id}: 自主搜集数据异常: {e}")
 
     # 6. 仍然缺失数据 → 拦截并给出明确提示
-    # deep_research 工作流自主搜索不拦截；其他工作流无数据则拦截
+    # v8.4.5: 仅 research_paper 等强需数据的工作流无数据才拦截；
+    # deep_research/quick/standard/code_focused 允许无数据运行（建模在沙箱内
+    # 生成或自主搜索，preflight 已将这类 missing 降级为 sufficient）。
     final_workflow_check = workflow_type or preflight_report.recommended_workflow
-    if preflight_report.data_adequacy == DataAdequacy.MISSING and not data_files and final_workflow_check != "deep_research":
+    _workflows_allowed_no_data = ("deep_research", "quick", "standard", "code_focused")
+    if preflight_report.data_adequacy == DataAdequacy.MISSING and not data_files and final_workflow_check not in _workflows_allowed_no_data:
         error_msg = "缺少数据，请上传数据文件"
         if req.data_source == "self_collect":
-            error_msg = "自主搜集未获取到有效数据（arXiv 论文多为 HTML），请上传数据文件或更换数据来源"
+            error_msg = "自主搜集未获取到有效数据，请上传数据文件或更换数据来源"
         logger.warning(f"Task {task_id}: {error_msg}")
         save_task_metadata(
             task_id=task_id,

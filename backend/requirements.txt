@@ -7,7 +7,8 @@ pydantic>=2.5.0
 pydantic-settings>=2.1.0
 
 # HTTP客户端
-httpx>=0.26.0
+httpx[socks]>=0.26.0  # [socks] pulls socksio → 支持 socks5:// 代理
+PySocks>=1.7.1  # requests/urllib 走 socks 代理（Kaggle SDK 等）
 
 # LLM 多提供商支持
 # (使用原生 httpx 调用各平台 API，无需额外 SDK)

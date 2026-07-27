@@ -238,6 +238,17 @@ class PreflightDecisionService:
                 report.collection_plan = self._default_collection_plan(problem_text, report.problem_type)
             report.llm_should_collect = True
 
+        # v8.4.5: 修正「LLM 判 missing 但工作流允许无数据」仍被拦截的 bug。
+        # quick/standard/code_focused/deep_research 设计上允许无数据运行（建模在沙箱内
+        # 生成或 deep_research 自主搜索），即使 LLM 判了 missing 也不应触发 submit 的
+        # 数据门禁拦截。将这类工作流的 missing 降级为 sufficient，保留 collection_plan
+        # 供 self_collect 分支使用（用户若选自采集仍可采，但不强制）。
+        if not data_files and effective_workflow in ("deep_research", "quick", "standard", "code_focused"):
+            if report.data_adequacy == DataAdequacy.MISSING:
+                report.data_adequacy = DataAdequacy.SUFFICIENT
+                report.has_data_confidence = max(report.has_data_confidence, 0.5)
+                report.llm_should_collect = False
+
         return report
 
     def _extract_schemas(self, file_paths: List[str]) -> List[Dict[str, Any]]:
@@ -445,8 +456,13 @@ class PreflightDecisionService:
         task_id: str,
         project_name: Optional[str] = None,
         max_queries: int = 3,
+        problem_text: str = "",
+        problem_type: str = "",
     ) -> Tuple[bool, List[str]]:
         """根据 collection_plan 尝试自主搜集数据（v5.3.0: 实际下载而非只记录 URL）。
+
+        v8.4.5: 新增 problem_text/problem_type 参数。金融选题优先走 akshare
+        采集真实行情数据（新浪源，免 key），通用场景仍走 research_agent 搜索。
 
         Args:
             collection_plan: LLM 给出的搜集计划文本
@@ -454,51 +470,85 @@ class PreflightDecisionService:
             task_id: 任务 ID
             project_name: 项目名
             max_queries: 最大搜索查询数
+            problem_text: 题目原文（用于识别金融标的等）
+            problem_type: 问题类型
 
         Returns:
             (success, new_file_paths) —— file_paths 是真实落盘的文件相对路径
         """
         logger.info(f"Task {task_id}: 开始自主搜集数据")
-        from .self_collector import collect_urls, extract_urls_from_search_result
-
-        # 从 collection_plan 中拆出候选查询（简单按行/分号拆分）
-        queries = [q.strip("-• \t") for q in re.split(r"[\n;]", collection_plan) if len(q.strip()) > 5]
-        queries = queries[:max_queries] if queries else [collection_plan[:200]]
+        from .self_collector import collect_urls, extract_urls_from_search_result, collect_financial_data
 
         collected_files: List[str] = []
-        for query in queries:
+
+        # ── 第一路：金融选题 → akshare 直采真实行情（免 key，新浪源稳定）──
+        if problem_text:
             try:
-                result = await search_fn(query)
-                urls = extract_urls_from_search_result(result)
-                if not urls:
-                    continue
-                # v5.3.0: 实际下载文件到 self_collected/
-                download_results = await collect_urls(
-                    urls,
+                _, fin_paths = await collect_financial_data(
+                    problem_text=problem_text,
                     project_name=project_name,
-                    source_query=query,
-                    concurrency=4,
-                    timeout_sec=30,
-                    max_size_mb=50,
+                    source_query=collection_plan[:80],
                 )
-                for dr in download_results:
-                    if dr.filename:
-                        logger.info(
-                            f"Task {task_id}: 下载成功 {dr.url} → {dr.filename} ({dr.size}B)"
-                        )
-                        # 返回相对路径
-                        from ..core.paths import _PROJECT_ROOT
-                        try:
-                            rel = (Path("outputs") / (project_name or "_global") / "data" / "self_collected" / dr.filename)
-                            collected_files.append(str(rel))
-                        except Exception:
-                            collected_files.append(dr.filename)
-                    else:
-                        logger.info(
-                            f"Task {task_id}: 跳过 {dr.url} ({dr.error})"
-                        )
+                if fin_paths:
+                    collected_files.extend(fin_paths)
+                    logger.info(f"Task {task_id}: akshare 金融采集到 {len(fin_paths)} 个文件")
             except Exception as e:
-                logger.warning(f"Task {task_id}: 自主搜集数据查询失败: {e}")
+                logger.warning(f"Task {task_id}: 金融数据采集异常: {e}")
+
+        # ── 第二路：通用数据集采集（内置表 → GitHub → Kaggle 多路）──
+        # 覆盖非金融模板（CCF-A 论文、ML、课程作业等）。金融选题已采到则跳过。
+        if problem_text and not collected_files:
+            try:
+                from .self_collector import collect_datasets_multi
+                _, ds_paths = await collect_datasets_multi(
+                    problem_text=problem_text,
+                    project_name=project_name,
+                    source_query=collection_plan[:80],
+                )
+                if ds_paths:
+                    collected_files.extend(ds_paths)
+                    logger.info(f"Task {task_id}: 通用数据集采集到 {len(ds_paths)} 个文件")
+            except Exception as e:
+                logger.warning(f"Task {task_id}: 通用数据集采集异常: {e}")
+
+        # ── 第三路：通用网页/论文搜索 → 抽 URL 下载（最终兜底）──
+        if not collected_files:
+            from .self_collector import collect_urls as _collect_urls, extract_urls_from_search_result as _extract
+            queries = [q.strip("-• \t") for q in re.split(r"[\n;]", collection_plan) if len(q.strip()) > 5]
+            queries = queries[:max_queries] if queries else [collection_plan[:200]]
+            for query in queries:
+                try:
+                    result = await search_fn(query)
+                    urls = extract_urls_from_search_result(result)
+                    if not urls:
+                        continue
+                    # v5.3.0: 实际下载文件到 self_collected/
+                    download_results = await collect_urls(
+                        urls,
+                        project_name=project_name,
+                        source_query=query,
+                        concurrency=4,
+                        timeout_sec=30,
+                        max_size_mb=50,
+                    )
+                    for dr in download_results:
+                        if dr.filename:
+                            logger.info(
+                                f"Task {task_id}: 下载成功 {dr.url} → {dr.filename} ({dr.size}B)"
+                            )
+                            # 返回相对路径
+                            from ..core.paths import _PROJECT_ROOT
+                            try:
+                                rel = (Path("outputs") / (project_name or "_global") / "data" / "self_collected" / dr.filename)
+                                collected_files.append(str(rel))
+                            except Exception:
+                                collected_files.append(dr.filename)
+                        else:
+                            logger.info(
+                                f"Task {task_id}: 跳过 {dr.url} ({dr.error})"
+                            )
+                except Exception as e:
+                    logger.warning(f"Task {task_id}: 自主搜集数据查询失败: {e}")
 
         # success = 至少下载到 1 个文件
         return len(collected_files) > 0, collected_files

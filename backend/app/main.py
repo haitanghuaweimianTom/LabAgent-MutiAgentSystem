@@ -1,10 +1,17 @@
 """数学建模多Agent系统 - FastAPI入口"""
 import os
-# 清除 SOCKS 代理环境变量（httpx 不支持 socks:// 协议）
-for _var in ("ALL_PROXY", "all_proxy", "HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"):
-    _val = os.environ.get(_var, "")
-    if _val and "socks" in _val.lower():
-        del os.environ[_var]
+# SOCKS 代理环境变量兼容：httpx 需 socksio 才能处理 socks:// 代理。
+# 已安装 socksio（见 requirements.txt httpx[socks]）→ 保留 socks 代理；
+# 若运行环境缺 socksio，则剥离 socks 变量以免 httpx 客户端崩溃。
+try:
+    import socksio  # noqa: F401
+    _SOCKS_OK = True
+except ImportError:
+    _SOCKS_OK = False
+    for _var in ("ALL_PROXY", "all_proxy", "HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"):
+        _val = os.environ.get(_var, "")
+        if _val and "socks" in _val.lower():
+            del os.environ[_var]
 
 # 限制 BLAS/OMP 线程数为 1：solver 子进程跑 numpy/scipy 时 OpenBLAS 默认开多线程，
 # 在内存压力下线程缓冲区分配失败 → "OpenBLAS error: Memory allocation still failed
@@ -38,6 +45,8 @@ from .routers.projects import router as projects_router
 from .routers.memory import router as memory_router
 from .routers.pdf import router as pdf_router
 from .routers.discussion import router as discussion_router
+from .routers.datasources import router as datasources_router
+from .routers.proxy import router as proxy_router
 from .core.provider_config import migrate_legacy_to_new, get_default_provider, list_custom_providers
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -118,6 +127,16 @@ async def lifespan(app: FastAPI):
     # 确保所有必要目录存在
     from .core.paths import ensure_dirs
     ensure_dirs()
+    # 检测并记录系统代理状态（仅日志；不全局写 env，避免影响 LLM 直连）
+    try:
+        from .core.proxy import get_proxy_status as _get_proxy_status
+        _ps = _get_proxy_status()
+        if _ps.get("detected"):
+            logger.info(f"系统代理: {_ps['detected']} (来源: {_ps.get('source')})；取数据路径将按需走代理")
+        else:
+            logger.info("未检测到系统代理，取数据走直连")
+    except Exception as _px_exc:
+        logger.debug(f"代理检测跳过: {_px_exc}")
     # v5.3.0: 迁移旧格式数据目录（outputs/<name>/data/*.csv → user_uploads/）
     try:
         from .core.paths import migrate_legacy_data_dir
@@ -185,6 +204,8 @@ app.include_router(projects_router, prefix="/api/v1")
 app.include_router(memory_router, prefix="/api/v1")
 app.include_router(pdf_router, prefix="/api/v1")
 app.include_router(discussion_router, prefix="/api/v1")
+app.include_router(datasources_router, prefix="/api/v1")
+app.include_router(proxy_router, prefix="/api/v1")
 
 
 @app.get("/")

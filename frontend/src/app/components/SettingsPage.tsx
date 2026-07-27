@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import ProviderSettings from './ProviderSettings';
 import McpManager from './McpManager';
 import KnowledgeBaseManager from './KnowledgeBaseManager';
+import DatasourceSettings from './DatasourceSettings';
 import { apiBase } from '@/lib/api';
 
 interface SystemInfo {
@@ -19,6 +20,7 @@ interface SystemInfo {
 
 const TABS = [
   { id: 'providers' as const, label: '🔌 Provider 管理' },
+  { id: 'datasources' as const, label: '🗃️ 数据源' },
   { id: 'mcp' as const, label: '🔗 MCP 管理' },
   { id: 'knowledge' as const, label: '📚 知识库' },
   { id: 'system' as const, label: '⚙️ 系统设置' },
@@ -27,7 +29,7 @@ const TABS = [
 export default function SettingsPage() {
   const [settingsMsg, setSettingsMsg] = useState('');
   const [sysInfo, setSysInfo] = useState<SystemInfo | null>(null);
-  const [activeTab, setActiveTab] = useState<'providers' | 'mcp' | 'knowledge' | 'system'>('providers');
+  const [activeTab, setActiveTab] = useState<'providers' | 'datasources' | 'mcp' | 'knowledge' | 'system'>('providers');
 
   const [claudeModel, setClaudeModel] = useState('');
   const [claudeMcpTools, setClaudeMcpTools] = useState('');
@@ -74,7 +76,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     const handler = (e: CustomEvent) => {
-      const targetTab = e.detail as 'providers' | 'mcp' | 'knowledge' | 'system';
+      const targetTab = e.detail as 'providers' | 'datasources' | 'mcp' | 'knowledge' | 'system';
       if (TABS.some(t => t.id === targetTab)) {
         setActiveTab(targetTab);
       }
@@ -136,6 +138,7 @@ export default function SettingsPage() {
       )}
 
       {activeTab === 'providers' && <ProviderSettings />}
+      {activeTab === 'datasources' && <DatasourceSettings />}
       {activeTab === 'mcp' && <McpManager />}
       {activeTab === 'knowledge' && <KnowledgeBaseManager />}
 
