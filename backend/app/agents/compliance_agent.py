@@ -1,6 +1,6 @@
 """合规审查Agent — 金融报告合规检查
 
-扫描金融分析报告，检测投顾话术，自动添加免责声明。
+扫描金融分析报告，检测投顾话术并清理违规内容（不再追加免责声明）。
 定位为"客观数据处理工具"，而非"投资顾问"。
 """
 
@@ -37,41 +37,11 @@ COMPLIANCE_PATTERNS = [
     (r"错过[就没]", "操纵性语言"),
 ]
 
-# 免责声明模板
-DISCLAIMER_ZH = """
-## 免责声明
-
-本报告由AI辅助生成，仅供学术研究和学习参考，不构成任何投资建议。
-
-1. 本报告中的分析基于历史数据和量化模型，过去的表现不代表未来收益。
-2. 投资有风险，入市需谨慎。任何投资决策应基于个人风险承受能力和专业财务顾问的建议。
-3. 本报告中的数据来源已在文中标注，数据的准确性和完整性依赖于原始数据源。
-4. 本系统定位为"客观数据处理工具"，不从事证券投资咨询业务。
-5. 报告中可能存在的模型局限性和假设条件已在相应章节说明。
-
-生成时间：{timestamp}
-"""
-
-DISCLAIMER_EN = """
-## Disclaimer
-
-This report is AI-assisted and for academic research/educational purposes only. It does not constitute investment advice.
-
-1. Analysis is based on historical data and quantitative models. Past performance does not guarantee future results.
-2. Investing involves risk. Consult a qualified financial advisor before making investment decisions.
-3. Data sources are cited in the report. Accuracy depends on original data providers.
-4. This system is an "objective data processing tool", not an investment advisor.
-5. Model limitations and assumptions are described in relevant sections.
-
-Generated: {timestamp}
-"""
-
-
 @AgentFactory.register("compliance_agent")
 class ComplianceAgent(BaseAgent):
     name = "compliance_agent"
     label = "合规审查专家"
-    description = "金融报告合规检查，检测投顾话术，添加免责声明"
+    description = "金融报告合规检查，检测投顾话术并清理违规内容"
     default_model = ""
 
     def get_system_prompt(self) -> str:
@@ -101,23 +71,17 @@ class ComplianceAgent(BaseAgent):
         # 检测违规内容
         violations = self._detect_violations(report_text)
 
-        # 生成免责声明
-        from datetime import datetime, timezone
-        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-        disclaimer = (DISCLAIMER_ZH if language == "zh" else DISCLAIMER_EN).format(
-            timestamp=timestamp
-        )
-
-        # 清理违规内容
+        # 清理违规内容（违规话术替换为 [已删除] 标记）
         cleaned_text = self._clean_violations(report_text, violations)
 
-        # 追加免责声明
-        cleaned_text = cleaned_text + "\n\n" + disclaimer
+        # 注：不再追加免责声明。用户硬约束：产出 PDF 不得出现任何 "AI 生成" 字眼；
+        # 此前免责声明含 "本报告由AI辅助生成" 且为 Markdown 追加进 LaTeX 源会渲染错，
+        # 故整段移除。disclaimer_added 保留为 False 以维持返回结构兼容。
 
         return {
             "passed": len(violations) == 0,
             "violations": [{"pattern": v[0], "category": v[1], "text": v[2]} for v in violations],
-            "disclaimer_added": True,
+            "disclaimer_added": False,
             "cleaned_text": cleaned_text,
         }
 

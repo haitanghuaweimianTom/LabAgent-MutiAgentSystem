@@ -914,6 +914,54 @@ def _resolve_preamble(template_id: str) -> str:
     return WriterAgent._cumcm_preamble(None)
 
 
+# v5.6: 统一代码块排版样式。所有模板 preamble 经 _ensure_listings_preamble 幂等注入此块，
+# 避免在多个 JSON 模板里复制 \lstset 导致漂移。克制配色（左竖线 + 近白底），打印友好，
+# 期刊/会议论文常用风格。basicstyle 用 \footnotesize 兼顾密度与可读性，breaklines 防超长行溢出。
+PAPER_CODE_LISTINGS_BLOCK = r"""\definecolor{codebg}{RGB}{248,248,248}
+\definecolor{coderule}{RGB}{200,200,200}
+\definecolor{codekey}{RGB}{0,90,170}
+\definecolor{codecom}{RGB}{110,120,110}
+\definecolor{codestr}{RGB}{163,21,21}
+\lstdefinestyle{papercode}{
+    backgroundcolor=\color{codebg},
+    frame=leftline, framerule=1.2pt, rulecolor=\color{coderule},
+    framesep=6pt, xleftmargin=10pt, xrightmargin=4pt,
+    basicstyle=\ttfamily\footnotesize,
+    keywordstyle=\color{codekey}\bfseries,
+    commentstyle=\color{codecom}\itshape,
+    stringstyle=\color{codestr},
+    numberstyle=\tiny\color{gray},
+    numbers=left, numbersep=8pt, stepnumber=1,
+    breaklines=true, breakatwhitespace=true,
+    showstringspaces=false, showtabs=false,
+    keepspaces=true, tabsize=4,
+    columns=fullflexible, extendedchars=true,
+    captionpos=b, aboveskip=8pt, belowskip=8pt,
+}
+\lstset{style=papercode}
+"""
+
+
+def _ensure_listings_preamble(preamble: str) -> str:
+    """幂等注入共享代码块样式 papercode。
+
+    若 preamble 已定义 papercode 样式则原样返回；否则在 \\begin{document} 前插入
+    \\definecolor/\\lstdefinestyle/\\lstset 块，并按需补 \\usepackage{listings} 与
+    \\usepackage{xcolor}（仅缺失才补，避免重复加载冲突）。
+    """
+    if r"\lstdefinestyle{papercode}" in preamble:
+        return preamble
+    block = PAPER_CODE_LISTINGS_BLOCK
+    # 仅当该包尚未被任意 \usepackage 形式加载时才补
+    if not re.search(r"\\usepackage(\[[^\]]*\])?\{[^}]*\blistings\b", preamble):
+        block = r"\usepackage{listings}" + "\n" + block
+    if not re.search(r"\\usepackage(\[[^\]]*\])?\{[^}]*\bxcolor\b", preamble):
+        block = r"\usepackage{xcolor}" + "\n" + block
+    if r"\begin{document}" in preamble:
+        return preamble.replace(r"\begin{document}", block + r"\begin{document}", 1)
+    return preamble + "\n" + block
+
+
 def _resolve_acceptance_threshold(template_id: str) -> int:
     """统一桥接 acceptance_threshold（CCF-A 默认 85，竞赛 75）。"""
     try:
@@ -2084,6 +2132,9 @@ class WriterAgent(BaseAgent):
         metadata = self._build_paper_metadata(chapters, template)
         preamble, skipped_placeholders = self._substitute_preamble_placeholders(preamble, template, metadata)
 
+        # v5.6: 幂等注入共享代码块样式 papercode（全模板统一 listings 排版，详见 _ensure_listings_preamble）。
+        preamble = _ensure_listings_preamble(preamble)
+
         body_parts: List[str] = []
         sections_summary: Dict[str, str] = {}
 
@@ -2108,14 +2159,11 @@ class WriterAgent(BaseAgent):
             if summary:
                 sections_summary[plan["title"]] = summary
 
-        # v6.2: AI使用声明 — 论文末尾自动添加
-        ai_declaration = self._build_ai_declaration(template)
+        # 不再追加 AI 使用声明（用户要求）。各章节正文已含必要说明。
 
         latex_code = f"""{preamble}
 
 {chr(10).join(body_parts)}
-
-{ai_declaration}
 
 \\end{{document}}
 """
@@ -2127,48 +2175,6 @@ class WriterAgent(BaseAgent):
         if skipped_placeholders:
             result["skipped_placeholders"] = skipped_placeholders
         return result
-
-    def _build_ai_declaration(self, template: str) -> str:
-        """生成AI使用声明（符合ACM/IEEE/ACL学术规范）"""
-        from datetime import datetime
-        year = datetime.now().year
-
-        # 根据模板类型生成不同声明
-        if template in ("neurips_2024", "ieee_conference", "acm_sigconf", "springer_lncs"):
-            return (
-                f"\\section*{{AI Usage Declaration}}\n"
-                f"\\addcontentsline{{toc}}{{section}}{{AI Usage Declaration}}\n"
-                f"This work was produced with the assistance of an AI-powered multi-agent research system. "
-                f"The following components were AI-assisted: literature review and synthesis, "
-                f"mathematical modeling and formula derivation, experiment code generation and execution, "
-                f"LaTeX typesetting, and figure generation. All AI-generated content was reviewed, "
-                f"verified, and edited by human authors. The authors take full responsibility for "
-                f"the accuracy and integrity of all claims, data, and conclusions presented herein. "
-                f"({year})"
-            )
-        elif template == "math_modeling":
-            return (
-                f"\\section*{{AI使用声明}}\n"
-                f"本论文的完成借助了AI多智能体研究系统的辅助。以下环节由AI辅助完成："
-                f"文献检索与综述、数学建模与公式推导、求解代码生成与执行、LaTeX排版、图表生成。"
-                f"所有AI生成的内容均经人工审核、验证和修改。作者对本文所有声明、数据和结论的准确性和完整性负全部责任。"
-                f"（{year}年）"
-            )
-        elif template == "financial_analysis":
-            return (
-                f"\\section*{{免责声明与AI使用声明}}\n"
-                f"本报告由AI辅助生成，仅供学术研究和学习参考，不构成任何投资建议。"
-                f"以下环节由AI辅助完成：数据获取与处理、量化分析、报告撰写。"
-                f"所有AI生成的内容均经人工审核。投资有风险，入市需谨慎。"
-                f"（{year}年）"
-            )
-        else:
-            return (
-                f"\\section*{{AI Usage Declaration}}\n"
-                f"This work was produced with the assistance of an AI system. "
-                f"All AI-generated content was reviewed and verified by human authors. "
-                f"The authors take full responsibility for all claims and conclusions. ({year})"
-            )
 
     def _build_paper_metadata(self, chapters: List[Dict[str, Any]], template: str) -> Dict[str, Any]:
         """从章节结果与模板默认值构建论文元数据。"""
@@ -2273,10 +2279,31 @@ class WriterAgent(BaseAgent):
         # v5.4: 弃用 cumcmthesis（系统/仓库均无 cumcmthesis.cls，导致从未编译出 PDF）。
         # 改用 ctexart（TeX Live 自带，零依赖，已验证可编译出 PDF）。失去 CUMCM
         # 竞赛封面格式，改用通用 article 封面；CCF-A 模板不受影响（各自带 cls）。
+        # v5.5: 加 listings 包 + \lstset 全局配置。此前 preamble 无 listings 配置，
+        # 而 body 用 \begin{lstlisting}，导致代码块被当纯文本、超长行被重排挤成
+        # 一行 → PDF 代码排版崩坏。breaklines=true 让超长行自动换行。
         return r"""\documentclass{ctexart}
 \usepackage{amsmath,amssymb,graphicx,booktabs}
 \usepackage{url}
 \usepackage{subcaption}
+\usepackage{listings}
+\usepackage{xcolor}
+
+\lstset{
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    stepnumber=1,
+    frame=single,
+    framesep=3pt,
+    tabsize=4,
+    showstringspaces=false,
+    extendedchars=true,
+    inputencoding=utf8,
+    columns=fullflexible,
+    keepspaces=true,
+}
 
 \title{__TITLE__}
 \author{__AUTHORS__}

@@ -118,6 +118,7 @@ class TaskState(TypedDict, total=False):
     preflight: Optional[Dict[str, Any]]
     current_step: str
     paper_template: str
+    figure_language: Optional[str]  # "zh"|"en"，图内文字语言；None 时按模板推断
     workflow_type: str
     mode: str
     phase: str
@@ -453,6 +454,7 @@ class LangGraphOrchestrator:
         workflow_type: str = "standard",
         preflight_report: Optional[Dict[str, Any]] = None,
         use_critique: bool = True,
+        figure_language: Optional[str] = None,  # "zh"|"en"，None 时按模板推断；用户可指定图内文字语言
     ) -> Dict[str, Any]:
         """运行完整工作流。"""
         if not LANGGRAPH_AVAILABLE or self._graph is None:
@@ -474,6 +476,7 @@ class LangGraphOrchestrator:
             "preflight": preflight_report,
             "current_step": "preflight_decision",
             "paper_template": template,
+            "figure_language": figure_language,  # 图表文字语言（None→按模板推断）
             "workflow_type": workflow_type,
             "mode": mode,
             "phase": "phase1",
@@ -8982,6 +8985,7 @@ print(json.dumps({{"accuracy": round(acc, 4)}}))
                 "action": "plan",
                 "problem_text": state["problem_text"],
                 "data": solver_result,
+                "figure_language": state.get("figure_language"),
             },
             context=self._agent_context(state),
         )
@@ -8998,6 +9002,7 @@ print(json.dumps({{"accuracy": round(acc, 4)}}))
                 "figure_plan": plan_output,
                 "data": solver_result,
                 "project_name": state.get("project_name"),
+                "figure_language": state.get("figure_language"),
             },
             context=self._agent_context(state),
         )
@@ -9184,7 +9189,7 @@ print(json.dumps({{"accuracy": round(acc, 4)}}))
                     logger.warning(f"[LangGraph:{task_id}] compliance text disk write failed: {disk_exc}")
                 self._post_chat(
                     task_id, "compliance_agent",
-                    f"⚠️ 合规审查：检测到 {len(violations)} 处违规投顾话术，已自动清洗并添加免责声明",
+                    f"⚠️ 合规审查：检测到 {len(violations)} 处违规投顾话术，已自动清洗",
                 )
 
             self._set_result(state, "compliance_agent", result)

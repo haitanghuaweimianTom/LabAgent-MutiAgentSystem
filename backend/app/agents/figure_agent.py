@@ -26,6 +26,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from .base import BaseAgent, AgentFactory
 from ..core.security import wrap_user_content
 from ..core.vlm_figure_reviewer import get_vlm_figure_reviewer
+from ..core.figure_fonts import CJK_FONT_SANS, CJK_FONT_SERIF
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +42,7 @@ FIGURE_SYSTEM_PLAN = """你是一个科研图表规划专家。请根据论文�
     {
       "id": "fig_01",
       "type": "line|bar|scatter|heatmap|box|violin|histogram|pair|3d|flowchart|architecture|comparison",
-      "title": "图表标题（中文）",
+      "title": "图表标题",
       "description": "该图表展示什么内容（≤50字）",
       "data_source": "数据来源描述，如 solver 输出的哪个字段",
       "recommended_size": "single_column|double_column|full_width",
@@ -56,6 +57,7 @@ FIGURE_SYSTEM_PLAN = """你是一个科研图表规划专家。请根据论文�
 - 优先选择最能展示研究亮点的图表类型
 - 避免冗余：同一数据不要用多种图表重复展示
 - 考虑期刊规范：Nature 偏好简洁，IEEE 偏好详细
+- 图表标题、轴标签、图例等所有文字必须使用用户指定的【图表语言】（zh=中文 / en=英文）
 """
 
 FIGURE_SYSTEM_GENERATE = """你是一个科研绘图代码生成专家。请生成 matplotlib 代码来创建发表级质量图表。
@@ -231,9 +233,12 @@ def apply_style(style_name: str = "nature"):
 
     plt.rcParams["font.family"] = style["font_family"]
     if style["font_family"] == "serif":
-        plt.rcParams["font.serif"] = style.get("font_serif", ["Times New Roman"])
+        # 期刊拉丁衬线字体在前 + CJK 衬线兜底，中文不再渲染成方框
+        plt.rcParams["font.serif"] = list(style.get("font_serif", ["Times New Roman"])) + list(CJK_FONT_SERIF)
     else:
-        plt.rcParams["font.sans-serif"] = style.get("font_sans", ["Arial"])
+        # 期刊拉丁无衬线字体在前 + CJK 无衬线兜底：matplotlib 逐字符回退，
+        # 英文走期刊字体、中文走 CJK 字体，两类文字都不方框
+        plt.rcParams["font.sans-serif"] = list(style.get("font_sans", ["Arial"])) + list(CJK_FONT_SANS)
     plt.rcParams["svg.fonttype"] = "none"
     plt.rcParams["font.size"] = style["font_size"]
     plt.rcParams["axes.labelsize"] = style["axes_labelsize"]
@@ -393,12 +398,30 @@ class FigureAgent(BaseAgent):
             return "nature"
         return "default"
 
+    def _get_figure_language(self, task_input: Dict[str, Any], context: Dict[str, Any]) -> str:
+        """决定图表文字语言（zh=中文 / en=英文）。
+
+        优先级：task_input["figure_language"]（用户显式指定）
+        > context["figure_language"] > context["language"]（论文语言）
+        > 按模板推断（cumcm/math_modeling/coursework 等中文模板→zh，CCF-A 英文模板→en）。
+        """
+        lang = task_input.get("figure_language") or context.get("figure_language")
+        if lang not in ("zh", "en"):
+            lang = context.get("language")
+        if lang not in ("zh", "en"):
+            template = context.get("template", "")
+            lang = "zh" if template in {
+                "cumcm", "math_modeling", "coursework", "financial_analysis", "research_survey"
+            } else "en"
+        return lang
+
     # ── Action: plan ──
 
     async def _plan(self, task_input: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
         """规划图表清单。"""
         problem_text = task_input.get("problem_text", "")
         data = self._extract_data(task_input, context)
+        figure_language = self._get_figure_language(task_input, context)
 
         # 构建数据描述
         data_desc = self._describe_data(data)
@@ -411,6 +434,7 @@ class FigureAgent(BaseAgent):
 {data_desc}
 
 【模板类型】{context.get("template", "default")}
+【图表语言】{figure_language}（zh=中文 / en=英文，所有标题/标签/图例必须用此语言）
 
 请规划需要生成的图表清单。"""
 
@@ -460,9 +484,10 @@ class FigureAgent(BaseAgent):
         figure_spec = task_input.get("figure_spec", {})
         data = self._extract_data(task_input, context)
         style_name = self._get_style_name(task_input, context)
+        figure_language = self._get_figure_language(task_input, context)
 
         # 构建代码生成提示
-        prompt = self._build_generate_prompt(figure_spec, data, style_name, output_dir)
+        prompt = self._build_generate_prompt(figure_spec, data, style_name, output_dir, figure_language)
 
         messages = [
             {"role": "system", "content": FIGURE_SYSTEM_GENERATE},
@@ -491,7 +516,8 @@ class FigureAgent(BaseAgent):
             return {"action": "generate", "error": str(e), "success": False}
 
     def _build_generate_prompt(
-        self, figure_spec: Dict[str, Any], data: Dict[str, Any], style_name: str, output_dir: Path
+        self, figure_spec: Dict[str, Any], data: Dict[str, Any], style_name: str,
+        output_dir: Path, figure_language: str = "zh",
     ) -> str:
         """构建图表生成提示。"""
         fig_type = figure_spec.get("type", "line")
@@ -510,17 +536,19 @@ class FigureAgent(BaseAgent):
 - 描述: {description}
 - 尺寸: {size} ({width} inches width)
 - 风格: {style_name}
+- 图表语言: {figure_language}（zh=中文 / en=英文）
 
 【数据】
 {data_desc}
 
 【要求】
 1. 使用 matplotlib 生成图表
-2. 调用 apply_style("{style_name}") 设置风格
+2. 调用 apply_style("{style_name}") 设置风格（已自动配置 CJK 字体兜底，中文不会方框，不要自行覆盖字体）
 3. 图表宽度约 {width} inches，高度自适应（不超过 {style['max_height']} inches）
 4. 使用 save_figure(fig, "{figure_spec.get('id', 'fig_01')}", charts_dir) 保存
 5. 数据在变量 DATA 中可用
 6. 输出目录在变量 charts_dir 中
+7. 标题、坐标轴标签、图例等所有文字必须使用「{figure_language}」语言
 
 请生成完整可执行的 Python 代码。"""
 

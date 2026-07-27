@@ -396,6 +396,16 @@ class CodeSandbox:
             "import __import_hook__\n",
             encoding="utf-8",
         )
+        # 写入 matplotlibrc：沙箱内 LLM 代码若用 matplotlib，启动时懒加载 CJK 字体，
+        # 防止中文标题/标签渲染成方框（零开销——非绘图代码不触发 matplotlib 读取）。
+        from .figure_fonts import CJK_FONT_SANS
+        mplrc = workspace / "matplotlibrc"
+        mplrc.write_text(
+            "font.family: sans-serif\n"
+            f"font.sans-serif: {', '.join(CJK_FONT_SANS)}\n"
+            "axes.unicode_minus: False\n",
+            encoding="utf-8",
+        )
 
     # ------------------------------------------------------------------
     # 沙箱执行核心
@@ -416,6 +426,7 @@ class CodeSandbox:
         merged_env["PYTHONPATH"] = str(workspace) + ":" + merged_env.get("PYTHONPATH", "")
         merged_env["PYTHONDONTWRITEBYTECODE"] = "1"
         merged_env["MPLBACKEND"] = "Agg"  # 无头 matplotlib
+        merged_env["MATPLOTLIBRC"] = str(workspace)  # CJK 字体兜底（防图表中文方框）
         if env_vars:
             merged_env.update(env_vars)
 
