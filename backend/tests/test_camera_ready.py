@@ -171,8 +171,8 @@ def test_readme_uses_registry_documentclass():
 def test_readme_uses_cumcm_for_math_modeling():
     art = CameraReadyArtifact(template_id="math_modeling")
     readme = build_readme(art, "task_cumcm")
-    # CUMCM 注册表 documentclass == cumcmthesis
-    assert "cumcmthesis" in readme
+    # math_modeling 注册表 documentclass == ctexart（cumcmthesis 无 cls，换 ctexart 出 PDF）
+    assert "ctexart" in readme
 
 
 # ==================== 5. artifact summary ====================

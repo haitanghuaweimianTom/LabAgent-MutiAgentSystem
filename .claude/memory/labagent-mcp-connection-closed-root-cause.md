@@ -30,4 +30,4 @@ LabAgent 后端 solver/reAct 调 `code_execute`/`file_write` 时，日志全部 
 6. result_validator 子串匹配 `'ratio' in 'iterations'` 误判比例字段 → 整词匹配。
 7. writer `_collect_kb_sources_for_citations` 遍历 `km._bases` 全部基（含 paper_reader 留下的几十个临时 `task_kb_*`）→ 每个重建引擎 → KB 构建死循环、0 LLM → 跳过 `task_kb_*` 基。
 8. pre 阶段数据质量门禁警告 `cannot_solve_report` 让已产出论文+交付的任务被标 `failed` → 写作完成时降级为质量警告、任务标 `completed`。
-验证：运输问题 ILP 任务 `task_5a92bcfea314` 端到端出论文+camera-ready zip+lessons(total=75)，solver 3/3 子问题 harness `passed=True`，total_cost=85（教科书最优）。
+验证（2026-07-27 纠正注水）：solver 3/3 子问题 harness `passed=True`、total_cost=85 属实；但 **writer 第3章「模型假设」生成失败 → 整篇 `latex_code` 为空 → camera-ready zip 空壳（无 tex 无 PDF）**，"出论文"系注水。且 math_modeling preamble 用 cumcmthesis 但无 cls，**此前从未真出过 PDF**。两 bug 真因+修复详见 [[writer-no-pdf-ctexart-fix]]。

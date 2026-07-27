@@ -13,7 +13,7 @@
 5. **writer KB 构建死循环**（commits 2516808d/11217dfb）— 章节生成 ReAct 触发 paper_search → 每论文新建 task_kb → 0 LLM。修：writer call_llm 禁 ReAct + 引用收集跳过 `task_kb_*` 基。
 6. **数据质量门禁误标 failed**（commit fc37ffcb）— pre 阶段警告让已产出论文的任务标 failed。修：写作完成时降级为质量警告、任务标 completed。
 
-**验证**：运输问题 ILP 任务端到端出论文 + camera-ready zip + lessons(84 条, 3 条 use_count 自增)，solver 3/3 子问题 harness `passed=True`，total_cost=85（教科书最优）。
+**验证（2026-07-27 纠正注水）**：solver 3/3 子问题 harness `passed=True`、total_cost=85（教科书最优）属实；但 **writer 第3章「模型假设」生成失败（LLM 返回无效内容 3 次重试）→ `_generate_chapter` raise → 整篇 `latex_code` 为空 → camera-ready zip 是空壳（无 tex 无 PDF）**。此前"端到端出论文+camera-ready zip"系**注水**（违反 [[no-inflated-resume-numbers]]）。更深一层：math_modeling preamble 用 `cumcmthesis`，但**系统/仓库均无 cumcmthesis.cls**，所以即便 writer 成功也编译不出 PDF——**此前所有 math_modeling 论文从未真正生成过 PDF**。本次会话修复（见 [[writer-no-pdf-ctexart-fix]]）：(1) writer 单章失败改 return `_chapter_fallback` 不再 raise；(2) preamble 换 `ctexart`（TeX Live 自带，零依赖）。mock 端到端验证：全降级占位章节也能编译出 ~100KB PDF。
 
 ## 约束（务必遵守）
 
@@ -27,3 +27,4 @@
 - [LabAgent MCP "Connection closed" 真因](labagent-mcp-connection-closed-root-cause.md) — 含完整 8 类根因 + 18-fix 链
 - [LabAgent 记忆池架构](labagent-memory-pool-architecture.md) — 两套记忆系统 + Lessons 闭环
 - [LabAgent 进程级连不上 LLM 真因](labagent-embedding-blocks-event-loop.md) — provider 缺凭证回退 + 占位符识别
+- [writer 出空壳 / 从未出 PDF 修复](writer-no-pdf-ctexart-fix.md) — 单章 raise→fallback + cumcmthesis→ctexart(2026-07-27)

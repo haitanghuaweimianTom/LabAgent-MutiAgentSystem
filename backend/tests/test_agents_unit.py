@@ -227,6 +227,41 @@ class TestWriterAgent:
         # writer 应该返回基本结构
         assert isinstance(result, dict)
 
+    @pytest.mark.asyncio
+    async def test_generate_chapter_fallback_on_invalid_content(self, agent):
+        """回归：单章 call_llm 返回空/无效内容时，_generate_chapter 不再 raise，
+        而是返回降级占位 LaTeX —— 防止单章失败中断整篇 → latex_code 为空 → 无 PDF。
+        历史 bug：曾 raise RuntimeError，使章节 for 循环中断、_assemble_paper 不执行，
+        camera_ready 打出空壳 zip（无 tex 无 PDF）。"""
+        # 用真实模板章节（字段齐全：prompt_role/requirements 等），取第 3 章
+        # —— 正是 task_5a92bcfea314 中失败的那一章「模型假设与符号说明」
+        chapter_plan = agent.get_template_chapters("math_modeling")
+        plan = chapter_plan[2] if len(chapter_plan) > 2 else chapter_plan[-1]
+        empty_resp = mock_llm_json_response({"chapter_latex": "", "chapter_summary": ""})
+        with patch.object(agent, "call_llm", new_callable=AsyncMock) as mock_llm:
+            mock_llm.return_value = empty_resp
+            latex, summary = await agent._generate_chapter(
+                plan=plan,
+                chapter_index=2,
+                chapters=[],
+                chapter_plan=chapter_plan,
+                problem_text="运输问题",
+                outline="",
+                section_results=[],
+                sub_problems=[],
+                analyzer_result={},
+                data_result={},
+                literature=[],
+                available_figures=[],
+                template="math_modeling",
+                previous_issues=[],
+            )
+        # 修复前这里会 raise RuntimeError，根本到不了下面的断言
+        assert latex and "\\section" in latex
+        assert "DEGRADED" in latex  # 占位标记（% [DEGRADED]）
+        assert "DEGRADED" in summary
+        assert mock_llm.await_count == 3  # 3 次重试都失败才兜底
+
 
 # ============================================================================
 # PeerReviewAgent 测试

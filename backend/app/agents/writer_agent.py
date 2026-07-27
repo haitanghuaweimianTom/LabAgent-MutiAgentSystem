@@ -1521,7 +1521,13 @@ class WriterAgent(BaseAgent):
 
         error_msg = f"章节 [{plan['title']}] 生成失败（3次重试后）: {last_error}"
         logger.error(error_msg)
-        raise RuntimeError(error_msg)
+        # 容错：单章生成失败不中断整篇论文。用降级占位内容兜底，保证
+        # _assemble_paper 仍能拼出可编译的完整 LaTeX（即使该章为占位）。
+        # 历史 bug：此处 raise 会中断章节 for 循环 → _assemble_paper 不执行
+        # → latex_code 为空 → camera_ready 无 tex 可打包 → 出空壳 zip、无 PDF。
+        fallback_latex = self._chapter_fallback(plan, template)
+        fallback_summary = f"[DEGRADED] 章节生成失败（{last_error}），已用占位内容兜底，需人工补充"
+        return fallback_latex, fallback_summary
 
     async def _critique_chapter(
         self,
@@ -2264,27 +2270,17 @@ class WriterAgent(BaseAgent):
         return preamble, list(set(skipped))
 
     def _cumcm_preamble(self) -> str:
-        return r"""\documentclass[withoutpreface]{cumcmthesis}
+        # v5.4: 弃用 cumcmthesis（系统/仓库均无 cumcmthesis.cls，导致从未编译出 PDF）。
+        # 改用 ctexart（TeX Live 自带，零依赖，已验证可编译出 PDF）。失去 CUMCM
+        # 竞赛封面格式，改用通用 article 封面；CCF-A 模板不受影响（各自带 cls）。
+        return r"""\documentclass{ctexart}
+\usepackage{amsmath,amssymb,graphicx,booktabs}
 \usepackage{url}
 \usepackage{subcaption}
-\usepackage{booktabs}
-\usepackage{amsmath,amssymb,graphicx}
 
-% 字体设置（使用系统自带字体）
-\setCJKmainfont{SimSun}
-\setCJKsansfont{SimHei}
-\setCJKmonofont{FangSong}
-
-\tihao{B}
-\baominghao{2025001}
-\schoolname{某大学}
-\membera{队员A}
-\memberb{队员B}
-\memberc{队员C}
-\supervisor{指导教师}
-\yearinput{2025}
-\monthinput{09}
-\dayinput{15}
+\title{__TITLE__}
+\author{__AUTHORS__}
+\date{\today}
 
 \begin{document}
 
