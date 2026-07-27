@@ -2282,6 +2282,10 @@ class LangGraphOrchestrator:
 
         try:
             files = list(state.get("files", []) or [])
+            # 排除系统内部标记文件（非用户数据）。.migrated_v530 是数据目录迁移幂等
+            # 标记（paths.py），0 字节，曾被误当数据文件 → size==0 → fatal → 任务标
+            # failed，尽管论文/PDF 已正常产出。也跳过其他隐藏文件（.开头）。
+            files = [f for f in files if not Path(f).name.startswith(".")]
             # 由 _route_after_parallel_analysis 保证仅 files 非空时进入；此处作防御
             if not files:
                 logger.info(f"[LangGraph:{task_id}] data_quality_check: 无数据文件，跳过门禁")
@@ -2673,6 +2677,14 @@ class LangGraphOrchestrator:
             self._update_progress(task_id, state["problem_text"], 67, "文献去重中")
 
             # ===== 规范化键（复用 reference_verifier 的归一化逻辑） =====
+            def _keyval(key_str: str) -> str:
+                """安全取 'prefix:value' 的 value 部分。
+                原 key_str.split(':',1)[1] 在 key_str 为空串或不含 ':' 时
+                IndexError（曾致 literature_dedup 崩溃：list index out of range）。"""
+                if not key_str or ":" not in key_str:
+                    return ""
+                return key_str.split(":", 1)[1]
+
             def _norm_arxiv(raw):
                 if not raw:
                     return ""
@@ -2698,7 +2710,7 @@ class LangGraphOrchestrator:
             def _register_keys(seen_dict, idx, ka, kd, ku, kt):
                 """把四元组键注册到 seen，指向 kept 中的索引（仅注册非空值）。"""
                 for key_str in (f"arxiv:{ka}", f"doi:{kd}", f"url:{ku}", f"title:{kt}"):
-                    if key_str.split(":", 1)[1] and key_str not in seen_dict:
+                    if _keyval(key_str) and key_str not in seen_dict:
                         seen_dict[key_str] = idx
 
             def _dedup_citations(cits):
@@ -2723,7 +2735,7 @@ class LangGraphOrchestrator:
                         (f"url:{ku}", "url"),
                         (f"title:{kt}", "title"),
                     ):
-                        if key_str.split(":", 1)[1] and key_str in seen_c:
+                        if _keyval(key_str) and key_str in seen_c:
                             hit = seen_c[key_str]
                             break
                     # 无强 id（无 arxiv_id 且无 doi）→ 标题模糊匹配
@@ -2771,7 +2783,7 @@ class LangGraphOrchestrator:
                     ("url", f"url:{k_url}"),
                     ("title", f"title:{k_title}"),
                 ):
-                    if key_str.split(":", 1)[1] and key_str in seen:
+                    if _keyval(key_str) and key_str in seen:
                         hit_idx = seen[key_str]
                         hit_reason = label
                         break

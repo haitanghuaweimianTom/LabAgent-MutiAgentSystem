@@ -160,7 +160,10 @@ def get_uploaded_files(selected_names: Optional[List[str]] = None, project_name:
     # 1. 从目标数据目录获取（项目目录或全局 uploads）
     if target_dir.exists():
         for f in target_dir.iterdir():
-            if f.is_file():
+            # 跳过隐藏文件（.开头）：.migrated_v530 等是系统内部迁移/标记文件，
+            # 非用户数据。曾被误当数据文件 → 数据质量门禁判 0 字节 → 任务标 failed
+            # （尽管论文已正常产出）。见 paths.py _MIGRATION_MARKER。
+            if f.is_file() and not f.name.startswith("."):
                 if selected_names is not None:
                     if f.name in selected_names:
                         files.append(str(f))
