@@ -69,7 +69,7 @@ export default function TaskHistory() {
   const loadTaskList = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(apiBase() + '/tasks/');
+      const res = await fetch(apiBase() + '/tasks');
       if (res.ok) {
         const data = await res.json();
         setTaskList(data);

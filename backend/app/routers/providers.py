@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/providers", tags=["Provider管理"])
 
 
-@router.get("/")
+@router.get("")
 async def list_providers():
     """列出所有 Provider（预设 + 自定义）"""
     custom = list_custom_providers()
@@ -85,7 +85,7 @@ async def import_cc_switch_json(body: Dict[str, Any]):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/")
+@router.post("")
 async def create_provider(body: Dict[str, Any]):
     """创建自定义 Provider"""
     try:

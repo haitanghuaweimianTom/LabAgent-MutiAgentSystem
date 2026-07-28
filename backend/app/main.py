@@ -182,7 +182,7 @@ async def lifespan(app: FastAPI):
     logger.info("系统关闭...")
 
 
-app = FastAPI(title="数学建模多Agent系统", version="8.2.0", lifespan=lifespan)
+app = FastAPI(title="数学建模多Agent系统", version="8.2.0", lifespan=lifespan, redirect_slashes=False)
 settings = get_settings()
 
 app.add_middleware(

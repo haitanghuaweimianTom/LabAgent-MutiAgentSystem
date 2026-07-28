@@ -1012,7 +1012,7 @@ async def start_discussion(task_id: str, req: dict):
     return {"discuss_id": discuss_id, "participants": participants}
 
 
-@router.get("/")
+@router.get("")
 async def list_tasks():
     """列出所有任务（从持久化存储，完整元数据）"""
     return list_all_tasks()
