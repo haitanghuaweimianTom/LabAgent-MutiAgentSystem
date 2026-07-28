@@ -391,14 +391,32 @@ class CodeSandbox:
         """).replace("%%BLOCKED_MODULES%%", repr(list(DEFAULT_BLOCKED_MODULES)))
         hook_file = workspace / "__import_hook__.py"
         hook_file.write_text(hook_code, encoding="utf-8")
+        from .figure_fonts import CJK_FONT_SANS
+
+        # CJK 字体守卫：LLM 生成的绘图代码常硬编码 font.sans-serif=['SimHei', ...]，
+        # 而 SimHei/WenQuanYi 在多数 Linux 未安装。matplotlib 3.11 不做逐字符回退，
+        # findfont 取列表里首个已安装字体——若该字体无 CJK 字形，中文就渲染成方框。
+        # 故此处把 CJK 字体列表【前置】到用户列表前，保证 findfont 命中首个已安装的
+        # CJK 字体（如 Noto Sans CJK，拉丁+CJK 皆全），中文不再方框。
+        cjk_list_repr = repr(list(CJK_FONT_SANS))
         sitecustomize = workspace / "sitecustomize.py"
         sitecustomize.write_text(
-            "import __import_hook__\n",
+            "import __import_hook__\n"
+            "try:\n"
+            "    import matplotlib\n"
+            "    from matplotlib import RcParams\n"
+            f"    _CJK_SANS = {cjk_list_repr}\n"
+            "    _orig_setitem = RcParams.__setitem__\n"
+            "    def _guarded_setitem(self, key, value):\n"
+            "        if key in ('font.sans-serif', 'font.sans_serif') and isinstance(value, (list, tuple)):\n"
+            "            value = list(_CJK_SANS) + [f for f in value if f not in _CJK_SANS]\n"
+            "        return _orig_setitem(self, key, value)\n"
+            "    RcParams.__setitem__ = _guarded_setitem\n"
+            "except Exception:\n"
+            "    pass\n",
             encoding="utf-8",
         )
-        # 写入 matplotlibrc：沙箱内 LLM 代码若用 matplotlib，启动时懒加载 CJK 字体，
-        # 防止中文标题/标签渲染成方框（零开销——非绘图代码不触发 matplotlib 读取）。
-        from .figure_fonts import CJK_FONT_SANS
+        # 写入 matplotlibrc：非覆盖场景下也保证默认字体含 CJK（与 sitecustomize 守卫双重保险）。
         mplrc = workspace / "matplotlibrc"
         mplrc.write_text(
             "font.family: sans-serif\n"

@@ -101,6 +101,7 @@ class SettingsUpdate(BaseModel):
     claude_mcp_config_path: str | None = None
     claude_temperature: float | None = None
     claude_max_tokens: int | None = None
+    claude_coder_prefer_cli: bool | None = None  # 求解器/coder 是否优先 Claude Code CLI
 
 
 @asynccontextmanager
@@ -347,6 +348,7 @@ async def get_runtime_settings():
             "claude_cli": {
                 "available": find_claude_code() is not None,
                 "model": s.claude_model,
+                "coder_prefer_cli": bool(s.claude_coder_prefer_cli),
             },
         },
         "default_llm_provider": s.default_llm_provider,
@@ -439,6 +441,10 @@ async def update_runtime_settings(body: SettingsUpdate):
     if body.claude_max_tokens is not None:
         s.claude_max_tokens = body.claude_max_tokens
         persist_claude_setting("CLAUDE_MAX_TOKENS", str(body.claude_max_tokens))
+        changed = True
+    if body.claude_coder_prefer_cli is not None:
+        s.claude_coder_prefer_cli = body.claude_coder_prefer_cli
+        persist_claude_setting("CLAUDE_CODER_PREFER_CLI", str(body.claude_coder_prefer_cli))
         changed = True
     if changed:
         reset_orchestrator()

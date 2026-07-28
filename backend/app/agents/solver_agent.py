@@ -84,6 +84,27 @@ FILE_SPLIT_RULES = """
 """
 
 
+VIZ_RULES = """
+
+【可视化与数据规范（硬规则，违反将导致图表失真 / 与正文不一致）】
+
+1. **优先使用真实采集数据**：若 data/ 目录或任务上下文已提供真实数据文件
+   （CSV/parquet/JSON 等），必须读取并使用之；禁止用 np.random / 模拟几何布朗运动
+   等合成数据替代。用合成数据会让回测、IC、绩效等结果失真，且与论文正文数字不一致。
+
+2. **中文字体**：沙箱已自动注入 CJK 字体兜底，中文标题/标签不会方框。
+   不要硬编码未安装的字体（如 SimHei、WenQuanYi Micro Hei）；保留默认即可，
+   无需手动 plt.rcParams 字体配置。
+
+3. **因子 IC 图**：仅 2 个标的的横截面 rank-IC 退化为 ±1，逐日画 IC 会得到一条
+   ±1 跳变的锯齿线，严重失真。应改画**滚动 IC**（如 60 日窗口的 IC 均值），
+   并叠加 IC 均值水平线；样本不足时改用累计 IC 或滚动命中率。
+
+4. **图表主题**：每张图聚焦一个主题；同一标的/组合的多个相关指标可拼成组合图，
+   不同主题（净值走势、回撤、持仓占比、绩效对比、因子 IC）用独立图，不要全塞一张大图。
+"""
+
+
 # ====== Claude Code 全自动编程的系统提示词（保留以兼容 Claude CLI 路径） ======
 CLAUDE_CODER_SYSTEM = """你是一个专业的算法工程师，擅长用 Python 实现数学模型的求解算法。
 
@@ -1492,7 +1513,8 @@ class SolverAgent(BaseAgent):
 
     def get_system_prompt(self) -> str:
         # v3.3：BASE_SYSTEM_PROMPT（领域无关） + FILE_SPLIT_RULES（硬规则）。
-        return BASE_SYSTEM_PROMPT + FILE_SPLIT_RULES
+        # v8.2：追加 VIZ_RULES（可视化与数据规范，防图表失真/正文不一致）。
+        return BASE_SYSTEM_PROMPT + FILE_SPLIT_RULES + VIZ_RULES
 
     async def execute(self, task_input: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
         action = task_input.get("action", "solve")

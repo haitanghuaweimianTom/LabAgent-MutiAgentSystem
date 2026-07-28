@@ -57,10 +57,11 @@ def apply_cjk_font_to_style(font_list: List[str], serif: bool = False) -> List[s
     （若已装），中文落到 CJK 字体。这样英文用期刊字体、中文不方框，两全。
     """
     cjk = list(CJK_FONT_SERIF if serif else CJK_FONT_SANS)
-    merged: List[str] = list(font_list)
-    for f in cjk:
-        if f not in merged:
-            merged.append(f)
+    # matplotlib 3.11 不做逐字符回退，findfont 取列表首个已安装字体。
+    # 故把 CJK 字体【前置】——首个已安装的 CJK 字体（如 Noto Sans CJK）
+    # 拉丁+CJK 字形皆全，中文不再方框；原拉丁字体保留在后作兜底。
+    merged: List[str] = [f for f in cjk if f not in font_list] + list(font_list)
+    # 去重保序（已由上式保证，留防御性循环）
     return merged
 
 

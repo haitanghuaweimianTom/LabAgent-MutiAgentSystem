@@ -84,6 +84,10 @@ class Settings(BaseSettings):
     # Claude Code MCP 服务器配置路径（JSON文件）
     claude_mcp_config_path: str = ""
 
+    # 求解器/coder 是否优先用 Claude Code CLI 生成代码（默认 False：走 HTTP API，
+    # 更快更稳；CLI 在部分子问题上会反复超时重试）。用户可在前端「系统设置」开启。
+    claude_coder_prefer_cli: bool = False
+
     # 允许使用 Claude Code 后端的 Agent 列表
     claude_enabled_agents: List[str] = [
         "analyzer_agent", "modeler_agent", "solver_agent", "research_agent", "writer_agent",

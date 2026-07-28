@@ -36,6 +36,7 @@ export default function SettingsPage() {
   const [claudeMcpConfigPath, setClaudeMcpConfigPath] = useState('');
   const [claudeTemperature, setClaudeTemperature] = useState('0.3');
   const [claudeMaxTokens, setClaudeMaxTokens] = useState('8192');
+  const [claudeCoderPreferCli, setClaudeCoderPreferCli] = useState(false);
 
   const [availableModels, setAvailableModels] = useState<{id: string, name: string, provider: string}[]>([]);
 
@@ -72,6 +73,13 @@ export default function SettingsPage() {
         setAvailableModels(models);
       }
     }).catch(() => {});
+
+    // 加载 Claude Code CLI 代码生成开关（/settings GET）
+    fetch(apiBase() + '/settings').then(r => r.ok ? r.json() : null).then(st => {
+      if (st && st.providers?.claude_cli) {
+        setClaudeCoderPreferCli(st.providers.claude_cli.coder_prefer_cli === true);
+      }
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -96,6 +104,7 @@ export default function SettingsPage() {
           claude_mcp_config_path: claudeMcpConfigPath,
           claude_temperature: parseFloat(claudeTemperature) || 0.3,
           claude_max_tokens: parseInt(claudeMaxTokens) || 8192,
+          claude_coder_prefer_cli: claudeCoderPreferCli,
         }),
       });
       const data = await res.json();
@@ -200,6 +209,17 @@ export default function SettingsPage() {
               <div className="flex gap-2">
                 <input type="number" className="flex-1 text-[#F8FAFC] bg-[#1E293B] border border-[#334155] p-2 rounded-[6px]" placeholder="8192" value={claudeMaxTokens} onChange={e => setClaudeMaxTokens(e.target.value)} min="100" max="32000" />
               </div>
+            </div>
+
+            <div className="flex flex-col gap-2 mb-4">
+              <div className="text-[0.875rem] text-[#94A3B8] font-semibold">代码生成方式</div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={claudeCoderPreferCli} onChange={e => setClaudeCoderPreferCli(e.target.checked)} className="cursor-pointer" />
+                <span className="text-[0.85rem] text-[#CBD5E1]">
+                  优先使用 Claude Code CLI 生成代码
+                  <span className="text-[#666] text-[0.75rem]">（默认关闭=走 HTTP API，更快更稳；CLI 在部分子问题上会反复超时重试）</span>
+                </span>
+              </label>
             </div>
 
             <div className="flex gap-2 mt-4">

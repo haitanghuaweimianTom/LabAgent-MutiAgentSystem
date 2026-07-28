@@ -181,6 +181,9 @@ class BaseAgent(ABC):
         self._claude_max_tokens = settings.claude_max_tokens
         self._claude_temperature = settings.claude_temperature
         self._claude_mcp_tools = settings.claude_mcp_tools.split(",") if settings.claude_mcp_tools else []
+        # 求解器/coder 是否优先 Claude Code CLI（默认 False=HTTP API）；前端可改。
+        from ..config import get_settings as _gs
+        self._claude_coder_prefer_cli = bool(_gs().claude_coder_prefer_cli)
 
         # 加载 Agent 独立记忆（可选，失败静默跳过）
         try:
@@ -389,6 +392,9 @@ class BaseAgent(ABC):
         output_dir = workspace_dir or str(get_output_dir())
 
         # ===== 判断使用哪个后端 =====
+        # 运行时开关 gate：即便调用方传 prefer_cli=True，也受前端「系统设置」开关控制
+        # （默认 False → 走 HTTP API，更稳更快；CLI 在部分子问题上反复超时重试）。
+        prefer_cli = prefer_cli and getattr(self, "_claude_coder_prefer_cli", False)
         cli_available = find_claude_code() is not None if prefer_cli else False
         backend = "claude_cli" if cli_available else "http_api"
         logger.info(f"[{self.name}] 全自动编程后端: {backend}, 工作目录: {output_dir}")
@@ -1809,25 +1815,18 @@ class BaseAgent(ABC):
                     logger.warning(f"[{self.name}] file_write fallback failed: {e}")
                     return f"file_write fallback failed: {e}"
 
-        # latex_compile fallback: 尝试本地调用 pdflatex/xelatex
+        # latex_compile fallback: 多趟编译以解析 \ref/\cite（避免交叉引用显示 ??）
         if tool_name == "latex_compile":
             tex_file = args.get("file_path", args.get("tex_file", ""))
             if tex_file:
                 try:
-                    import subprocess
-                    result = subprocess.run(
-                        ["xelatex", "-interaction=nonstopmode", tex_file],
-                        capture_output=True,
-                        text=True,
-                        timeout=60,
-                    )
-                    if result.returncode == 0:
-                        pdf_file = tex_file.replace(".tex", ".pdf")
-                        logger.info(f"[{self.name}] latex_compile fallback: compiled {tex_file}")
-                        return f"LaTeX compiled successfully (fallback): {pdf_file}"
-                    else:
-                        logger.warning(f"[{self.name}] latex_compile fallback: xelatex failed")
-                        return f"LaTeX compilation failed (fallback): {result.stderr[:200]}"
+                    from ..core.latex_compile import compile_latex
+                    res = compile_latex(tex_file, engine="xelatex", passes=2, timeout=60)
+                    if res["success"]:
+                        logger.info(f"[{self.name}] latex_compile fallback: compiled {tex_file} (2 passes)")
+                        return f"LaTeX compiled successfully (fallback, 2 passes): {res.get('pdf_path') or tex_file.replace('.tex', '.pdf')}"
+                    logger.warning(f"[{self.name}] latex_compile fallback: xelatex failed rc={res.get('returncode')}")
+                    return f"LaTeX compilation failed (fallback): {res.get('stderr_snippet', '')[:200]}"
                 except FileNotFoundError:
                     logger.warning(f"[{self.name}] latex_compile fallback: xelatex not found")
                     return "latex_compile fallback failed: xelatex not installed"

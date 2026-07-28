@@ -1223,8 +1223,10 @@ class WriterAgent(BaseAgent):
     def _discover_available_figures(self, project_name: Optional[str]) -> List[str]:
         """扫描项目输出目录，发现可用图表文件。
 
-        优先扫描项目输出目录下的 code/ 与 figures/；同时保留对旧 outputs/{project_name}/
-        的回退扫描，避免历史项目图表丢失。
+        扫描范围：项目 output 根目录及其 code/figures 子目录、项目基目录，
+        以及全局 outputs/_global/figures（求解器实际写图位置，旧版漏扫导致
+        全部 \includegraphics 复用同一张图）。按绝对路径去重，返回相对
+        _PROJECT_ROOT 的路径便于 LaTeX \includegraphics 引用。
         """
         figures: List[str] = []
         if not project_name:
@@ -1234,24 +1236,30 @@ class WriterAgent(BaseAgent):
 
         output_dir = get_project_output_dir(project_name)
         search_roots: List[Path] = [
+            output_dir,
             output_dir / "code",
             output_dir / "figures",
             get_project_base_dir(project_name),
+            _PROJECT_ROOT / "outputs" / "_global" / "figures",
         ]
 
+        seen: set = set()
         for base_dir in search_roots:
-            if not base_dir.exists():
+            if not base_dir or not base_dir.exists():
                 continue
             for ext in ("*.png", "*.jpg", "*.jpeg", "*.pdf", "*.eps"):
                 for path in base_dir.rglob(ext):
+                    abs_p = str(path.resolve())
+                    if abs_p in seen:
+                        continue
+                    seen.add(abs_p)
                     try:
                         rel = path.relative_to(_PROJECT_ROOT)
                         figures.append(str(rel))
                     except ValueError:
                         figures.append(str(path))
 
-        # 去重并排序
-        return sorted(list(set(figures)))
+        return sorted(figures)
 
     def _build_outline(
         self,
@@ -2175,6 +2183,14 @@ class WriterAgent(BaseAgent):
 \\end{{document}}
 """
 
+        # 去除章节标题里的手动编号前缀（如 "\section{1 投资背景}" → "\section{投资背景}"），
+        # 让 LaTeX 自动编号，避免渲染出 “1 1 投资背景” 的双重编号。
+        latex_code = re.sub(
+            r"(\\(?:subsubsection|subsection|section)\s*\*?\s*\{)\s*\d+\s+",
+            r"\1",
+            latex_code,
+        )
+
         result = {
             "latex_code": latex_code,
             "sections": sections_summary,
@@ -2457,12 +2473,15 @@ class WriterAgent(BaseAgent):
                 "\\end{appendices}"
             )
 
-        # 降级生成：标注为占位内容
-        content_parts = [degraded_marker, f"\\section{{{title}}}"]
+        # 降级生成：标注为占位内容。
+        # 注意：不在此处写 \section{...}——由 _assemble_paper 统一注入章节标题，
+        # 否则会出现重复 \section，导致“3 3 分析框架与方法”双重编号及后续章节错位。
+        display_title = re.sub(r"^\s*\d+\s+", "", title.strip()) or title
+        content_parts = [degraded_marker]
         if description:
             content_parts.append(f"% 章节说明：{description}")
         content_parts.append("")
-        content_parts.append(f"本章节围绕{title}展开讨论。")
+        content_parts.append(f"本章节围绕{display_title}展开讨论。")
         if "分析" in title or "analysis" in title.lower():
             content_parts.append("通过对相关数据和问题的深入分析，我们得出以下主要发现：")
             content_parts.append("\\begin{itemize}")
@@ -2486,35 +2505,64 @@ class WriterAgent(BaseAgent):
         return "\n".join(content_parts) + "\n"
 
     def _build_figure_suggestions(self, plan: ChapterPlan, available_figures: List[str]) -> str:
-        """为当前章节建议可用图表"""
+        """为当前章节建议可用图表，并约束插图多样性。
+
+        关键约束：
+        - 每个 \\begin{figure} 必须引用不同的图片文件，禁止多图复用同一文件
+          （旧版仅给一张图导致全篇 4 张图共用同一组合图）。
+        - 组合 vs 独立：同一标的/组合的多个相关指标用一张组合图；不同主题
+          （净值、回撤、持仓、绩效、IC 等）用独立图，不要塞进一张大图。
+        """
         if not available_figures:
             return ""
 
-        # 根据章节类型过滤
-        relevant = []
-        keywords = []
+        # 按文件名关键词粗筛与本章相关的图
+        keywords: List[str] = []
         if plan["id"] in ("data", "experiment"):
-            keywords = ["correlation", "heatmap", "distribution", "trend", "basic"]
+            keywords = ["correlation", "heatmap", "distribution", "trend", "basic",
+                        "price", "return", "data", "描述", "走势", "分布"]
         elif plan["id"] in ("modeling", "empirical", "result_analysis"):
-            keywords = ["comparison", "radar", "result", "plot", "figure"]
+            keywords = ["comparison", "radar", "result", "plot", "figure",
+                        "strategy", "backtest", "momentum", "reversal", "weight",
+                        "performance", "ic", "factor", "净值", "回测", "绩效",
+                        "动量", "反转", "权重", "因子"]
         elif plan["id"] == "risk":
-            keywords = ["risk", "var", "sensitivity"]
+            keywords = ["risk", "var", "sensitivity", "drawdown", "stress",
+                        "回撤", "风险", "敏感", "压力"]
 
+        relevant: List[str] = []
         if keywords:
             for fig in available_figures:
                 lowered = fig.lower()
-                if any(k in lowered for k in keywords):
+                if any(k.lower() in lowered for k in keywords):
                     relevant.append(fig)
-        else:
-            relevant = available_figures[:5]
-
         if not relevant:
-            return ""
+            relevant = list(available_figures)
 
-        lines = ["可在本章节引用以下图表（使用相对路径）："]
-        for fig in relevant[:10]:
-            lines.append(f"- {fig}")
-        lines.append("插入示例：\\begin{figure}[H]\\centering\\includegraphics[width=0.8\\textwidth]{{{fig}}}\\caption{{图表标题}}\\end{figure}}")
+        # 去重保序，放宽到 12 张供 LLM 挑选
+        deduped: List[str] = []
+        for f in relevant:
+            if f not in deduped:
+                deduped.append(f)
+        relevant = deduped[:12]
+
+        lines = [
+            "可在本章节引用以下图表（使用给出的相对路径，路径必须真实存在）：",
+            "- 【硬约束】每个 \\begin{figure} 必须引用【不同】的图片文件，禁止多张图复用同一文件；"
+            "  若可用图不足，宁可少插图也不要重复同一张图。",
+            "- 【组合 vs 独立】展示同一标的/组合的多个相关指标时引用已有的组合图（多子图拼接）；"
+            "  不同主题（如净值走势、回撤、持仓占比、绩效对比、因子 IC）应分别用独立图，"
+            "  不要把所有内容塞进一张大图。",
+            "- 图标题(caption)必须与图片内容一致；从文件名推断图片主题，按章节叙事顺序选用。",
+        ]
+        for fig in relevant:
+            hint = Path(fig).stem.replace("_", " ").replace("-", " ")
+            lines.append(f"- {fig}  （主题参考：{hint}）")
+        lines.append(
+            "插入示例：\\begin{figure}[H]\\centering"
+            "\\includegraphics[width=0.8\\textwidth]{<上方某个真实路径>}"
+            "\\caption{与图片内容一致的标题}\\label{fig:xxx}\\end{figure}"
+        )
         return "\n".join(lines)
 
     def _format_peer_review_feedback(self, feedback: Dict[str, Any]) -> str:

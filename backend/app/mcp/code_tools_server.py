@@ -231,14 +231,17 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
                 return [TextContent(type="text", text=f"latex_compile 拒绝: {e}")]
             xelatex = shutil.which("xelatex") if shutil.which("xelatex") else "xelatex"
             try:
-                proc = subprocess.run(
-                    [xelatex, "-interaction=nonstopmode", "-halt-on-error", p.name],
-                    capture_output=True, text=True, encoding="utf-8", errors="replace",
-                    timeout=60, cwd=str(p.parent),
-                )
+                # 两趟编译以解析 \ref/\cite，避免交叉引用显示 ??
+                proc = None
+                for _ in range(2):
+                    proc = subprocess.run(
+                        [xelatex, "-interaction=nonstopmode", "-halt-on-error", p.name],
+                        capture_output=True, text=True, encoding="utf-8", errors="replace",
+                        timeout=60, cwd=str(p.parent),
+                    )
                 pdf = p.with_suffix(".pdf")
                 ok = proc.returncode == 0 and pdf.exists()
-                msg = f"latex_compile {'成功' if ok else '失败'} (exit={proc.returncode})"
+                msg = f"latex_compile {'成功' if ok else '失败'} (exit={proc.returncode}, 2 passes)"
                 if proc.stdout:
                     msg += f"\n[stdout]\n{_truncate(proc.stdout)}"
                 if proc.stderr:

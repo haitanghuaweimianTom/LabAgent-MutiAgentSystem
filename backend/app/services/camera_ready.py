@@ -589,46 +589,47 @@ def _verify_compilation(pkg_dir: Path, template_id: str) -> Dict[str, Any]:
     except Exception:  # noqa: BLE001
         pass
 
-    # 优先使用 latexmk；若不可用则使用 engine 直接编译一次
+    # 优先 latexmk（自动多趟）；不可用则用 engine 跑两趟以解析 \ref/\cite，
+    # 否则交叉引用会显示成 ??。
+    from ..core.latex_compile import compile_latex
+
     engines_to_try = ["latexmk", engine]
     if engine != "xelatex":
         engines_to_try.append("xelatex")
 
+    last_failure: Dict[str, object] = {"engine": "", "returncode": -1, "stderr_snippet": ""}
     for eng in engines_to_try:
-        cmd_path = shutil.which(eng)
-        if not cmd_path:
+        if not shutil.which(eng):
             continue
-        cmd: List[str]
-        if eng == "latexmk":
-            cmd = [eng, "-pdf", "-interaction=nonstopmode", "-silent", "main.tex"]
-        else:
-            cmd = [eng, "-interaction=nonstopmode", "main.tex"]
-        try:
-            proc = subprocess.run(
-                cmd,
-                cwd=str(pkg_dir),
-                capture_output=True,
-                text=True,
-                timeout=120,
-            )
-            pdf_path = pkg_dir / "main.pdf"
-            success = pdf_path.exists()
-            try:
-                pdf_rel = str(pdf_path.relative_to(pkg_dir.parent)) if success else None
-            except ValueError:
-                pdf_rel = str(pdf_path) if success else None
+        passes = 1 if eng == "latexmk" else 2
+        result = compile_latex(
+            "main.tex", cwd=pkg_dir, engine=eng, passes=passes, timeout=120
+        )
+        if result["success"]:
             return {
-                "success": success,
+                "success": True,
                 "engine": eng,
-                "returncode": proc.returncode,
-                "message": "ok" if success else f"{eng} failed (rc={proc.returncode})",
-                "pdf_path": pdf_rel,
-                "stderr_snippet": proc.stderr[:2000] if not success or proc.returncode != 0 else "",
+                "returncode": result["returncode"],
+                "message": "ok",
+                "pdf_path": result["pdf_path"],
+                "stderr_snippet": "",
             }
-        except subprocess.TimeoutExpired:
-            return {"success": False, "engine": eng, "message": "compilation timeout", "pdf_path": None}
-        except Exception as exc:  # noqa: BLE001
-            return {"success": False, "engine": eng, "message": str(exc), "pdf_path": None}
+        last_failure = {
+            "engine": eng,
+            "returncode": result["returncode"],
+            "stderr_snippet": result.get("stderr_snippet", ""),
+        }
+
+    if last_failure["engine"]:
+        rc = last_failure["returncode"]
+        return {
+            "success": False,
+            "engine": last_failure["engine"],
+            "returncode": rc,
+            "message": f"{last_failure['engine']} failed (rc={rc})",
+            "pdf_path": None,
+            "stderr_snippet": last_failure["stderr_snippet"],
+        }
 
     return {"success": False, "message": "no latex engine available", "pdf_path": None}
 
