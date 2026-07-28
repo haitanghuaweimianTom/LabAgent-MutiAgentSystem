@@ -37,6 +37,7 @@ class DataAsset:
     rel_path: str        # 相对 _PROJECT_ROOT 的路径（prompt 展示 + LaTeX 用）
     ext: str             # 扩展名（决定读取方式）
     size_bytes: int = 0
+    purpose: str = ""    # 数据用途说明（来自 _index.json.source_query / 上传备注）
 
 
 @dataclass
@@ -72,6 +73,10 @@ def discover_data_assets(project_name: Optional[str]) -> DataAssets:
     if not data_root.exists():
         return assets
 
+    # 读取各子目录的 _index.json，建立 文件名 -> 用途说明 的映射
+    # （source_query 记录了该数据文件是为什么搜集的，供 LLM 判断该用哪个）
+    purpose_map = _load_purpose_map(data_root)
+
     seen: set = set()
     for path in sorted(data_root.rglob("*")):
         if not path.is_file():
@@ -98,8 +103,36 @@ def discover_data_assets(project_name: Optional[str]) -> DataAssets:
             rel_path=rel,
             ext=path.suffix.lower(),
             size_bytes=size,
+            purpose=purpose_map.get(path.name, ""),
         ))
     return assets
+
+
+def _load_purpose_map(data_root: Path) -> Dict[str, str]:
+    """读取 data_root 下各子目录的 _index.json，返回 {文件名: 用途说明}。
+
+    _index.json 由 self_collector 写入，每项含 filename + source_query（搜集意图）。
+    user_uploads 通常无 _index.json，其用途靠文件名语义（由 LLM 判断）。
+    """
+    import json
+
+    purpose: Dict[str, str] = {}
+    for idx_file in data_root.rglob("_index.json"):
+        try:
+            data = json.loads(idx_file.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001
+            continue
+        if not isinstance(data, list):
+            continue
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+            fname = item.get("filename") or item.get("name")
+            query = item.get("source_query") or item.get("description") or ""
+            if fname and query:
+                # source_query 可能很长（含搜集计划全文），截断到 200 字
+                purpose[str(fname)] = str(query).strip()[:200]
+    return purpose
 
 
 def read_snippet_for(asset: DataAsset) -> str:
@@ -195,19 +228,22 @@ def build_prompt_block(assets: DataAssets) -> str:
     lines = [
         "## 真实数据加载器（系统提供，必须使用）",
         f"数据目录：{assets.data_dir}",
-        f"可用数据文件（共 {len(assets.assets)} 个）：",
+        f"可用数据文件（共 {len(assets.assets)} 个，附用途说明）：",
     ]
     for a in assets.assets:
         size_kb = a.size_bytes / 1024
-        lines.append(f"- `{a.name}`（{a.ext}，{size_kb:.0f} KB）")
+        line = f"- `{a.name}`（{a.ext}，{size_kb:.0f} KB）"
+        if a.purpose:
+            line += f"  → 用途：{a.purpose}"
+        lines.append(line)
     lines += [
         "",
         "【硬约束】你的代码必须通过系统数据加载器读取真实数据，禁止用 np.random / "
-        "模拟几何布朗运动等合成数据。示例：",
+        "模拟几何布朗运动等合成数据。根据每个文件的「用途说明」选择该用的数据：",
         "```python",
         "from utils import load_dataset, list_datasets",
         "print(list_datasets())   # 查看可用文件",
-        "df = load_dataset()       # 加载主数据集；多文件可用 load_dataset('hs300.csv')",
+        "df = load_dataset()       # 加载主数据集；多文件按用途指定 load_dataset('sh000300_沪深300_daily.csv')",
         "```",
         "若代码检测到合成数据而项目已有真实数据，将被代码审计拦截并要求重写。",
         f"单文件直接读取示例（如不使用加载器）：`{read_snippet_for(assets.primary())}`",
