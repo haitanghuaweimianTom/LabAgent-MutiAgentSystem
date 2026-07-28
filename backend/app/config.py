@@ -15,7 +15,10 @@ class Settings(BaseSettings):
     debug: bool = True
 
     api_prefix: str = "/api/v1"
-    cors_origins: List[str] = ["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000"]
+    # 本地开发默认放开：前端端口与访问方式不固定（localhost/127.0.0.1/局域网IP + 3000~3002），
+    # 写死端口列表会漏导致前端拉不到数据。allow_credentials=False 时 ["*"] 安全且更通用。
+    # 生产环境用 backend/.env 的 CORS_ORIGINS 收紧。
+    cors_origins: List[str] = ["*"]
 
     @model_validator(mode="before")
     @classmethod
