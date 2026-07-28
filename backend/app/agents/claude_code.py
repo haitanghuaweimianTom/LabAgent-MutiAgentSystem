@@ -7,7 +7,9 @@ import json
 import logging
 import os
 import shutil
+import signal
 import subprocess
+import threading
 from typing import List, Optional
 
 logger = logging.getLogger(__name__)
@@ -101,6 +103,12 @@ def call_claude_code(
 
     try:
         cwd = task_dir if task_dir and os.path.isdir(task_dir) else os.getcwd()
+        # start_new_session=True → claude 及其 spawn 的孙进程(node worker 等)自成进程组。
+        # 关键修复：claude CLI 退出后，孙进程常持有 stdout 管道 → communicate() 的 select
+        # 永久阻塞 → 调用方 anyio cancel-scope 取消空转抢 GIL → 饿死本线程使 communicate
+        # 自身的 timeout 检查无法执行 → 正反馈死锁(曾观测 88% CPU 永转、9 分钟不超时)。
+        # 解法：独立看门狗线程，timeout 秒后 os.killpg(SIGKILL) 杀整组 → 孙进程死→管道
+        # EOF→communicate 必然返回。看门狗跑 syscall 不持有 GIL，不受饿死影响。
         proc = subprocess.Popen(
             cmd,
             stdin=subprocess.PIPE,
@@ -108,11 +116,43 @@ def call_claude_code(
             stderr=subprocess.PIPE,
             cwd=cwd,
             env=env,
+            start_new_session=True,
         )
-        stdout, stderr = proc.communicate(
-            input=full_prompt.encode("utf-8"),
-            timeout=timeout,
-        )
+
+        killed = {"flag": False}
+
+        def _watchdog():
+            try:
+                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                killed["flag"] = True
+            except Exception:
+                pass
+
+        timer = threading.Timer(max(float(timeout), 1.0), _watchdog)
+        timer.daemon = True
+        timer.start()
+        try:
+            # 给 communicate 多 30s 容差；看门狗在 timeout 秒已杀进程组，
+            # 管道 EOF 后 communicate 会立即返回，不会真等满 timeout+30。
+            stdout, stderr = proc.communicate(
+                input=full_prompt.encode("utf-8"),
+                timeout=timeout + 30,
+            )
+        finally:
+            timer.cancel()
+            # 兜底：确保进程组已回收（僵尸孙进程也清掉）
+            try:
+                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+            except Exception:
+                pass
+            try:
+                proc.wait(timeout=5)
+            except Exception:
+                pass
+
+        if killed["flag"]:
+            raise RuntimeError(f"Claude Code {mode} 调用超时（{timeout}秒，已强杀进程组）")
+
         stdout_text = stdout.decode("utf-8", errors="replace").strip()
         stderr_text = stderr.decode("utf-8", errors="replace").strip()
 
@@ -142,6 +182,7 @@ def call_claude_code(
         return str(result_text)
 
     except subprocess.TimeoutExpired:
+        # communicate 自身超时（看门狗未先触发时的兜底）
         raise RuntimeError(f"Claude Code {mode} 调用超时（{timeout}秒）")
     except FileNotFoundError:
         raise RuntimeError("Claude Code CLI 未找到")

@@ -1774,6 +1774,13 @@ class WriterAgent(BaseAgent):
         except Exception:
             return 0
 
+        # 无任务级知识库 → 不从全局 KB 拉引用。
+        # 既是正确行为（无 KB 任务不应从随机全局 KB 拉引用），也防止
+        # asyncio.to_thread(km.search) 在 cancel-scope 下首次加载 SentenceTransformer
+        # 模型时触发 anyio _deliver_cancellation 忙循环死锁（曾致 writer 105% CPU 卡死）。
+        if not getattr(self, "_knowledge_base_ids", None):
+            return 0
+
         added = 0
         # 遍历所有知识库，搜索相关内容
         # 但跳过临时 task_kb_* 基（之前 paper_reader.process_papers 为每篇论文建一个，
