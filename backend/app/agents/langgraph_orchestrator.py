@@ -1432,11 +1432,17 @@ class LangGraphOrchestrator:
 
         try:
             from ..core.code_audit import audit_and_patch
-            audit_result, patched_code = audit_and_patch(raw_code, task_type="training")
+            from ..core.data_assets import discover_data_assets
+            _real_data = not discover_data_assets(state.get("project_name")).empty
+            audit_result, patched_code = audit_and_patch(
+                raw_code, task_type="training", has_real_data=_real_data
+            )
         except ImportError:
             # fallback: 只做防造假审计，不做安全壳注入
             from ..core.code_audit import audit_code
-            audit_result = audit_code(raw_code, task_type="training")
+            from ..core.data_assets import discover_data_assets
+            _real_data = not discover_data_assets(state.get("project_name")).empty
+            audit_result = audit_code(raw_code, task_type="training", has_real_data=_real_data)
             patched_code = raw_code
             logger.warning(f"[LangGraph:{task_id}] safety_shell 不可用，仅执行防造假审计")
         except Exception as e:

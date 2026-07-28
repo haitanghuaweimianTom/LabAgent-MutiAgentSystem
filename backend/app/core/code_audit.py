@@ -191,6 +191,63 @@ class _DataSourceDetector(ast.NodeVisitor):
         return issues
 
 
+class _SyntheticDataDetector(ast.NodeVisitor):
+    """检测合成数据生成（np.random / random / 模拟几何布朗运动等）。
+
+    当项目已提供真实数据（has_real_data=True）时，若代码用合成数据替代
+    真实读取且未调用系统数据加载器/文件IO，标记为 error。
+    """
+
+    # 合成数据生成调用特征
+    _SYNTHETIC_CALLS = {
+        "random", "randn", "rand", "randint", "normal", "uniform",
+        "standard_normal", "choice", "permutation", "shuffle",
+        "seed", "default_rng", "Generator",  # np.random.* / random.*
+    }
+    # 数据加载/读取特征（命中则视为已用真实数据，跳过拦截）
+    _REAL_LOAD_CALLS = {
+        "load_dataset", "read_csv", "read_excel", "read_parquet",
+        "read_json", "read_feather", "loadtxt", "genfromtxt",
+    }
+
+    def __init__(self, has_real_data: bool = False):
+        self.has_real_data = has_real_data
+        self.has_synthetic = False
+        self.synthetic_lines: List[int] = []
+        self.has_real_load = False
+
+    def visit_Call(self, node: ast.Call):
+        func_name = ""
+        if isinstance(node.func, ast.Name):
+            func_name = node.func.id
+        elif isinstance(node.func, ast.Attribute):
+            func_name = node.func.attr
+
+        if func_name in self._REAL_LOAD_CALLS:
+            self.has_real_load = True
+        if func_name in self._SYNTHETIC_CALLS:
+            self.has_synthetic = True
+            self.synthetic_lines.append(getattr(node, "lineno", 0))
+        self.generic_visit(node)
+
+    def check(self) -> List[AuditIssue]:
+        if not self.has_real_data:
+            return []
+        # 有真实数据可用：若代码生成合成数据且未读取真实数据，拦截
+        if self.has_synthetic and not self.has_real_load:
+            lines = ", ".join(str(l) for l in self.synthetic_lines[:3])
+            return [AuditIssue(
+                line=self.synthetic_lines[0] if self.synthetic_lines else 0,
+                severity="error",
+                category="synthetic_data",
+                message=f"检测到合成数据生成（np.random/random 等，行 {lines}），"
+                        "但项目已提供真实数据文件",
+                suggestion="改用系统数据加载器读取真实数据："
+                           "`from utils import load_dataset; df = load_dataset()`",
+            )]
+        return []
+
+
 def _check_inline_data(node: ast.AST) -> List[AuditIssue]:
     """检测大量内联数据（列表字面量中包含过多数字）"""
     issues = []
@@ -216,12 +273,14 @@ def _check_inline_data(node: ast.AST) -> List[AuditIssue]:
     return issues
 
 
-def audit_code(code: str, task_type: str = "general") -> AuditResult:
+def audit_code(code: str, task_type: str = "general", has_real_data: bool = False) -> AuditResult:
     """AST分析代码，检测作弊嫌疑
 
     Args:
         code: Python源代码
         task_type: 任务类型 (training/data_analysis/optimization/classification等)
+        has_real_data: 项目是否已提供真实数据文件。为 True 时，用 np.random 等合成数据
+            替代真实读取将被标记为 error（强制求解器读取真实数据）。
 
     Returns:
         AuditResult: 审计结果
@@ -257,6 +316,11 @@ def audit_code(code: str, task_type: str = "general") -> AuditResult:
     # 4. 内联数据检测
     issues.extend(_check_inline_data(tree))
 
+    # 5. 合成数据检测（项目有真实数据时，禁止 np.random 等合成替代）
+    detector5 = _SyntheticDataDetector(has_real_data=has_real_data)
+    detector5.visit(tree)
+    issues.extend(detector5.check())
+
     # 计算分数
     error_count = sum(1 for i in issues if i.severity == "error")
     warning_count = sum(1 for i in issues if i.severity == "warning")
@@ -279,7 +343,7 @@ def audit_code(code: str, task_type: str = "general") -> AuditResult:
     )
 
 
-def audit_and_patch(code: str, task_type: str = "general") -> tuple:
+def audit_and_patch(code: str, task_type: str = "general", has_real_data: bool = False) -> tuple:
     """双重职责：AST 审计防造假 + 安全壳自动打补丁防崩溃。
 
     这是 AST Audit Agent 的统一入口，执行两个阶段：
@@ -290,12 +354,13 @@ def audit_and_patch(code: str, task_type: str = "general") -> tuple:
     Args:
         code: Python 源代码
         task_type: 任务类型
+        has_real_data: 项目是否已提供真实数据文件（透传给 audit_code）
 
     Returns:
         (AuditResult, patched_code): 审计结果和打补丁后的代码
     """
     # 阶段 A：防造假审计
-    audit_result = audit_code(code, task_type)
+    audit_result = audit_code(code, task_type, has_real_data=has_real_data)
 
     # 阶段 B：安全壳自动打补丁
     patched_code = code

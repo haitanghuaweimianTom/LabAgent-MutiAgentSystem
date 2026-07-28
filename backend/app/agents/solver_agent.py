@@ -1129,6 +1129,20 @@ class SolverAgent(BaseAgent):
         schemas = get_schema_extractor().extract_multiple(file_paths)
         return get_schema_extractor().format_for_prompt(schemas)
 
+    def _build_data_loader_block(self, project_name: Optional[str]) -> str:
+        """构建「真实数据加载器」prompt 块。
+
+        非空时给出可复制即用的 ``from utils import load_dataset`` 用法 + 真实文件路径，
+        并声明代码审计会拦截合成数据。沙箱执行时由 sandbox 注入 utils.py + 数据副本。
+        """
+        try:
+            from ..core.data_assets import discover_data_assets, build_prompt_block
+            assets = discover_data_assets(project_name)
+            return build_prompt_block(assets)
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"[{self.name}] 数据加载器块构建失败: {e}")
+            return ""
+
     def _classify_execution_error(self, error: str, code: str) -> Dict[str, Any]:
         """对执行错误进行分类，便于自动修复"""
         error_lower = (error or "").lower()
@@ -1383,14 +1397,18 @@ class SolverAgent(BaseAgent):
                 Path(file_path).write_text(raw_code, encoding="utf-8")
 
                 # v6.2: AST代码审计 — 执行前检测硬编码指标和作弊嫌疑
+                # v8.2: has_real_data=True，存在真实数据时拦截 np.random 等合成数据
                 from ..core.code_audit import audit_code
-                audit_result = audit_code(raw_code, task_type="training")
+                from ..core.data_assets import discover_data_assets
+                _real_data = not discover_data_assets(project_name).empty
+                audit_result = audit_code(raw_code, task_type="training", has_real_data=_real_data)
                 if not audit_result.passed:
                     error_issues = [i for i in audit_result.issues if i.severity == "error"]
                     error_msg = "; ".join(f"L{i.line}: {i.message}" for i in error_issues[:3])
                     raise RuntimeError(
                         f"代码审计未通过（{len(error_issues)}个严重问题）: {error_msg}。"
-                        f"请修改代码，确保不硬编码任何指标数值，从模型实际输出获取结果。"
+                        f"请修改代码，确保不硬编码任何指标数值，从模型实际输出获取结果；"
+                        f"若涉及数据，必须用 `from utils import load_dataset` 读取真实数据。"
                     )
                 if audit_result.issues:
                     warning_issues = [i for i in audit_result.issues if i.severity == "warning"]
@@ -1414,13 +1432,16 @@ class SolverAgent(BaseAgent):
                     stderr_text = gpu_result.stderr.strip()
                 else:
                     from ..core.sandbox import CodeSandbox, SandboxConfig
+                    from ..core.data_assets import discover_data_assets
                     sandbox_config = SandboxConfig(
                         max_cpu_time=120,
                         max_memory_mb=1024,
                         workspace_persist=True,  # 保留工作区以便后续分析
                     )
                     sandbox = CodeSandbox(sandbox_config)
-                    result = sandbox.execute_file(file_path)
+                    # 注入真实数据加载器（utils.py + 数据副本），强制读取真实数据
+                    data_assets = discover_data_assets(project_name)
+                    result = sandbox.execute_file(file_path, data_assets=data_assets)
                     exec_ok = result.success
                     stdout_text = result.stdout.strip()
                     stderr_text = result.stderr.strip()
@@ -1577,6 +1598,9 @@ class SolverAgent(BaseAgent):
             # 数据 schema 上下文
             schema_context = self._build_data_schema_context(data_result, context.get("project_name"))
 
+            # 真实数据加载器上下文（系统提供 load_dataset，强制读真实数据）
+            data_loader_block = self._build_data_loader_block(context.get("project_name"))
+
             prompt = f"""你是一个专业的算法工程师。请为数学建模的第{i+1}个子问题设计求解算法并编写完整可运行的Python代码。
 
 【问题背景】
@@ -1594,6 +1618,7 @@ class SolverAgent(BaseAgent):
 【数据文件】
 {data_context or '（无数据文件）'}
 {schema_context}
+{data_loader_block}
 
 【前序子问题的求解结果（直接代入当前代码）】
 {prev_solution_summary or "（这是第一个子问题，无前序依赖）"}
@@ -1789,6 +1814,9 @@ class SolverAgent(BaseAgent):
         # 数据 schema 上下文
         schema_context = self._build_data_schema_context(data_result, context.get("project_name"))
 
+        # 真实数据加载器上下文（系统提供 load_dataset，强制读真实数据）
+        data_loader_block = self._build_data_loader_block(context.get("project_name"))
+
         prompt = f"""请为以下数学建模问题设计求解算法并编写Python代码。
 
 【问题背景】
@@ -1806,6 +1834,7 @@ class SolverAgent(BaseAgent):
 【数据文件】
 {data_context or '（无数据文件）'}
 {schema_context}
+{data_loader_block}
 
 请生成完整可运行的Python求解代码，包括数据处理、求解、可视化等步骤。
 
@@ -1980,6 +2009,9 @@ class SolverAgent(BaseAgent):
         ])
         schema_context = self._build_data_schema_context(data_result, context.get("project_name"))
 
+        # 真实数据加载器上下文（系统提供 load_dataset，强制读真实数据）
+        data_loader_block = self._build_data_loader_block(context.get("project_name"))
+
         all_solutions = []
         for sr in section_results:
             sp_id = sr.get("sub_problem_id", 1)
@@ -2010,6 +2042,7 @@ class SolverAgent(BaseAgent):
 【数据文件】
 {data_context or '（无数据文件）'}
 {schema_context}
+{data_loader_block}
 """
 
             # ===== 直接调用 _run_code_with_autofix（全自动 Claude CLI 编程）=====

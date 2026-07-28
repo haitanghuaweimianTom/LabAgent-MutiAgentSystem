@@ -198,8 +198,16 @@ class CodeSandbox:
         file_path: str,
         env_vars: Optional[Dict[str, str]] = None,
         input_data: Optional[str] = None,
+        data_assets: Any = None,
     ) -> SandboxResult:
-        """执行已有代码文件。"""
+        """执行已有代码文件。
+
+        Args:
+            data_assets: 可选的 DataAssets（来自 core.data_assets），非空时把真实
+                数据文件复制到 workspace/data/ 并写入 utils.py 数据加载器，使求解器
+                代码能 ``from utils import load_dataset`` 读取真实数据（而非 np.random
+                合成）。详见 [[paper-quality-hardening]]。
+        """
         workspace = self._create_workspace()
         try:
             # 复制文件到工作区
@@ -209,6 +217,10 @@ class CodeSandbox:
 
             # 注入导入限制
             self._inject_import_hook(workspace)
+
+            # 注入真实数据加载器（复制数据文件 + 写 utils.py）
+            if data_assets is not None:
+                self._inject_data_loader(workspace, data_assets)
 
             return self._run_in_sandbox(
                 dst, workspace, env_vars=env_vars, input_data=input_data
@@ -425,6 +437,41 @@ class CodeSandbox:
             encoding="utf-8",
         )
 
+    def _inject_data_loader(self, workspace: Path, data_assets: Any) -> None:
+        """把真实数据文件复制进 workspace/data/ 并写入 utils.py 数据加载器。
+
+        这样求解器代码 ``from utils import load_dataset`` 读取的是真实采集/上传
+        数据，而非 np.random 合成数据。data_assets 为 core.data_assets.DataAssets。
+        """
+        try:
+            from .data_assets import DataAssets, build_utils_py
+            if not isinstance(data_assets, DataAssets) or data_assets.empty:
+                return
+            data_dir = workspace / "data"
+            data_dir.mkdir(exist_ok=True)
+            # 复制真实数据文件到 workspace/data/，utils.py 指向这些副本
+            local_assets = DataAssets(data_dir=str(data_dir))
+            for a in data_assets.assets:
+                try:
+                    dst = data_dir / a.name
+                    shutil.copy2(a.abs_path, dst)
+                    from .data_assets import DataAsset
+                    local_assets.assets.append(DataAsset(
+                        name=a.name, abs_path=str(dst),
+                        rel_path=f"data/{a.name}", ext=a.ext, size_bytes=a.size_bytes,
+                    ))
+                except Exception as e:  # noqa: BLE001
+                    logger.warning(f"[Sandbox] 复制数据文件 {a.name} 失败: {e}")
+            if local_assets.empty:
+                return
+            utils_py = build_utils_py(local_assets)
+            (workspace / "utils.py").write_text(utils_py, encoding="utf-8")
+            logger.info(
+                f"[Sandbox] 注入数据加载器：{len(local_assets.assets)} 个真实数据文件 → utils.py"
+            )
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"[Sandbox] 数据加载器注入失败: {e}")
+
     # ------------------------------------------------------------------
     # 沙箱执行核心
     # ------------------------------------------------------------------
@@ -445,6 +492,11 @@ class CodeSandbox:
         merged_env["PYTHONDONTWRITEBYTECODE"] = "1"
         merged_env["MPLBACKEND"] = "Agg"  # 无头 matplotlib
         merged_env["MATPLOTLIBRC"] = str(workspace)  # CJK 字体兜底（防图表中文方框）
+        # BLAS/OpenMP 线程数限制：受限内存沙箱内多线程 numpy/OpenBLAS 易触发
+        # "Memory allocation still failed" 崩溃（求解器/数据处理常见）。单线程更稳。
+        merged_env.setdefault("OPENBLAS_NUM_THREADS", "1")
+        merged_env.setdefault("OMP_NUM_THREADS", "1")
+        merged_env.setdefault("MKL_NUM_THREADS", "1")
         if env_vars:
             merged_env.update(env_vars)
 
