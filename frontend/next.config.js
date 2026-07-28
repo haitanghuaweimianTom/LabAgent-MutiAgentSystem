@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8001';
+// 用 127.0.0.1 而非 localhost：Linux 上 localhost 解析为 IPv6 ::1，
+// 而 uvicorn 只监听 IPv4 0.0.0.0:8001，导致 rewrites 转发到 [::1]:8001
+// 连接失败 → Next 返回 502。127.0.0.1 强制走 IPv4，绕过此问题。
+const BACKEND_URL = process.env.BACKEND_URL || 'http://127.0.0.1:8001';
 
 const nextConfig = {
   trailingSlash: true,
