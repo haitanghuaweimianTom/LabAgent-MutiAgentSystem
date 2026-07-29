@@ -4,24 +4,18 @@ import { useState, useEffect, useCallback } from 'react';
 import { apiBase } from '@/lib/api';
 
 // =============================================================
-// v5.4.0 深色模式样式常量（替代原 inline 浅色样式）
+// v5.4.0 样式常量（仅保留 layout，颜色全部走 Tailwind 语义令牌）
 // =============================================================
 const fieldStyle: React.CSSProperties = {
   padding: '6px 10px',
   height: 32,
-  background: '#0F172A',
-  border: '1px solid #334155',
   borderRadius: 6,
-  color: '#F8FAFC',
   fontSize: 14,
   outline: 'none',
 };
 
 const thStyle: React.CSSProperties = {
   padding: '8px 10px',
-  borderBottom: '1px solid #334155',
-  background: '#0F172A',
-  color: '#94A3B8',
   fontSize: 12,
   fontWeight: 600,
   textAlign: 'left',
@@ -30,8 +24,6 @@ const thStyle: React.CSSProperties = {
 
 const tdStyle: React.CSSProperties = {
   padding: '8px 10px',
-  borderBottom: '1px solid #334155',
-  color: '#E2E8F0',
   fontSize: 13,
   verticalAlign: 'middle',
 };
@@ -39,9 +31,6 @@ const tdStyle: React.CSSProperties = {
 const primaryBtnStyle: React.CSSProperties = {
   padding: '6px 16px',
   height: 32,
-  background: '#2DD4BF',
-  color: '#0F172A',
-  border: 'none',
   borderRadius: 6,
   fontSize: 14,
   fontWeight: 600,
@@ -50,9 +39,6 @@ const primaryBtnStyle: React.CSSProperties = {
 
 const primaryBtnSmStyle: React.CSSProperties = {
   padding: '4px 10px',
-  background: '#2DD4BF',
-  color: '#0F172A',
-  border: 'none',
   borderRadius: 4,
   fontSize: 12,
   fontWeight: 600,
@@ -62,9 +48,6 @@ const primaryBtnSmStyle: React.CSSProperties = {
 const secondaryBtnStyle: React.CSSProperties = {
   padding: '6px 16px',
   height: 32,
-  background: '#1E293B',
-  color: '#CBD5E1',
-  border: '1px solid #334155',
   borderRadius: 6,
   fontSize: 14,
   cursor: 'pointer',
@@ -72,9 +55,6 @@ const secondaryBtnStyle: React.CSSProperties = {
 
 const secondaryBtnSmStyle: React.CSSProperties = {
   padding: '4px 10px',
-  background: '#1E293B',
-  color: '#CBD5E1',
-  border: '1px solid #334155',
   borderRadius: 4,
   fontSize: 12,
   cursor: 'pointer',
@@ -82,9 +62,6 @@ const secondaryBtnSmStyle: React.CSSProperties = {
 
 const dangerBtnSmStyle: React.CSSProperties = {
   padding: '4px 10px',
-  background: '#7F1D1D',
-  color: '#FCA5A5',
-  border: '1px solid #B91C1C',
   borderRadius: 4,
   fontSize: 12,
   cursor: 'pointer',
@@ -92,9 +69,6 @@ const dangerBtnSmStyle: React.CSSProperties = {
 
 const disabledBtnStyle: React.CSSProperties = {
   padding: '4px 10px',
-  background: '#1E293B',
-  color: '#475569',
-  border: '1px solid #334155',
   borderRadius: 4,
   fontSize: 12,
   cursor: 'not-allowed',
@@ -234,34 +208,28 @@ export default function EnvironmentManager() {
 
   return (
     <div style={{ padding: 16, maxWidth: 960, margin: '0 auto' }}>
-      <h2 style={{ color: '#F8FAFC', fontSize: 20, marginBottom: 12 }}>🐍 环境管理</h2>
+      <h2 className="text-foreground" style={{ fontSize: 20, marginBottom: 12 }}>🐍 环境管理</h2>
 
       {msg && (
-        <div style={{
-          padding: '10px 14px',
-          marginBottom: 12,
-          background: /失败|错误|error|fail/i.test(msg) ? '#7F1D1D' : '#1E3A8A',
-          color: '#F8FAFC',
-          borderRadius: 6,
-          border: '1px solid #334155',
-          fontSize: 13,
-        }}>
+        <div
+          className={
+            /失败|错误|error|fail/i.test(msg)
+              ? 'border border-error/20 bg-error/10 text-error'
+              : 'border border-info/20 bg-info/10 text-info'
+          }
+          style={{ padding: '10px 14px', marginBottom: 12, borderRadius: 6, fontSize: 13 }}
+        >
           {msg}
         </div>
       )}
 
-      <section style={{
-        marginBottom: 24,
-        padding: 16,
-        background: '#1E293B',
-        border: '1px solid #334155',
-        borderRadius: 8,
-      }}>
-        <h3 style={{ color: '#F8FAFC', fontSize: 16, marginBottom: 12 }}>创建新环境</h3>
+      <section className="bg-card border border-border rounded-xl p-5" style={{ marginBottom: 24 }}>
+        <h3 className="text-foreground" style={{ fontSize: 16, marginBottom: 12 }}>创建新环境</h3>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
           <select
             value={newBackend}
             onChange={(e) => setNewBackend(e.target.value)}
+            className="bg-muted border border-border text-foreground"
             style={fieldStyle}
           >
             {backends.map((b) => (
@@ -272,17 +240,20 @@ export default function EnvironmentManager() {
             placeholder="环境名称"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
+            className="bg-muted border border-border text-foreground"
             style={fieldStyle}
           />
           <input
             placeholder="Python 版本"
             value={newPython}
             onChange={(e) => setNewPython(e.target.value)}
+            className="bg-muted border border-border text-foreground"
             style={fieldStyle}
           />
           <button
             onClick={createEnv}
             disabled={creating || !newName.trim()}
+            className="bg-primary text-primary-foreground hover:opacity-90"
             style={primaryBtnStyle}
           >
             {creating ? '创建中...' : '创建'}
@@ -291,14 +262,8 @@ export default function EnvironmentManager() {
       </section>
 
       {installTarget && (
-        <section style={{
-          marginBottom: 24,
-          padding: 16,
-          background: '#1E293B',
-          border: '1px solid #334155',
-          borderRadius: 8,
-        }}>
-          <h3 style={{ color: '#F8FAFC', fontSize: 16, marginBottom: 12 }}>
+        <section className="bg-card border border-border rounded-xl p-5" style={{ marginBottom: 24 }}>
+          <h3 className="text-foreground" style={{ fontSize: 16, marginBottom: 12 }}>
             安装依赖到 {installTarget.name}
           </h3>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -306,12 +271,22 @@ export default function EnvironmentManager() {
               placeholder="requirements.txt 路径（留空使用项目默认）"
               value={requirementsPath}
               onChange={(e) => setRequirementsPath(e.target.value)}
+              className="bg-muted border border-border text-foreground"
               style={{ ...fieldStyle, minWidth: 320 }}
             />
-            <button onClick={installReqs} disabled={installing} style={primaryBtnStyle}>
+            <button
+              onClick={installReqs}
+              disabled={installing}
+              className="bg-primary text-primary-foreground hover:opacity-90"
+              style={primaryBtnStyle}
+            >
               {installing ? '安装中...' : '安装'}
             </button>
-            <button onClick={() => setInstallTarget(null)} style={secondaryBtnStyle}>
+            <button
+              onClick={() => setInstallTarget(null)}
+              className="bg-muted border border-border text-muted-foreground"
+              style={secondaryBtnStyle}
+            >
               取消
             </button>
           </div>
@@ -319,57 +294,75 @@ export default function EnvironmentManager() {
       )}
 
       <section>
-        <h3 style={{ color: '#F8FAFC', fontSize: 16, marginBottom: 12 }}>环境列表</h3>
+        <h3 className="text-foreground" style={{ fontSize: 16, marginBottom: 12 }}>环境列表</h3>
         {loading ? (
-          <p style={{ color: '#94A3B8', fontSize: 13 }}>加载中...</p>
+          <p className="text-muted-foreground" style={{ fontSize: 13 }}>加载中...</p>
         ) : envs.length === 0 ? (
-          <p style={{ color: '#94A3B8', fontSize: 13 }}>暂无环境</p>
+          <p className="text-muted-foreground" style={{ fontSize: 13 }}>暂无环境</p>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, color: '#E2E8F0' }}>
+          <table className="text-foreground" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
-              <tr style={{ background: '#0F172A' }}>
-                <th style={thStyle}>名称</th>
-                <th style={thStyle}>后端</th>
-                <th style={thStyle}>Python</th>
-                <th style={thStyle}>路径</th>
-                <th style={thStyle}>状态</th>
-                <th style={{ ...thStyle, minWidth: 220 }}>操作</th>
+              <tr className="bg-muted">
+                <th className="border-b border-border bg-muted text-muted-foreground" style={thStyle}>名称</th>
+                <th className="border-b border-border bg-muted text-muted-foreground" style={thStyle}>后端</th>
+                <th className="border-b border-border bg-muted text-muted-foreground" style={thStyle}>Python</th>
+                <th className="border-b border-border bg-muted text-muted-foreground" style={thStyle}>路径</th>
+                <th className="border-b border-border bg-muted text-muted-foreground" style={thStyle}>状态</th>
+                <th className="border-b border-border bg-muted text-muted-foreground" style={{ ...thStyle, minWidth: 220 }}>操作</th>
               </tr>
             </thead>
             <tbody>
               {envs.map((env) => (
-                <tr key={`${env.backend}-${env.name}`} style={{ borderBottom: '1px solid #334155' }}>
-                  <td style={tdStyle}>{env.name}</td>
-                  <td style={tdStyle}>{env.backend}</td>
-                  <td style={tdStyle}>{env.python_version}</td>
-                  <td style={{ ...tdStyle, maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'ui-monospace, Menlo, Consolas, monospace', fontSize: 12, color: '#94A3B8' }}>
+                <tr key={`${env.backend}-${env.name}`} className="border-b border-border">
+                  <td className="border-b border-border text-foreground" style={tdStyle}>{env.name}</td>
+                  <td className="border-b border-border text-foreground" style={tdStyle}>{env.backend}</td>
+                  <td className="border-b border-border text-foreground" style={tdStyle}>{env.python_version}</td>
+                  <td
+                    className="border-b border-border text-muted-foreground"
+                    style={{
+                      ...tdStyle,
+                      maxWidth: 300,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      fontFamily: 'ui-monospace, Menlo, Consolas, monospace',
+                      fontSize: 12,
+                    }}
+                  >
                     {env.path}
                   </td>
-                  <td style={tdStyle}>
+                  <td className="border-b border-border text-foreground" style={tdStyle}>
                     {env.is_active ? (
-                      <span style={{ color: '#4ADE80', fontWeight: 700, fontSize: 13 }}>
+                      <span className="text-success" style={{ fontWeight: 700, fontSize: 13 }}>
                         ● 激活
                       </span>
                     ) : (
-                      <span style={{ color: '#94A3B8', fontSize: 13 }}>未激活</span>
+                      <span className="text-muted-foreground" style={{ fontSize: 13 }}>未激活</span>
                     )}
                   </td>
-                  <td style={{ ...tdStyle, minWidth: 220 }}>
+                  <td className="border-b border-border text-foreground" style={{ ...tdStyle, minWidth: 220 }}>
                     <button
                       onClick={() => activateEnv(env.backend, env.name)}
                       disabled={env.is_active}
+                      className={
+                        env.is_active
+                          ? 'bg-muted border border-border text-muted-foreground'
+                          : 'bg-primary text-primary-foreground hover:opacity-90'
+                      }
                       style={env.is_active ? disabledBtnStyle : primaryBtnSmStyle}
                     >
                       激活
                     </button>{' '}
                     <button
                       onClick={() => setInstallTarget({ backend: env.backend, name: env.name })}
+                      className="bg-muted border border-border text-muted-foreground"
                       style={secondaryBtnSmStyle}
                     >
                       安装依赖
                     </button>{' '}
                     <button
                       onClick={() => deleteEnv(env.backend, env.name)}
+                      className="border border-error/20 bg-error/10 text-error"
                       style={dangerBtnSmStyle}
                     >
                       删除

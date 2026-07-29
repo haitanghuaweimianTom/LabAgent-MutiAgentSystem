@@ -163,11 +163,11 @@ export default function PdfManager() {
   };
 
   return (
-    <div className="bg-[#1E293B] border border-[#334155] rounded-[14px] p-4 flex flex-col gap-4">
-      <div className="text-[1rem] text-[#F8FAFC] font-semibold">📄 PDF 解析中心</div>
+    <div className="bg-card border border-border rounded-xl p-5 flex flex-col gap-4">
+      <div className="text-base text-foreground font-semibold">📄 PDF 解析中心</div>
 
-      <div className="flex flex-col gap-[0.6rem]">
-        <div className="text-[0.9375rem] text-[#94A3B8] font-semibold">上传 / 下载 PDF</div>
+      <div className="flex flex-col gap-2.5">
+        <div className="text-sm text-muted-foreground font-semibold">上传 / 下载 PDF</div>
         <div className="flex gap-2 items-center flex-wrap">
           <input
             type="file"
@@ -177,31 +177,31 @@ export default function PdfManager() {
             id="pdf-upload"
             onChange={handleFileChange}
           />
-          <label htmlFor="pdf-upload" className="py-2 px-[0.8rem] bg-[rgba(45,212,191,0.15)] border border-[rgba(45,212,191,0.15)] rounded-[8px] text-[#3498db] text-[0.9375rem] cursor-pointer transition-[background] duration-200 hover:bg-[rgba(45,212,191,0.15)]">
+          <label htmlFor="pdf-upload" className="py-2 px-3 bg-primary/10 text-primary border border-primary/20 rounded-lg text-sm cursor-pointer transition-colors duration-200 hover:bg-primary/20">
             {loading ? '处理中...' : '📤 选择 PDF 上传'}
           </label>
           <input
             type="text"
-            className="flex-1 min-w-[200px] py-[0.5rem] px-[0.7rem] bg-[rgba(0,0,0,0.25)] border border-[#334155] rounded-[8px] text-[#e0e0e0] text-[0.9375rem] focus:outline-none focus:border-[rgba(45,212,191,0.15)]"
+            className="flex-1 min-w-[200px] py-2 px-3 bg-muted border border-border rounded-lg text-foreground text-sm focus:outline-none focus:border-primary/30"
             placeholder="输入 PDF 链接或 arXiv 摘要页 URL"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
           />
-          <button className="py-[0.5rem] px-[0.9rem] bg-[#2DD4BF] text-[#F8FAFC] border-none rounded-[8px] text-[0.9375rem] cursor-pointer transition-[opacity] duration-200 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleDownload} disabled={loading || !url.trim()}>
+          <button className="py-2 px-3.5 bg-primary text-primary-foreground border-none rounded-lg text-sm cursor-pointer transition-opacity duration-200 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleDownload} disabled={loading || !url.trim()}>
             ⬇️ 下载
           </button>
         </div>
       </div>
 
-      <div className="flex flex-col gap-[0.6rem]">
-        <div className="text-[0.9375rem] text-[#94A3B8] font-semibold">解析策略</div>
+      <div className="flex flex-col gap-2.5">
+        <div className="text-sm text-muted-foreground font-semibold">解析策略</div>
         <div className="flex gap-2 items-center flex-wrap">
-          <select className="py-[0.45rem] px-[0.6rem] bg-[rgba(0,0,0,0.25)] border border-[#334155] rounded-[6px] text-[#e0e0e0] text-[0.875rem]" value={strategy} onChange={(e) => setStrategy(e.target.value)}>
+          <select className="py-2 px-2.5 bg-muted border border-border rounded-md text-foreground text-sm" value={strategy} onChange={(e) => setStrategy(e.target.value)}>
             <option value="auto">自动选择</option>
             <option value="pymupdf4llm">PyMuPDF4LLM（本地保底）</option>
             <option value="vision">多模态视觉（限速）</option>
           </select>
-          <label className="flex items-center gap-[0.4rem] text-[#94A3B8] text-[0.875rem] cursor-pointer">
+          <label className="flex items-center gap-2 text-muted-foreground text-sm cursor-pointer">
             <input
               type="checkbox"
               checked={useVision}
@@ -211,7 +211,7 @@ export default function PdfManager() {
           </label>
           {useVision && (
             <select
-              className="py-[0.45rem] px-[0.6rem] bg-[rgba(0,0,0,0.25)] border border-[#334155] rounded-[6px] text-[#e0e0e0] text-[0.875rem]"
+              className="py-2 px-2.5 bg-muted border border-border rounded-md text-foreground text-sm"
               value={visionProvider}
               onChange={(e) => setVisionProvider(e.target.value)}
             >
@@ -226,31 +226,31 @@ export default function PdfManager() {
         </div>
       </div>
 
-      {error && <div className="text-[#e74c3c] text-[0.875rem] p-2 bg-[rgba(248,113,113,0.15)] rounded-[6px]">{error}</div>}
+      {error && <div className="text-error text-sm p-2 bg-error/10 rounded-md">{error}</div>}
 
-      <div className="flex flex-col gap-[0.6rem]">
-        <div className="text-[0.9375rem] text-[#94A3B8] font-semibold">已下载 PDF</div>
+      <div className="flex flex-col gap-2.5">
+        <div className="text-sm text-muted-foreground font-semibold">已下载 PDF</div>
         {files.length === 0 ? (
-          <div className="text-center p-[2rem] text-[#94A3B8] text-[0.9375rem]">暂无 PDF 文件</div>
+          <div className="text-center p-8 text-muted-foreground text-sm">暂无 PDF 文件</div>
         ) : (
           <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto">
             {files.map((f) => (
-              <div key={f.file_id} className="flex justify-between items-center py-[0.7rem] px-[0.9rem] bg-[rgba(0,0,0,0.2)] border border-[#334155] rounded-[10px]">
-                <div className="flex flex-col gap-[0.2rem] flex-1 min-w-0">
-                  <span className="text-[#e0e0e0] text-[0.9375rem] font-medium whitespace-nowrap overflow-hidden text-ellipsis">{f.filename}</span>
-                  <span className="text-[#94A3B8] text-[0.875rem]">
+              <div key={f.file_id} className="flex justify-between items-center py-3 px-3.5 bg-muted border border-border rounded-lg">
+                <div className="flex flex-col gap-1 flex-1 min-w-0">
+                  <span className="text-foreground text-sm font-medium whitespace-nowrap overflow-hidden text-ellipsis">{f.filename}</span>
+                  <span className="text-muted-foreground text-sm">
                     {formatSize(f.size)} · {f.pages ?? '?'} 页 · {f.source}
                   </span>
                 </div>
-                <div className="flex gap-[0.4rem] items-center">
+                <div className="flex gap-2 items-center">
                   <button
-                    className="py-[0.5rem] px-[0.9rem] bg-[#2DD4BF] text-[#F8FAFC] border-none rounded-[8px] text-[0.9375rem] cursor-pointer transition-[opacity] duration-200 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="py-2 px-3.5 bg-primary text-primary-foreground border-none rounded-lg text-sm cursor-pointer transition-opacity duration-200 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                     onClick={() => handleParse(f.file_id)}
                     disabled={parsing === f.file_id}
                   >
                     {parsing === f.file_id ? '解析中...' : '🔍 解析'}
                   </button>
-                  <button className="py-[0.4rem] px-[0.7rem] bg-[#334155] border border-[#475569] rounded-[6px] text-[#CBD5E1] text-[0.875rem] cursor-pointer hover:bg-[#334155]" onClick={() => handleDelete(f.file_id)}>
+                  <button className="py-1.5 px-3 bg-error/10 text-error border border-error/20 rounded-md text-sm cursor-pointer hover:bg-error/20" onClick={() => handleDelete(f.file_id)}>
                     删除
                   </button>
                 </div>
@@ -261,17 +261,17 @@ export default function PdfManager() {
       </div>
 
       {result && (
-        <div className="flex flex-col gap-[0.6rem]">
-          <div className="text-[0.9375rem] text-[#94A3B8] font-semibold">解析结果</div>
-          <div className="bg-[rgba(0,0,0,0.2)] border border-[#334155] rounded-[10px] p-[0.8rem] max-h-[400px] overflow-y-auto">
-            <div className="flex gap-2 flex-wrap mb-[0.6rem] pb-[0.6rem] border-b border-[#334155]">
-              <span className="text-[0.875rem] text-[#a0d0ff] bg-[rgba(45,212,191,0.15)] px-[0.5rem] py-[0.15rem] rounded-[4px]">策略: {result.strategy}</span>
-              <span className="text-[0.875rem] text-[#a0d0ff] bg-[rgba(45,212,191,0.15)] px-[0.5rem] py-[0.15rem] rounded-[4px]">页数: {result.pages}</span>
+        <div className="flex flex-col gap-2.5">
+          <div className="text-sm text-muted-foreground font-semibold">解析结果</div>
+          <div className="bg-muted border border-border rounded-lg p-4 max-h-[400px] overflow-y-auto">
+            <div className="flex gap-2 flex-wrap mb-2.5 pb-2.5 border-b border-border">
+              <span className="text-sm text-primary bg-primary/10 px-2 py-0.5 rounded">策略: {result.strategy}</span>
+              <span className="text-sm text-primary bg-primary/10 px-2 py-0.5 rounded">页数: {result.pages}</span>
               {result.metadata?.total_pages && (
-                <span className="text-[0.875rem] text-[#a0d0ff] bg-[rgba(45,212,191,0.15)] px-[0.5rem] py-[0.15rem] rounded-[4px]">总页数: {result.metadata.total_pages}</span>
+                <span className="text-sm text-primary bg-primary/10 px-2 py-0.5 rounded">总页数: {result.metadata.total_pages}</span>
               )}
             </div>
-            <pre className="text-[#CBD5E1] text-[0.82rem] leading-[1.6] whitespace-pre-wrap font-['Fira_Code','Consolas',monospace]">{result.markdown || result.text}</pre>
+            <pre className="text-muted-foreground text-sm leading-relaxed whitespace-pre-wrap font-mono">{result.markdown || result.text}</pre>
           </div>
         </div>
       )}

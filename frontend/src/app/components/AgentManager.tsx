@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { apiBase } from '@/lib/api';
-import { useTheme } from '@/hooks/useTheme';
 
 interface ProviderModel {
   name: string;
@@ -34,24 +33,6 @@ interface AgentInfo {
   provider_name: string;
 }
 
-const AGENT_COLORS: Record<string, string> = {
-  coordinator: '#e74c3c',
-  research_agent: '#3498db',
-  data_agent: '#9b59b6',
-  analyzer_agent: '#f39c12',
-  modeler_agent: '#27ae60',
-  algorithm_engineer_agent: '#16a085',
-  financial_analyst_agent: '#d4ac0d',
-  solver_agent: '#e67e22',
-  writer_agent: '#1abc9c',
-  peer_review_agent: '#8e44ad',
-  experimentation_agent: '#2c3e50',
-  figure_agent: '#e84393',
-  requirement_decomposer: '#00b894',
-  innovation_agent: '#6c5ce7',
-  summary_agent: '#fdcb6e',
-};
-
 const AGENT_ICONS: Record<string, string> = {
   coordinator: '🎯',
   research_agent: '🔍',
@@ -71,8 +52,6 @@ const AGENT_ICONS: Record<string, string> = {
 };
 
 export default function AgentManager() {
-  const { theme } = useTheme();
-  const dark = theme === 'dark';
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [providers, setProviders] = useState<CustomProvider[]>([]);
   const [loading, setLoading] = useState(true);
@@ -185,18 +164,18 @@ export default function AgentManager() {
 
   const getProvider = (providerId: string) => providers.find(p => p.id === providerId);
 
-  if (loading) return <div style={{ color: dark ? '#cbd5e1' : '#aaa', textAlign: 'center', padding: '2rem' }}>加载中...</div>;
+  if (loading) return <div className="text-muted-foreground" style={{ textAlign: 'center', padding: '2rem' }}>加载中...</div>;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       {/* Header */}
-      <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 14, padding: '1.5rem' }}>
-        <span style={{ fontSize: '1.1rem', color: '#fff', fontWeight: 600 }}>🤖 Agent 团队模型配置</span>
-        <div style={{ color: dark ? '#94a3b8' : '#888', fontSize: '0.8rem', marginTop: '0.3rem' }}>
+      <div className="bg-card border border-border" style={{ borderRadius: 14, padding: '1.5rem' }}>
+        <span className="text-foreground" style={{ fontSize: '1.1rem', fontWeight: 600 }}>🤖 Agent 团队模型配置</span>
+        <div className="text-muted-foreground" style={{ fontSize: '0.8rem', marginTop: '0.3rem' }}>
           为每个 Agent 从可用 Provider 中选择模型，支持单独测试每个模型是否可用
         </div>
         {providers.length === 0 && (
-          <div style={{ color: '#e74c3c', fontSize: '0.85rem', marginTop: '0.5rem' }}>
+          <div className="text-error" style={{ fontSize: '0.85rem', marginTop: '0.5rem' }}>
             ⚠ 尚未配置任何 Provider，请先到「设置 → Provider 管理」添加
           </div>
         )}
@@ -205,7 +184,6 @@ export default function AgentManager() {
       {/* Agent grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '1rem' }}>
         {agents.map(agent => {
-          const color = AGENT_COLORS[agent.name] || '#666';
           const icon = AGENT_ICONS[agent.name] || '🤖';
           const isEditing = editingAgent === agent.name;
           const currentProvider = isEditing ? getProvider(editProviderId) : getProvider(agent.provider_id);
@@ -213,19 +191,19 @@ export default function AgentManager() {
           const providerModels = currentProvider?.models?.filter(m => m.enabled) || [];
 
           return (
-            <div key={agent.name} style={{ background: 'rgba(0,0,0,0.15)', border: `1px solid ${color}33`, borderRadius: 10, padding: '1rem' }}>
+            <div key={agent.name} className="bg-card border border-border" style={{ borderRadius: 10, padding: '1rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.6rem' }}>
                 <span style={{ fontSize: '1.3rem' }}>{icon}</span>
-                <span style={{ color: '#fff', fontWeight: 600, fontSize: '1rem' }}>{agent.label}</span>
-                <span style={{ color: dark ? '#94a3b8' : '#888', fontSize: '0.75rem' }}>{agent.name}</span>
+                <span className="text-foreground" style={{ fontWeight: 600, fontSize: '1rem' }}>{agent.label}</span>
+                <span className="text-muted-foreground" style={{ fontSize: '0.75rem' }}>{agent.name}</span>
               </div>
-              <div style={{ color: dark ? '#cbd5e1' : '#aaa', fontSize: '0.82rem', marginBottom: '0.8rem' }}>{agent.description}</div>
+              <div className="text-muted-foreground" style={{ fontSize: '0.82rem', marginBottom: '0.8rem' }}>{agent.description}</div>
 
               {isEditing ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
                   {/* Provider selector */}
                   <div>
-                    <div style={{ color: dark ? '#94a3b8' : '#888', fontSize: '0.78rem', marginBottom: '0.3rem' }}>Provider</div>
+                    <div className="text-muted-foreground" style={{ fontSize: '0.78rem', marginBottom: '0.3rem' }}>Provider</div>
                     <select
                       value={editProviderId}
                       onChange={e => {
@@ -236,7 +214,8 @@ export default function AgentManager() {
                         setEditModelName(firstModel);
                         setModelTestResults({}); // clear model test results on provider change
                       }}
-                      style={{ width: '100%', padding: '0.5rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, color: '#e0e0e0', fontSize: '0.85rem' }}
+                      className="bg-muted border border-border text-foreground"
+                      style={{ width: '100%', padding: '0.5rem', borderRadius: 6, fontSize: '0.85rem' }}
                     >
                       <option value="">选择 Provider</option>
                       {providers.map(p => (
@@ -249,12 +228,13 @@ export default function AgentManager() {
 
                   {/* Model selector */}
                   <div>
-                    <div style={{ color: dark ? '#94a3b8' : '#888', fontSize: '0.78rem', marginBottom: '0.3rem' }}>模型</div>
+                    <div className="text-muted-foreground" style={{ fontSize: '0.78rem', marginBottom: '0.3rem' }}>模型</div>
                     {providerModels.length > 0 ? (
                       <select
                         value={editModelName}
                         onChange={e => setEditModelName(e.target.value)}
-                        style={{ width: '100%', padding: '0.5rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, color: '#e0e0e0', fontSize: '0.85rem' }}
+                        className="bg-muted border border-border text-foreground"
+                        style={{ width: '100%', padding: '0.5rem', borderRadius: 6, fontSize: '0.85rem' }}
                       >
                         {providerModels.map(m => (
                           <option key={m.name} value={m.name}>{m.display_name || m.name}</option>
@@ -265,7 +245,8 @@ export default function AgentManager() {
                         value={editModelName}
                         onChange={e => setEditModelName(e.target.value)}
                         placeholder="输入模型名称"
-                        style={{ width: '100%', padding: '0.5rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, color: '#e0e0e0', fontSize: '0.85rem' }}
+                        className="bg-muted border border-border text-foreground"
+                        style={{ width: '100%', padding: '0.5rem', borderRadius: 6, fontSize: '0.85rem' }}
                       />
                     )}
                   </div>
@@ -276,12 +257,16 @@ export default function AgentManager() {
                       <button
                         onClick={() => handleTestIndividualModel(editProviderId, editModelName)}
                         disabled={testingModel === `${editProviderId}/${editModelName}`}
-                        style={{ padding: '0.4rem 0.6rem', background: 'rgba(52,152,219,0.15)', border: '1px solid rgba(52,152,219,0.3)', borderRadius: 6, color: '#3498db', fontSize: '0.75rem', cursor: 'pointer' }}
+                        className="bg-primary/10 border border-primary/20 text-primary"
+                        style={{ padding: '0.4rem 0.6rem', borderRadius: 6, fontSize: '0.75rem', cursor: 'pointer' }}
                       >
                         {testingModel === `${editProviderId}/${editModelName}` ? '测试中...' : '🧪 测试此模型'}
                       </button>
                       {modelTestResults[`${editProviderId}/${editModelName}`] && (
-                        <span style={{ fontSize: '0.8rem', color: modelTestResults[`${editProviderId}/${editModelName}`].startsWith('✓') ? '#2ecc71' : '#e74c3c' }}>
+                        <span
+                          className={modelTestResults[`${editProviderId}/${editModelName}`].startsWith('✓') ? 'text-success' : 'text-error'}
+                          style={{ fontSize: '0.8rem' }}
+                        >
                           {modelTestResults[`${editProviderId}/${editModelName}`]}
                         </span>
                       )}
@@ -290,10 +275,18 @@ export default function AgentManager() {
 
                   {/* Actions */}
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <button onClick={() => handleSave(agent.name)} style={{ padding: '0.4rem 0.8rem', background: 'rgba(46,204,113,0.15)', border: '1px solid rgba(46,204,113,0.3)', borderRadius: 6, color: '#2ecc71', fontSize: '0.78rem', cursor: 'pointer', fontWeight: 600 }}>
+                    <button
+                      onClick={() => handleSave(agent.name)}
+                      className="bg-success/10 border border-success/20 text-success"
+                      style={{ padding: '0.4rem 0.8rem', borderRadius: 6, fontSize: '0.78rem', cursor: 'pointer', fontWeight: 600 }}
+                    >
                       💾 保存
                     </button>
-                    <button onClick={() => setEditingAgent(null)} style={{ padding: '0.4rem 0.8rem', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, color: dark ? '#cbd5e1' : '#aaa', fontSize: '0.78rem', cursor: 'pointer' }}>
+                    <button
+                      onClick={() => setEditingAgent(null)}
+                      className="bg-muted border border-border text-muted-foreground"
+                      style={{ padding: '0.4rem 0.8rem', borderRadius: 6, fontSize: '0.78rem', cursor: 'pointer' }}
+                    >
                       取消
                     </button>
                   </div>
@@ -302,15 +295,19 @@ export default function AgentManager() {
                 <div>
                   {/* Current config display */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                    <span style={{ color: dark ? '#94a3b8' : '#888', fontSize: '0.78rem' }}>当前:</span>
+                    <span className="text-muted-foreground" style={{ fontSize: '0.78rem' }}>当前:</span>
                     {agent.provider_id ? (
-                      <code style={{ color: color, fontSize: '0.82rem', background: 'rgba(0,0,0,0.2)', padding: '0.2rem 0.4rem', borderRadius: 4 }}>
+                      <code className="text-foreground bg-muted" style={{ fontSize: '0.82rem', padding: '0.2rem 0.4rem', borderRadius: 4 }}>
                         {agent.provider_name}/{currentModelName}
                       </code>
                     ) : (
-                      <code style={{ color: dark ? '#94a3b8' : '#888', fontSize: '0.82rem' }}>{agent.model}</code>
+                      <code className="text-muted-foreground" style={{ fontSize: '0.82rem' }}>{agent.model}</code>
                     )}
-                    <button onClick={() => startEdit(agent)} style={{ padding: '0.3rem 0.5rem', background: 'rgba(52,152,219,0.15)', border: '1px solid rgba(52,152,219,0.3)', borderRadius: 6, color: '#3498db', fontSize: '0.7rem', cursor: 'pointer' }}>
+                    <button
+                      onClick={() => startEdit(agent)}
+                      className="bg-primary/10 border border-primary/20 text-primary"
+                      style={{ padding: '0.3rem 0.5rem', borderRadius: 6, fontSize: '0.7rem', cursor: 'pointer' }}
+                    >
                       修改
                     </button>
                   </div>
@@ -321,12 +318,16 @@ export default function AgentManager() {
                       <button
                         onClick={() => handleTestAgentModel(agent.name, agent.provider_id, currentModelName)}
                         disabled={testingAgent === agent.name}
-                        style={{ padding: '0.3rem 0.5rem', background: 'rgba(155,89,182,0.15)', border: '1px solid rgba(155,89,182,0.3)', borderRadius: 6, color: '#9b59b6', fontSize: '0.7rem', cursor: 'pointer' }}
+                        className="bg-primary/10 border border-primary/20 text-primary"
+                        style={{ padding: '0.3rem 0.5rem', borderRadius: 6, fontSize: '0.7rem', cursor: 'pointer' }}
                       >
                         {testingAgent === agent.name ? '测试中...' : '🧪 测试当前模型'}
                       </button>
                       {testResults[agent.name] && (
-                        <span style={{ fontSize: '0.8rem', color: testResults[agent.name].startsWith('✓') ? '#2ecc71' : '#e74c3c' }}>
+                        <span
+                          className={testResults[agent.name].startsWith('✓') ? 'text-success' : 'text-error'}
+                          style={{ fontSize: '0.8rem' }}
+                        >
                           {testResults[agent.name]}
                         </span>
                       )}
@@ -339,7 +340,7 @@ export default function AgentManager() {
         })}
       </div>
 
-      {msg && <div style={{ fontSize: '0.85rem', color: msg.startsWith('✗') ? '#e74c3c' : '#2ecc71', textAlign: 'center' }}>{msg}</div>}
+      {msg && <div className={`text-center ${msg.startsWith('✗') ? 'text-error' : 'text-success'}`} style={{ fontSize: '0.85rem' }}>{msg}</div>}
     </div>
   );
 }
