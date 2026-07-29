@@ -127,13 +127,11 @@ export default function SettingsPage() {
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className="py-2 px-[1.2rem] rounded-[8px] cursor-pointer text-[0.9rem] transition-colors"
-            style={{
-              background: activeTab === tab.id ? 'rgba(52,152,219,0.15)' : 'rgba(255,255,255,0.05)',
-              border: `1px solid ${activeTab === tab.id ? 'rgba(52,152,219,0.4)' : 'rgba(255,255,255,0.1)'}`,
-              color: activeTab === tab.id ? '#3498db' : '#aaa',
-              fontWeight: activeTab === tab.id ? 600 : 400,
-            }}
+            className={`py-2 px-5 rounded-md cursor-pointer text-sm transition-colors border ${
+              activeTab === tab.id
+                ? 'bg-primary/10 border-primary/40 text-primary font-semibold'
+                : 'bg-muted border-border text-muted-foreground font-normal'
+            }`}
           >
             {tab.label}
           </button>
@@ -141,7 +139,7 @@ export default function SettingsPage() {
       </div>
 
       {settingsMsg && (
-        <div className="text-[0.85rem] text-center" style={{ color: settingsMsg.includes('✓') ? '#2ecc71' : '#e74c3c' }}>
+        <div className={`text-sm text-center ${settingsMsg.includes('✓') ? 'text-success' : 'text-error'}`}>
           {settingsMsg}
         </div>
       )}
@@ -153,21 +151,21 @@ export default function SettingsPage() {
 
       {activeTab === 'system' && (
         <div className="flex flex-col gap-6">
-          <div className="bg-[#1E293B] border border-[#334155] rounded-[10px] p-[1.2rem]">
-            <span className="text-[0.95rem] text-[#F8FAFC] font-semibold">🤖 Claude Code CLI 配置</span>
+          <div className="bg-card border border-border rounded-lg p-5">
+            <span className="text-sm text-foreground font-semibold">🤖 Claude Code CLI 配置</span>
 
-            <div className="mb-[0.8rem] flex items-center gap-2 mt-4">
-              <span className="w-2 h-2 rounded-full" style={{ background: sysInfo?.claude_code_available ? '#2ecc71' : '#666' }} />
-              <span className="text-[#ddd] text-[0.85rem]">
+            <div className="mb-3 flex items-center gap-2 mt-4">
+              <span className={`w-2 h-2 rounded-full ${sysInfo?.claude_code_available ? 'bg-success' : 'bg-muted-foreground'}`} />
+              <span className="text-foreground text-sm">
                 {sysInfo?.claude_code_available ? `已安装: ${sysInfo?.claude_code_path}` : '未安装 - 请运行 npm install -g @anthropic-ai/claude-code'}
               </span>
             </div>
 
             <div className="flex flex-col gap-2 mb-4">
-              <div className="text-[0.875rem] text-[#94A3B8] font-semibold">Claude 模型</div>
+              <div className="text-sm text-muted-foreground font-semibold">Claude 模型</div>
               <div className="flex gap-2">
                 <select
-                  className="flex-1 text-[#F8FAFC] bg-[#1E293B] border border-[#334155] p-2 rounded-[6px]"
+                  className="flex-1 text-foreground bg-muted border border-border p-2 rounded-md"
                   value={claudeModel}
                   onChange={e => setClaudeModel(e.target.value)}
                 >
@@ -183,62 +181,62 @@ export default function SettingsPage() {
             </div>
 
             <div className="flex flex-col gap-2 mb-4">
-              <div className="text-[0.875rem] text-[#94A3B8] font-semibold">MCP 工具（逗号分隔）</div>
+              <div className="text-sm text-muted-foreground font-semibold">MCP 工具（逗号分隔）</div>
               <div className="flex gap-2">
-                <input type="text" className="flex-1 text-[#F8FAFC] bg-[#1E293B] border border-[#334155] p-2 rounded-[6px]" placeholder="bing_search,web_search,paper_search,sequentialthinking" value={claudeMcpTools} onChange={e => setClaudeMcpTools(e.target.value)} />
+                <input type="text" className="flex-1 text-foreground bg-muted border border-border p-2 rounded-md" placeholder="bing_search,web_search,paper_search,sequentialthinking" value={claudeMcpTools} onChange={e => setClaudeMcpTools(e.target.value)} />
               </div>
-              <div className="text-[0.75rem] text-[#666]">可用: bing_search, web_search, paper_search, python_execute, sequentialthinking</div>
+              <div className="text-xs text-muted-foreground">可用: bing_search, web_search, paper_search, python_execute, sequentialthinking</div>
             </div>
 
             <div className="flex flex-col gap-2 mb-4">
-              <div className="text-[0.875rem] text-[#94A3B8] font-semibold">MCP 配置文件路径</div>
+              <div className="text-sm text-muted-foreground font-semibold">MCP 配置文件路径</div>
               <div className="flex gap-2">
-                <input type="text" className="flex-1 text-[#F8FAFC] bg-[#1E293B] border border-[#334155] p-2 rounded-[6px]" placeholder="留空则自动搜索" value={claudeMcpConfigPath} onChange={e => setClaudeMcpConfigPath(e.target.value)} />
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-2 mb-4">
-              <div className="text-[0.875rem] text-[#94A3B8] font-semibold">温度</div>
-              <div className="flex gap-2">
-                <input type="number" className="flex-1 text-[#F8FAFC] bg-[#1E293B] border border-[#334155] p-2 rounded-[6px]" placeholder="0.3" value={claudeTemperature} onChange={e => setClaudeTemperature(e.target.value)} min="0" max="1" step="0.1" />
+                <input type="text" className="flex-1 text-foreground bg-muted border border-border p-2 rounded-md" placeholder="留空则自动搜索" value={claudeMcpConfigPath} onChange={e => setClaudeMcpConfigPath(e.target.value)} />
               </div>
             </div>
 
             <div className="flex flex-col gap-2 mb-4">
-              <div className="text-[0.875rem] text-[#94A3B8] font-semibold">最大输出 Token</div>
+              <div className="text-sm text-muted-foreground font-semibold">温度</div>
               <div className="flex gap-2">
-                <input type="number" className="flex-1 text-[#F8FAFC] bg-[#1E293B] border border-[#334155] p-2 rounded-[6px]" placeholder="8192" value={claudeMaxTokens} onChange={e => setClaudeMaxTokens(e.target.value)} min="100" max="32000" />
+                <input type="number" className="flex-1 text-foreground bg-muted border border-border p-2 rounded-md" placeholder="0.3" value={claudeTemperature} onChange={e => setClaudeTemperature(e.target.value)} min="0" max="1" step="0.1" />
               </div>
             </div>
 
             <div className="flex flex-col gap-2 mb-4">
-              <div className="text-[0.875rem] text-[#94A3B8] font-semibold">代码生成方式</div>
+              <div className="text-sm text-muted-foreground font-semibold">最大输出 Token</div>
+              <div className="flex gap-2">
+                <input type="number" className="flex-1 text-foreground bg-muted border border-border p-2 rounded-md" placeholder="8192" value={claudeMaxTokens} onChange={e => setClaudeMaxTokens(e.target.value)} min="100" max="32000" />
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2 mb-4">
+              <div className="text-sm text-muted-foreground font-semibold">代码生成方式</div>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={claudeCoderPreferCli} onChange={e => setClaudeCoderPreferCli(e.target.checked)} className="cursor-pointer" />
-                <span className="text-[0.85rem] text-[#CBD5E1]">
+                <span className="text-sm text-muted-foreground">
                   优先使用 Claude Code CLI 生成代码
-                  <span className="text-[#666] text-[0.75rem]">（默认关闭=走 HTTP API，更快更稳；CLI 在部分子问题上会反复超时重试）</span>
+                  <span className="text-muted-foreground text-xs">（默认关闭=走 HTTP API，更快更稳；CLI 在部分子问题上会反复超时重试）</span>
                 </span>
               </label>
             </div>
 
             <div className="flex gap-2 mt-4">
-              <button className="bg-[#3498db] text-white border-none py-2 px-4 rounded-[6px] cursor-pointer font-semibold hover:bg-[#2980b9]" onClick={handleSaveClaudeSettings}>💾 保存 Claude Code 配置</button>
+              <button className="bg-primary text-primary-foreground border-none py-2 px-4 rounded-md cursor-pointer font-semibold hover:opacity-90" onClick={handleSaveClaudeSettings}>💾 保存 Claude Code 配置</button>
             </div>
           </div>
 
-          <div className="bg-[#1E293B] border border-[#334155] rounded-[10px] p-[1.2rem]">
-            <span className="text-[0.95rem] text-[#F8FAFC] font-semibold">ℹ️ 系统信息</span>
-            <div className="mt-4 p-4 bg-black/20 rounded-[6px] text-[0.875rem] text-[#CBD5E1] leading-relaxed">
-              <strong className="text-[#F8FAFC]">📍 访问地址：</strong>
-              <code className="text-[#e0c080]">本机: http://localhost:3000</code><br />
-              <code className="text-[#e0c080]">局域网: 请使用本机 IP:3000</code><br />
-              <strong className="text-[#F8FAFC]">📖 后端 API 文档：</strong>
-              <code className="text-[#e0c080]">http://localhost:8001/docs</code><br />
+          <div className="bg-card border border-border rounded-lg p-5">
+            <span className="text-sm text-foreground font-semibold">ℹ️ 系统信息</span>
+            <div className="mt-4 p-4 bg-muted rounded-md text-sm text-muted-foreground leading-relaxed">
+              <strong className="text-foreground">📍 访问地址：</strong>
+              <code className="text-warning">本机: http://localhost:3000</code><br />
+              <code className="text-warning">局域网: 请使用本机 IP:3000</code><br />
+              <strong className="text-foreground">📖 后端 API 文档：</strong>
+              <code className="text-warning">http://localhost:8001/docs</code><br />
               {sysInfo && (
                 <>
-                  <strong className="text-[#F8FAFC]">🔄 版本：</strong><code className="text-[#e0c080]">v{sysInfo.version}</code><br />
-                  <strong className="text-[#F8FAFC]">🤖 默认后端：</strong><code className="text-[#e0c080]">{sysInfo.default_llm_backend}</code><br />
+                  <strong className="text-foreground">🔄 版本：</strong><code className="text-warning">v{sysInfo.version}</code><br />
+                  <strong className="text-foreground">🤖 默认后端：</strong><code className="text-warning">{sysInfo.default_llm_backend}</code><br />
                 </>
               )}
             </div>

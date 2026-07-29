@@ -141,11 +141,11 @@ export default function FileManager({ taskId }: FileManagerProps) {
   const allSelected = files.length > 0 && files.every((f) => selectedFiles.has(f.name));
 
   return (
-    <div className="bg-[#1E293B] border border-[#334155] rounded-[14px] p-[1.2rem]">
+    <div className="bg-card border border-border rounded-xl p-5">
       <div className="flex justify-between items-center mb-2">
-        <span className="text-[1rem] text-[#F8FAFC] font-semibold">📁 数据文件管理{projectName ? ` · ${projectName}` : ''}</span>
+        <span className="text-base text-foreground font-semibold">📁 数据文件管理{projectName ? ` · ${projectName}` : ''}</span>
         {tab === 'user_upload' && (
-          <label className="inline-flex items-center gap-2 py-2 px-4 bg-[#2DD4BF] text-[#F8FAFC] rounded-[8px] cursor-pointer text-[0.9375rem] font-semibold hover:-translate-y-[1px] transition-transform duration-200 disabled:opacity-60 disabled:cursor-not-allowed">
+          <label className="inline-flex items-center gap-2 py-2 px-4 bg-primary text-primary-foreground rounded-md cursor-pointer text-sm font-semibold transition-opacity duration-150 hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed">
             {uploading ? '上传中...' : '📤 批量上传'}
             <input
               type="file"
@@ -159,11 +159,11 @@ export default function FileManager({ taskId }: FileManagerProps) {
         )}
       </div>
 
-      <div className="flex gap-[0.3rem] mb-4 border-b border-[#334155] pb-0">
+      <div className="flex gap-1.5 mb-4 border-b border-border pb-0">
         <button
           className={cn(
-            'py-[0.55rem] px-4 bg-transparent text-[#94A3B8] border-none border-b-2 border-transparent cursor-pointer text-[0.9375rem] font-medium transition-all duration-200 -mb-px hover:text-[#F8FAFC]',
-            tab === 'user_upload' && 'text-[#2DD4BF] border-b-[#2DD4BF] font-semibold'
+            'py-2 px-4 bg-transparent text-muted-foreground border-none border-b-2 border-transparent cursor-pointer text-sm font-medium transition-colors duration-150 -mb-px hover:text-foreground',
+            tab === 'user_upload' && 'text-primary border-b-primary font-semibold'
           )}
           onClick={() => setTab('user_upload')}
         >
@@ -171,8 +171,8 @@ export default function FileManager({ taskId }: FileManagerProps) {
         </button>
         <button
           className={cn(
-            'py-[0.55rem] px-4 bg-transparent text-[#94A3B8] border-none border-b-2 border-transparent cursor-pointer text-[0.9375rem] font-medium transition-all duration-200 -mb-px hover:text-[#F8FAFC]',
-            tab === 'self_collected' && 'text-[#2DD4BF] border-b-[#2DD4BF] font-semibold'
+            'py-2 px-4 bg-transparent text-muted-foreground border-none border-b-2 border-transparent cursor-pointer text-sm font-medium transition-colors duration-150 -mb-px hover:text-foreground',
+            tab === 'self_collected' && 'text-primary border-b-primary font-semibold'
           )}
           onClick={() => setTab('self_collected')}
         >
@@ -180,8 +180,8 @@ export default function FileManager({ taskId }: FileManagerProps) {
         </button>
         <button
           className={cn(
-            'py-[0.55rem] px-4 bg-transparent text-[#94A3B8] border-none border-b-2 border-transparent cursor-pointer text-[0.9375rem] font-medium transition-all duration-200 -mb-px hover:text-[#F8FAFC]',
-            tab === 'knowledge_base' && 'text-[#2DD4BF] border-b-[#2DD4BF] font-semibold'
+            'py-2 px-4 bg-transparent text-muted-foreground border-none border-b-2 border-transparent cursor-pointer text-sm font-medium transition-colors duration-150 -mb-px hover:text-foreground',
+            tab === 'knowledge_base' && 'text-primary border-b-primary font-semibold'
           )}
           onClick={() => setTab('knowledge_base')}
         >
@@ -191,61 +191,61 @@ export default function FileManager({ taskId }: FileManagerProps) {
 
       {tab === 'user_upload' && (
         <>
-          <div className="text-[#64748B] text-[0.875rem] mb-4">
+          <div className="text-muted-foreground text-sm mb-4">
             支持 CSV · Excel · JSON · 图片 · PDF · 可多选批量删除
             {projectName ? ' · 文件将保存到项目目录' : ' · 全局文件池'}
           </div>
 
           {files.length > 0 && (
-            <div className="flex items-center gap-4 mb-[0.6rem] py-[0.4rem] px-[0.6rem] bg-black/15 rounded-[8px]">
-              <label className="flex items-center gap-[0.4rem] text-[#94A3B8] text-[0.9375rem] cursor-pointer">
+            <div className="flex items-center gap-4 mb-2.5 py-1.5 px-2.5 bg-muted rounded-md">
+              <label className="flex items-center gap-1.5 text-muted-foreground text-sm cursor-pointer">
                 <input
                   type="checkbox"
                   checked={allSelected}
                   onChange={() => allSelected ? clearSelection() : selectAll(files.map((f) => f.name))}
-                  className="accent-[#3498db] w-4 h-4"
+                  className="accent-primary w-4 h-4"
                 />
                 <span>全选</span>
               </label>
               {selectedFiles.size > 0 && (
-                <button className="py-[0.4rem] px-[0.8rem] bg-[rgba(248,113,113,0.15)] text-[#e74c3c] border border-[rgba(248,113,113,0.15)] rounded-[6px] cursor-pointer text-[0.9375rem] font-semibold transition-all duration-200 hover:bg-[rgba(248,113,113,0.15)]" onClick={handleBatchDelete}>
+                <button className="py-1.5 px-3 bg-error/10 text-error border border-error/20 rounded-md cursor-pointer text-sm font-semibold transition-colors duration-150 hover:bg-error/15" onClick={handleBatchDelete}>
                   🗑️ 删除选中 ({selectedFiles.size})
                 </button>
               )}
             </div>
           )}
 
-          {loading && files.length === 0 && <div className="text-center p-8 text-[#475569] text-[0.9375rem]">加载中...</div>}
+          {loading && files.length === 0 && <div className="text-center p-8 text-muted-foreground text-sm">加载中...</div>}
           {files.length === 0 && !loading && (
-            <div className="text-center p-8 text-[#475569] text-[0.9375rem]">暂无用户上传文件，请上传数据文件</div>
+            <div className="text-center p-8 text-muted-foreground text-sm">暂无用户上传文件，请上传数据文件</div>
           )}
 
           <div className="flex flex-col gap-2">
             {files.map((f) => (
-              <div key={f.name} className="flex items-center gap-[0.8rem] p-[0.7rem] bg-black/20 rounded-[8px] flex-wrap">
+              <div key={f.name} className="flex items-center gap-3 p-3 bg-muted rounded-md flex-wrap">
                 <input
                   type="checkbox"
-                  className="accent-[#3498db] w-4 h-4 cursor-pointer"
+                  className="accent-primary w-4 h-4 cursor-pointer"
                   checked={selectedFiles.has(f.name)}
                   onChange={() => toggleFile(f.name)}
                 />
-                <span className="text-[0.875rem] py-[0.2rem] px-2 bg-[rgba(155,89,182,0.2)] rounded-[4px] text-[#9b59b6] font-semibold min-w-[50px] text-center">{f.type}</span>
+                <span className="text-sm py-0.5 px-2 bg-primary/10 text-primary rounded font-semibold min-w-[50px] text-center">{f.type}</span>
                 <div className="flex-1">
-                  <span className="block text-[0.9375rem] text-[#CBD5E1]">{f.name}</span>
-                  <span className="block text-[0.78rem] text-[#64748B] mt-[0.2rem]">
+                  <span className="block text-sm text-foreground">{f.name}</span>
+                  <span className="block text-xs text-muted-foreground mt-0.5">
                     {typeof f.size === 'number' ? `${(f.size / 1024).toFixed(1)} KB` : '未知大小'}
                     {f.shape ? ` · ${f.shape[0]}行 x ${f.shape[1]}列` : ''}
                   </span>
                 </div>
                 {f.insights && f.insights.length > 0 && (
-                  <div className="flex gap-[0.3rem] flex-wrap">
+                  <div className="flex gap-1.5 flex-wrap">
                     {f.insights.slice(0, 2).map((ins, j) => (
-                      <span key={j} className="text-[0.72rem] py-[0.15rem] px-2 bg-[rgba(74,222,128,0.15)] rounded-[10px] text-[#2ecc71]">{ins}</span>
+                      <span key={j} className="text-xs py-0.5 px-2 bg-success/10 rounded-full text-success">{ins}</span>
                     ))}
                   </div>
                 )}
                 <button
-                  className="py-[0.3rem] px-[0.6rem] bg-[rgba(248,113,113,0.15)] text-[#e74c3c] border border-[rgba(248,113,113,0.15)] rounded-[6px] cursor-pointer text-[0.875rem] transition-all duration-200 hover:bg-[rgba(248,113,113,0.15)] ml-2 shrink-0"
+                  className="py-1 px-2 bg-error/10 text-error border border-error/20 rounded-md cursor-pointer text-sm transition-colors duration-150 hover:bg-error/15 ml-2 shrink-0"
                   onClick={() => handleDelete(f.name, 'user_upload')}
                   title="删除"
                 >
@@ -259,14 +259,14 @@ export default function FileManager({ taskId }: FileManagerProps) {
 
       {tab === 'self_collected' && (
         <>
-          <div className="text-[#64748B] text-[0.875rem] mb-4">
+          <div className="text-muted-foreground text-sm mb-4">
             系统在任务执行期间自动下载的公开数据（Kaggle / UCI / arXiv / 政府开放数据等）。
             带原 URL 和来源关键词，点击文件名跳转。
           </div>
 
-          {loading && files.length === 0 && <div className="text-center p-8 text-[#475569] text-[0.9375rem]">加载中...</div>}
+          {loading && files.length === 0 && <div className="text-center p-8 text-muted-foreground text-sm">加载中...</div>}
           {files.length === 0 && !loading && (
-            <div className="text-center p-8 text-[#475569] text-[0.9375rem]">
+            <div className="text-center p-8 text-muted-foreground text-sm">
               暂无自收集文件。提交任务时启用「自主搜集数据」即可。
             </div>
           )}
@@ -275,30 +275,30 @@ export default function FileManager({ taskId }: FileManagerProps) {
             {files.map((f) => {
               const meta = f.meta;
               return (
-                <div key={f.name} className="flex items-center gap-[0.8rem] p-[0.7rem] bg-black/20 rounded-[8px] flex-wrap">
-                  <span className="inline-block text-[0.72rem] py-[0.15rem] px-2 bg-[rgba(139,92,246,0.15)] text-[#8B5CF6] rounded-[10px] font-medium">🌐 自收集</span>
-                  <span className="text-[0.875rem] py-[0.2rem] px-2 bg-[rgba(155,89,182,0.2)] rounded-[4px] text-[#9b59b6] font-semibold min-w-[50px] text-center">{f.type}</span>
+                <div key={f.name} className="flex items-center gap-3 p-3 bg-muted rounded-md flex-wrap">
+                  <span className="inline-block text-xs py-0.5 px-2 bg-primary/10 text-primary rounded-full font-medium">🌐 自收集</span>
+                  <span className="text-sm py-0.5 px-2 bg-primary/10 text-primary rounded font-semibold min-w-[50px] text-center">{f.type}</span>
                   <div className="flex-1">
-                    <span className="block text-[0.9375rem] text-[#CBD5E1]">{f.name}</span>
-                    <span className="block text-[0.78rem] text-[#64748B] mt-[0.2rem]">
+                    <span className="block text-sm text-foreground">{f.name}</span>
+                    <span className="block text-xs text-muted-foreground mt-0.5">
                       {typeof f.size === 'number' ? `${(f.size / 1024).toFixed(1)} KB` : ''}
                       {meta?.source_query ? ` · 来源: ${meta.source_query}` : ''}
                     </span>
                     {meta?.url && (
-                      <span className="text-[0.72rem] text-[#64748B] mt-[0.2rem] block break-all">
-                        <a href={meta.url} target="_blank" rel="noopener noreferrer" className="text-[#60A5FA] no-underline hover:underline">
+                      <span className="text-xs text-muted-foreground mt-0.5 block break-all">
+                        <a href={meta.url} target="_blank" rel="noopener noreferrer" className="text-primary no-underline hover:underline">
                           {meta.url.length > 60 ? meta.url.slice(0, 60) + '...' : meta.url}
                         </a>
                       </span>
                     )}
                   </div>
                   {meta?.error && (
-                    <span className="text-[#e74c3c] text-[0.78rem]">
+                    <span className="text-error text-xs">
                       ⚠ {meta.error}
                     </span>
                   )}
                   <button
-                    className="py-[0.3rem] px-[0.6rem] bg-[rgba(248,113,113,0.15)] text-[#e74c3c] border border-[rgba(248,113,113,0.15)] rounded-[6px] cursor-pointer text-[0.875rem] transition-all duration-200 hover:bg-[rgba(248,113,113,0.15)] shrink-0"
+                    className="py-1 px-2 bg-error/10 text-error border border-error/20 rounded-md cursor-pointer text-sm transition-colors duration-150 hover:bg-error/15 shrink-0"
                     onClick={() => handleDelete(f.name, 'self_collected')}
                     title="删除"
                   >
@@ -310,7 +310,7 @@ export default function FileManager({ taskId }: FileManagerProps) {
           </div>
 
           {selfIndex.length > 0 && (
-            <div className="mt-4 text-[0.78rem] text-[#64748B]">
+            <div className="mt-4 text-xs text-muted-foreground">
               共索引 {selfIndex.length} 条下载记录（{selfIndex.filter(i => i.error).length} 条失败）
             </div>
           )}
@@ -318,13 +318,13 @@ export default function FileManager({ taskId }: FileManagerProps) {
       )}
 
       {tab === 'knowledge_base' && (
-        <div className="p-6 text-center bg-black/15 rounded-[8px]">
-          <p className="text-[#94A3B8] my-2 text-[0.9375rem]">📚 知识库是独立管理的向量数据库系统。</p>
-          <p className="text-[#94A3B8] my-2 text-[0.9375rem]">支持全局公共 + 项目私有两级 scope，可与多个任务关联。</p>
-          <p className="text-[#64748B] my-2 text-[0.85rem]">
+        <div className="p-6 text-center bg-muted rounded-md">
+          <p className="text-muted-foreground my-2 text-sm">📚 知识库是独立管理的向量数据库系统。</p>
+          <p className="text-muted-foreground my-2 text-sm">支持全局公共 + 项目私有两级 scope，可与多个任务关联。</p>
+          <p className="text-muted-foreground my-2 text-sm">
             创建 KB / 上传文档 / 配置嵌入模型 → 任务提交时勾选注入
           </p>
-          <a href="#" onClick={(e) => { e.preventDefault(); window.dispatchEvent(new CustomEvent('mm:switch-tab', { detail: 'knowledge' })); }} className="inline-block mt-[0.8rem] py-2 px-4 bg-[#2DD4BF] text-[#0F172A] rounded-[8px] no-underline font-semibold text-[0.9375rem] hover:bg-[#5EEAD4]">
+          <a href="#" onClick={(e) => { e.preventDefault(); window.dispatchEvent(new CustomEvent('mm:switch-tab', { detail: 'knowledge' })); }} className="inline-block mt-2 py-2 px-4 bg-primary text-primary-foreground rounded-md no-underline font-semibold text-sm transition-opacity duration-150 hover:opacity-90">
             前往知识库管理 →
           </a>
         </div>

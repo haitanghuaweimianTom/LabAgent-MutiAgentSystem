@@ -559,24 +559,23 @@ export default function KnowledgeBaseManager() {
     setSelectedItemIds(new Set());
   };
 
-  const actionBtnBase = "py-[0.4rem] px-[0.8rem] bg-[#334155] border border-[#334155] rounded-[6px] text-[#94A3B8] text-[0.78rem] cursor-pointer transition-all duration-150 whitespace-nowrap hover:bg-[#334155] hover:text-[#F8FAFC]";
-  const actionBtnPrimary = "bg-[rgba(74,222,128,0.15)] border-[rgba(74,222,128,0.15)] text-[#2ecc71] hover:bg-[rgba(74,222,128,0.15)]";
-  const modalInputBase = "py-[0.6rem] px-[0.6rem] bg-[rgba(0,0,0,0.3)] border border-[#334155] rounded-[8px] text-[#e0e0e0] text-[0.9375rem] outline-none w-full focus:border-[rgba(45,212,191,0.15)]";
+  const actionBtnBase = "py-1.5 px-3 bg-muted border border-border rounded-md text-muted-foreground text-xs cursor-pointer transition-colors duration-150 whitespace-nowrap hover:bg-accent hover:text-foreground";
+  const actionBtnPrimary = "bg-primary text-primary-foreground border-primary hover:bg-primary hover:text-primary-foreground hover:opacity-90";
+  const modalInputBase = "py-2 px-2.5 bg-muted border border-border rounded-md text-foreground text-sm outline-none w-full focus:border-primary";
 
   return (
-    <div className="flex h-full min-h-[500px] bg-[#1E293B] border border-[#334155] rounded-[14px] overflow-hidden">
+    <div className="flex h-full min-h-[500px] bg-card border border-border rounded-xl overflow-hidden">
       {/* Sidebar */}
-      <div className="w-[240px] min-w-[200px] flex flex-col border-r border-[#334155] bg-[rgba(0,0,0,0.2)]">
-        <div className="p-4 border-b border-[#334155] flex items-center justify-between">
-          <span className="text-[0.95rem] text-[#F8FAFC] font-semibold">📚 知识库</span>
-          <button className="py-[0.3rem] px-[0.6rem] bg-[rgba(74,222,128,0.15)] border border-[rgba(74,222,128,0.15)] rounded-[6px] text-[#2ecc71] text-[0.875rem] cursor-pointer font-semibold" onClick={() => setShowCreateBase(true)}>+ 新建</button>
+      <div className="w-[240px] min-w-[200px] flex flex-col border-r border-border bg-muted">
+        <div className="p-4 border-b border-border flex items-center justify-between">
+          <span className="text-base text-foreground font-semibold">📚 知识库</span>
+          <button className="py-1 px-2.5 bg-primary border border-primary rounded-md text-primary-foreground text-sm cursor-pointer font-semibold transition-opacity hover:opacity-90" onClick={() => setShowCreateBase(true)}>+ 新建</button>
         </div>
-        <div className="flex gap-1 py-[0.4rem] px-[0.6rem] border-b border-[#334155]">
+        <div className="flex gap-1 py-1.5 px-2.5 border-b border-border">
           {(['all', 'global', 'project'] as const).map(s => (
             <button
               key={s}
               className={cn(actionBtnBase, scopeFilter === s && actionBtnPrimary)}
-              style={{ fontSize: '0.78rem', padding: '0.3rem 0.6rem' }}
               onClick={() => setScopeFilter(s)}
               type="button"
             >
@@ -588,24 +587,20 @@ export default function KnowledgeBaseManager() {
           {bases.map(base => (
             <div
               key={base.id}
-              className={cn('flex items-center justify-between py-[0.6rem] px-[0.8rem] rounded-[8px] cursor-pointer mb-[0.3rem] transition-[background] duration-150 border border-transparent hover:bg-[#1E293B]', base.id === activeBaseId && 'bg-[rgba(45,212,191,0.15)] border-[rgba(45,212,191,0.15)]')}
+              className={cn('flex items-center justify-between py-2 px-3 rounded-md cursor-pointer mb-1.5 transition-colors duration-150 border border-transparent hover:bg-accent', base.id === activeBaseId && 'bg-primary/10 border-primary/30')}
               onClick={() => { setActiveBaseId(base.id); setShowSearch(false); setSearchResults([]); }}
             >
               <div className="flex flex-col flex-1 min-w-0">
-                <span className={cn('text-[#CBD5E1] text-[0.9375rem] font-medium whitespace-nowrap overflow-hidden text-ellipsis', base.id === activeBaseId && 'text-[#F8FAFC]')}>{base.name}</span>
-                <span style={{
-                  fontSize: '0.7rem',
-                  color: base.scope === 'project' ? '#8B5CF6' : '#2DD4BF',
-                  marginTop: '0.15rem',
-                }}>
+                <span className={cn('text-muted-foreground text-sm font-medium whitespace-nowrap overflow-hidden text-ellipsis', base.id === activeBaseId && 'text-foreground')}>{base.name}</span>
+                <span className="text-xs text-primary mt-0.5">
                   {base.scope === 'project'
                     ? `📁 ${base.project_name || '项目'}`
                     : '🌐 全局'}
                 </span>
               </div>
-              <span className="text-[0.8125rem] text-[#94A3B8] bg-[#334155] px-[0.4rem] py-[0.1rem] rounded-[10px] ml-[0.4rem]">{base.item_count ?? 0}</span>
+              <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded-lg ml-1.5">{base.item_count ?? 0}</span>
               <button
-                className="opacity-0 transition-[opacity] duration-150 ml-[0.3rem] py-[0.1rem] px-[0.3rem] bg-transparent border-none text-[#94A3B8] cursor-pointer text-[0.9375rem] hover:opacity-100"
+                className="opacity-0 transition-opacity duration-150 ml-1 py-0.5 px-1 bg-transparent border-none text-muted-foreground cursor-pointer text-sm hover:opacity-100"
                 onClick={(e) => {
                   e.stopPropagation();
                   const action = window.prompt(`操作: ${base.name}\n1. 重命名\n2. 删除\n请输入数字:`);
@@ -622,7 +617,7 @@ export default function KnowledgeBaseManager() {
             </div>
           ))}
           {bases.length === 0 && (
-            <div style={{ color: '#666', textAlign: 'center', padding: '2rem 0.5rem', fontSize: '0.85rem' }}>
+            <div className="text-muted-foreground text-center py-8 px-2 text-sm">
               暂无知识库，点击「新建」创建
             </div>
           )}
@@ -632,11 +627,11 @@ export default function KnowledgeBaseManager() {
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <div className="py-4 px-6 border-b border-[#334155] flex items-center justify-between gap-4">
-          <span className="text-[1rem] text-[#F8FAFC] font-semibold whitespace-nowrap overflow-hidden text-ellipsis">{activeBase ? activeBase.name : '请选择知识库'}</span>
+        <div className="py-4 px-6 border-b border-border flex items-center justify-between gap-4">
+          <span className="text-base text-foreground font-semibold whitespace-nowrap overflow-hidden text-ellipsis">{activeBase ? activeBase.name : '请选择知识库'}</span>
           <div className="flex gap-2 items-center">
             <input
-              className="py-[0.4rem] px-[0.7rem] bg-[rgba(0,0,0,0.3)] border border-[#334155] rounded-[6px] text-[#e0e0e0] text-[0.9375rem] w-[200px] outline-none focus:border-[rgba(45,212,191,0.15)]"
+              className="py-1.5 px-3 bg-muted border border-border rounded-md text-foreground text-sm w-[200px] outline-none focus:border-primary"
               placeholder="搜索知识库..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
@@ -648,7 +643,7 @@ export default function KnowledgeBaseManager() {
             {activeBaseId && (
               <>
                 <button className={actionBtnBase} onClick={openSettings} title="模型配置">⚙️</button>
-                <label className={cn(actionBtnBase, actionBtnPrimary)} style={{ cursor: uploading ? 'not-allowed' : 'pointer' }}>
+                <label className={cn(actionBtnBase, actionBtnPrimary, uploading && 'cursor-not-allowed')}>
                   {uploading ? '上传中...' : '📤 上传文件'}
                   <input
                     ref={fileInputRef}
@@ -656,7 +651,7 @@ export default function KnowledgeBaseManager() {
                     accept=".md,.txt,.markdown,.rst,.tex,.json,.csv,.pdf,.docx,.doc"
                     multiple
                     onChange={handleFileUpload}
-                    style={{ display: 'none' }}
+                    className="hidden"
                     disabled={uploading}
                   />
                 </label>
@@ -667,13 +662,13 @@ export default function KnowledgeBaseManager() {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-0 px-6 border-b border-[#334155]">
+        <div className="flex gap-0 px-6 border-b border-border">
           {TABS.map(tab => (
             <button
               key={tab.key}
               className={cn(
-                'py-[0.6rem] px-4 bg-transparent border-none border-b-2 border-b-transparent text-[#94A3B8] text-[0.9375rem] cursor-pointer font-medium transition-all duration-150 hover:text-[#CBD5E1]',
-                activeTab === tab.key && 'text-[#3498db] border-b-[#3498db]'
+                'py-2 px-4 bg-transparent border-none border-b-2 border-b-transparent text-muted-foreground text-sm cursor-pointer font-medium transition-colors duration-150 hover:text-foreground',
+                activeTab === tab.key && 'text-primary border-b-primary'
               )}
               onClick={() => { setActiveTab(tab.key); setShowSearch(false); }}
             >
@@ -685,77 +680,77 @@ export default function KnowledgeBaseManager() {
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4 px-6">
           {msg && (
-            <div className={cn('py-2 px-4 rounded-[8px] text-[0.9375rem] text-center mb-4', msg.includes('失败') || msg.startsWith('✗') ? 'text-[#e74c3c] bg-[rgba(248,113,113,0.15)]' : 'text-[#2ecc71] bg-[rgba(74,222,128,0.15)]')}>
+            <div className={cn('py-2 px-4 rounded-md text-sm text-center mb-4', msg.includes('失败') || msg.startsWith('✗') ? 'text-error bg-error/10' : 'text-success bg-success/10')}>
               {msg}
             </div>
           )}
 
           {showSearch && (
-            <div className="mt-[0.8rem]">
+            <div className="mt-3">
               <div className="flex justify-between items-center mb-2">
-                <span style={{ color: '#aaa', fontSize: '0.85rem' }}>搜索结果: {searchResults.length} 条</span>
+                <span className="text-muted-foreground text-sm">搜索结果: {searchResults.length} 条</span>
                 <button className={actionBtnBase} onClick={() => { setShowSearch(false); setSearchResults([]); setSelectedResult(null); }}>关闭</button>
               </div>
               {searchResults.map(r => (
                 <div
                   key={r.id}
                   onClick={() => setSelectedResult(selectedResult?.id === r.id ? null : r)}
-                  className="py-[0.7rem] px-[0.7rem] bg-[rgba(0,0,0,0.15)] border border-[#334155] rounded-[8px] mb-2 cursor-pointer hover:border-[#3498db] transition-colors"
+                  className="py-3 px-3 bg-muted border border-border rounded-md mb-2 cursor-pointer hover:border-primary transition-colors"
                 >
-                  <div className="flex justify-between mb-[0.3rem]">
-                    <span className="text-[#F8FAFC] font-semibold text-[0.88rem]">{r.title}</span>
+                  <div className="flex justify-between mb-1.5">
+                    <span className="text-foreground font-semibold text-sm">{r.title}</span>
                     <div className="flex items-center gap-2">
                       {r.metadata?.domain && (
-                        <span className="text-[0.7rem] px-[0.4rem] py-[0.1rem] rounded bg-[rgba(52,152,219,0.15)] text-[#3498db]">{r.metadata.domain}</span>
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary">{r.metadata.domain}</span>
                       )}
                       {r.metadata?.year && (
-                        <span className="text-[0.7rem] px-[0.4rem] py-[0.1rem] rounded bg-[rgba(46,204,113,0.15)] text-[#2ecc71]">{r.metadata.year}</span>
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-success/10 text-success">{r.metadata.year}</span>
                       )}
-                      <span className="text-[#3498db] text-[0.875rem]">{(r.score * 100).toFixed(1)}%</span>
+                      <span className="text-primary text-sm">{(r.score * 100).toFixed(1)}%</span>
                     </div>
                   </div>
-                  <div className="text-[#94A3B8] text-[0.82rem] whitespace-pre-wrap leading-[1.4]">{r.content.slice(0, 300)}{r.content.length > 300 ? '...' : ''}</div>
-                  {r.source && <div style={{ color: '#666', fontSize: '0.75rem', marginTop: '0.2rem' }}>来源: {r.source}</div>}
+                  <div className="text-muted-foreground text-sm whitespace-pre-wrap leading-[1.4]">{r.content.slice(0, 300)}{r.content.length > 300 ? '...' : ''}</div>
+                  {r.source && <div className="text-muted-foreground text-xs mt-0.5">来源: {r.source}</div>}
                 </div>
               ))}
-              {searchResults.length === 0 && <div className="text-[#64748B] text-center p-[3rem_1rem] text-[0.9375rem]">无匹配结果</div>}
+              {searchResults.length === 0 && <div className="text-muted-foreground text-center py-12 px-4 text-sm">无匹配结果</div>}
             </div>
           )}
 
           {/* 搜索结果详情弹窗 */}
           {selectedResult && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setSelectedResult(null)}>
-              <div className="bg-[#1E293B] border border-[#334155] rounded-[12px] w-[720px] max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
-                <div className="flex justify-between items-center px-5 py-4 border-b border-[#334155]">
+              <div className="bg-card border border-border rounded-xl w-[720px] max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+                <div className="flex justify-between items-center px-5 py-4 border-b border-border">
                   <div className="flex-1 min-w-0">
-                    <div className="text-[#F8FAFC] font-semibold text-[1rem] truncate">{selectedResult.title}</div>
+                    <div className="text-foreground font-semibold text-base truncate">{selectedResult.title}</div>
                     <div className="flex items-center gap-2 mt-1">
                       {selectedResult.metadata?.domain && (
-                        <span className="text-[0.72rem] px-2 py-0.5 rounded bg-[rgba(52,152,219,0.15)] text-[#3498db]">{selectedResult.metadata.domain}</span>
+                        <span className="text-xs px-2 py-0.5 rounded bg-primary/10 text-primary">{selectedResult.metadata.domain}</span>
                       )}
                       {selectedResult.metadata?.year && (
-                        <span className="text-[0.72rem] px-2 py-0.5 rounded bg-[rgba(46,204,113,0.15)] text-[#2ecc71]">{selectedResult.metadata.year}</span>
+                        <span className="text-xs px-2 py-0.5 rounded bg-success/10 text-success">{selectedResult.metadata.year}</span>
                       )}
                       {selectedResult.metadata?.method && (
-                        <span className="text-[0.72rem] px-2 py-0.5 rounded bg-[rgba(155,89,182,0.15)] text-[#9b59b6]">{selectedResult.metadata.method}</span>
+                        <span className="text-xs px-2 py-0.5 rounded bg-primary/10 text-primary">{selectedResult.metadata.method}</span>
                       )}
-                      <span className="text-[0.72rem] text-[#64748B]">相关度: {(selectedResult.score * 100).toFixed(1)}%</span>
+                      <span className="text-xs text-muted-foreground">相关度: {(selectedResult.score * 100).toFixed(1)}%</span>
                     </div>
                   </div>
-                  <button onClick={() => setSelectedResult(null)} className="ml-3 text-[#64748B] hover:text-[#F8FAFC] text-xl leading-none p-1">×</button>
+                  <button onClick={() => setSelectedResult(null)} className="ml-3 text-muted-foreground hover:text-foreground text-xl leading-none p-1">×</button>
                 </div>
                 <div className="flex-1 overflow-y-auto p-5">
-                  <div className="text-[#CBD5E1] text-[0.88rem] whitespace-pre-wrap leading-[1.6] leading-relaxed">
+                  <div className="text-foreground text-sm whitespace-pre-wrap leading-relaxed">
                     {selectedResult.content}
                   </div>
                 </div>
-                <div className="px-5 py-3 border-t border-[#334155] flex justify-between items-center">
-                  <div className="text-[0.75rem] text-[#64748B]">
+                <div className="px-5 py-3 border-t border-border flex justify-between items-center">
+                  <div className="text-xs text-muted-foreground">
                     {selectedResult.metadata?.title && <span>标题: {selectedResult.metadata.title}</span>}
                     {selectedResult.source && <span className="ml-3">来源: {selectedResult.source}</span>}
                   </div>
                   <button
-                    className="px-4 py-1.5 bg-[#2563eb] text-white text-[0.82rem] rounded-md hover:bg-[#1d4ed8] transition-colors"
+                    className="px-4 py-1.5 bg-primary text-primary-foreground text-sm rounded-md transition-opacity hover:opacity-90"
                     onClick={() => {
                       navigator.clipboard.writeText(selectedResult.content);
                       showMsg('内容已复制到剪贴板');
@@ -771,27 +766,25 @@ export default function KnowledgeBaseManager() {
           {!showSearch && (
             <>
               {filteredItems.length > 0 && (
-                <div className="flex items-center gap-2 mb-[0.8rem]">
+                <div className="flex items-center gap-2 mb-3">
                   <input
                     type="checkbox"
                     checked={selectedItemIds.size > 0 && selectedItemIds.size === filteredItems.length}
                     onChange={e => { e.target.checked ? selectAllItems() : clearSelection(); }}
-                    style={{ cursor: 'pointer' }}
+                    className="cursor-pointer"
                   />
-                  <span style={{ color: '#888', fontSize: '0.8rem' }}>全选 ({selectedItemIds.size}/{filteredItems.length})</span>
+                  <span className="text-muted-foreground text-sm">全选 ({selectedItemIds.size}/{filteredItems.length})</span>
                   {selectedItemIds.size > 0 && (
                     <>
                       <button
-                        className={cn(actionBtnBase, actionBtnPrimary)}
+                        className={cn(actionBtnBase, actionBtnPrimary, 'py-1 px-2.5')}
                         onClick={handleDownloadSelectedItems}
-                        style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem' }}
                       >
                         📥 批量下载 ({selectedItemIds.size})
                       </button>
                       <button
-                        className={cn(actionBtnBase, actionBtnPrimary)}
+                        className="py-1 px-2.5 bg-error/10 border border-error/20 rounded-md text-error text-xs cursor-pointer transition-colors duration-150 whitespace-nowrap hover:bg-error/15"
                         onClick={handleDeleteSelectedItems}
-                        style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem' }}
                       >
                         🗑️ 批量删除 ({selectedItemIds.size})
                       </button>
@@ -800,10 +793,10 @@ export default function KnowledgeBaseManager() {
                 </div>
               )}
               {filteredItems.length === 0 && (
-                <div className="text-[#64748B] text-center p-[3rem_1rem] text-[0.9375rem]">
+                <div className="text-muted-foreground text-center py-12 px-4 text-sm">
                   该分类下暂无条目
-                  {activeTab === 'file' && <div style={{ marginTop: '0.5rem', fontSize: '0.8rem' }}>点击「上传文件」添加</div>}
-                  {activeTab === 'note' && <div style={{ marginTop: '0.5rem', fontSize: '0.8rem' }}>点击「添加笔记」添加</div>}
+                  {activeTab === 'file' && <div className="mt-2 text-sm">点击「上传文件」添加</div>}
+                  {activeTab === 'note' && <div className="mt-2 text-sm">点击「添加笔记」添加</div>}
                 </div>
               )}
               {filteredItems.map(item => {
@@ -811,31 +804,31 @@ export default function KnowledgeBaseManager() {
                 const size = isFileMeta(item.content) ? item.content.size : undefined;
                 const isSelected = selectedItemIds.has(item.id);
                 return (
-                  <div key={item.id} className="flex items-center gap-[0.8rem] py-[0.7rem] px-[0.9rem] bg-[rgba(0,0,0,0.15)] border border-[#334155] rounded-[8px] mb-2 transition-[background] duration-150 hover:bg-[rgba(0,0,0,0.25)]" style={{ background: isSelected ? 'rgba(52,152,219,0.08)' : undefined }}>
+                  <div key={item.id} className={cn('flex items-center gap-3 py-3 px-3.5 bg-muted border border-border rounded-md mb-2 transition-colors duration-150 hover:bg-foreground/5', isSelected && 'bg-primary/10')}>
                     <input
                       type="checkbox"
                       checked={isSelected}
                       onChange={() => toggleSelectItem(item.id)}
-                      style={{ cursor: 'pointer', marginRight: '0.4rem' }}
+                      className="cursor-pointer mr-1.5"
                     />
-                    <span className="text-[1.1rem] w-[1.5rem] text-center shrink-0">{typeIcon(item.type)}</span>
+                    <span className="text-lg w-[1.5rem] text-center shrink-0">{typeIcon(item.type)}</span>
                     <div className="flex-1 min-w-0">
-                      <div className="text-[#E2E8F0] text-[0.88rem] font-medium whitespace-nowrap overflow-hidden text-ellipsis">{name}</div>
-                      {item.source && <div className="text-[#64748B] text-[0.875rem] mt-[0.15rem]">{item.source}</div>}
+                      <div className="text-foreground text-sm font-medium whitespace-nowrap overflow-hidden text-ellipsis">{name}</div>
+                      {item.source && <div className="text-muted-foreground text-sm mt-0.5">{item.source}</div>}
                     </div>
-                    <div className="flex items-center gap-[0.6rem] shrink-0">
-                      {size !== undefined && <span className="text-[#94A3B8] text-[0.78rem]">{formatBytes(size)}</span>}
-                      {item.type === 'file' && <span className="text-[0.9375rem]" title={item.processingStatus}>{statusIcon(item.processingStatus)}</span>}
+                    <div className="flex items-center gap-2.5 shrink-0">
+                      {size !== undefined && <span className="text-muted-foreground text-xs">{formatBytes(size)}</span>}
+                      {item.type === 'file' && <span className="text-sm" title={item.processingStatus}>{statusIcon(item.processingStatus)}</span>}
                       {item.type === 'file' && isFileMeta(item.content) && (
-                        <button className="py-[0.2rem] px-[0.4rem] bg-[rgba(45,212,191,0.15)] border border-[rgba(45,212,191,0.15)] rounded-[4px] text-[#3498db] text-[0.875rem] cursor-pointer opacity-0 transition-[opacity] duration-150 hover:opacity-100" onClick={() => handleDownloadItem(item)} title="下载">📥</button>
+                        <button className="py-0.5 px-1.5 bg-primary/10 border border-primary/20 rounded text-primary text-sm cursor-pointer opacity-0 transition-opacity duration-150 hover:opacity-100" onClick={() => handleDownloadItem(item)} title="下载">📥</button>
                       )}
                       {item.type === 'file' && isFileMeta(item.content) && (
-                        <button className="py-[0.2rem] px-[0.4rem] bg-[rgba(155,89,182,0.1)] border border-[rgba(155,89,182,0.2)] rounded-[4px] text-[#9b59b6] text-[0.875rem] cursor-pointer opacity-0 transition-[opacity] duration-150 hover:opacity-100" onClick={() => triggerReplaceFile(item)} title="替换文件">🔄</button>
+                        <button className="py-0.5 px-1.5 bg-primary/10 border border-primary/20 rounded text-primary text-sm cursor-pointer opacity-0 transition-opacity duration-150 hover:opacity-100" onClick={() => triggerReplaceFile(item)} title="替换文件">🔄</button>
                       )}
                       {item.type === 'note' && (
-                        <button className="py-[0.2rem] px-[0.4rem] bg-[rgba(243,156,18,0.1)] border border-[rgba(243,156,18,0.2)] rounded-[4px] text-[#f39c12] text-[0.875rem] cursor-pointer opacity-0 transition-[opacity] duration-150 hover:opacity-100" onClick={() => openEditNote(item)} title="编辑">✏️</button>
+                        <button className="py-0.5 px-1.5 bg-warning/10 border border-warning/20 rounded text-warning text-sm cursor-pointer opacity-0 transition-opacity duration-150 hover:opacity-100" onClick={() => openEditNote(item)} title="编辑">✏️</button>
                       )}
-                      <button className="py-[0.2rem] px-[0.4rem] bg-[rgba(248,113,113,0.15)] border border-[rgba(248,113,113,0.15)] rounded-[4px] text-[#e74c3c] text-[0.875rem] cursor-pointer opacity-0 transition-[opacity] duration-150 hover:opacity-100" onClick={() => handleDeleteItem(item.id)}>删除</button>
+                      <button className="py-0.5 px-1.5 bg-error/10 border border-error/20 rounded text-error text-sm cursor-pointer opacity-0 transition-opacity duration-150 hover:opacity-100" onClick={() => handleDeleteItem(item.id)}>删除</button>
                     </div>
                   </div>
                 );
@@ -847,9 +840,9 @@ export default function KnowledgeBaseManager() {
 
       {/* Create Base Modal */}
       {showCreateBase && (
-        <div className="fixed inset-0 bg-[rgba(0,0,0,0.6)] flex items-center justify-center z-[1000]" onClick={() => setShowCreateBase(false)}>
-          <div className="bg-[#1e1e2e] border border-[#334155] rounded-[14px] p-6 w-[90%] max-w-[500px] flex flex-col gap-4" onClick={e => e.stopPropagation()}>
-            <div className="text-[1rem] text-[#F8FAFC] font-semibold">新建知识库</div>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[1000]" onClick={() => setShowCreateBase(false)}>
+          <div className="bg-card border border-border rounded-xl p-6 w-[90%] max-w-[500px] flex flex-col gap-4" onClick={e => e.stopPropagation()}>
+            <div className="text-base text-foreground font-semibold">新建知识库</div>
             <input
               className={modalInputBase}
               placeholder="知识库名称"
@@ -858,7 +851,7 @@ export default function KnowledgeBaseManager() {
               onKeyDown={e => e.key === 'Enter' && handleCreateBase()}
               autoFocus
             />
-            <div className="flex gap-2 mt-[0.6rem]">
+            <div className="flex gap-2 mt-2.5">
               <button
                 className={cn(actionBtnBase, newBaseScope === 'global' && actionBtnPrimary)}
                 onClick={() => setNewBaseScope('global')}
@@ -876,11 +869,10 @@ export default function KnowledgeBaseManager() {
             </div>
             {newBaseScope === 'project' && (
               <input
-                className={modalInputBase}
+                className={cn(modalInputBase, 'mt-2')}
                 placeholder="项目名（如 work_2026_xxx）"
                 value={newBaseProjectName}
                 onChange={e => setNewBaseProjectName(e.target.value)}
-                style={{ marginTop: '0.5rem' }}
               />
             )}
             <div className="flex justify-end gap-2">
@@ -893,9 +885,9 @@ export default function KnowledgeBaseManager() {
 
       {/* Rename Base Modal */}
       {showRenameBase && (
-        <div className="fixed inset-0 bg-[rgba(0,0,0,0.6)] flex items-center justify-center z-[1000]" onClick={() => setShowRenameBase(false)}>
-          <div className="bg-[#1e1e2e] border border-[#334155] rounded-[14px] p-6 w-[90%] max-w-[500px] flex flex-col gap-4" onClick={e => e.stopPropagation()}>
-            <div className="text-[1rem] text-[#F8FAFC] font-semibold">重命名知识库</div>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[1000]" onClick={() => setShowRenameBase(false)}>
+          <div className="bg-card border border-border rounded-xl p-6 w-[90%] max-w-[500px] flex flex-col gap-4" onClick={e => e.stopPropagation()}>
+            <div className="text-base text-foreground font-semibold">重命名知识库</div>
             <input
               className={modalInputBase}
               placeholder="新名称"
@@ -914,11 +906,11 @@ export default function KnowledgeBaseManager() {
 
       {/* Add / Edit Note Modal */}
       {showAddNote && (
-        <div className="fixed inset-0 bg-[rgba(0,0,0,0.6)] flex items-center justify-center z-[1000]" onClick={closeAddNoteModal}>
-          <div className="bg-[#1e1e2e] border border-[#334155] rounded-[14px] p-6 w-[90%] max-w-[500px] flex flex-col gap-4" onClick={e => e.stopPropagation()}>
-            <div className="text-[1rem] text-[#F8FAFC] font-semibold">{editingItem ? '编辑笔记' : '添加笔记'}</div>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[1000]" onClick={closeAddNoteModal}>
+          <div className="bg-card border border-border rounded-xl p-6 w-[90%] max-w-[500px] flex flex-col gap-4" onClick={e => e.stopPropagation()}>
+            <div className="text-base text-foreground font-semibold">{editingItem ? '编辑笔记' : '添加笔记'}</div>
             <textarea
-              className="py-[0.6rem] px-[0.6rem] bg-[rgba(0,0,0,0.3)] border border-[#334155] rounded-[8px] text-[#e0e0e0] text-[0.9375rem] outline-none w-full min-h-[120px] resize-y font-[inherit] focus:border-[rgba(45,212,191,0.15)]"
+              className={cn(modalInputBase, 'min-h-[120px] resize-y font-[inherit]')}
               placeholder="输入笔记内容..."
               value={noteContent}
               onChange={e => setNoteContent(e.target.value)}
@@ -939,18 +931,18 @@ export default function KnowledgeBaseManager() {
         ref={replaceFileInputRef}
         type="file"
         accept=".md,.txt,.markdown,.rst,.tex,.json,.csv,.pdf,.docx,.doc"
-        style={{ display: 'none' }}
+        className="hidden"
         onChange={handleReplaceFile}
       />
 
       {/* Settings Modal */}
       {showSettings && (
-        <div className="fixed inset-0 bg-[rgba(0,0,0,0.6)] flex items-center justify-center z-[1000]" onClick={() => setShowSettings(false)}>
-          <div className="bg-[#1e1e2e] border border-[#334155] rounded-[14px] p-6 w-[90%] max-w-[500px] flex flex-col gap-4" style={{ maxHeight: '80vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
-            <div className="text-[1rem] text-[#F8FAFC] font-semibold">模型配置</div>
-            <div className="flex flex-col gap-[0.8rem]">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[1000]" onClick={() => setShowSettings(false)}>
+          <div className="bg-card border border-border rounded-xl p-6 w-[90%] max-w-[500px] flex flex-col gap-4 max-h-[80vh] overflow-auto" onClick={e => e.stopPropagation()}>
+            <div className="text-base text-foreground font-semibold">模型配置</div>
+            <div className="flex flex-col gap-3">
               <div>
-                <div style={{ color: '#aaa', fontSize: '0.85rem', marginBottom: '0.3rem' }}>嵌入模型</div>
+                <div className="text-muted-foreground text-sm mb-1.5">嵌入模型</div>
                 <select
                   className={modalInputBase}
                   value={settingsEmbedding}
@@ -964,8 +956,7 @@ export default function KnowledgeBaseManager() {
                 </select>
                 {settingsEmbedding !== 'tfidf' && (
                   <input
-                    className={modalInputBase}
-                    style={{ marginTop: '0.4rem' }}
+                    className={cn(modalInputBase, 'mt-1.5')}
                     placeholder={
                       settingsEmbedding === 'sentence-transformers' ? '模型名称 (默认: all-MiniLM-L6-v2)' :
                       settingsEmbedding === 'openai' ? '模型名称 (默认: text-embedding-3-small)' :
@@ -978,8 +969,7 @@ export default function KnowledgeBaseManager() {
                 )}
                 {(settingsEmbedding === 'openai' || settingsEmbedding === 'voyageai') && (
                   <input
-                    className={modalInputBase}
-                    style={{ marginTop: '0.4rem' }}
+                    className={cn(modalInputBase, 'mt-1.5')}
                     type="password"
                     placeholder="API Key"
                     value={settingsEmbeddingApiKey}
@@ -988,8 +978,7 @@ export default function KnowledgeBaseManager() {
                 )}
                 {(settingsEmbedding === 'openai' || settingsEmbedding === 'ollama') && (
                   <input
-                    className={modalInputBase}
-                    style={{ marginTop: '0.4rem' }}
+                    className={cn(modalInputBase, 'mt-1.5')}
                     placeholder={
                       settingsEmbedding === 'openai' ? 'Base URL (可选，默认: https://api.openai.com/v1)' :
                       'Base URL (可选，默认: http://localhost:11434)'
@@ -1000,7 +989,7 @@ export default function KnowledgeBaseManager() {
                 )}
               </div>
               <div>
-                <div style={{ color: '#aaa', fontSize: '0.85rem', marginBottom: '0.3rem' }}>重排模型</div>
+                <div className="text-muted-foreground text-sm mb-1.5">重排模型</div>
                 <select
                   className={modalInputBase}
                   value={settingsReranker}
@@ -1016,8 +1005,7 @@ export default function KnowledgeBaseManager() {
                 </select>
                 {settingsReranker !== 'none' && settingsReranker !== 'tfidf' && settingsReranker !== 'tei' && (
                   <input
-                    className={modalInputBase}
-                    style={{ marginTop: '0.4rem' }}
+                    className={cn(modalInputBase, 'mt-1.5')}
                     placeholder={
                       settingsReranker === 'cross-encoder' ? '模型名称 (默认: cross-encoder/ms-marco-MiniLM-L-6-v2)' :
                       settingsReranker === 'voyageai' ? '模型名称 (默认: rerank-2)' :
@@ -1030,8 +1018,7 @@ export default function KnowledgeBaseManager() {
                 )}
                 {(settingsReranker === 'voyageai' || settingsReranker === 'bailian' || settingsReranker === 'jina') && (
                   <input
-                    className={modalInputBase}
-                    style={{ marginTop: '0.4rem' }}
+                    className={cn(modalInputBase, 'mt-1.5')}
                     type="password"
                     placeholder="API Key"
                     value={settingsRerankerApiKey}
@@ -1040,8 +1027,7 @@ export default function KnowledgeBaseManager() {
                 )}
                 {settingsReranker === 'tei' && (
                   <input
-                    className={modalInputBase}
-                    style={{ marginTop: '0.4rem' }}
+                    className={cn(modalInputBase, 'mt-1.5')}
                     placeholder="Base URL (可选，默认: http://localhost:8080)"
                     value={settingsRerankerBaseUrl}
                     onChange={e => setSettingsRerankerBaseUrl(e.target.value)}
