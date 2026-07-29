@@ -328,8 +328,13 @@ echo
 cleanup() {
     echo
     print_info "正在停止服务..."
-    [ -n "${BACKEND_PID:-}" ] && kill "$BACKEND_PID" 2>/dev/null && wait "$BACKEND_PID" 2>/dev/null
-    [ -n "${FRONTEND_PID:-}" ] && kill "$FRONTEND_PID" 2>/dev/null && wait "$FRONTEND_PID" 2>/dev/null
+    # 用进程组负 PID 杀整个子进程树（uvicorn/next 可能 spawn worker 子进程），
+    # 避免 kill 主进程后子进程成孤儿继续占用端口。
+    for pid in "${BACKEND_PID:-}" "${FRONTEND_PID:-}"; do
+        [ -n "$pid" ] && kill -- "-$pid" 2>/dev/null
+        [ -n "$pid" ] && kill "$pid" 2>/dev/null
+        wait "$pid" 2>/dev/null
+    done
     print_ok "服务已停止"
     exit 0
 }
@@ -353,9 +358,14 @@ for i in $(seq 1 30); do
 done
 
 # 启动前端
+# ⚠️ 不用 `npm run start`（它会再 fork 一层 node wrapper），因为：
+#   wait $FRONTEND_PID 等的是 npm 父进程；若 npm 父进程在 next-server 子进程之前
+#   返回（信号/自身退出），trap cleanup EXIT 会立即触发把刚 Ready 的 next-server
+#   杀掉 → 前端「✓ Ready 后立刻 Killed」打不开（已实测 npx next start 不复现）。
+#   直接用 npx next start，FRONTEND_PID 即 next 主进程，wait 稳定。
 print_info "启动前端（端口 $FRONTEND_PORT）..."
 cd frontend
-npm run start -- --port $FRONTEND_PORT > /tmp/frontend.log 2>&1 &
+npx next start --port $FRONTEND_PORT > /tmp/frontend.log 2>&1 &
 FRONTEND_PID=$!
 cd "$PROJECT_ROOT"
 
