@@ -223,9 +223,18 @@ export default function EnvironmentManager() {
         </div>
       )}
 
-      <section className="bg-card border border-border rounded-xl p-7" style={{ marginBottom: 24 }}>
-        <h3 className="text-foreground" style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>创建新环境</h3>
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+      <section
+        className="bg-card"
+        style={{
+          marginBottom: 24,
+          padding: '24px 32px',
+          borderRadius: 12,
+          border: '1px solid #eef0f3',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+        }}
+      >
+        <h3 className="text-foreground" style={{ fontSize: 20, fontWeight: 600, marginBottom: 18, lineHeight: 1.4 }}>创建新环境</h3>
+        <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center' }}>
           <select
             value={newBackend}
             onChange={(e) => setNewBackend(e.target.value)}
@@ -254,7 +263,7 @@ export default function EnvironmentManager() {
             onClick={createEnv}
             disabled={creating || !newName.trim()}
             className="bg-primary text-primary-foreground hover:opacity-90"
-            style={primaryBtnStyle}
+            style={{ ...primaryBtnStyle, marginLeft: 16 }}
           >
             {creating ? '创建中...' : '创建'}
           </button>
