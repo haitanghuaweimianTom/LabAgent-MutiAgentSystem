@@ -365,7 +365,7 @@ export default function ProviderSettings() {
   const btnPurple = `${btnBase} py-2.5 px-5 text-sm bg-primary/10 text-primary border border-primary/20 hover:bg-primary/15`;
   const btnGhost = `${btnBase} py-2.5 px-5 text-sm bg-muted text-muted-foreground border border-border hover:bg-muted/70`;
   // 小尺寸按钮（列表内操作：测试/删除/设为默认/自动获取）
-  const btnSm = (extra: string) => `${btnBase} py-1.5 px-3 text-xs rounded-md ${extra}`;
+  const btnSm = (extra: string) => `${btnBase} py-2 px-4 text-sm rounded-md ${extra}`;
   const btnSmInfo = btnSm('bg-primary/10 text-primary border border-primary/20 hover:bg-primary/15');
   const btnSmSuccess = btnSm('bg-success/10 text-success border border-success/20 hover:bg-success/15');
   const btnSmDanger = btnSm('bg-error/10 text-error border border-error/20 hover:bg-error/15');
