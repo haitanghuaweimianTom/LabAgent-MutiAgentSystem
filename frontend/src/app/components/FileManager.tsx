@@ -162,7 +162,7 @@ export default function FileManager({ taskId }: FileManagerProps) {
       <div className="flex gap-3 mb-4 border-b border-border pb-0">
         <button
           className={cn(
-            'py-2 px-4 bg-transparent text-muted-foreground border-none border-b-2 border-transparent cursor-pointer text-sm font-medium transition-colors duration-150 -mb-px hover:text-foreground',
+            'py-2.5 px-5 bg-transparent text-muted-foreground border-none border-b-2 border-transparent cursor-pointer text-sm font-medium transition-colors duration-150 -mb-px hover:text-foreground',
             tab === 'user_upload' && 'text-primary border-b-primary font-semibold'
           )}
           onClick={() => setTab('user_upload')}
@@ -171,7 +171,7 @@ export default function FileManager({ taskId }: FileManagerProps) {
         </button>
         <button
           className={cn(
-            'py-2 px-4 bg-transparent text-muted-foreground border-none border-b-2 border-transparent cursor-pointer text-sm font-medium transition-colors duration-150 -mb-px hover:text-foreground',
+            'py-2.5 px-5 bg-transparent text-muted-foreground border-none border-b-2 border-transparent cursor-pointer text-sm font-medium transition-colors duration-150 -mb-px hover:text-foreground',
             tab === 'self_collected' && 'text-primary border-b-primary font-semibold'
           )}
           onClick={() => setTab('self_collected')}
@@ -180,7 +180,7 @@ export default function FileManager({ taskId }: FileManagerProps) {
         </button>
         <button
           className={cn(
-            'py-2 px-4 bg-transparent text-muted-foreground border-none border-b-2 border-transparent cursor-pointer text-sm font-medium transition-colors duration-150 -mb-px hover:text-foreground',
+            'py-2.5 px-5 bg-transparent text-muted-foreground border-none border-b-2 border-transparent cursor-pointer text-sm font-medium transition-colors duration-150 -mb-px hover:text-foreground',
             tab === 'knowledge_base' && 'text-primary border-b-primary font-semibold'
           )}
           onClick={() => setTab('knowledge_base')}
@@ -324,7 +324,7 @@ export default function FileManager({ taskId }: FileManagerProps) {
           <p className="text-muted-foreground my-2 text-sm">
             创建 KB / 上传文档 / 配置嵌入模型 → 任务提交时勾选注入
           </p>
-          <a href="#" onClick={(e) => { e.preventDefault(); window.dispatchEvent(new CustomEvent('mm:switch-tab', { detail: 'knowledge' })); }} className="inline-block mt-2 py-2 px-4 bg-primary text-primary-foreground rounded-md no-underline font-semibold text-sm transition-opacity duration-150 hover:opacity-90">
+          <a href="#" onClick={(e) => { e.preventDefault(); window.dispatchEvent(new CustomEvent('mm:switch-tab', { detail: 'knowledge' })); }} className="inline-block mt-2 py-2.5 px-5 bg-primary text-primary-foreground rounded-md no-underline font-semibold text-sm transition-opacity duration-150 hover:opacity-90">
             前往知识库管理 →
           </a>
         </div>

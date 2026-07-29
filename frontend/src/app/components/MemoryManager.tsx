@@ -164,13 +164,13 @@ export default function MemoryManager() {
       )}
 
       <div className="flex gap-3 mb-4 border-b border-border pb-2">
-        <button className={cn('py-2 px-4 bg-transparent border border-border rounded-md text-muted-foreground cursor-pointer text-sm transition-colors', tab === 'lessons' && 'bg-warning/10 border-warning/40 text-warning')} onClick={() => setTab('lessons')}>
+        <button className={cn('py-2.5 px-5 bg-transparent border border-border rounded-md text-muted-foreground cursor-pointer text-sm transition-colors', tab === 'lessons' && 'bg-warning/10 border-warning/40 text-warning')} onClick={() => setTab('lessons')}>
           📚 经验教训
         </button>
-        <button className={cn('py-2 px-4 bg-transparent border border-border rounded-md text-muted-foreground cursor-pointer text-sm transition-colors', tab === 'task' && 'bg-warning/10 border-warning/40 text-warning')} onClick={() => setTab('task')}>
+        <button className={cn('py-2.5 px-5 bg-transparent border border-border rounded-md text-muted-foreground cursor-pointer text-sm transition-colors', tab === 'task' && 'bg-warning/10 border-warning/40 text-warning')} onClick={() => setTab('task')}>
           📋 任务记忆
         </button>
-        <button className={cn('py-2 px-4 bg-transparent border border-border rounded-md text-muted-foreground cursor-pointer text-sm transition-colors', tab === 'stats' && 'bg-warning/10 border-warning/40 text-warning')} onClick={() => setTab('stats')}>
+        <button className={cn('py-2.5 px-5 bg-transparent border border-border rounded-md text-muted-foreground cursor-pointer text-sm transition-colors', tab === 'stats' && 'bg-warning/10 border-warning/40 text-warning')} onClick={() => setTab('stats')}>
           📊 统计
         </button>
       </div>
@@ -219,7 +219,7 @@ export default function MemoryManager() {
               onChange={(e) => setNewLesson({ ...newLesson, content: e.target.value })}
             />
             <div className="flex gap-3 mt-4">
-              <button className="py-2 px-4 bg-primary text-primary-foreground border-none rounded-md cursor-pointer text-sm font-semibold transition-opacity hover:opacity-90" onClick={addLesson}>添加经验</button>
+              <button className="py-2.5 px-5 bg-primary text-primary-foreground border-none rounded-md cursor-pointer text-sm font-semibold transition-opacity hover:opacity-90" onClick={addLesson}>添加经验</button>
               <button className="py-1.5 px-4 bg-error/10 text-error border border-error/20 rounded-md cursor-pointer text-sm transition-colors hover:bg-error/15" onClick={clearLessons}>清空全部</button>
             </div>
           </div>
@@ -237,7 +237,7 @@ export default function MemoryManager() {
               value={problemTypeFilter}
               onChange={(e) => setProblemTypeFilter(e.target.value)}
             />
-            <button className="py-2 px-4 bg-primary/10 text-primary border border-primary/20 rounded-md cursor-pointer text-sm transition-colors hover:bg-primary/15" onClick={loadLessons}>刷新</button>
+            <button className="py-2.5 px-5 bg-primary/10 text-primary border border-primary/20 rounded-md cursor-pointer text-sm transition-colors hover:bg-primary/15" onClick={loadLessons}>刷新</button>
           </div>
 
           {loading && lessons.length === 0 ? (
@@ -281,7 +281,7 @@ export default function MemoryManager() {
               value={taskId}
               onChange={(e) => setTaskId(e.target.value)}
             />
-            <button className="py-2 px-4 bg-primary/10 text-primary border border-primary/20 rounded-md cursor-pointer text-sm transition-colors hover:bg-primary/15" onClick={() => loadTaskMemory(taskId)}>加载</button>
+            <button className="py-2.5 px-5 bg-primary/10 text-primary border border-primary/20 rounded-md cursor-pointer text-sm transition-colors hover:bg-primary/15" onClick={() => loadTaskMemory(taskId)}>加载</button>
           </div>
           {loading && !taskMemory ? (
             <div className="text-muted-foreground text-center p-8">加载中...</div>

@@ -311,7 +311,7 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
                 disabled={sendingMsg}
               />
               <button
-                className="py-2 px-4 bg-primary text-primary-foreground border-none rounded-md text-sm font-semibold cursor-pointer transition-opacity duration-150 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90"
+                className="py-2.5 px-5 bg-primary text-primary-foreground border-none rounded-md text-sm font-semibold cursor-pointer transition-opacity duration-150 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90"
                 onClick={handleSendMessage}
                 disabled={!userInput.trim() || sendingMsg}
               >
@@ -575,7 +575,7 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
                     />
                   </div>
                   <button
-                    className="py-2 px-4 bg-primary text-primary-foreground border-none rounded-md cursor-pointer text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90"
+                    className="py-2.5 px-5 bg-primary text-primary-foreground border-none rounded-md cursor-pointer text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90"
                     onClick={handleSubmitFeedback}
                     disabled={submittingFeedback}
                   >

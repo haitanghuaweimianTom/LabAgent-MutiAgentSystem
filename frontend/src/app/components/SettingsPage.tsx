@@ -221,7 +221,7 @@ export default function SettingsPage() {
             </div>
 
             <div className="flex gap-3 mt-4">
-              <button className="bg-primary text-primary-foreground border-none py-2 px-4 rounded-md cursor-pointer font-semibold hover:opacity-90" onClick={handleSaveClaudeSettings}>💾 保存 Claude Code 配置</button>
+              <button className="bg-primary text-primary-foreground border-none py-2.5 px-5 rounded-md cursor-pointer font-semibold hover:opacity-90" onClick={handleSaveClaudeSettings}>💾 保存 Claude Code 配置</button>
             </div>
           </div>
 

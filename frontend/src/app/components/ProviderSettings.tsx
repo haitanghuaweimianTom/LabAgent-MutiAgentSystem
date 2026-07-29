@@ -357,13 +357,13 @@ export default function ProviderSettings() {
 
   // 语义色按钮样式（Geist 单色）
   const btnBase = 'inline-flex items-center justify-center gap-3 rounded-lg cursor-pointer font-semibold transition-opacity duration-150 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed';
-  const btnPrimary = `${btnBase} py-2 px-4 text-sm bg-primary text-primary-foreground`;
-  const btnSuccess = `${btnBase} py-2 px-4 text-sm bg-success/10 text-success border border-success/20 hover:bg-success/15`;
-  const btnInfo = `${btnBase} py-2 px-4 text-sm bg-primary/10 text-primary border border-primary/20 hover:bg-primary/15`;
-  const btnDanger = `${btnBase} py-2 px-4 text-sm bg-error/10 text-error border border-error/20 hover:bg-error/15`;
-  const btnWarning = `${btnBase} py-2 px-4 text-sm bg-warning/10 text-warning border border-warning/20 hover:bg-warning/15`;
-  const btnPurple = `${btnBase} py-2 px-4 text-sm bg-primary/10 text-primary border border-primary/20 hover:bg-primary/15`;
-  const btnGhost = `${btnBase} py-2 px-4 text-sm bg-muted text-muted-foreground border border-border hover:bg-muted/70`;
+  const btnPrimary = `${btnBase} py-2.5 px-5 text-sm bg-primary text-primary-foreground`;
+  const btnSuccess = `${btnBase} py-2.5 px-5 text-sm bg-success/10 text-success border border-success/20 hover:bg-success/15`;
+  const btnInfo = `${btnBase} py-2.5 px-5 text-sm bg-primary/10 text-primary border border-primary/20 hover:bg-primary/15`;
+  const btnDanger = `${btnBase} py-2.5 px-5 text-sm bg-error/10 text-error border border-error/20 hover:bg-error/15`;
+  const btnWarning = `${btnBase} py-2.5 px-5 text-sm bg-warning/10 text-warning border border-warning/20 hover:bg-warning/15`;
+  const btnPurple = `${btnBase} py-2.5 px-5 text-sm bg-primary/10 text-primary border border-primary/20 hover:bg-primary/15`;
+  const btnGhost = `${btnBase} py-2.5 px-5 text-sm bg-muted text-muted-foreground border border-border hover:bg-muted/70`;
   // 小尺寸按钮（列表内操作：测试/删除/设为默认/自动获取）
   const btnSm = (extra: string) => `${btnBase} py-1.5 px-3 text-xs rounded-md ${extra}`;
   const btnSmInfo = btnSm('bg-primary/10 text-primary border border-primary/20 hover:bg-primary/15');

@@ -177,17 +177,17 @@ export default function PdfManager() {
             id="pdf-upload"
             onChange={handleFileChange}
           />
-          <label htmlFor="pdf-upload" className="py-2 px-3 bg-primary/10 text-primary border border-primary/20 rounded-lg text-sm cursor-pointer transition-colors duration-200 hover:bg-primary/20">
+          <label htmlFor="pdf-upload" className="py-2.5 px-4 bg-primary/10 text-primary border border-primary/20 rounded-lg text-sm cursor-pointer transition-colors duration-200 hover:bg-primary/20">
             {loading ? '处理中...' : '📤 选择 PDF 上传'}
           </label>
           <input
             type="text"
-            className="flex-1 min-w-[200px] py-2 px-3 bg-muted border border-border rounded-lg text-foreground text-sm focus:outline-none focus:border-primary/30"
+            className="flex-1 min-w-[200px] py-2.5 px-4 bg-muted border border-border rounded-lg text-foreground text-sm focus:outline-none focus:border-primary/30"
             placeholder="输入 PDF 链接或 arXiv 摘要页 URL"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
           />
-          <button className="py-2 px-3.5 bg-primary text-primary-foreground border-none rounded-lg text-sm cursor-pointer transition-opacity duration-200 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleDownload} disabled={loading || !url.trim()}>
+          <button className="py-3 px-5 bg-primary text-primary-foreground border-none rounded-lg text-sm cursor-pointer transition-opacity duration-200 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleDownload} disabled={loading || !url.trim()}>
             ⬇️ 下载
           </button>
         </div>
@@ -196,7 +196,7 @@ export default function PdfManager() {
       <div className="flex flex-col gap-2.5">
         <div className="text-sm text-muted-foreground font-semibold">解析策略</div>
         <div className="flex gap-3 items-center flex-wrap">
-          <select className="py-2 px-2.5 bg-muted border border-border rounded-md text-foreground text-sm" value={strategy} onChange={(e) => setStrategy(e.target.value)}>
+          <select className="py-2.5 px-3.5 bg-muted border border-border rounded-md text-foreground text-sm" value={strategy} onChange={(e) => setStrategy(e.target.value)}>
             <option value="auto">自动选择</option>
             <option value="pymupdf4llm">PyMuPDF4LLM（本地保底）</option>
             <option value="vision">多模态视觉（限速）</option>
@@ -211,7 +211,7 @@ export default function PdfManager() {
           </label>
           {useVision && (
             <select
-              className="py-2 px-2.5 bg-muted border border-border rounded-md text-foreground text-sm"
+              className="py-2.5 px-3.5 bg-muted border border-border rounded-md text-foreground text-sm"
               value={visionProvider}
               onChange={(e) => setVisionProvider(e.target.value)}
             >
@@ -244,13 +244,13 @@ export default function PdfManager() {
                 </div>
                 <div className="flex gap-3 items-center">
                   <button
-                    className="py-2 px-3.5 bg-primary text-primary-foreground border-none rounded-lg text-sm cursor-pointer transition-opacity duration-200 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="py-3 px-5 bg-primary text-primary-foreground border-none rounded-lg text-sm cursor-pointer transition-opacity duration-200 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                     onClick={() => handleParse(f.file_id)}
                     disabled={parsing === f.file_id}
                   >
                     {parsing === f.file_id ? '解析中...' : '🔍 解析'}
                   </button>
-                  <button className="py-1.5 px-3 bg-error/10 text-error border border-error/20 rounded-md text-sm cursor-pointer hover:bg-error/20" onClick={() => handleDelete(f.file_id)}>
+                  <button className="py-2 px-3.5 bg-error/10 text-error border border-error/20 rounded-md text-sm cursor-pointer hover:bg-error/20" onClick={() => handleDelete(f.file_id)}>
                     删除
                   </button>
                 </div>
