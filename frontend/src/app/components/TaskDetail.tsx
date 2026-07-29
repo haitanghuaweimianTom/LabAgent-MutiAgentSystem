@@ -256,14 +256,21 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
       </div>
 
       {taskState.state && taskState.state.name !== 'completed' && taskState.state.name !== 'failed' && (
-        <div className="relative w-full h-[28px] bg-muted rounded-md overflow-hidden border border-border">
-          <div
-            className="h-full bg-gradient-to-r bg-primary transition-[width] duration-500 rounded-md"
-            style={{ width: `${taskState.state.progressPercentage}%` }}
-          />
-          <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-sm text-foreground font-medium shadow-[0_1px_2px_rgba(0,0,0,0.5)] whitespace-nowrap">
-            {taskState.state.progressPercentage}% · {taskState.state.currentStep || '运行中...'}
-          </span>
+        <div className="flex flex-col gap-1.5">
+          <div className="flex justify-between items-center text-xs">
+            <span className="text-muted-foreground truncate" title={taskState.state.currentStep || ''}>
+              {taskState.state.currentStep || '运行中...'}
+            </span>
+            <span className="text-foreground font-semibold tabular-nums shrink-0 ml-2">
+              {taskState.state.progressPercentage}%
+            </span>
+          </div>
+          <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+            <div
+              className="h-full bg-primary rounded-full transition-[width] duration-500 ease-out"
+              style={{ width: `${taskState.state.progressPercentage}%` }}
+            />
+          </div>
         </div>
       )}
 
@@ -304,7 +311,7 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
                 disabled={sendingMsg}
               />
               <button
-                className="py-2 px-4 bg-primary text-foreground border-none rounded-md text-sm font-semibold cursor-pointer transition-all duration-200 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+                className="py-2 px-4 bg-primary text-primary-foreground border-none rounded-md text-sm font-semibold cursor-pointer transition-opacity duration-150 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90"
                 onClick={handleSendMessage}
                 disabled={!userInput.trim() || sendingMsg}
               >
@@ -568,7 +575,7 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
                     />
                   </div>
                   <button
-                    className="py-2 px-4 bg-primary border-none rounded-md text-foreground cursor-pointer text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="py-2 px-4 bg-primary text-primary-foreground border-none rounded-md cursor-pointer text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90"
                     onClick={handleSubmitFeedback}
                     disabled={submittingFeedback}
                   >
