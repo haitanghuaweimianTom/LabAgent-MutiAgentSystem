@@ -229,12 +229,14 @@ if [ -n "$PIDS" ]; then
 fi
 
 # 检测并停止前端
-NEXT_PIDS=$(pgrep -f "next-server" || pgrep -f "next start" || true)
+# ⚠️ 只杀占本服务 FRONTEND_PORT(3001) 的 next 进程，不能 pgrep -f "next-server"——
+# 那会误杀同机上别的项目(如 DAOS 的 3000 前端)的 next-server。与后端 fuser 按端口清对称。
+NEXT_PIDS=$(ss -ltnp 2>/dev/null | grep -F ":${FRONTEND_PORT} " | grep -oP 'pid=\K[0-9]+' | sort -u || true)
 if [ -n "$NEXT_PIDS" ]; then
     print_info "停止旧前端: $NEXT_PIDS"
     kill -TERM $NEXT_PIDS 2>/dev/null || true
     sleep 1
-    REMAINING=$(pgrep -f "next-server" || pgrep -f "next start" || true)
+    REMAINING=$(ss -ltnp 2>/dev/null | grep -F ":${FRONTEND_PORT} " | grep -oP 'pid=\K[0-9]+' | sort -u || true)
     [ -n "$REMAINING" ] && kill -KILL $REMAINING 2>/dev/null || true
     print_ok "旧前端已停止"
 fi
