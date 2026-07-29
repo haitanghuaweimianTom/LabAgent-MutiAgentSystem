@@ -151,14 +151,14 @@ export function TopBar({ title, subtitle, className }: TopBarProps) {
               )}
             </button>
             {showNotif && (
-              <div className="absolute right-0 top-full mt-2 w-[360px] bg-card border border-border rounded-xl shadow-2xl z-50" onClick={e => e.stopPropagation()}>
+              <div className="absolute right-0 top-full mt-2 w-[360px] bg-card border border-border rounded-xl shadow-md z-50" onClick={e => e.stopPropagation()}>
                 <div className="flex justify-between items-center px-4 py-3 border-b border-border">
-                  <span className="text-foreground font-semibold text-[0.875rem]">通知</span>
-                  <button onClick={() => setShowNotif(false)} className="text-muted-foreground hover:text-foreground text-[0.75rem]">关闭</button>
+                  <span className="text-foreground font-semibold text-sm">通知</span>
+                  <button onClick={() => setShowNotif(false)} className="text-muted-foreground hover:text-foreground text-xs">关闭</button>
                 </div>
                 <div className="max-h-[320px] overflow-y-auto">
                   {notifTasks.length === 0 ? (
-                    <div className="py-8 text-center text-muted-foreground text-[0.875rem]">暂无通知</div>
+                    <div className="py-8 text-center text-muted-foreground text-sm">暂无通知</div>
                   ) : notifTasks.map(t => (
                     <button
                       key={t.task_id}
@@ -169,8 +169,8 @@ export function TopBar({ title, subtitle, className }: TopBarProps) {
                       {t.status === 'failed' && <XCircle className="w-4 h-4 text-error shrink-0" />}
                       {t.status === 'cancelled' && <AlertTriangle className="w-4 h-4 text-warning shrink-0" />}
                       <div className="flex-1 min-w-0">
-                        <div className="text-foreground text-[0.82rem] truncate">{t.problem_text || t.task_id}</div>
-                        <div className="text-muted-foreground text-[0.72rem]">{statusLabel(t.status)} · {t.task_id.slice(0, 8)}</div>
+                        <div className="text-foreground text-sm truncate">{t.problem_text || t.task_id}</div>
+                        <div className="text-muted-foreground text-xs">{statusLabel(t.status)} · {t.task_id.slice(0, 8)}</div>
                       </div>
                     </button>
                   ))}
@@ -192,7 +192,7 @@ export function TopBar({ title, subtitle, className }: TopBarProps) {
       {/* 全局搜索弹窗 */}
       {showSearch && (
         <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] bg-black/50" onClick={() => setShowSearch(false)}>
-          <div className="bg-card border border-border rounded-xl w-[520px] shadow-2xl" onClick={e => e.stopPropagation()}>
+          <div className="bg-card border border-border rounded-xl w-[520px] shadow-md" onClick={e => e.stopPropagation()}>
             <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
               <Search className="w-4 h-4 text-muted-foreground shrink-0" />
               <input
@@ -200,17 +200,17 @@ export function TopBar({ title, subtitle, className }: TopBarProps) {
                 value={query}
                 onChange={e => setQuery(e.target.value)}
                 placeholder="搜索任务... (Ctrl+K)"
-                className="flex-1 bg-transparent text-foreground text-[0.9375rem] outline-none placeholder:text-muted-foreground"
+                className="flex-1 bg-transparent text-foreground text-sm outline-none placeholder:text-muted-foreground"
               />
               {searching && <Loader2 className="w-4 h-4 text-muted-foreground animate-spin" />}
-              <kbd className="text-[0.7rem] text-muted-foreground bg-muted px-1.5 py-0.5 rounded border border-border">ESC</kbd>
+              <kbd className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded border border-border">ESC</kbd>
             </div>
             <div className="max-h-[300px] overflow-y-auto">
               {query && results.length === 0 && !searching && (
-                <div className="py-8 text-center text-muted-foreground text-[0.875rem]">无匹配结果</div>
+                <div className="py-8 text-center text-muted-foreground text-sm">无匹配结果</div>
               )}
               {!query && (
-                <div className="py-8 text-center text-muted-foreground text-[0.875rem]">输入关键词搜索任务</div>
+                <div className="py-8 text-center text-muted-foreground text-sm">输入关键词搜索任务</div>
               )}
               {results.map(t => (
                 <button
@@ -220,8 +220,8 @@ export function TopBar({ title, subtitle, className }: TopBarProps) {
                 >
                   <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <div className="text-foreground text-[0.875rem] truncate">{t.problem_text || t.task_id}</div>
-                    <div className="text-muted-foreground text-[0.75rem]">{statusLabel(t.status)} · {t.task_id.slice(0, 8)}</div>
+                    <div className="text-foreground text-sm truncate">{t.problem_text || t.task_id}</div>
+                    <div className="text-muted-foreground text-xs">{statusLabel(t.status)} · {t.task_id.slice(0, 8)}</div>
                   </div>
                 </button>
               ))}

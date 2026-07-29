@@ -8,9 +8,9 @@ import DetailPanel from './components/DetailPanel'
 import { TAB_META } from '@/lib/constants'
 
 const pageVariants = {
-  initial: { opacity: 0, y: 8 },
-  animate: { opacity: 1, y: 0 },
-  exit: { opacity: 0, y: -8 },
+  initial: { opacity: 0 },
+  animate: { opacity: 1 },
+  exit: { opacity: 0 },
 }
 
 const ROUTE_META: Record<string, { title: string; subtitle: string }> = {

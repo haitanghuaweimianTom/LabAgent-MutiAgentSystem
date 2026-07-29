@@ -143,11 +143,11 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="bg-[#1E293B] border border-[#334155] rounded-[14px] p-[1.2rem]">
-        <div className="text-[1rem] text-[#F8FAFC] font-semibold mb-[0.8rem]">📝 研究问题输入</div>
+      <div className="bg-card border border-border rounded-xl p-5">
+        <div className="text-base text-foreground font-semibold mb-3">📝 研究问题输入</div>
         <div className="flex gap-2 items-center mb-2">
           <select
-            className="flex-1 p-2 bg-black/30 border border-white/15 rounded-[8px] text-[#e0e0e0] text-[0.9rem]"
+            className="flex-1 p-2 bg-muted border border-border rounded-md text-foreground text-sm"
             value={activeProjectId || ''}
             onChange={e => {
               const id = e.target.value;
@@ -171,53 +171,53 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
                 await deleteProject(activeProjectId);
                 setProjectName('');
               }}
-              className="py-[0.4rem] px-[0.6rem] bg-[rgba(231,76,60,0.15)] border border-[rgba(231,76,60,0.3)] rounded-[6px] text-[#e74c3c] cursor-pointer text-[0.8rem]"
+              className="py-1.5 px-2.5 bg-error/10 border border-error/20 rounded-md text-error cursor-pointer text-sm transition-colors hover:bg-error/15"
             >
               🗑️ 删除
             </button>
           )}
           {showNewProject && (
-            <div className="flex gap-[0.3rem] items-center">
+            <div className="flex gap-1.5 items-center">
               <input
-                className="p-2 bg-black/30 border border-white/15 rounded-[8px] text-[#e0e0e0] text-[0.9rem] w-[140px]"
+                className="p-2 bg-muted border border-border rounded-md text-foreground text-sm w-36"
                 placeholder="项目名称"
                 value={newProjectName}
                 onChange={e => setNewProjectName(e.target.value)}
                 maxLength={60}
               />
-              <button onClick={handleCreateProject} className="py-[0.4rem] px-[0.6rem] bg-gradient-to-br from-[#2ecc71] to-[#27ae60] text-white border-none rounded-[6px] cursor-pointer text-[0.8rem]">创建</button>
-              <button onClick={() => setShowNewProject(false)} className="py-[0.4rem] px-[0.6rem] bg-[rgba(231,76,60,0.15)] border border-[rgba(231,76,60,0.3)] rounded-[6px] text-[#e74c3c] cursor-pointer text-[0.8rem]">取消</button>
+              <button onClick={handleCreateProject} className="py-1.5 px-2.5 bg-primary text-primary-foreground border-none rounded-md cursor-pointer text-sm transition-opacity hover:opacity-90">创建</button>
+              <button onClick={() => setShowNewProject(false)} className="py-1.5 px-2.5 bg-error/10 border border-error/20 rounded-md text-error cursor-pointer text-sm transition-colors hover:bg-error/15">取消</button>
             </div>
           )}
         </div>
         <input
-          className="w-full py-[0.7rem] px-4 mb-[0.6rem] bg-black/30 border border-[#334155] rounded-[8px] text-[#e0e0e0] text-[0.95rem]"
+          className="w-full py-3 px-4 mb-2.5 bg-muted border border-border rounded-md text-foreground text-sm"
           placeholder="输入项目名称（如：供应链优化 / CCF-A 论文 / 金融风控模型）"
           value={projectName}
           onChange={e => setProjectName(e.target.value)}
           maxLength={60}
         />
         <div className="mt-2">
-          <div className="flex gap-2 items-center mb-[0.4rem]">
-            <span className="text-[#94A3B8] text-[0.85rem]">
+          <div className="flex gap-2 items-center mb-1.5">
+            <span className="text-muted-foreground text-sm">
               📚 关联知识库（v5.4.0：可多选）
             </span>
             {selectedKBIds.size > 0 && (
               <button
                 type="button"
                 onClick={clearKBSelection}
-                className="py-[0.2rem] px-[0.6rem] bg-transparent text-[#64748B] border border-[#334155] rounded-[6px] text-[0.78rem] cursor-pointer"
+                className="py-0.5 px-2.5 bg-transparent text-muted-foreground border border-border rounded-md text-xs cursor-pointer"
               >
                 清空
               </button>
             )}
           </div>
           {knowledgeBases.length === 0 ? (
-            <div className="p-2 text-[#64748B] text-[0.85rem] italic">
+            <div className="p-2 text-muted-foreground text-sm italic">
               暂无知识库；留空将自动使用项目私有 + 全局公共 KB
             </div>
           ) : (
-            <div className="flex flex-wrap gap-[0.4rem]">
+            <div className="flex flex-wrap gap-1.5">
               {knowledgeBases.map((kb) => {
                 const selected = selectedKBIds.has(kb.id);
                 const isProject = (kb as any).scope === 'project';
@@ -228,10 +228,10 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
                     onClick={() => toggleKBSelection(kb.id)}
                     title={(kb as any).description || kb.name}
                     className={cn(
-                      'py-[0.35rem] px-[0.75rem] border rounded-[16px] cursor-pointer text-[0.85rem] transition-all duration-150',
+                      'py-1.5 px-3 border rounded-2xl cursor-pointer text-sm transition-colors duration-150',
                       selected
-                        ? (isProject ? 'bg-[#8B5CF6] text-[#0F172A] border-[#A78BFA] font-semibold' : 'bg-[#2DD4BF] text-[#0F172A] border-[#5EEAD4] font-semibold')
-                        : 'bg-black/30 text-[#CBD5E1] border-white/15 font-normal'
+                        ? 'bg-primary text-primary-foreground border-primary font-semibold'
+                        : 'bg-muted text-muted-foreground border-border font-normal hover:border-foreground/20'
                     )}
                   >
                     {isProject ? '📁' : '🌐'} {kb.name}
@@ -241,30 +241,30 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
               })}
             </div>
           )}
-          <div className="mt-[0.3rem] text-[#64748B] text-[0.75rem]">
+          <div className="mt-1.5 text-muted-foreground text-xs">
             不选 = 自动注入「项目私有 + 全局公共」KB；勾选 = 仅使用勾选的 KB
           </div>
         </div>
-        <div className="flex items-center gap-4 mb-[0.8rem]">
-          <label className="inline-flex items-center gap-2 py-[0.6rem] px-[1.2rem] bg-[#F87171] text-[#F8FAFC] rounded-[8px] cursor-pointer text-[0.9375rem] font-semibold hover:-translate-y-[1px] transition-transform duration-200 disabled:opacity-60 disabled:cursor-not-allowed">
+        <div className="flex items-center gap-4 mb-3">
+          <label className="inline-flex items-center gap-2 py-2.5 px-5 bg-primary text-primary-foreground rounded-md cursor-pointer text-sm font-semibold transition-opacity duration-150 hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed">
             {ocrLoading ? '识别中...' : '📷 上传问题图片 / PDF（OCR 提取文本）'}
             <input type="file" accept="image/*,.pdf" onChange={handleOcrUpload} className="hidden" disabled={ocrLoading} />
           </label>
-          <span className="text-[#94A3B8] text-[0.9375rem]">支持 JPG / PNG / PDF，自动提取文本</span>
+          <span className="text-muted-foreground text-sm">支持 JPG / PNG / PDF，自动提取文本</span>
         </div>
         <textarea
-          className="w-full p-4 bg-black/30 border border-[#334155] rounded-[8px] text-[#e0e0e0] text-[0.95rem] font-[inherit] resize-y leading-relaxed focus:outline-none focus:border-[#3498db] placeholder:text-[#475569]"
+          className="w-full p-4 bg-muted border border-border rounded-md text-foreground text-sm font-[inherit] resize-y leading-relaxed focus:outline-none focus:border-primary placeholder:text-muted-foreground"
           placeholder={'请描述您的研究问题，包括：\n1. 研究背景与目标\n2. 具体要求（优化/预测/评价/分类/仿真等）\n3. 数据情况（如有数据文件，请先到「数据」标签上传；无数据可选"系统自动搜集"）\n4. 约束条件或特殊要求\n5. 目标投稿会议/期刊（可选，系统会自动推荐模板）'}
           value={problemText}
           onChange={e => setProblemText(e.target.value)}
           rows={10}
         />
 
-        <div className="mt-[0.8rem] grid gap-[0.6rem] grid-cols-2">
+        <div className="mt-3 grid gap-2.5 grid-cols-2">
           <div>
-            <div className="text-[0.9375rem] text-[#94A3B8] font-semibold mb-2">问题类型</div>
+            <div className="text-sm text-muted-foreground font-semibold mb-2">问题类型</div>
             <select
-              className="w-full p-2 bg-black/30 border border-white/15 rounded-[8px] text-[#e0e0e0] text-[0.9rem]"
+              className="w-full p-2 bg-muted border border-border rounded-md text-foreground text-sm"
               value={problemType}
               onChange={e => setProblemType(e.target.value)}
             >
@@ -282,9 +282,9 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
           </div>
           {currentTemplate?.domain !== 'research_survey' && (
             <div>
-              <div className="text-[0.9375rem] text-[#94A3B8] font-semibold mb-2">数据来源</div>
+              <div className="text-sm text-muted-foreground font-semibold mb-2">数据来源</div>
               <select
-                className="w-full p-2 bg-black/30 border border-white/15 rounded-[8px] text-[#e0e0e0] text-[0.9rem]"
+                className="w-full p-2 bg-muted border border-border rounded-md text-foreground text-sm"
                 value={dataSource}
                 onChange={e => setDataSource(e.target.value as any)}
               >
@@ -297,20 +297,20 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
         </div>
 
         {dataSource !== 'self_collect' && currentTemplate?.domain !== 'research_survey' && (
-          <div className="mt-2 text-[#aaa] text-[0.8rem]">
+          <div className="mt-2 text-muted-foreground text-sm">
             已勾选 {selectedFiles.size} 个数据文件（请到「数据」标签上传并勾选）
           </div>
         )}
       </div>
 
-      <div className="bg-[#1E293B] border border-[#334155] rounded-[14px] p-[1.2rem]">
-        <div className="text-[1rem] text-[#F8FAFC] font-semibold mb-[0.8rem]">⚙️ 工作流与模板</div>
+      <div className="bg-card border border-border rounded-xl p-5">
+        <div className="text-base text-foreground font-semibold mb-3">⚙️ 工作流与模板</div>
 
         <div className="mb-4">
-          <div className="text-[0.9375rem] text-[#94A3B8] font-semibold mb-2">
+          <div className="text-sm text-muted-foreground font-semibold mb-2">
             工作流模式（已由所选模板自动绑定：{currentWorkflowName}）
           </div>
-          <div className="p-[0.75rem] bg-[rgba(37,99,235,0.1)] border border-[rgba(37,99,235,0.3)] rounded-[8px] text-[#93c5fd] text-[0.85rem]">
+          <div className="p-3 bg-primary/10 border border-primary/20 rounded-md text-foreground text-sm">
             {currentTemplate
               ? `「${currentTemplate.name}」模板采用「${currentWorkflowName}」工作流：${WORKFLOWS.find((w) => w.id === workflow)?.desc}`
               : `当前工作流：${currentWorkflowName}`}
@@ -318,7 +318,7 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
         </div>
 
         <div className="mb-4">
-          <div className="text-[0.9375rem] text-[#94A3B8] font-semibold mb-2">论文模板（{TEMPLATES.length} 选 1）</div>
+          <div className="text-sm text-muted-foreground font-semibold mb-2">论文模板（{TEMPLATES.length} 选 1）</div>
           <TemplateSelector
             value={template}
             onChange={(t) => {
@@ -336,33 +336,33 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
         </div>
 
         <div className="mb-4">
-          <label className="flex items-center gap-[0.6rem] cursor-pointer">
+          <label className="flex items-center gap-2.5 cursor-pointer">
             <input type="checkbox" checked={useCritique} onChange={e => setUseCritique(e.target.checked)} className="hidden peer" />
             <span className={cn(
-              'w-[36px] h-[20px] rounded-[10px] relative transition-colors duration-200 shrink-0',
-              useCritique ? 'bg-[rgba(74,222,128,0.15)]' : 'bg-[#334155]'
+              'w-9 h-5 rounded-lg relative transition-colors duration-200 shrink-0',
+              useCritique ? 'bg-primary' : 'bg-muted'
             )}>
               <span className={cn(
-                'w-4 h-4 bg-white rounded-full absolute top-[2px] left-[2px] transition-transform duration-200',
+                'w-4 h-4 bg-white rounded-full absolute top-0.5 left-0.5 transition-transform duration-200',
                 useCritique && 'translate-x-4'
               )} />
             </span>
-            <span className="text-[0.9375rem] text-[#CBD5E1]">启用自评质量循环（Writer 自评 + 自动重写，推荐开启）</span>
+            <span className="text-sm text-foreground">启用自评质量循环（Writer 自评 + 自动重写，推荐开启）</span>
           </label>
         </div>
       </div>
 
       {isRunning && (
-        <div className="bg-black/20 rounded-[8px] py-[0.8rem] px-4">
-          <div className="h-[6px] bg-[#334155] rounded-[3px] overflow-hidden mb-[0.4rem]">
-            <div className="h-full bg-gradient-to-r from-[#3498db] to-[#2ecc71] rounded-[3px] transition-[width] duration-300 ease-in-out" style={{ width: progress + '%' }} />
+        <div className="bg-muted rounded-md py-3 px-4">
+          <div className="h-1.5 bg-muted rounded-sm overflow-hidden mb-1.5">
+            <div className="h-full bg-primary rounded-sm transition-[width] duration-300 ease-in-out" style={{ width: progress + '%' }} />
           </div>
-          <div className="text-[0.875rem] text-[#3498db] font-semibold text-center">{progress}% · 生成中...</div>
+          <div className="text-sm text-primary font-semibold text-center">{progress}% · 生成中...</div>
         </div>
       )}
 
-      <div className="flex gap-[0.8rem]">
-        <button className="flex-1 py-[0.9rem] px-8 bg-[#2DD4BF] text-[#F8FAFC] border-none rounded-[10px] text-[1rem] font-semibold cursor-pointer hover:-translate-y-[0.5px] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleSubmit} disabled={submitting || !problemText.trim() || isRunning}>
+      <div className="flex gap-3">
+        <button className="flex-1 py-3.5 px-8 bg-primary text-primary-foreground border-none rounded-lg text-base font-semibold cursor-pointer transition-opacity duration-150 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleSubmit} disabled={submitting || !problemText.trim() || isRunning}>
           {submitting ? '🚀 启动中...' : isRunning ? `🔄 生成中 ${progress}%` : '🚀 启动 LabAgent 生成'}
         </button>
       </div>

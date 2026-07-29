@@ -22,14 +22,14 @@ interface TaskInfo {
 }
 
 const STATUS_BADGE_CLASSES: Record<string, string> = {
-  completed: 'bg-[rgba(74,222,128,0.15)] text-[#2ecc71]',
-  running: 'bg-[rgba(45,212,191,0.15)] text-[#3498db]',
-  phase1: 'bg-[rgba(45,212,191,0.15)] text-[#3498db]',
-  phase2: 'bg-[rgba(45,212,191,0.15)] text-[#3498db]',
-  failed: 'bg-[rgba(248,113,113,0.15)] text-[#e74c3c]',
-  cancelled: 'bg-[rgba(243,156,18,0.15)] text-[#f39c12]',
-  paused: 'bg-[rgba(155,89,182,0.15)] text-[#bb8fce]',
-  unknown: 'bg-[rgba(150,150,150,0.1)] text-[#94A3B8]',
+  completed: 'bg-success/15 text-success',
+  running: 'bg-primary/10 text-primary',
+  phase1: 'bg-primary/10 text-primary',
+  phase2: 'bg-primary/10 text-primary',
+  failed: 'bg-error/15 text-error',
+  cancelled: 'bg-warning/15 text-warning',
+  paused: 'bg-muted text-muted-foreground',
+  unknown: 'bg-muted text-muted-foreground',
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -46,7 +46,7 @@ const STATUS_LABELS: Record<string, string> = {
 function StatusBadge({ status }: { status: string }) {
   return (
     <span className={cn(
-      'text-[0.72rem] py-[0.15rem] px-2 rounded-[10px] font-semibold whitespace-nowrap',
+      'text-xs py-0.5 px-2 rounded-lg font-semibold whitespace-nowrap',
       STATUS_BADGE_CLASSES[status] || STATUS_BADGE_CLASSES.unknown
     )}>
       {STATUS_LABELS[status] || status}
@@ -116,15 +116,15 @@ export default function TaskHistory() {
 
   return (
     <div className="grid grid-cols-[320px_1fr] gap-4 min-h-[600px] max-md:grid-cols-1">
-      <div className="bg-[#1E293B] border border-[#334155] rounded-[14px] p-4 overflow-y-auto max-h-[700px]">
+      <div className="bg-card border border-border rounded-xl p-4 overflow-y-auto max-h-[700px]">
         <div className="flex justify-between items-center mb-4">
-          <span className="text-[1rem] text-[#F8FAFC] font-semibold">📋 历史任务</span>
+          <span className="text-base text-foreground font-semibold">📋 历史任务</span>
           <div className="flex gap-2 items-center">
-            <button className="py-[0.3rem] px-[0.8rem] bg-[#334155] border border-[#334155] rounded-[6px] text-[#94A3B8] text-[0.78rem] cursor-pointer transition-all duration-200 hover:bg-[#334155] disabled:opacity-40 disabled:cursor-not-allowed" onClick={loadTaskList} disabled={loading}>
+            <button className="py-1.5 px-3 bg-muted border border-border rounded-md text-muted-foreground text-sm cursor-pointer transition-colors duration-150 hover:bg-muted/80 hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed" onClick={loadTaskList} disabled={loading}>
               {loading ? '加载中...' : '🔄 刷新'}
             </button>
             <button
-              className="py-[0.35rem] px-[0.9rem] bg-[rgba(45,212,191,0.15)] border border-[rgba(45,212,191,0.15)] rounded-[8px] text-[#3498db] text-[0.78rem] cursor-pointer transition-all duration-200 hover:bg-[rgba(45,212,191,0.15)]"
+              className="py-1.5 px-3 bg-primary/10 border border-primary/20 rounded-md text-primary text-sm cursor-pointer transition-colors duration-150 hover:bg-primary/15"
               onClick={() => {
                 if (selectedIds.size === taskList.length) {
                   setSelectedIds(new Set());
@@ -136,49 +136,49 @@ export default function TaskHistory() {
               {selectedIds.size === taskList.length && taskList.length > 0 ? '☑️ 取消全选' : '⬜ 全选'}
             </button>
             {selectedIds.size > 0 && (
-              <button className="py-[0.35rem] px-[0.9rem] bg-[rgba(248,113,113,0.15)] border border-[rgba(248,113,113,0.15)] rounded-[8px] text-[#e74c3c] text-[0.82rem] cursor-pointer transition-all duration-200 hover:bg-[rgba(248,113,113,0.15)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleBatchDelete} disabled={batchDeleting}>
+              <button className="py-1.5 px-3 bg-error/10 border border-error/20 rounded-md text-error text-sm cursor-pointer transition-colors duration-150 hover:bg-error/15 disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleBatchDelete} disabled={batchDeleting}>
                 🗑️ 批量删除({selectedIds.size})
               </button>
             )}
           </div>
         </div>
 
-        {loading && taskList.length === 0 && <div className="text-center p-8 text-[#475569] text-[0.9375rem]">加载中...</div>}
-        {!loading && taskList.length === 0 && <div className="text-center p-8 text-[#475569] text-[0.9375rem]">暂无历史任务</div>}
+        {loading && taskList.length === 0 && <div className="text-center p-8 text-muted-foreground text-sm">加载中...</div>}
+        {!loading && taskList.length === 0 && <div className="text-center p-8 text-muted-foreground text-sm">暂无历史任务</div>}
 
         <div className="flex flex-col gap-2">
           {taskList.map(task => (
             <div
               key={task.task_id}
               className={cn(
-                'flex items-start gap-2 p-[0.7rem] rounded-[10px] border border-[#334155] bg-black/20 cursor-pointer transition-all duration-200 hover:bg-[#334155] hover:border-[#475569]',
-                detailTaskId === task.task_id && '!bg-[rgba(45,212,191,0.15)] !border-[rgba(45,212,191,0.15)]'
+                'flex items-start gap-2 p-3 rounded-lg border border-border bg-muted cursor-pointer transition-colors duration-150 hover:bg-muted/60 hover:border-foreground/20',
+                detailTaskId === task.task_id && '!bg-primary/10 !border-primary/30'
               )}
               onClick={() => setDetailTaskId(task.task_id)}
             >
-              <div className="pt-[0.1rem]">
+              <div className="pt-0.5">
                 <input
                   type="checkbox"
                   checked={selectedIds.has(task.task_id)}
                   onChange={() => toggleSelection(task.task_id)}
                   onClick={e => e.stopPropagation()}
-                  className="w-4 h-4 accent-[#3498db] cursor-pointer"
+                  className="w-4 h-4 accent-primary cursor-pointer"
                 />
               </div>
               <div className="flex-1">
-                <div className="flex justify-between items-center mb-[0.3rem]">
+                <div className="flex justify-between items-center mb-1.5">
                   <StatusBadge status={task.status} />
-                  <span className="text-[0.72rem] text-[#475569]">{formatTime(task.created_at)}</span>
+                  <span className="text-xs text-muted-foreground">{formatTime(task.created_at)}</span>
                 </div>
-                <div className="text-[0.875rem] text-[#94A3B8] leading-normal display-[-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical] overflow-hidden mb-[0.3rem]">
+                <div className="text-sm text-muted-foreground leading-normal display-[-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical] overflow-hidden mb-1.5">
                   {task.problem_preview || '（无题目描述）'}
                 </div>
-                <div className="flex gap-2 items-center text-[0.72rem] text-[#64748B]">
+                <div className="flex gap-2 items-center text-xs text-muted-foreground">
                   {task.template && <span>📄 {task.template}</span>}
                   {task.workflow_type && <span>⚙️ {task.workflow_type}</span>}
                   {task.current_step && <span>📍 {nodeLabel(task.current_step)}</span>}
                   {task.total_steps > 0 && <span>📊 {task.total_steps} 步骤</span>}
-                  <button className="ml-auto bg-transparent border-none cursor-pointer text-[0.875rem] opacity-30 transition-opacity duration-200 p-[0.2rem] hover:opacity-100" onClick={e => { e.stopPropagation(); handleDeleteOne(task.task_id); }} title="删除">
+                  <button className="ml-auto bg-transparent border-none cursor-pointer text-sm opacity-30 transition-opacity duration-200 p-0.5 hover:opacity-100" onClick={e => { e.stopPropagation(); handleDeleteOne(task.task_id); }} title="删除">
                     🗑️
                   </button>
                 </div>
@@ -188,7 +188,7 @@ export default function TaskHistory() {
         </div>
       </div>
 
-      <div className="bg-[#1E293B] border border-[#334155] rounded-[14px] p-4 overflow-hidden flex flex-col min-h-[400px]">
+      <div className="bg-card border border-border rounded-xl p-4 overflow-hidden flex flex-col min-h-[400px]">
         {detailTaskId ? (
           <TaskDetail
             taskId={detailTaskId}
@@ -196,7 +196,7 @@ export default function TaskHistory() {
             onRerun={(newTaskId) => { loadTaskList(); setDetailTaskId(newTaskId); }}
           />
         ) : (
-          <div className="text-center p-8 text-[#475569] text-[0.9375rem]">👈 点击左侧任务查看详情</div>
+          <div className="text-center p-8 text-muted-foreground text-sm">👈 点击左侧任务查看详情</div>
         )}
       </div>
     </div>

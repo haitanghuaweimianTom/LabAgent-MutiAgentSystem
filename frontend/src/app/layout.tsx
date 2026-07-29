@@ -32,14 +32,22 @@ export default async function RootLayout({
     : '';
 
   return (
-    <html lang="zh-CN" className="dark">
+    <html lang="zh-CN" suppressHydrationWarning>
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+        {/* 防 SSR 闪烁：在 React hydrate 前同步设定主题 class，默认浅色。
+            系统字体栈在 globals.css --font-sans 定义，无需 CDN 加载。 */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){window.__API_BASE__='/api/v1';${initialInfoScript}})()`,
+            __html: `(function(){
+              try {
+                var t = localStorage.getItem('theme');
+                if (t !== 'dark' && t !== 'light') t = 'light';
+                document.documentElement.classList.add(t);
+              } catch (e) {
+                document.documentElement.classList.add('light');
+              }
+              window.__API_BASE__='/api/v1';${initialInfoScript}
+            })()`,
           }}
         />
       </head>

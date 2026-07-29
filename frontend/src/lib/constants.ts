@@ -1,20 +1,6 @@
-export const TEAM_COLORS: Record<string, string> = {
-  coordinator: '#3B82F6',
-  research_agent: '#6366F1',
-  data_agent: '#10B981',
-  analyzer_agent: '#F59E0B',
-  modeler_agent: '#EC4899',
-  algorithm_engineer_agent: '#8B5CF6',
-  financial_analyst_agent: '#14B8A6',
-  solver_agent: '#EF4444',
-  writer_agent: '#06B6D4',
-  peer_review_agent: '#F97316',
-  experimentation_agent: '#A855F7',
-  figure_agent: '#22D3EE',
-  requirement_decomposer: '#84CC16',
-  innovation_agent: '#E879F9',
-  summary_agent: '#FB923C',
-};
+// Geist 单色风格：Agent 不再用彩色区分，全部统一中性色，仅靠名称区分。
+// 保留空对象导出以兼容现有 TEAM_COLORS[sender] 引用（取值返回 undefined → 走 fallback）。
+export const TEAM_COLORS: Record<string, string> = {};
 
 export const TEAM_LABELS: Record<string, string> = {
   coordinator: '协调者',

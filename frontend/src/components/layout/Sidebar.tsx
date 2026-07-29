@@ -55,8 +55,8 @@ export function Sidebar({ tasks = [] }: SidebarProps) {
     <>
       {/* Logo */}
       <div className="h-14 flex items-center gap-3 px-4 border-b border-border">
-        <Link href="/" className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center" onClick={() => setMobileOpen(false)}>
-          <span className="text-white text-sm font-bold">M</span>
+        <Link href="/" className="w-8 h-8 rounded-lg bg-background text-foreground border border-border flex items-center justify-center" onClick={() => setMobileOpen(false)}>
+          <span className="text-sm font-bold">M</span>
         </Link>
         <AnimatePresence>
           {!collapsed && (
@@ -87,8 +87,8 @@ export function Sidebar({ tasks = [] }: SidebarProps) {
           onClick={() => setMobileOpen(false)}
           className={cn(
             'w-full flex items-center justify-center gap-2 rounded-lg font-medium',
-            'bg-gradient-to-r from-primary to-secondary text-white',
-            'hover:shadow-glow-lg transition-all duration-200',
+            'bg-background text-foreground border border-border',
+            'hover:bg-muted transition-colors duration-150',
             collapsed ? 'h-9 w-9 p-0' : 'h-9 px-4'
           )}
         >
@@ -193,7 +193,7 @@ export function Sidebar({ tasks = [] }: SidebarProps) {
       <motion.aside
         animate={{ width: collapsed ? 64 : 260 }}
         transition={{ duration: 0.2, ease: 'easeInOut' }}
-        className="hidden md:flex h-screen flex-col border-r border-border bg-slate-900/50 backdrop-blur-xl"
+        className="hidden md:flex h-screen flex-col border-r border-border bg-card/80 backdrop-blur-xl"
       >
         {sidebarContent}
       </motion.aside>
@@ -206,7 +206,7 @@ export function Sidebar({ tasks = [] }: SidebarProps) {
             animate={{ x: 0 }}
             exit={{ x: -280 }}
             transition={{ duration: 0.2, ease: 'easeInOut' }}
-            className="md:hidden fixed inset-y-0 left-0 z-50 w-[260px] flex flex-col border-r border-border bg-slate-900/50 backdrop-blur-xl"
+            className="md:hidden fixed inset-y-0 left-0 z-50 w-[260px] flex flex-col border-r border-border bg-card/95 backdrop-blur-xl"
           >
             {sidebarContent}
           </motion.aside>

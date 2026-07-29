@@ -261,7 +261,7 @@ export default function DatasourceSettings() {
           <div>
             <span style={{ fontSize: '1.1rem', color: '#fff', fontWeight: 600 }}>🌐 网络代理</span>
             <div style={{ color: dark ? '#94a3b8' : '#888', fontSize: '0.8rem', marginTop: '0.3rem' }}>
-              自动检测系统代理（gsettings/环境变量/scutil/注册表）；仅用于"取数据"，不影响 LLM 调用
+              自动检测系统代理（gsettings/环境变量/scutil/注册表）；仅用于「取数据」，不影响 LLM 调用
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>

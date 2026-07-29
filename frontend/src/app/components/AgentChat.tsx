@@ -3,7 +3,7 @@
 import { useRef, useEffect, useState } from 'react';
 import StageProgress from './StageProgress';
 import { apiBase } from '@/lib/api';
-import { TEAM_COLORS, TEAM_LABELS } from '@/lib/constants';
+import { TEAM_LABELS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
 interface Message {
@@ -218,73 +218,72 @@ export default function AgentChat({
     <div className="flex flex-col gap-4">
       <StageProgress stages={stages} currentStep={currentStep} />
 
-      <div className="bg-[#1E293B] border border-[#334155] rounded-[14px] p-[1.2rem] flex flex-col gap-[0.8rem]">
+      <div className="bg-card border border-border rounded-[14px] p-5 flex flex-col gap-3">
         <div className="flex justify-between items-center flex-wrap gap-2">
-          <div className="flex items-center gap-[0.8rem] flex-wrap">
-            <span className="text-[1.1rem] text-[#F8FAFC] font-semibold">💬 Agent 团队实时讨论</span>
-            <div className="flex gap-[0.3rem] flex-wrap">
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="text-lg text-foreground font-semibold">💬 Agent 团队实时讨论</span>
+            <div className="flex gap-1.5 flex-wrap">
               {Object.entries(TEAM_LABELS).filter(([k]) => k !== 'system').map(([k, v]) => (
-                <span key={k} className="px-[0.5rem] py-[0.2rem] rounded-[10px] text-[0.8125rem] text-[#F8FAFC] font-semibold whitespace-nowrap" style={{ background: TEAM_COLORS[k] }}>{v}</span>
+                <span key={k} className="px-2 py-0.5 rounded-lg text-sm text-muted-foreground font-medium whitespace-nowrap bg-muted border border-border">{v}</span>
               ))}
             </div>
           </div>
-          <div className="flex gap-[0.4rem]">
+          <div className="flex gap-1.5">
             {isRunning && !paused && (
               <>
-                <button className="py-[0.35rem] px-[0.8rem] bg-[rgba(243,156,18,0.3)] border border-[rgba(243,156,18,0.5)] rounded-[6px] text-[#f39c12] text-[0.875rem] cursor-pointer transition-all duration-200 hover:bg-[rgba(243,156,18,0.5)]" onClick={onPause}>⏸ 暂停</button>
+                <button className="py-1.5 px-3 bg-warning/15 border border-warning/30 rounded-md text-warning text-sm cursor-pointer transition-colors duration-150 hover:bg-warning/20" onClick={onPause}>⏸ 暂停</button>
                 {onCancel && (
-                  <button className="py-[0.35rem] px-[0.8rem] bg-[rgba(248,113,113,0.15)] border border-[rgba(248,113,113,0.15)] rounded-[6px] text-[#e74c3c] text-[0.875rem] cursor-pointer transition-all duration-200 hover:bg-[rgba(248,113,113,0.15)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={onCancel} disabled={cancelling}>
+                  <button className="py-1.5 px-3 bg-error/10 border border-error/20 rounded-md text-error text-sm cursor-pointer transition-colors duration-150 hover:bg-error/15 disabled:opacity-50 disabled:cursor-not-allowed" onClick={onCancel} disabled={cancelling}>
                     {cancelling ? '取消中...' : '⏹ 取消'}
                   </button>
                 )}
               </>
             )}
             {paused && (
-              <button className="py-[0.35rem] px-[0.8rem] bg-[rgba(74,222,128,0.15)] border border-[rgba(74,222,128,0.15)] rounded-[6px] text-[#2ecc71] text-[0.875rem] cursor-pointer transition-all duration-200 hover:bg-[rgba(74,222,128,0.15)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={onResume} disabled={resuming}>
+              <button className="py-1.5 px-3 bg-success/10 border border-success/20 rounded-md text-success text-sm cursor-pointer transition-colors duration-150 hover:bg-success/15 disabled:opacity-50 disabled:cursor-not-allowed" onClick={onResume} disabled={resuming}>
                 {resuming ? '继续中...' : '▶ 继续执行'}
               </button>
             )}
           </div>
         </div>
 
-        <div className="h-[480px] overflow-y-auto p-[0.8rem] bg-[rgba(0,0,0,0.2)] rounded-[8px] relative" ref={messagesContainerRef}>
+        <div className="h-[480px] overflow-y-auto p-3 bg-muted/50 rounded-md relative" ref={messagesContainerRef}>
           {allMessages.length === 0 && (
-            <div className="text-center p-[3rem] text-[#475569] text-[0.9375rem]">提交问题后，各 Agent 将在此展开协作讨论</div>
+            <div className="text-center p-12 text-muted-foreground text-sm">提交问题后，各 Agent 将在此展开协作讨论</div>
           )}
           {allMessages.map(msg => (
             <div
               key={msg.id}
               className={cn(
-                'p-[0.7rem_0.9rem] mb-[0.5rem] rounded-[8px]',
+                'p-3 mb-2 rounded-md border-l-2',
                 msg.type === 'result'
-                  ? 'p-[0.8rem] mb-[0.6rem] rounded-[10px] bg-[rgba(45,212,191,0.15)] border border-[rgba(45,212,191,0.15)]'
+                  ? 'bg-primary/10 border-primary'
                   : msg.type === 'user_input'
-                    ? 'bg-[rgba(45,212,191,0.15)] border-l-[3px] border-[#3498db]'
+                    ? 'bg-primary/10 border-primary'
                     : msg.type === 'discussion'
-                      ? 'bg-[rgba(142,68,173,0.05)] border-l-[3px] border-[#8e44ad]'
-                      : 'bg-[#1E293B] border-l-[3px] border-[#666]'
+                      ? 'bg-muted border-foreground/30'
+                      : 'bg-card border-border'
               )}
-              style={{ borderLeftColor: TEAM_COLORS[msg.sender] || '#666' }}
             >
-              <div className="flex justify-between mb-[0.5rem] text-[0.82rem] items-center">
-                <span style={{ color: TEAM_COLORS[msg.sender] || '#666', fontWeight: 600 }}>
+              <div className="flex justify-between mb-2 text-sm items-center">
+                <span className="font-semibold text-foreground">
                   {msg.sender === 'user' ? '👤 ' : ''}{msg.sender_label}
                 </span>
-                {msg.type === 'result' && <span className="text-[0.8125rem] px-[0.5rem] py-[0.1rem] bg-[rgba(45,212,191,0.15)] text-[#3498db] rounded-[10px] font-semibold">📋 详细结果</span>}
-                {msg.type === 'discussion' && <span className="text-[0.8125rem] px-[0.5rem] py-[0.1rem] bg-[rgba(142,68,173,0.2)] text-[#8e44ad] rounded-[10px] font-semibold">💬 讨论</span>}
-                {msg.type === 'user_input' && <span className="text-[0.8125rem] px-[0.5rem] py-[0.1rem] bg-[rgba(45,212,191,0.15)] text-[#3498db] rounded-[10px] font-semibold">👤 用户</span>}
-                <span className="text-[#475569] text-[0.875rem]">{formatTime(msg.timestamp)}</span>
+                {msg.type === 'result' && <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded-lg font-semibold">📋 详细结果</span>}
+                {msg.type === 'discussion' && <span className="text-xs px-2 py-0.5 bg-muted text-foreground rounded-lg font-semibold">💬 讨论</span>}
+                {msg.type === 'user_input' && <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded-lg font-semibold">👤 用户</span>}
+                <span className="text-muted-foreground text-sm">{formatTime(msg.timestamp)}</span>
               </div>
               <div className={cn(
-                'whitespace-pre-wrap text-[#CBD5E1]',
+                'whitespace-pre-wrap text-foreground',
                 msg.type === 'result'
-                  ? 'text-[0.9375rem] leading-[1.7] font-[\'Courier_New\',monospace]'
-                  : 'text-[0.88rem] leading-[1.6]'
+                  ? 'text-sm leading-relaxed font-mono'
+                  : 'text-sm leading-relaxed'
               )}>
                 {msg.content.split('\n').map((line, i) => {
                   if (line.startsWith('```')) return null;
-                  if (line.startsWith('- ')) return <div key={i} className="pl-[0.5rem] text-[#94A3B8]">{line.slice(2)}</div>;
-                  if (line.startsWith('**') && line.endsWith('**')) return <div key={i} className="font-bold text-[#F8FAFC] mt-[0.3rem]">{line.slice(2, -2)}</div>;
+                  if (line.startsWith('- ')) return <div key={i} className="pl-2 text-muted-foreground">{line.slice(2)}</div>;
+                  if (line.startsWith('**') && line.endsWith('**')) return <div key={i} className="font-bold text-foreground mt-1">{line.slice(2, -2)}</div>;
                   return <div key={i}>{line || ' '}</div>;
                 })}
               </div>
@@ -293,7 +292,7 @@ export default function AgentChat({
           <div ref={messagesEndRef} />
           {showScrollButton && (
             <button
-              className="sticky bottom-[0.8rem] left-1/2 -translate-x-1/2 py-[0.4rem] px-[0.9rem] bg-[rgba(45,212,191,0.15)] border-none rounded-[20px] text-[#F8FAFC] text-[0.875rem] font-semibold cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.3)] transition-all duration-200 hover:translate-y-[-1px] z-10"
+              className="sticky bottom-2 left-1/2 -translate-x-1/2 py-1.5 px-3.5 bg-primary/10 border-none rounded-2xl text-foreground text-sm font-semibold cursor-pointer shadow-md transition-colors duration-150 hover:bg-primary/15 z-10"
               onClick={() => scrollToBottom('instant')}
               title="回到最新消息"
             >
@@ -302,10 +301,10 @@ export default function AgentChat({
           )}
         </div>
 
-        <div className="mt-[0.5rem] pt-[0.5rem] border-t border-[#334155]">
+        <div className="mt-2 pt-[0.5rem] border-t border-border">
           <div className="flex gap-2 items-end">
             <textarea
-              className="flex-1 py-[0.6rem] px-[0.8rem] bg-[rgba(0,0,0,0.3)] border border-[#475569] rounded-[8px] text-[#e0e0e0] text-[0.9375rem] resize-none font-[inherit] leading-[1.5] focus:outline-none focus:border-[rgba(45,212,191,0.15)] focus:shadow-[0_0_0_2px_rgba(45,212,191,0.15)] placeholder:text-[#475569]"
+              className="flex-1 py-2.5 px-3 bg-background border border-input rounded-md text-foreground text-sm resize-none font-inherit leading-relaxed focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
               placeholder={isWaiting ? 'Agent 正在等待您的反馈，请输入意见...' : '参与讨论：输入您的想法、建议或修正方向...'}
               value={userInput}
               onChange={e => setUserInput(e.target.value)}
@@ -314,14 +313,14 @@ export default function AgentChat({
               disabled={sending}
             />
             <button
-              className="py-[0.6rem] px-4 bg-[#2DD4BF] text-[#F8FAFC] border-none rounded-[8px] text-[0.9375rem] font-semibold cursor-pointer transition-all duration-200 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+              className="py-2.5 px-4 bg-primary text-primary-foreground border-none rounded-md text-sm font-semibold cursor-pointer transition-opacity duration-150 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90"
               onClick={handleSend}
               disabled={!userInput.trim() || sending}
             >
               {sending ? '...' : '发送'}
             </button>
           </div>
-          <div className="mt-[0.3rem] text-[0.72rem] text-[#475569] text-center">
+          <div className="mt-[0.3rem] text-xs text-muted-foreground text-center">
             Enter 发送 · Shift+Enter 换行 · 您的消息会实时出现在 Agent 讨论中
           </div>
         </div>

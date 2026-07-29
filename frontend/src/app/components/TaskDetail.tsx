@@ -6,7 +6,7 @@ import AlgorithmRecommend from './AlgorithmRecommend';
 import PaperList from './PaperList';
 import { useTaskState } from '../hooks/useTaskState';
 import { apiBase } from '@/lib/api';
-import { TEAM_COLORS, TEAM_LABELS } from '@/lib/constants';
+import { TEAM_LABELS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
 interface Message {
@@ -43,6 +43,8 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
   const [feedback, setFeedback] = useState({ overall: 5, category: 'method_selection', comment: '' });
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
   const [feedbackSent, setFeedbackSent] = useState(false);
+  const [userInput, setUserInput] = useState('');
+  const [sendingMsg, setSendingMsg] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -153,29 +155,72 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
     } catch { alert('反馈提交失败'); } finally { setSubmittingFeedback(false); }
   };
 
+  // 历史详情页向已结束的任务追加消息/追问。后端 post_user_message 会存入聊天室，
+  // 若任务仍在等待态则 resume，否则触发被 @ 的 agent 用 LLM 回应（事后追问）。
+  const reloadMessages = async () => {
+    try {
+      const res = await fetch(apiBase() + '/tasks/' + taskId + '/messages');
+      if (res.ok) {
+        const msgs = await res.json();
+        setMessages(msgs.map((m: any) => ({
+          id: m.id, sender: m.sender,
+          sender_label: m.sender_label || TEAM_LABELS[m.sender] || m.sender,
+          content: m.content, type: m.type || 'text', timestamp: m.timestamp,
+        })));
+      }
+    } catch {}
+  };
+
+  const handleSendMessage = async () => {
+    const content = userInput.trim();
+    if (!content) return;
+    setSendingMsg(true);
+    try {
+      const res = await fetch(apiBase() + '/tasks/' + taskId + '/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content }),
+      });
+      if (res.ok) {
+        setUserInput('');
+        // 稍等后端处理完（agent 回应是异步 create_task），再拉取新消息
+        setTimeout(() => { reloadMessages(); }, 800);
+      } else {
+        alert('发送失败');
+      }
+    } catch { alert('发送失败'); } finally { setSendingMsg(false); }
+  };
+
+  const handleInputKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); }
+  };
+
   const renderMsg = (msg: Message) => (
     <div
       key={msg.id}
       className={cn(
-        'p-[0.7rem_0.9rem] mb-[0.5rem] rounded-[8px] border-l-[3px] border-[#666] bg-[#1E293B]',
-        msg.type === 'result' && 'p-[0.8rem] mb-[0.6rem] rounded-[10px] bg-[rgba(45,212,191,0.15)] border border-[rgba(45,212,191,0.15)] border-l-[4px] border-l-[#3498db]'
+        'p-3 mb-2 rounded-md border-l-2',
+        msg.type === 'result'
+          ? 'bg-primary/10 border-primary'
+          : msg.type === 'user_input'
+            ? 'bg-primary/10 border-primary'
+            : 'bg-card border-border'
       )}
-      style={{ borderLeftColor: TEAM_COLORS[msg.sender] || '#666' }}
     >
-      <div className="flex justify-between mb-[0.5rem] text-[0.82rem] items-center">
-        <span style={{ color: TEAM_COLORS[msg.sender] || '#666', fontWeight: 600 }}>{msg.sender_label}</span>
-        <span className="text-[#475569] text-[0.875rem]">{formatTime(msg.timestamp)}</span>
+      <div className="flex justify-between mb-2 text-sm items-center">
+        <span className="font-semibold text-foreground">{msg.sender_label}</span>
+        <span className="text-muted-foreground text-sm">{formatTime(msg.timestamp)}</span>
       </div>
       <div className={cn(
-        'whitespace-pre-wrap text-[#CBD5E1]',
+        'whitespace-pre-wrap text-foreground',
         msg.type === 'result'
-          ? 'text-[0.9375rem] leading-[1.7] font-[\'Courier_New\',monospace]'
-          : 'text-[0.88rem] leading-[1.6]'
+          ? 'text-sm leading-relaxed font-mono'
+          : 'text-sm leading-relaxed'
       )}>
         {msg.content.split('\n').map((line, i) => {
           if (line.startsWith('```')) return null;
-          if (line.startsWith('- ')) return <div key={i} className="pl-[0.5rem] text-[#94A3B8]">{line.slice(2)}</div>;
-          if (line.startsWith('**') && line.endsWith('**')) return <div key={i} className="font-bold text-[#F8FAFC] mt-[0.3rem]">{line.slice(2, -2)}</div>;
+          if (line.startsWith('- ')) return <div key={i} className="pl-2 text-muted-foreground">{line.slice(2)}</div>;
+          if (line.startsWith('**') && line.endsWith('**')) return <div key={i} className="font-bold text-foreground mt-1">{line.slice(2, -2)}</div>;
           return <div key={i}>{line || ' '}</div>;
         })}
       </div>
@@ -189,46 +234,46 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
   const markdown = result?.output?.markdown || result?.output?.paper || '';
 
   return (
-    <div className="flex flex-col gap-[0.8rem] h-full">
+    <div className="flex flex-col gap-3 h-full">
       <div className="flex justify-between items-center flex-wrap gap-2">
-        <span className="text-[1rem] text-[#F8FAFC] font-semibold">📄 任务详情: {taskId}</span>
-        <div className="flex gap-[0.4rem]">
+        <span className="text-base text-foreground font-semibold">📄 任务详情: {taskId}</span>
+        <div className="flex gap-1.5">
           {meta?.status === 'running' && !cancelled && (
-            <button className="py-[0.35rem] px-[0.9rem] bg-[rgba(248,113,113,0.15)] border border-[rgba(248,113,113,0.15)] rounded-[6px] text-[#e74c3c] text-[0.78rem] cursor-pointer transition-all duration-200 hover:bg-[rgba(248,113,113,0.15)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleCancel} disabled={cancelling}>
+            <button className="py-1.5 px-3.5 bg-error/10 border border-error/20 rounded-md text-error text-sm cursor-pointer transition-all duration-200 hover:bg-error/10 disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleCancel} disabled={cancelling}>
               {cancelling ? '取消中...' : '⏹ 取消任务'}
             </button>
           )}
-          <button className="py-[0.35rem] px-[0.9rem] bg-[rgba(74,222,128,0.15)] border border-[rgba(74,222,128,0.15)] rounded-[6px] text-[#2ecc71] text-[0.78rem] cursor-pointer transition-all duration-200 hover:bg-[rgba(74,222,128,0.15)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleExport} disabled={exporting}>
+          <button className="py-1.5 px-3.5 bg-success/10 border border-success/20 rounded-md text-success text-sm cursor-pointer transition-all duration-200 hover:bg-success/10 disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleExport} disabled={exporting}>
             {exporting ? '导出中...' : '💾 导出到桌面'}
           </button>
           {canRerun && (
-            <button className="py-[0.35rem] px-[0.9rem] bg-[rgba(74,222,128,0.15)] border border-[rgba(74,222,128,0.15)] rounded-[6px] text-[#2ecc71] text-[0.78rem] cursor-pointer transition-all duration-200 hover:bg-[rgba(74,222,128,0.15)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleRerun} disabled={rerunning}>
+            <button className="py-1.5 px-3.5 bg-success/10 border border-success/20 rounded-md text-success text-sm cursor-pointer transition-all duration-200 hover:bg-success/10 disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleRerun} disabled={rerunning}>
               {rerunning ? '创建中...' : '🔄 重新执行'}
             </button>
           )}
-          <button className="py-[0.35rem] px-[0.9rem] bg-[rgba(248,113,113,0.15)] border border-[rgba(248,113,113,0.15)] rounded-[6px] text-[#e74c3c] text-[0.78rem] cursor-pointer transition-all duration-200 hover:bg-[rgba(248,113,113,0.15)]" onClick={onDelete}>🗑️ 删除</button>
+          <button className="py-1.5 px-3.5 bg-error/10 border border-error/20 rounded-md text-error text-sm cursor-pointer transition-all duration-200 hover:bg-error/10" onClick={onDelete}>🗑️ 删除</button>
         </div>
       </div>
 
       {taskState.state && taskState.state.name !== 'completed' && taskState.state.name !== 'failed' && (
-        <div className="relative w-full h-[28px] bg-[rgba(0,0,0,0.3)] rounded-[6px] overflow-hidden border border-[#334155]">
+        <div className="relative w-full h-[28px] bg-muted rounded-md overflow-hidden border border-border">
           <div
-            className="h-full bg-gradient-to-r from-[rgba(45,212,191,0.15)] to-[rgba(74,222,128,0.15)] transition-[width] duration-500 rounded-[6px]"
+            className="h-full bg-gradient-to-r bg-primary transition-[width] duration-500 rounded-md"
             style={{ width: `${taskState.state.progressPercentage}%` }}
           />
-          <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[0.875rem] text-[#F8FAFC] font-medium shadow-[0_1px_2px_rgba(0,0,0,0.5)] whitespace-nowrap">
+          <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-sm text-foreground font-medium shadow-[0_1px_2px_rgba(0,0,0,0.5)] whitespace-nowrap">
             {taskState.state.progressPercentage}% · {taskState.state.currentStep || '运行中...'}
           </span>
         </div>
       )}
 
-      <div className="flex gap-[0.3rem] border-b border-[#334155] pb-2">
+      <div className="flex gap-1.5 border-b border-border pb-2">
         {(['messages', 'result', 'peer_review', 'info'] as const).map(t => (
           <button
             key={t}
             className={cn(
-              'py-[0.4rem] px-[0.8rem] rounded-[6px] text-[0.82rem] cursor-pointer transition-all duration-200 border border-[#334155] bg-[#1E293B] text-[#94A3B8] hover:bg-[#334155] hover:text-[#CBD5E1]',
-              activeTab === t && 'bg-[rgba(45,212,191,0.15)] border-[rgba(45,212,191,0.15)] text-[#3498db]'
+              'py-1.5 px-3 rounded-md text-sm cursor-pointer transition-colors duration-150 border border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground',
+              activeTab === t && 'bg-primary/10 border-primary/20 text-primary'
             )}
             onClick={() => setActiveTab(t)}
           >
@@ -240,16 +285,39 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
         ))}
       </div>
 
-      {loading && <div className="text-center p-[2rem] text-[#475569] text-[0.9375rem]">加载中...</div>}
+      {loading && <div className="text-center p-[2rem] text-muted-foreground text-sm">加载中...</div>}
 
       {!loading && activeTab === 'messages' && (
-        <div className="flex-1 overflow-y-auto max-h-[520px] p-[0.5rem] bg-[rgba(0,0,0,0.2)] rounded-[8px]">
-          {messages.length === 0 ? <div className="text-center p-[2rem] text-[#475569] text-[0.9375rem]">暂无讨论记录</div> : messages.map(renderMsg)}
+        <div className="flex-1 flex flex-col gap-2">
+          <div className="overflow-y-auto max-h-[460px] p-2 bg-muted/50 rounded-md">
+            {messages.length === 0 ? <div className="text-center p-[2rem] text-muted-foreground text-sm">暂无讨论记录</div> : messages.map(renderMsg)}
+          </div>
+          <div className="pt-[0.4rem] border-t border-border">
+            <div className="flex gap-2 items-end">
+              <textarea
+                className="flex-1 py-2 px-[0.7rem] bg-muted border border-border rounded-md text-foreground text-sm resize-none font-[inherit] leading-[1.5] focus:outline-none focus:border-primary placeholder:text-muted-foreground"
+                placeholder="向团队追加消息或追问（@Agent名称 可指定专家）..."
+                value={userInput}
+                onChange={e => setUserInput(e.target.value)}
+                onKeyDown={handleInputKeyDown}
+                rows={2}
+                disabled={sendingMsg}
+              />
+              <button
+                className="py-2 px-4 bg-primary text-foreground border-none rounded-md text-sm font-semibold cursor-pointer transition-all duration-200 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={handleSendMessage}
+                disabled={!userInput.trim() || sendingMsg}
+              >
+                {sendingMsg ? '...' : '发送'}
+              </button>
+            </div>
+            <div className="mt-1 text-xs text-muted-foreground text-center">Enter 发送 · Shift+Enter 换行 · 你的消息会出现在讨论记录中</div>
+          </div>
         </div>
       )}
 
       {!loading && activeTab === 'result' && (
-        <div className="flex-1 overflow-y-auto max-h-[520px] flex flex-col gap-[0.8rem]">
+        <div className="flex-1 overflow-y-auto max-h-[520px] flex flex-col gap-3">
           {(() => {
             const researchOutput = result?.output?.research_agent;
             const papers = researchOutput?.papers || result?.output?.papers || [];
@@ -269,15 +337,15 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
             keywords={keywords}
           />
           {result?.output?.analyses && result.output.analyses.length > 0 && (
-            <div className="bg-[#1E293B] border border-[#334155] rounded-[10px] p-4">
-              <div className="text-[0.9375rem] text-[#3498db] font-bold mb-2">📊 数据分析</div>
+            <div className="bg-card border border-border rounded-lg p-4">
+              <div className="text-sm text-primary font-bold mb-2">📊 数据分析</div>
               {result.output.analyses.map((a: any, i: number) => (
-                <div key={i} className="bg-[rgba(0,0,0,0.3)] rounded-[8px] p-[0.7rem] mb-[0.4rem] text-[0.84rem] text-[#94A3B8] border border-[#334155]">
-                  <strong className="text-[#F8FAFC]">{a.file_name}</strong>
+                <div key={i} className="bg-muted rounded-md p-3 mb-1.5 text-sm text-muted-foreground border border-border">
+                  <strong className="text-foreground">{a.file_name}</strong>
                   <span> {a.shape?.[0]}行 × {a.shape?.[1]}列</span>
                   <div>{a.data_quality?.missing_rate === 0 ? '✓ 无缺失值' : `⚠ 缺失率 ${a.data_quality?.missing_rate}`}</div>
                   {(a.insights || []).map((ins: string, j: number) => (
-                    <div key={j} className="pl-[0.5rem] text-[#94A3B8]">• {ins}</div>
+                    <div key={j} className="pl-[0.5rem] text-muted-foreground">• {ins}</div>
                   ))}
                 </div>
               ))}
@@ -285,38 +353,37 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
           )}
 
           {result?.output?.requirement_plan && (
-            <div className="bg-[#1E293B] border border-[#334155] rounded-[10px] p-4">
-              <div className="text-[0.9375rem] text-[#3498db] font-bold mb-2">📋 需求分解计划</div>
-              <div style={{ marginBottom: 8, color: '#60a5fa', fontWeight: 600 }}>
+            <div className="bg-card border border-border rounded-lg p-4">
+              <div className="text-sm text-primary font-semibold mb-2">📋 需求分解计划</div>
+              <div className="mb-2 text-primary font-medium">
                 {result.output.requirement_plan.research_goal}
               </div>
               {result.output.requirement_plan.background && (
-                <div style={{ marginBottom: 8, color: '#ccc', fontSize: '0.9rem' }}>
+                <div className="mb-2 text-sm text-muted-foreground">
                   {result.output.requirement_plan.background}
                 </div>
               )}
               {result.output.requirement_plan.key_questions?.length > 0 && (
-                <div style={{ marginBottom: 8 }}>
-                  <strong style={{ color: '#E2E8F0' }}>核心问题：</strong>
+                <div className="mb-2">
+                  <strong className="text-foreground">核心问题：</strong>
                   {result.output.requirement_plan.key_questions.map((q: string, i: number) => (
-                    <div key={i} style={{ color: '#aaa', fontSize: '0.85rem', marginLeft: 12 }}>• {q}</div>
+                    <div key={i} className="ml-3 text-sm text-muted-foreground">• {q}</div>
                   ))}
                 </div>
               )}
               {result.output.requirement_plan.subtasks?.length > 0 && (
                 <div>
-                  <strong style={{ color: '#E2E8F0' }}>子任务：</strong>
+                  <strong className="text-foreground">子任务：</strong>
                   {result.output.requirement_plan.subtasks.map((t: any, i: number) => (
-                    <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', marginLeft: 12, marginTop: 4 }}>
-                      <span style={{
-                        padding: '2px 6px', borderRadius: 4, fontSize: '0.75rem',
-                        background: t.priority === 'high' ? 'rgba(239,68,68,0.2)' : t.priority === 'medium' ? 'rgba(234,179,8,0.2)' : 'rgba(34,197,94,0.2)',
-                        color: t.priority === 'high' ? '#f87171' : t.priority === 'medium' ? '#facc15' : '#4ade80',
-                      }}>
+                    <div key={i} className="flex gap-2 items-center ml-3 mt-1">
+                      <span className={cn(
+                        'px-1.5 py-0.5 rounded text-xs font-medium',
+                        t.priority === 'high' ? 'bg-error/15 text-error' : t.priority === 'medium' ? 'bg-warning/15 text-warning' : 'bg-success/15 text-success'
+                      )}>
                         {t.priority}
                       </span>
-                      <span style={{ color: '#ccc', fontSize: '0.85rem' }}>{t.description}</span>
-                      <span style={{ color: '#888', fontSize: '0.75rem' }}>→ {t.suggested_agent}</span>
+                      <span className="text-sm text-foreground">{t.description}</span>
+                      <span className="text-xs text-muted-foreground">→ {t.suggested_agent}</span>
                     </div>
                   ))}
                 </div>
@@ -325,87 +392,84 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
           )}
 
           {result?.output?.innovation_analysis && (
-            <div className="bg-[#1E293B] border border-[#334155] rounded-[10px] p-4">
-              <div className="text-[0.9375rem] text-[#3498db] font-bold mb-2">💡 创新发现分析</div>
+            <div className="bg-card border border-border rounded-lg p-4">
+              <div className="text-sm text-primary font-semibold mb-2">💡 创新发现分析</div>
               {result.output.innovation_analysis.research_gaps?.length > 0 && (
-                <div style={{ marginBottom: 12 }}>
-                  <strong style={{ color: '#E2E8F0' }}>研究空白：</strong>
+                <div className="mb-3">
+                  <strong className="text-foreground">研究空白：</strong>
                   {result.output.innovation_analysis.research_gaps.map((g: any, i: number) => (
-                    <div key={i} style={{ marginLeft: 12, marginTop: 6, padding: '6px 10px', background: 'rgba(59,130,246,0.1)', borderRadius: 6, borderLeft: '3px solid #3B82F6' }}>
-                      <div style={{ color: '#93c5fd', fontSize: '0.85rem', fontWeight: 600 }}>
-                        Gap #{g.gap_id} <span style={{ color: g.importance === 'high' ? '#f87171' : '#facc15' }}>({g.importance})</span>
+                    <div key={i} className="ml-3 mt-1.5 px-2.5 py-1.5 bg-primary/10 rounded-md border-l-2 border-primary">
+                      <div className="text-sm font-medium text-primary">
+                        Gap #{g.gap_id} <span className={g.importance === 'high' ? 'text-error' : 'text-warning'}>({g.importance})</span>
                       </div>
-                      <div style={{ color: '#ccc', fontSize: '0.85rem' }}>{g.description}</div>
-                      {g.opportunity && <div style={{ color: '#888', fontSize: '0.8rem', marginTop: 2 }}>机会：{g.opportunity}</div>}
+                      <div className="text-sm text-foreground">{g.description}</div>
+                      {g.opportunity && <div className="text-xs text-muted-foreground mt-0.5">机会：{g.opportunity}</div>}
                     </div>
                   ))}
                 </div>
               )}
               {result.output.innovation_analysis.innovation_ideas?.length > 0 && (
                 <div>
-                  <strong style={{ color: '#E2E8F0' }}>创新方案：</strong>
+                  <strong className="text-foreground">创新方案：</strong>
                   {result.output.innovation_analysis.innovation_ideas.map((idea: any, i: number) => (
-                    <div key={i} style={{ marginLeft: 12, marginTop: 6, padding: '6px 10px', background: 'rgba(168,85,247,0.1)', borderRadius: 6, borderLeft: '3px solid #a855f7' }}>
-                      <div style={{ color: '#c084fc', fontSize: '0.85rem', fontWeight: 600 }}>{idea.title}</div>
-                      <div style={{ color: '#ccc', fontSize: '0.85rem' }}>新颖性：{idea.novelty}</div>
-                      <div style={{ color: '#aaa', fontSize: '0.8rem' }}>方法：{idea.methodology}</div>
-                      <div style={{ color: '#888', fontSize: '0.8rem' }}>可行性：{idea.feasibility} | 预期贡献：{idea.expected_contribution}</div>
+                    <div key={i} className="ml-3 mt-1.5 px-2.5 py-1.5 bg-muted rounded-md border-l-2 border-foreground/30">
+                      <div className="text-sm font-medium text-foreground">{idea.title}</div>
+                      <div className="text-sm text-foreground">新颖性：{idea.novelty}</div>
+                      <div className="text-xs text-muted-foreground">方法：{idea.methodology}</div>
+                      <div className="text-xs text-muted-foreground">可行性：{idea.feasibility} | 预期贡献：{idea.expected_contribution}</div>
                     </div>
                   ))}
                 </div>
               )}
               {result.output.innovation_analysis.recommended_approach && (
-                <div style={{ marginTop: 8, padding: '6px 10px', background: 'rgba(34,197,94,0.1)', borderRadius: 6, borderLeft: '3px solid #22c55e' }}>
-                  <strong style={{ color: '#4ade80' }}>推荐方案：</strong>
-                  <span style={{ color: '#ccc', fontSize: '0.85rem' }}> {result.output.innovation_analysis.recommended_approach}</span>
+                <div className="mt-2 px-2.5 py-1.5 bg-success/10 rounded-md border-l-2 border-success">
+                  <strong className="text-success">推荐方案：</strong>
+                  <span className="text-sm text-foreground"> {result.output.innovation_analysis.recommended_approach}</span>
                 </div>
               )}
             </div>
           )}
 
           {result?.output?.task_summary && (
-            <div className="bg-[#1E293B] border border-[#334155] rounded-[10px] p-4">
-              <div className="text-[0.9375rem] text-[#3498db] font-bold mb-2">📊 任务总结报告</div>
+            <div className="bg-card border border-border rounded-lg p-4">
+              <div className="text-sm text-primary font-semibold mb-2">📊 任务总结报告</div>
               {result.output.task_summary.research_summary && (
-                <div style={{ marginBottom: 8, color: '#ccc', fontSize: '0.9rem' }}>
-                  <strong style={{ color: '#E2E8F0' }}>研究回顾：</strong>{result.output.task_summary.research_summary}
+                <div className="mb-2 text-sm text-foreground">
+                  <strong className="text-foreground">研究回顾：</strong>{result.output.task_summary.research_summary}
                 </div>
               )}
               {result.output.task_summary.paper_quality && (
-                <div style={{ marginBottom: 8, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-                  <div style={{ padding: '4px 10px', background: 'rgba(59,130,246,0.15)', borderRadius: 6 }}>
-                    <span style={{ color: '#93c5fd', fontSize: '0.8rem' }}>论文质量 </span>
-                    <span style={{ color: '#60a5fa', fontWeight: 700 }}>{result.output.task_summary.paper_quality.overall_score}/100</span>
+                <div className="mb-2 flex gap-4 flex-wrap">
+                  <div className="px-2.5 py-1 bg-primary/10 rounded-md">
+                    <span className="text-xs text-primary">论文质量 </span>
+                    <span className="text-primary font-bold">{result.output.task_summary.paper_quality.overall_score}/100</span>
                   </div>
                   {result.output.task_summary.paper_quality.strengths?.length > 0 && (
-                    <div style={{ color: '#4ade80', fontSize: '0.8rem' }}>优势：{result.output.task_summary.paper_quality.strengths.join('、')}</div>
+                    <div className="text-xs text-success">优势：{result.output.task_summary.paper_quality.strengths.join('、')}</div>
                   )}
                   {result.output.task_summary.paper_quality.weaknesses?.length > 0 && (
-                    <div style={{ color: '#f87171', fontSize: '0.8rem' }}>不足：{result.output.task_summary.paper_quality.weaknesses.join('、')}</div>
+                    <div className="text-xs text-error">不足：{result.output.task_summary.paper_quality.weaknesses.join('、')}</div>
                   )}
                 </div>
               )}
               {result.output.task_summary.lessons_learned?.length > 0 && (
-                <div style={{ marginBottom: 8 }}>
-                  <strong style={{ color: '#E2E8F0' }}>经验教训：</strong>
+                <div className="mb-2">
+                  <strong className="text-foreground">经验教训：</strong>
                   {result.output.task_summary.lessons_learned.map((l: any, i: number) => (
-                    <div key={i} style={{ marginLeft: 12, marginTop: 4, fontSize: '0.85rem' }}>
-                      <span style={{
-                        padding: '1px 5px', borderRadius: 3, fontSize: '0.7rem',
-                        background: 'rgba(234,179,8,0.15)', color: '#facc15', marginRight: 6,
-                      }}>
+                    <div key={i} className="ml-3 mt-1 text-sm">
+                      <span className="px-1.5 py-0.5 rounded-sm text-xs bg-warning/15 text-warning mr-1.5">
                         {l.category}
                       </span>
-                      <span style={{ color: '#ccc' }}>{l.content}</span>
+                      <span className="text-foreground">{l.content}</span>
                     </div>
                   ))}
                 </div>
               )}
               {result.output.task_summary.recommendations?.length > 0 && (
                 <div>
-                  <strong style={{ color: '#E2E8F0' }}>建议：</strong>
+                  <strong className="text-foreground">建议：</strong>
                   {result.output.task_summary.recommendations.map((r: string, i: number) => (
-                    <div key={i} style={{ marginLeft: 12, color: '#aaa', fontSize: '0.85rem' }}>• {r}</div>
+                    <div key={i} className="ml-3 text-sm text-muted-foreground">• {r}</div>
                   ))}
                 </div>
               )}
@@ -415,17 +479,17 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
       )}
 
       {!loading && activeTab === 'peer_review' && (
-        <div className="flex-1 overflow-y-auto max-h-[520px] flex flex-col gap-[0.8rem]">
+        <div className="flex-1 overflow-y-auto max-h-[520px] flex flex-col gap-3">
           {taskState.state?.peerReview ? (
-            <div className="bg-[#1E293B] border border-[#334155] rounded-[10px] p-4">
-              <div className="text-[0.9375rem] text-[#3498db] font-bold mb-2">🔍 同行评议结果</div>
-              <div className="flex gap-4 py-[0.6rem] border-b border-[#1E293B] items-start flex-wrap">
-                <span className="text-[0.78rem] text-[#475569] min-w-[80px] font-semibold">总体评分</span>
-                <span className="text-[0.9375rem] text-[#CBD5E1] flex-1 break-all">{'★'.repeat(Math.round(taskState.state.peerReview.overallScore))}{'☆'.repeat(5 - Math.round(taskState.state.peerReview.overallScore))} ({taskState.state.peerReview.overallScore}/5)</span>
+            <div className="bg-card border border-border rounded-lg p-4">
+              <div className="text-sm text-primary font-bold mb-2">🔍 同行评议结果</div>
+              <div className="flex gap-4 py-2.5 border-b border-border items-start flex-wrap">
+                <span className="text-sm text-muted-foreground min-w-[80px] font-semibold">总体评分</span>
+                <span className="text-sm text-foreground flex-1 break-all">{'★'.repeat(Math.round(taskState.state.peerReview.overallScore))}{'☆'.repeat(5 - Math.round(taskState.state.peerReview.overallScore))} ({taskState.state.peerReview.overallScore}/5)</span>
               </div>
-              <div className="flex gap-4 py-[0.6rem] border-b border-[#1E293B] items-start flex-wrap">
-                <span className="text-[0.78rem] text-[#475569] min-w-[80px] font-semibold">推荐结论</span>
-                <span className="text-[0.9375rem] text-[#CBD5E1] flex-1 break-all">
+              <div className="flex gap-4 py-2.5 border-b border-border items-start flex-wrap">
+                <span className="text-sm text-muted-foreground min-w-[80px] font-semibold">推荐结论</span>
+                <span className="text-sm text-foreground flex-1 break-all">
                   {taskState.state.peerReview.recommendation === 'accept' && '✅ 接收'}
                   {taskState.state.peerReview.recommendation === 'revise' && '⚠️ 修订'}
                   {taskState.state.peerReview.recommendation === 'reject' && '❌ 拒稿'}
@@ -434,7 +498,7 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
               <PeerReviewDetails taskId={taskId} />
             </div>
           ) : (
-            <div className="text-center p-[2rem] text-[#475569] text-[0.9375rem]">暂无同行评议数据。任务完成后若触发了同行评议，将在此显示。</div>
+            <div className="text-center p-[2rem] text-muted-foreground text-sm">暂无同行评议数据。任务完成后若触发了同行评议，将在此显示。</div>
           )}
           {taskState.state?.name === 'completed' && meta?.status === 'completed' && (
             <CameraReadyDownload taskId={taskId} templateId={taskState.state?.templateId || meta?.template || 'math_modeling'} />
@@ -443,35 +507,35 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
       )}
 
       {!loading && activeTab === 'info' && meta && (
-        <div className="flex-1 overflow-y-auto max-h-[520px] p-[0.5rem] bg-[rgba(0,0,0,0.2)] rounded-[8px]">
-          <div className="flex gap-4 py-[0.6rem] border-b border-[#1E293B] items-start flex-wrap">
-            <span className="text-[0.78rem] text-[#475569] min-w-[80px] font-semibold">任务ID</span>
-            <code className="text-[0.9375rem] text-[#CBD5E1] flex-1 break-all">{taskId}</code>
+        <div className="flex-1 overflow-y-auto max-h-[520px] p-2 bg-muted/50 rounded-md">
+          <div className="flex gap-4 py-2.5 border-b border-border items-start flex-wrap">
+            <span className="text-sm text-muted-foreground min-w-[80px] font-semibold">任务ID</span>
+            <code className="text-sm text-foreground flex-1 break-all">{taskId}</code>
           </div>
-          <div className="flex gap-4 py-[0.6rem] border-b border-[#1E293B] items-start flex-wrap">
-            <span className="text-[0.78rem] text-[#475569] min-w-[80px] font-semibold">状态</span>
-            <span className="text-[0.9375rem] text-[#CBD5E1] flex-1 break-all">{meta.status}</span>
+          <div className="flex gap-4 py-2.5 border-b border-border items-start flex-wrap">
+            <span className="text-sm text-muted-foreground min-w-[80px] font-semibold">状态</span>
+            <span className="text-sm text-foreground flex-1 break-all">{meta.status}</span>
           </div>
-          <div className="flex gap-4 py-[0.6rem] border-b border-[#1E293B] items-start flex-wrap">
-            <span className="text-[0.78rem] text-[#475569] min-w-[80px] font-semibold">进度</span>
-            <span className="text-[0.9375rem] text-[#CBD5E1] flex-1 break-all">{meta.progress_percentage || 0}%</span>
+          <div className="flex gap-4 py-2.5 border-b border-border items-start flex-wrap">
+            <span className="text-sm text-muted-foreground min-w-[80px] font-semibold">进度</span>
+            <span className="text-sm text-foreground flex-1 break-all">{meta.progress_percentage || 0}%</span>
           </div>
-          <div className="flex gap-4 py-[0.6rem] border-b border-[#1E293B] items-start flex-wrap">
-            <span className="text-[0.78rem] text-[#475569] min-w-[80px] font-semibold">当前步骤</span>
-            <span className="text-[0.9375rem] text-[#CBD5E1] flex-1 break-all">{meta.current_step || '无'}</span>
+          <div className="flex gap-4 py-2.5 border-b border-border items-start flex-wrap">
+            <span className="text-sm text-muted-foreground min-w-[80px] font-semibold">当前步骤</span>
+            <span className="text-sm text-foreground flex-1 break-all">{meta.current_step || '无'}</span>
           </div>
 
           {(meta.status === 'completed' || meta.status === 'failed' || cancelled) && (
-            <div className="mt-6 pt-4 border-t border-[#334155]">
-              <div className="text-[0.95rem] text-[#f39c12] font-bold mb-[0.8rem]">📝 任务反馈</div>
+            <div className="mt-6 pt-4 border-t border-border">
+              <div className="text-sm text-warning font-bold mb-3">📝 任务反馈</div>
               {feedbackSent ? (
-                <div className="text-[#2ecc71] text-[0.9375rem] p-[0.8rem] bg-[rgba(74,222,128,0.15)] rounded-[6px] text-center">反馈已提交，感谢！</div>
+                <div className="text-success text-sm p-3 bg-success/10 rounded-md text-center">反馈已提交，感谢！</div>
               ) : (
                 <>
-                  <div className="flex flex-col gap-[0.3rem] mb-[0.8rem]">
-                    <label className="text-[0.875rem] text-[#94A3B8]">整体评分</label>
+                  <div className="flex flex-col gap-1.5 mb-3">
+                    <label className="text-sm text-muted-foreground">整体评分</label>
                     <select
-                      className="p-[0.5rem] bg-[rgba(0,0,0,0.3)] border border-[#475569] rounded-[6px] text-[#e0e0e0] text-[0.9375rem] font-[inherit]"
+                      className="p-2 bg-muted border border-border rounded-md text-foreground text-sm font-[inherit]"
                       value={feedback.overall}
                       onChange={(e) => setFeedback({ ...feedback, overall: parseInt(e.target.value) })}
                     >
@@ -480,10 +544,10 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
                       ))}
                     </select>
                   </div>
-                  <div className="flex flex-col gap-[0.3rem] mb-[0.8rem]">
-                    <label className="text-[0.875rem] text-[#94A3B8]">类别</label>
+                  <div className="flex flex-col gap-1.5 mb-3">
+                    <label className="text-sm text-muted-foreground">类别</label>
                     <select
-                      className="p-[0.5rem] bg-[rgba(0,0,0,0.3)] border border-[#475569] rounded-[6px] text-[#e0e0e0] text-[0.9375rem] font-[inherit]"
+                      className="p-2 bg-muted border border-border rounded-md text-foreground text-sm font-[inherit]"
                       value={feedback.category}
                       onChange={(e) => setFeedback({ ...feedback, category: e.target.value })}
                     >
@@ -494,17 +558,17 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
                       <option value="data_processing">数据处理</option>
                     </select>
                   </div>
-                  <div className="flex flex-col gap-[0.3rem] mb-[0.8rem]">
-                    <label className="text-[0.875rem] text-[#94A3B8]">建议/备注</label>
+                  <div className="flex flex-col gap-1.5 mb-3">
+                    <label className="text-sm text-muted-foreground">建议/备注</label>
                     <textarea
-                      className="p-[0.5rem] bg-[rgba(0,0,0,0.3)] border border-[#475569] rounded-[6px] text-[#e0e0e0] text-[0.9375rem] font-[inherit] min-h-[80px] resize-y"
+                      className="p-2 bg-muted border border-border rounded-md text-foreground text-sm font-[inherit] min-h-[80px] resize-y"
                       value={feedback.comment}
                       onChange={(e) => setFeedback({ ...feedback, comment: e.target.value })}
                       placeholder="描述本次任务中有效的方法或需要改进的地方..."
                     />
                   </div>
                   <button
-                    className="py-[0.5rem] px-4 bg-[#2DD4BF] border-none rounded-[6px] text-[#F8FAFC] cursor-pointer text-[0.9375rem] font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="py-2 px-4 bg-primary border-none rounded-md text-foreground cursor-pointer text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                     onClick={handleSubmitFeedback}
                     disabled={submittingFeedback}
                   >
@@ -540,8 +604,8 @@ function PeerReviewDetails({ taskId }: { taskId: string }) {
     load();
   }, [taskId]);
 
-  if (loading) return <div className="text-center p-[2rem] text-[#475569] text-[0.9375rem]">加载评议详情...</div>;
-  if (!details) return <div className="text-center p-[2rem] text-[#475569] text-[0.9375rem]">无详细评议数据</div>;
+  if (loading) return <div className="text-center p-[2rem] text-muted-foreground text-sm">加载评议详情...</div>;
+  if (!details) return <div className="text-center p-[2rem] text-muted-foreground text-sm">无详细评议数据</div>;
 
   const scores = details.scores || {};
   const comments = details.comments || {};
@@ -550,32 +614,32 @@ function PeerReviewDetails({ taskId }: { taskId: string }) {
   return (
     <div>
       {Object.keys(scores).length > 0 && (
-        <div className="bg-[#1E293B] border border-[#334155] rounded-[10px] p-4">
-          <div className="text-[0.9375rem] text-[#3498db] font-bold mb-2">分项评分</div>
+        <div className="bg-card border border-border rounded-lg p-4">
+          <div className="text-sm text-primary font-bold mb-2">分项评分</div>
           {Object.entries(scores).map(([k, v]: [string, any]) => (
-            <div key={k} className="flex gap-4 py-[0.6rem] border-b border-[#1E293B] items-start flex-wrap">
-              <span className="text-[0.78rem] text-[#475569] min-w-[80px] font-semibold">{k}</span>
-              <span className="text-[0.9375rem] text-[#CBD5E1] flex-1 break-all">{v}/5</span>
+            <div key={k} className="flex gap-4 py-2.5 border-b border-border items-start flex-wrap">
+              <span className="text-sm text-muted-foreground min-w-[80px] font-semibold">{k}</span>
+              <span className="text-sm text-foreground flex-1 break-all">{v}/5</span>
             </div>
           ))}
         </div>
       )}
       {(comments.major?.length > 0 || comments.minor?.length > 0) && (
-        <div className="bg-[#1E293B] border border-[#334155] rounded-[10px] p-4">
-          <div className="text-[0.9375rem] text-[#3498db] font-bold mb-2">评审意见</div>
+        <div className="bg-card border border-border rounded-lg p-4">
+          <div className="text-sm text-primary font-bold mb-2">评审意见</div>
           {(comments.major || []).map((c: string, i: number) => (
-            <div key={`major-${i}`} className="pl-[0.5rem] text-[#94A3B8]">• <strong>Major:</strong> {c}</div>
+            <div key={`major-${i}`} className="pl-[0.5rem] text-muted-foreground">• <strong>Major:</strong> {c}</div>
           ))}
           {(comments.minor || []).map((c: string, i: number) => (
-            <div key={`minor-${i}`} className="pl-[0.5rem] text-[#94A3B8]">• Minor: {c}</div>
+            <div key={`minor-${i}`} className="pl-[0.5rem] text-muted-foreground">• Minor: {c}</div>
           ))}
         </div>
       )}
       {edits.length > 0 && (
-        <div className="bg-[#1E293B] border border-[#334155] rounded-[10px] p-4">
-          <div className="text-[0.9375rem] text-[#3498db] font-bold mb-2">建议编辑</div>
+        <div className="bg-card border border-border rounded-lg p-4">
+          <div className="text-sm text-primary font-bold mb-2">建议编辑</div>
           {edits.map((ed: any, i: number) => (
-            <div key={i} className="pl-[0.5rem] text-[#94A3B8]">
+            <div key={i} className="pl-[0.5rem] text-muted-foreground">
               • {ed.location ? `[${ed.location}] ` : ''}{ed.suggestion || ed}
             </div>
           ))}
@@ -626,10 +690,10 @@ function CameraReadyDownload({ taskId, templateId }: { taskId: string; templateI
   }, [taskId]);
 
   return (
-    <div className="bg-[#1E293B] border border-[#334155] rounded-[10px] p-4">
-      <div className="text-[0.9375rem] text-[#3498db] font-bold mb-2">📦 Camera-Ready 下载</div>
+    <div className="bg-card border border-border rounded-lg p-4">
+      <div className="text-sm text-primary font-bold mb-2">📦 Camera-Ready 下载</div>
       {status === 'idle' && (
-        <button className="py-[0.35rem] px-[0.9rem] bg-[rgba(74,222,128,0.15)] border border-[rgba(74,222,128,0.15)] rounded-[6px] text-[#2ecc71] text-[0.78rem] cursor-pointer transition-all duration-200 hover:bg-[rgba(74,222,128,0.15)]" onClick={build}>生成并下载 zip</button>
+        <button className="py-1.5 px-3.5 bg-success/10 border border-success/20 rounded-md text-success text-sm cursor-pointer transition-all duration-200 hover:bg-success/10" onClick={build}>生成并下载 zip</button>
       )}
       {status === 'building' && <div>打包中...</div>}
       {status === 'error' && <div>打包失败，请稍后重试。</div>}
@@ -639,7 +703,7 @@ function CameraReadyDownload({ taskId, templateId }: { taskId: string; templateI
             ⬇️ 下载 camera-ready.zip
           </a>
           {pkg.verification?.success === false && (
-            <div style={{ color: '#e67e22', marginTop: 4 }}>⚠️ 编译验证未通过，请检查 LaTeX 源文件。</div>
+            <div className="text-warning mt-1">⚠️ 编译验证未通过，请检查 LaTeX 源文件。</div>
           )}
         </div>
       )}
