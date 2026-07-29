@@ -145,7 +145,7 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
     <div className="flex flex-col gap-4">
       <div className="bg-card border border-border rounded-xl p-5">
         <div className="text-base text-foreground font-semibold mb-3">📝 研究问题输入</div>
-        <div className="flex gap-2 items-center mb-2">
+        <div className="flex gap-3 items-center mb-2">
           <select
             className="flex-1 p-2 bg-muted border border-border rounded-md text-foreground text-sm"
             value={activeProjectId || ''}
@@ -177,7 +177,7 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
             </button>
           )}
           {showNewProject && (
-            <div className="flex gap-1.5 items-center">
+            <div className="flex gap-3 items-center">
               <input
                 className="p-2 bg-muted border border-border rounded-md text-foreground text-sm w-36"
                 placeholder="项目名称"
@@ -198,7 +198,7 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
           maxLength={60}
         />
         <div className="mt-2">
-          <div className="flex gap-2 items-center mb-1.5">
+          <div className="flex gap-3 items-center mb-1.5">
             <span className="text-muted-foreground text-sm">
               📚 关联知识库（v5.4.0：可多选）
             </span>
@@ -217,7 +217,7 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
               暂无知识库；留空将自动使用项目私有 + 全局公共 KB
             </div>
           ) : (
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-3">
               {knowledgeBases.map((kb) => {
                 const selected = selectedKBIds.has(kb.id);
                 const isProject = (kb as any).scope === 'project';
@@ -246,7 +246,7 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
           </div>
         </div>
         <div className="flex items-center gap-4 mb-3">
-          <label className="inline-flex items-center gap-2 py-2.5 px-5 bg-primary text-primary-foreground rounded-md cursor-pointer text-sm font-semibold transition-opacity duration-150 hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed">
+          <label className="inline-flex items-center gap-3 py-2.5 px-5 bg-primary text-primary-foreground rounded-md cursor-pointer text-sm font-semibold transition-opacity duration-150 hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed">
             {ocrLoading ? '识别中...' : '📷 上传问题图片 / PDF（OCR 提取文本）'}
             <input type="file" accept="image/*,.pdf" onChange={handleOcrUpload} className="hidden" disabled={ocrLoading} />
           </label>

@@ -95,7 +95,7 @@ function SystemStatusSkeleton() {
       </div>
       <div className="text-[0.9375rem] text-muted-foreground font-semibold mb-2">Provider 配置状态</div>
       <div className="flex flex-col gap-[0.4rem]">
-        <div className="flex items-center gap-2 py-[0.4rem] px-[0.6rem] bg-muted/50 rounded-[6px] text-[0.82rem]">
+        <div className="flex items-center gap-3 py-[0.4rem] px-[0.6rem] bg-muted/50 rounded-[6px] text-[0.82rem]">
           <span className="w-2 h-2 rounded-full shrink-0 bg-muted-foreground" />
           <span className="text-muted-foreground">加载中...</span>
         </div>
@@ -150,7 +150,7 @@ function SystemStatusContent({ info }: { info: SystemInfo }) {
         <div className="flex flex-col gap-0.5 p-2 bg-muted/50 rounded-[8px]">
           <span className="text-[0.72rem] text-muted-foreground font-semibold">Agent 团队</span>
           <span className="text-[0.9375rem] text-foreground">{info.agent_count} 个</span>
-          <div className="flex flex-wrap gap-1 mt-[0.3rem]">
+          <div className="flex flex-wrap gap-2.5 mt-[0.3rem]">
             {info.agents?.map(a => (
               <span key={a.id} title={a.description} className="text-[0.7rem] text-muted-foreground bg-muted py-[0.15rem] px-[0.4rem] rounded-[4px] cursor-default">
                 {a.label}
@@ -192,7 +192,7 @@ function SystemStatusContent({ info }: { info: SystemInfo }) {
       ) : (
         <div className="flex flex-col gap-[0.4rem]">
           {info.providers.map(p => (
-            <div key={p.id} className="flex items-center gap-2 py-[0.4rem] px-[0.6rem] bg-muted/50 rounded-[6px] text-[0.82rem]">
+            <div key={p.id} className="flex items-center gap-3 py-[0.4rem] px-[0.6rem] bg-muted/50 rounded-[6px] text-[0.82rem]">
               <span className={cn('w-2 h-2 rounded-full shrink-0', p.available ? 'bg-success shadow-[0_0_6px_rgba(16,185,129,0.15)]' : 'bg-error shadow-[0_0_6px_rgba(239,68,68,0.15)]')} />
               <span className="text-foreground font-medium min-w-[120px]">{p.name}</span>
               <span className="text-muted-foreground text-[0.8125rem] bg-muted py-[0.1rem] px-[0.35rem] rounded-[4px]">{p.type}</span>
@@ -204,7 +204,7 @@ function SystemStatusContent({ info }: { info: SystemInfo }) {
 
       <div className="text-[0.9375rem] text-muted-foreground font-semibold mb-2">工具链</div>
       <div className="flex flex-col gap-[0.4rem]">
-        <div className="flex items-center gap-2 py-[0.4rem] px-[0.6rem] bg-muted/50 rounded-[6px] text-[0.82rem]">
+        <div className="flex items-center gap-3 py-[0.4rem] px-[0.6rem] bg-muted/50 rounded-[6px] text-[0.82rem]">
           <span className={cn('w-2 h-2 rounded-full shrink-0', info.claude_code_available ? 'bg-success shadow-[0_0_6px_rgba(16,185,129,0.15)]' : 'bg-error shadow-[0_0_6px_rgba(239,68,68,0.15)]')} />
           <span className="text-foreground font-medium min-w-[120px]">Claude Code CLI</span>
           <span className="text-muted-foreground text-[0.875rem]">
@@ -215,7 +215,7 @@ function SystemStatusContent({ info }: { info: SystemInfo }) {
 
       <div className="text-[0.9375rem] text-muted-foreground font-semibold mb-2">CC Switch</div>
       <div className="flex flex-col gap-[0.4rem]">
-        <div className="flex items-center gap-2 py-[0.4rem] px-[0.6rem] bg-muted/50 rounded-[6px] text-[0.82rem]">
+        <div className="flex items-center gap-3 py-[0.4rem] px-[0.6rem] bg-muted/50 rounded-[6px] text-[0.82rem]">
           <span className={cn('w-2 h-2 rounded-full shrink-0', info.ccswitch_status?.installed ? 'bg-success shadow-[0_0_6px_rgba(16,185,129,0.15)]' : 'bg-error shadow-[0_0_6px_rgba(239,68,68,0.15)]')} />
           <span className="text-foreground font-medium min-w-[120px]">CC Switch</span>
           <span className="text-muted-foreground text-[0.875rem]">

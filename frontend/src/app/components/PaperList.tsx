@@ -41,7 +41,7 @@ export default function PaperList({ papers, source }: PaperListProps) {
       <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2.5">
         {papers.map((paper, idx) => (
           <div key={`${paper.arxiv_id}-${idx}`} className="bg-muted/40 rounded-lg py-3 px-4 border border-border transition-colors duration-200 hover:border-primary/30">
-            <div className="flex justify-between items-start gap-2 mb-1.5">
+            <div className="flex justify-between items-start gap-3 mb-1.5">
               <a
                 href={paper.url}
                 target="_blank"
@@ -60,7 +60,7 @@ export default function PaperList({ papers, source }: PaperListProps) {
                   }`
                 : '作者未知'}
             </div>
-            <div className="flex gap-1.5 items-center flex-wrap mb-1.5">
+            <div className="flex gap-3 items-center flex-wrap mb-1.5">
               <span className="text-sm text-muted-foreground bg-muted py-0.5 px-1.5 rounded">arXiv:{paper.arxiv_id}</span>
               {paper.relevance_score !== undefined && paper.relevance_score !== null && (
                 <span className="text-sm text-warning bg-warning/10 py-0.5 px-1.5 rounded" title="相关性评分">
@@ -104,7 +104,7 @@ export default function PaperList({ papers, source }: PaperListProps) {
               ) : null}
             </div>
             {paper.fields_of_study && paper.fields_of_study.length > 0 && (
-              <div className="flex gap-1.5 flex-wrap mb-1.5">
+              <div className="flex gap-3 flex-wrap mb-1.5">
                 {paper.fields_of_study.slice(0, 4).map((field) => (
                   <span key={field} className="text-xs text-muted-foreground bg-muted py-0.5 px-1 rounded">
                     {field}

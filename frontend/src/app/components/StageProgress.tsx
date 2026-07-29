@@ -52,7 +52,7 @@ export default function StageProgress({ stages, memoryPool, currentStep }: Stage
         </span>
       </div>
 
-      <div className="grid grid-cols-4 gap-2 relative max-md:grid-cols-1">
+      <div className="grid grid-cols-4 gap-3 relative max-md:grid-cols-1">
         {stages.map((stage, idx) => (
           <div key={stage.id} className="relative flex flex-col items-center">
             {idx > 0 && (
@@ -64,7 +64,7 @@ export default function StageProgress({ stages, memoryPool, currentStep }: Stage
               )} />
             )}
 
-            <div className="w-full flex flex-col items-center gap-2">
+            <div className="w-full flex flex-col items-center gap-3">
               <div className={cn(
                 'flex items-center gap-[0.4rem] py-[0.4rem] px-[0.8rem] rounded-[20px] text-[0.82rem] font-semibold border border-[#334155] bg-[#1E293B] text-[#94A3B8] z-[1] whitespace-nowrap',
                 STATUS_CLASSES[stage.status]

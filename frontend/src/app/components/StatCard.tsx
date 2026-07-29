@@ -27,7 +27,7 @@ export function StatCard({ icon: Icon, label, value, trend = 'neutral', classNam
       className
     )}>
       <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2 text-muted-foreground text-sm">
+        <div className="flex items-center gap-3 text-muted-foreground text-sm">
           <Icon className="w-4 h-4" />
           <span>{label}</span>
         </div>

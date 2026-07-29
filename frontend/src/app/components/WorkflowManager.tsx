@@ -59,14 +59,14 @@ export default function WorkflowManager() {
 
         {workflows.map(wf => (
           <div key={wf.name} className="border border-border rounded-lg p-3 mb-3 last:mb-0">
-            <div className="mb-2 flex items-center gap-2">
+            <div className="mb-2 flex items-center gap-3">
               <span className="text-foreground font-semibold">{wf.name}</span>
               <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-secondary text-secondary-foreground border border-border">
                 预定义
               </span>
             </div>
             <div className="text-sm text-muted-foreground mb-2">{wf.description}</div>
-            <div className="flex gap-1.5 flex-wrap">
+            <div className="flex gap-3 flex-wrap">
               {wf.steps.map((step, i) => (
                 <span key={i} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-secondary text-secondary-foreground border border-border">
                   {i + 1}. {AGENTS.find(a => a.id === step.agent)?.label || step.agent}

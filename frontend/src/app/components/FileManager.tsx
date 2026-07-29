@@ -145,7 +145,7 @@ export default function FileManager({ taskId }: FileManagerProps) {
       <div className="flex items-center justify-between gap-4">
         <span className="text-base text-foreground font-semibold">📁 数据文件管理{projectName ? ` · ${projectName}` : ''}</span>
         {tab === 'user_upload' && (
-          <label className="inline-flex items-center gap-2 min-h-[40px] px-4 py-2 bg-primary text-primary-foreground rounded-lg cursor-pointer text-sm font-semibold transition-opacity duration-150 hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed">
+          <label className="inline-flex items-center gap-3 min-h-[40px] px-4 py-2 bg-primary text-primary-foreground rounded-lg cursor-pointer text-sm font-semibold transition-opacity duration-150 hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed">
             {uploading ? '上传中...' : '📤 批量上传'}
             <input
               type="file"
@@ -159,7 +159,7 @@ export default function FileManager({ taskId }: FileManagerProps) {
         )}
       </div>
 
-      <div className="flex gap-1.5 mb-4 border-b border-border pb-0">
+      <div className="flex gap-3 mb-4 border-b border-border pb-0">
         <button
           className={cn(
             'py-2 px-4 bg-transparent text-muted-foreground border-none border-b-2 border-transparent cursor-pointer text-sm font-medium transition-colors duration-150 -mb-px hover:text-foreground',
@@ -198,7 +198,7 @@ export default function FileManager({ taskId }: FileManagerProps) {
 
           {files.length > 0 && (
             <div className="flex items-center gap-4 mb-2.5 py-1.5 px-2.5 bg-muted rounded-md">
-              <label className="flex items-center gap-1.5 text-muted-foreground text-sm cursor-pointer">
+              <label className="flex items-center gap-3 text-muted-foreground text-sm cursor-pointer">
                 <input
                   type="checkbox"
                   checked={allSelected}
@@ -220,7 +220,7 @@ export default function FileManager({ taskId }: FileManagerProps) {
             <div className="text-center p-8 text-muted-foreground text-sm">暂无用户上传文件，请上传数据文件</div>
           )}
 
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-3">
             {files.map((f) => (
               <div key={f.name} className="flex items-center gap-3 px-5 py-3 bg-muted rounded-lg flex-wrap transition-colors hover:bg-muted/70">
                 <input
@@ -238,7 +238,7 @@ export default function FileManager({ taskId }: FileManagerProps) {
                   </span>
                 </div>
                 {f.insights && f.insights.length > 0 && (
-                  <div className="flex gap-1.5 flex-wrap">
+                  <div className="flex gap-3 flex-wrap">
                     {f.insights.slice(0, 2).map((ins, j) => (
                       <span key={j} className="text-xs py-0.5 px-2 bg-success/10 rounded-full text-success">{ins}</span>
                     ))}
@@ -271,7 +271,7 @@ export default function FileManager({ taskId }: FileManagerProps) {
             </div>
           )}
 
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-3">
             {files.map((f) => {
               const meta = f.meta;
               return (

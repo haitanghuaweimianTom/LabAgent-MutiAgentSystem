@@ -21,7 +21,7 @@ export default function DetailPanel() {
         >
           {/* Header */}
           <div className="h-14 flex items-center justify-between px-4 border-b border-border shrink-0">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               {detailPanelContent.type === 'agent' ? (
                 <Bot className="w-4 h-4 text-primary" />
               ) : (
@@ -79,7 +79,7 @@ function AgentDetail({ agentName }: { agentName: string }) {
       {/* Status */}
       <div className="rounded-lg border border-border bg-muted/30 p-3">
         <div className="text-xs text-muted-foreground mb-1">状态</div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
           <span className="text-sm text-foreground">就绪</span>
         </div>

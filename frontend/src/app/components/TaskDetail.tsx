@@ -235,9 +235,9 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
 
   return (
     <div className="flex flex-col gap-3 h-full">
-      <div className="flex justify-between items-center flex-wrap gap-2">
+      <div className="flex justify-between items-center flex-wrap gap-3">
         <span className="text-base text-foreground font-semibold">📄 任务详情: {taskId}</span>
-        <div className="flex gap-1.5">
+        <div className="flex gap-3">
           {meta?.status === 'running' && !cancelled && (
             <button className="py-1.5 px-3.5 bg-error/10 border border-error/20 rounded-md text-error text-sm cursor-pointer transition-all duration-200 hover:bg-error/10 disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleCancel} disabled={cancelling}>
               {cancelling ? '取消中...' : '⏹ 取消任务'}
@@ -256,7 +256,7 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
       </div>
 
       {taskState.state && taskState.state.name !== 'completed' && taskState.state.name !== 'failed' && (
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-3">
           <div className="flex justify-between items-center text-xs">
             <span className="text-muted-foreground truncate" title={taskState.state.currentStep || ''}>
               {taskState.state.currentStep || '运行中...'}
@@ -274,7 +274,7 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
         </div>
       )}
 
-      <div className="flex gap-1.5 border-b border-border pb-2">
+      <div className="flex gap-3 border-b border-border pb-2">
         {(['messages', 'result', 'peer_review', 'info'] as const).map(t => (
           <button
             key={t}
@@ -295,12 +295,12 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
       {loading && <div className="text-center p-[2rem] text-muted-foreground text-sm">加载中...</div>}
 
       {!loading && activeTab === 'messages' && (
-        <div className="flex-1 flex flex-col gap-2">
+        <div className="flex-1 flex flex-col gap-3">
           <div className="overflow-y-auto max-h-[460px] p-2 bg-muted/50 rounded-md">
             {messages.length === 0 ? <div className="text-center p-[2rem] text-muted-foreground text-sm">暂无讨论记录</div> : messages.map(renderMsg)}
           </div>
           <div className="pt-[0.4rem] border-t border-border">
-            <div className="flex gap-2 items-end">
+            <div className="flex gap-3 items-end">
               <textarea
                 className="flex-1 py-2 px-[0.7rem] bg-muted border border-border rounded-md text-foreground text-sm resize-none font-[inherit] leading-[1.5] focus:outline-none focus:border-primary placeholder:text-muted-foreground"
                 placeholder="向团队追加消息或追问（@Agent名称 可指定专家）..."
@@ -382,7 +382,7 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
                 <div>
                   <strong className="text-foreground">子任务：</strong>
                   {result.output.requirement_plan.subtasks.map((t: any, i: number) => (
-                    <div key={i} className="flex gap-2 items-center ml-3 mt-1">
+                    <div key={i} className="flex gap-3 items-center ml-3 mt-1">
                       <span className={cn(
                         'px-1.5 py-0.5 rounded text-xs font-medium',
                         t.priority === 'high' ? 'bg-error/15 text-error' : t.priority === 'medium' ? 'bg-warning/15 text-warning' : 'bg-success/15 text-success'
@@ -539,7 +539,7 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
                 <div className="text-success text-sm p-3 bg-success/10 rounded-md text-center">反馈已提交，感谢！</div>
               ) : (
                 <>
-                  <div className="flex flex-col gap-1.5 mb-3">
+                  <div className="flex flex-col gap-3 mb-3">
                     <label className="text-sm text-muted-foreground">整体评分</label>
                     <select
                       className="p-2 bg-muted border border-border rounded-md text-foreground text-sm font-[inherit]"
@@ -551,7 +551,7 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
                       ))}
                     </select>
                   </div>
-                  <div className="flex flex-col gap-1.5 mb-3">
+                  <div className="flex flex-col gap-3 mb-3">
                     <label className="text-sm text-muted-foreground">类别</label>
                     <select
                       className="p-2 bg-muted border border-border rounded-md text-foreground text-sm font-[inherit]"
@@ -565,7 +565,7 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
                       <option value="data_processing">数据处理</option>
                     </select>
                   </div>
-                  <div className="flex flex-col gap-1.5 mb-3">
+                  <div className="flex flex-col gap-3 mb-3">
                     <label className="text-sm text-muted-foreground">建议/备注</label>
                     <textarea
                       className="p-2 bg-muted border border-border rounded-md text-foreground text-sm font-[inherit] min-h-[80px] resize-y"

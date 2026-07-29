@@ -561,7 +561,7 @@ export default function KnowledgeBaseManager() {
     setSelectedItemIds(new Set());
   };
 
-  const actionBtnBase = "inline-flex items-center gap-1.5 min-h-[34px] px-3.5 py-2 bg-muted border border-border rounded-lg text-muted-foreground text-sm cursor-pointer transition-colors duration-150 whitespace-nowrap hover:bg-accent hover:text-foreground";
+  const actionBtnBase = "inline-flex items-center gap-3 min-h-[34px] px-3.5 py-2 bg-muted border border-border rounded-lg text-muted-foreground text-sm cursor-pointer transition-colors duration-150 whitespace-nowrap hover:bg-accent hover:text-foreground";
   const actionBtnPrimary = "bg-primary text-primary-foreground border-primary hover:bg-primary hover:text-primary-foreground hover:opacity-90";
   const modalInputBase = "h-10 px-3.5 bg-muted border border-border rounded-lg text-foreground text-sm outline-none w-full focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground";
 
@@ -573,7 +573,7 @@ export default function KnowledgeBaseManager() {
           <span className="text-lg text-foreground font-semibold">📚 知识库</span>
           <button className="inline-flex items-center justify-center min-h-[34px] px-3.5 py-2 bg-primary border border-primary rounded-lg text-primary-foreground text-sm cursor-pointer font-semibold transition-opacity hover:opacity-90" onClick={() => setShowCreateBase(true)}>+ 新建</button>
         </div>
-        <div className="flex items-center gap-1 h-11 px-5 border-b border-border shrink-0">
+        <div className="flex items-center gap-2.5 h-11 px-5 border-b border-border shrink-0">
           {(['all', 'global', 'project'] as const).map(s => (
             <button
               key={s}
@@ -631,7 +631,7 @@ export default function KnowledgeBaseManager() {
         {/* Header */}
         <div className="flex items-center justify-between px-5 h-14 border-b border-border shrink-0 gap-4">
           <span className="text-base text-foreground font-semibold whitespace-nowrap overflow-hidden text-ellipsis">{activeBase ? activeBase.name : '请选择知识库'}</span>
-          <div className="flex gap-2 items-center shrink-0">
+          <div className="flex gap-3 items-center shrink-0">
             <input
               className="h-10 px-3.5 bg-muted border border-border rounded-lg text-foreground text-sm w-[240px] outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
               placeholder="搜索知识库..."
@@ -664,7 +664,7 @@ export default function KnowledgeBaseManager() {
         </div>
 
         {/* Tabs */}
-        <div className="flex items-center gap-1 h-11 px-5 border-b border-border shrink-0">
+        <div className="flex items-center gap-2.5 h-11 px-5 border-b border-border shrink-0">
           {TABS.map(tab => (
             <button
               key={tab.key}
@@ -701,7 +701,7 @@ export default function KnowledgeBaseManager() {
                 >
                   <div className="flex justify-between mb-1.5">
                     <span className="text-foreground font-semibold text-sm">{r.title}</span>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-3">
                       {r.metadata?.domain && (
                         <span className="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary">{r.metadata.domain}</span>
                       )}
@@ -726,7 +726,7 @@ export default function KnowledgeBaseManager() {
                 <div className="flex justify-between items-center px-5 py-4 border-b border-border">
                   <div className="flex-1 min-w-0">
                     <div className="text-foreground font-semibold text-base truncate">{selectedResult.title}</div>
-                    <div className="flex items-center gap-2 mt-1">
+                    <div className="flex items-center gap-3 mt-1">
                       {selectedResult.metadata?.domain && (
                         <span className="text-xs px-2 py-0.5 rounded bg-primary/10 text-primary">{selectedResult.metadata.domain}</span>
                       )}
@@ -768,7 +768,7 @@ export default function KnowledgeBaseManager() {
           {!showSearch && (
             <>
               {filteredItems.length > 0 && (
-                <div className="flex items-center gap-2 mb-3">
+                <div className="flex items-center gap-3 mb-3">
                   <input
                     type="checkbox"
                     checked={selectedItemIds.size > 0 && selectedItemIds.size === filteredItems.length}
@@ -877,7 +877,7 @@ export default function KnowledgeBaseManager() {
                 onChange={e => setNewBaseProjectName(e.target.value)}
               />
             )}
-            <div className="flex justify-end gap-2 mt-2">
+            <div className="flex justify-end gap-3 mt-2">
               <button className={actionBtnBase} onClick={() => setShowCreateBase(false)}>取消</button>
               <button className={cn(actionBtnBase, actionBtnPrimary)} onClick={handleCreateBase}>创建</button>
             </div>
@@ -898,7 +898,7 @@ export default function KnowledgeBaseManager() {
               onKeyDown={e => e.key === 'Enter' && handleRenameBase()}
               autoFocus
             />
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-3">
               <button className={actionBtnBase} onClick={() => setShowRenameBase(false)}>取消</button>
               <button className={cn(actionBtnBase, actionBtnPrimary)} onClick={handleRenameBase}>确认</button>
             </div>
@@ -918,7 +918,7 @@ export default function KnowledgeBaseManager() {
               onChange={e => setNoteContent(e.target.value)}
               autoFocus
             />
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-3">
               <button className={actionBtnBase} onClick={closeAddNoteModal}>取消</button>
               <button className={cn(actionBtnBase, actionBtnPrimary)} onClick={handleAddNote}>
                 {editingItem ? '保存' : '添加'}
@@ -1037,7 +1037,7 @@ export default function KnowledgeBaseManager() {
                 )}
               </div>
             </div>
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-3">
               <button className={actionBtnBase} onClick={() => setShowSettings(false)}>取消</button>
               <button className={cn(actionBtnBase, actionBtnPrimary)} onClick={saveSettings}>保存</button>
             </div>

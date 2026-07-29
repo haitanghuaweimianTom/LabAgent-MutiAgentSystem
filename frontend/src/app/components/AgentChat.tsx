@@ -219,16 +219,16 @@ export default function AgentChat({
       <StageProgress stages={stages} currentStep={currentStep} />
 
       <div className="bg-card border border-border rounded-[14px] p-5 flex flex-col gap-3">
-        <div className="flex justify-between items-center flex-wrap gap-2">
+        <div className="flex justify-between items-center flex-wrap gap-3">
           <div className="flex items-center gap-3 flex-wrap">
             <span className="text-lg text-foreground font-semibold">💬 Agent 团队实时讨论</span>
-            <div className="flex gap-1.5 flex-wrap">
+            <div className="flex gap-3 flex-wrap">
               {Object.entries(TEAM_LABELS).filter(([k]) => k !== 'system').map(([k, v]) => (
                 <span key={k} className="px-2 py-0.5 rounded-lg text-sm text-muted-foreground font-medium whitespace-nowrap bg-muted border border-border">{v}</span>
               ))}
             </div>
           </div>
-          <div className="flex gap-1.5">
+          <div className="flex gap-3">
             {isRunning && !paused && (
               <>
                 <button className="py-1.5 px-3 bg-warning/15 border border-warning/30 rounded-md text-warning text-sm cursor-pointer transition-colors duration-150 hover:bg-warning/20" onClick={onPause}>⏸ 暂停</button>
@@ -302,7 +302,7 @@ export default function AgentChat({
         </div>
 
         <div className="mt-2 pt-[0.5rem] border-t border-border">
-          <div className="flex gap-2 items-end">
+          <div className="flex gap-3 items-end">
             <textarea
               className="flex-1 py-2.5 px-3 bg-background border border-input rounded-md text-foreground text-sm resize-none font-inherit leading-relaxed focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
               placeholder={isWaiting ? 'Agent 正在等待您的反馈，请输入意见...' : '参与讨论：输入您的想法、建议或修正方向...'}

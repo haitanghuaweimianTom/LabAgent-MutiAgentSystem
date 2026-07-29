@@ -85,7 +85,7 @@ export function ActivityTimeline() {
 
   return (
     <div className="rounded-xl border border-border bg-card/50 backdrop-blur p-4">
-      <div className="flex items-center gap-2 text-sm text-muted-foreground mb-3">
+      <div className="flex items-center gap-3 text-sm text-muted-foreground mb-3">
         <Activity className="w-4 h-4" />
         <span>近期活动</span>
       </div>

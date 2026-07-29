@@ -122,7 +122,7 @@ export default function LogStream({ taskId, className }: LogStreamProps) {
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-muted/50 transition-colors"
       >
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <div className="relative">
             <Terminal className="w-4 h-4 text-muted-foreground" />
             {logs.some((l) => l.level === 'error') && (
@@ -151,7 +151,7 @@ export default function LogStream({ taskId, className }: LogStreamProps) {
             className="overflow-hidden"
           >
             {/* 过滤器 */}
-            <div className="flex items-center gap-1 px-4 py-1.5 border-b border-border">
+            <div className="flex items-center gap-2.5 px-4 py-1.5 border-b border-border">
               {(['all', 'agent', 'error'] as const).map((f) => (
                 <button
                   key={f}
@@ -187,7 +187,7 @@ export default function LogStream({ taskId, className }: LogStreamProps) {
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ duration: 0.15 }}
                     className={cn(
-                      'flex items-start gap-2 py-1 px-2 rounded mb-0.5',
+                      'flex items-start gap-3 py-1 px-2 rounded mb-0.5',
                       log.level === 'error' && 'bg-red-500/5',
                       log.level === 'warn' && 'bg-amber-500/5'
                     )}
@@ -220,7 +220,7 @@ export default function LogStream({ taskId, className }: LogStreamProps) {
 
             {/* 底部控制 */}
             <div className="flex items-center justify-between px-4 py-1.5 border-t border-border">
-              <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
+              <label className="flex items-center gap-3 text-xs text-muted-foreground cursor-pointer">
                 <input
                   type="checkbox"
                   checked={autoScroll}
@@ -231,7 +231,7 @@ export default function LogStream({ taskId, className }: LogStreamProps) {
               </label>
               <button
                 onClick={() => setLogs([])}
-                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                className="flex items-center gap-2.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
                 <Trash2 className="w-3 h-3" />
                 清空

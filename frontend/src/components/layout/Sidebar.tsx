@@ -89,16 +89,16 @@ export function Sidebar({ tasks = [] }: SidebarProps) {
             'w-full flex items-center justify-center gap-2 rounded-lg font-medium',
             'bg-background text-foreground border border-border',
             'hover:bg-muted transition-colors duration-150',
-            collapsed ? 'h-9 w-9 p-0' : 'h-9 px-4'
+            collapsed ? 'h-11 w-11 p-0' : 'h-11 px-4 text-[15px]'
           )}
         >
-          <Plus className="w-4 h-4" />
-          {!collapsed && <span className="text-sm">新建任务</span>}
+          <Plus className="w-[18px] h-[18px]" />
+          {!collapsed && <span>新建任务</span>}
         </Link>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto px-2 py-1">
+      <nav className="flex-1 overflow-y-auto px-2.5 py-2">
         {navItems.map((item) => {
           const Icon = item.icon
           const isActive = pathname === item.href ||
@@ -109,15 +109,15 @@ export function Sidebar({ tasks = [] }: SidebarProps) {
               href={item.href}
               onClick={() => setMobileOpen(false)}
               className={cn(
-                'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium',
-                'transition-colors duration-150 mb-0.5',
+                'flex items-center gap-3 rounded-lg px-3.5 py-2.5 text-[15px] font-medium',
+                'transition-colors duration-150 mb-1',
                 isActive
                   ? 'bg-primary/10 text-primary'
                   : 'text-muted-foreground hover:text-foreground hover:bg-muted',
                 collapsed && 'justify-center px-0'
               )}
             >
-              <Icon className="w-4 h-4 shrink-0" />
+              <Icon className="w-[18px] h-[18px] shrink-0" />
               {!collapsed && <span>{item.label}</span>}
             </Link>
           )
@@ -146,7 +146,7 @@ export function Sidebar({ tasks = [] }: SidebarProps) {
       <div className="px-2 py-1 hidden md:block">
         <button
           onClick={toggleTheme}
-          className="w-full flex items-center justify-center gap-2 py-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors text-xs"
+          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors text-sm"
         >
           {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           <span>{theme === 'dark' ? '浅色模式' : '深色模式'}</span>
@@ -157,7 +157,7 @@ export function Sidebar({ tasks = [] }: SidebarProps) {
       <div className="px-2 py-2 border-t border-border hidden md:block">
         <button
           onClick={toggleSidebar}
-          className="w-full flex items-center justify-center gap-2 py-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors text-xs"
+          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors text-sm"
         >
           {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
           {!collapsed && <span>收起侧栏</span>}
@@ -191,7 +191,7 @@ export function Sidebar({ tasks = [] }: SidebarProps) {
 
       {/* Desktop sidebar */}
       <motion.aside
-        animate={{ width: collapsed ? 64 : 260 }}
+        animate={{ width: collapsed ? 64 : 272 }}
         transition={{ duration: 0.2, ease: 'easeInOut' }}
         className="hidden md:flex h-screen flex-col border-r border-border bg-card/80 backdrop-blur-xl"
       >

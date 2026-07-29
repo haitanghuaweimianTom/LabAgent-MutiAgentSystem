@@ -122,7 +122,7 @@ export default function SettingsPage() {
 
   return (
     <div className="flex flex-col gap-6 space-y-6">
-      <div className="flex gap-2 flex-wrap">
+      <div className="flex gap-3 flex-wrap">
         {TABS.map(tab => (
           <button
             key={tab.id}
@@ -154,16 +154,16 @@ export default function SettingsPage() {
           <div className="bg-card border border-border rounded-lg p-5">
             <span className="text-sm text-foreground font-semibold">🤖 Claude Code CLI 配置</span>
 
-            <div className="mb-3 flex items-center gap-2 mt-4">
+            <div className="mb-3 flex items-center gap-3 mt-4">
               <span className={`w-2 h-2 rounded-full ${sysInfo?.claude_code_available ? 'bg-success' : 'bg-muted-foreground'}`} />
               <span className="text-foreground text-sm">
                 {sysInfo?.claude_code_available ? `已安装: ${sysInfo?.claude_code_path}` : '未安装 - 请运行 npm install -g @anthropic-ai/claude-code'}
               </span>
             </div>
 
-            <div className="flex flex-col gap-2 mb-4">
+            <div className="flex flex-col gap-3 mb-4">
               <div className="text-sm text-muted-foreground font-semibold">Claude 模型</div>
-              <div className="flex gap-2">
+              <div className="flex gap-3">
                 <select
                   className="flex-1 text-foreground bg-muted border border-border p-2 rounded-md"
                   value={claudeModel}
@@ -180,38 +180,38 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            <div className="flex flex-col gap-2 mb-4">
+            <div className="flex flex-col gap-3 mb-4">
               <div className="text-sm text-muted-foreground font-semibold">MCP 工具（逗号分隔）</div>
-              <div className="flex gap-2">
+              <div className="flex gap-3">
                 <input type="text" className="flex-1 text-foreground bg-muted border border-border p-2 rounded-md" placeholder="bing_search,web_search,paper_search,sequentialthinking" value={claudeMcpTools} onChange={e => setClaudeMcpTools(e.target.value)} />
               </div>
               <div className="text-xs text-muted-foreground">可用: bing_search, web_search, paper_search, python_execute, sequentialthinking</div>
             </div>
 
-            <div className="flex flex-col gap-2 mb-4">
+            <div className="flex flex-col gap-3 mb-4">
               <div className="text-sm text-muted-foreground font-semibold">MCP 配置文件路径</div>
-              <div className="flex gap-2">
+              <div className="flex gap-3">
                 <input type="text" className="flex-1 text-foreground bg-muted border border-border p-2 rounded-md" placeholder="留空则自动搜索" value={claudeMcpConfigPath} onChange={e => setClaudeMcpConfigPath(e.target.value)} />
               </div>
             </div>
 
-            <div className="flex flex-col gap-2 mb-4">
+            <div className="flex flex-col gap-3 mb-4">
               <div className="text-sm text-muted-foreground font-semibold">温度</div>
-              <div className="flex gap-2">
+              <div className="flex gap-3">
                 <input type="number" className="flex-1 text-foreground bg-muted border border-border p-2 rounded-md" placeholder="0.3" value={claudeTemperature} onChange={e => setClaudeTemperature(e.target.value)} min="0" max="1" step="0.1" />
               </div>
             </div>
 
-            <div className="flex flex-col gap-2 mb-4">
+            <div className="flex flex-col gap-3 mb-4">
               <div className="text-sm text-muted-foreground font-semibold">最大输出 Token</div>
-              <div className="flex gap-2">
+              <div className="flex gap-3">
                 <input type="number" className="flex-1 text-foreground bg-muted border border-border p-2 rounded-md" placeholder="8192" value={claudeMaxTokens} onChange={e => setClaudeMaxTokens(e.target.value)} min="100" max="32000" />
               </div>
             </div>
 
-            <div className="flex flex-col gap-2 mb-4">
+            <div className="flex flex-col gap-3 mb-4">
               <div className="text-sm text-muted-foreground font-semibold">代码生成方式</div>
-              <label className="flex items-center gap-2 cursor-pointer">
+              <label className="flex items-center gap-3 cursor-pointer">
                 <input type="checkbox" checked={claudeCoderPreferCli} onChange={e => setClaudeCoderPreferCli(e.target.checked)} className="cursor-pointer" />
                 <span className="text-sm text-muted-foreground">
                   优先使用 Claude Code CLI 生成代码
@@ -220,7 +220,7 @@ export default function SettingsPage() {
               </label>
             </div>
 
-            <div className="flex gap-2 mt-4">
+            <div className="flex gap-3 mt-4">
               <button className="bg-primary text-primary-foreground border-none py-2 px-4 rounded-md cursor-pointer font-semibold hover:opacity-90" onClick={handleSaveClaudeSettings}>💾 保存 Claude Code 配置</button>
             </div>
           </div>

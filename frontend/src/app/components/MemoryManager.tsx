@@ -163,7 +163,7 @@ export default function MemoryManager() {
         </div>
       )}
 
-      <div className="flex gap-2 mb-4 border-b border-border pb-2">
+      <div className="flex gap-3 mb-4 border-b border-border pb-2">
         <button className={cn('py-2 px-4 bg-transparent border border-border rounded-md text-muted-foreground cursor-pointer text-sm transition-colors', tab === 'lessons' && 'bg-warning/10 border-warning/40 text-warning')} onClick={() => setTab('lessons')}>
           📚 经验教训
         </button>
@@ -179,7 +179,7 @@ export default function MemoryManager() {
         <>
           <div className="bg-card border border-border rounded-lg p-4 mb-6">
             <div className="text-base font-semibold text-foreground mb-4">➕ 添加经验</div>
-            <div className="flex gap-2 mb-4 flex-wrap">
+            <div className="flex gap-3 mb-4 flex-wrap">
               <select
                 className="py-2.5 px-3 bg-muted border border-border rounded-md text-foreground text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
                 value={newLesson.category}
@@ -218,13 +218,13 @@ export default function MemoryManager() {
               value={newLesson.content}
               onChange={(e) => setNewLesson({ ...newLesson, content: e.target.value })}
             />
-            <div className="flex gap-2 mt-4">
+            <div className="flex gap-3 mt-4">
               <button className="py-2 px-4 bg-primary text-primary-foreground border-none rounded-md cursor-pointer text-sm font-semibold transition-opacity hover:opacity-90" onClick={addLesson}>添加经验</button>
               <button className="py-1.5 px-4 bg-error/10 text-error border border-error/20 rounded-md cursor-pointer text-sm transition-colors hover:bg-error/15" onClick={clearLessons}>清空全部</button>
             </div>
           </div>
 
-          <div className="flex gap-2 mb-4 flex-wrap">
+          <div className="flex gap-3 mb-4 flex-wrap">
             <input
               className="py-2.5 px-3 bg-muted border border-border rounded-md text-foreground text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
               placeholder="按类别筛选"
@@ -249,7 +249,7 @@ export default function MemoryManager() {
               {lessons.map((lesson) => (
                 <div key={lesson.id} className="bg-card border border-border rounded-lg p-4">
                   <div className="flex justify-between items-start mb-2">
-                    <div className="flex gap-2 flex-wrap">
+                    <div className="flex gap-3 flex-wrap">
                       <span className="px-2 py-1 bg-primary/10 rounded text-sm text-primary">{lesson.category}</span>
                       <span className={cn('px-2 py-1 rounded text-sm', lesson.success ? 'bg-primary/10 text-primary' : 'bg-warning/10 text-warning')}>
                         {lesson.success ? '有效' : '教训'}
@@ -260,7 +260,7 @@ export default function MemoryManager() {
                     <button className="py-1.5 px-4 bg-error/10 text-error border border-error/20 rounded-md cursor-pointer text-sm transition-colors hover:bg-error/15" onClick={() => deleteLesson(lesson.id)}>删除</button>
                   </div>
                   <div className="text-sm leading-relaxed text-foreground">{lesson.content}</div>
-                  <div className="flex gap-2 flex-wrap mt-2 text-xs text-muted-foreground">
+                  <div className="flex gap-3 flex-wrap mt-2 text-xs text-muted-foreground">
                     <span>引用 {lesson.use_count || 0} 次</span>
                     <span>来源: {lesson.source_task}</span>
                     <span>{new Date(lesson.created_at).toLocaleString('zh-CN')}</span>
@@ -274,7 +274,7 @@ export default function MemoryManager() {
 
       {tab === 'task' && (
         <>
-          <div className="flex gap-2 mb-4">
+          <div className="flex gap-3 mb-4">
             <input
               className="py-2.5 px-3 bg-muted border border-border rounded-md text-foreground text-sm flex-1 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
               placeholder="输入任务ID"

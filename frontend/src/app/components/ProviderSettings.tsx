@@ -356,7 +356,7 @@ export default function ProviderSettings() {
   if (loading) return <div className="text-center p-8 text-muted-foreground text-sm">加载中...</div>;
 
   // 语义色按钮样式（Geist 单色）
-  const btnBase = 'inline-flex items-center justify-center gap-1.5 rounded-lg cursor-pointer font-semibold transition-opacity duration-150 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed';
+  const btnBase = 'inline-flex items-center justify-center gap-3 rounded-lg cursor-pointer font-semibold transition-opacity duration-150 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed';
   const btnPrimary = `${btnBase} py-2 px-4 text-sm bg-primary text-primary-foreground`;
   const btnSuccess = `${btnBase} py-2 px-4 text-sm bg-success/10 text-success border border-success/20 hover:bg-success/15`;
   const btnInfo = `${btnBase} py-2 px-4 text-sm bg-primary/10 text-primary border border-primary/20 hover:bg-primary/15`;
@@ -384,7 +384,7 @@ export default function ProviderSettings() {
               CC Switch 风格：支持导入内置预设，自定义 API 格式（OpenAI/Anthropic/Ollama 等）
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-3">
             <button onClick={() => setShowJsonImport(!showJsonImport)} className={btnWarning}>📋 JSON 导入</button>
             <button onClick={() => setShowPresets(!showPresets)} className={btnPurple}>📦 内置预设</button>
             <button onClick={() => setShowAdd(!showAdd)} className={btnSuccess}>+ 添加 Provider</button>
@@ -396,7 +396,7 @@ export default function ProviderSettings() {
       <div className={cardClass}>
         <div className="flex justify-between items-center">
           <div>
-            <div className="flex items-center gap-2 mb-1.5">
+            <div className="flex items-center gap-3 mb-1.5">
               <span className="text-base text-foreground font-semibold">🔄 CC Switch 自动同步</span>
               {ccswitchStatus?.installed ? (
                 <span className="w-2 h-2 rounded-full bg-success inline-block" />
@@ -461,7 +461,7 @@ export default function ProviderSettings() {
             placeholder={`{\n  "env": {\n    "ANTHROPIC_BASE_URL": "https://api.kimi.com/coding/",\n    "ANTHROPIC_AUTH_TOKEN": "sk-...",\n    "ANTHROPIC_MODEL": "kimi-for-coding"\n  },\n  "model": "kimi-for-coding"\n}`}
             className="w-full p-3 bg-muted border border-border rounded-md text-foreground text-sm font-mono resize-y box-border focus:outline-none focus:border-primary placeholder:text-muted-foreground"
           />
-          <div className="flex gap-2 mt-4">
+          <div className="flex gap-3 mt-4">
             <button onClick={handleJsonImport} disabled={importingJson} className={btnPrimary}>
               {importingJson ? '导入中...' : '确认导入'}
             </button>
@@ -481,12 +481,12 @@ export default function ProviderSettings() {
               <div className="inline-block py-0.5 px-2.5 rounded text-xs font-semibold mb-2 bg-primary/10 text-primary border border-primary/20">
                 {CATEGORY_LABEL(cat)}
               </div>
-              <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
+              <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
                 {catPresets.map((p: Preset) => (
                   <button
                     key={p.id}
                     onClick={() => handleImportPreset(p.id)}
-                    className="p-2.5 bg-muted border border-border rounded-md text-foreground cursor-pointer text-left flex flex-col gap-1 transition-colors hover:border-primary/40"
+                    className="p-2.5 bg-muted border border-border rounded-md text-foreground cursor-pointer text-left flex flex-col gap-2.5 transition-colors hover:border-primary/40"
                   >
                     <span className="text-foreground font-semibold text-sm">{p.icon} {p.name}</span>
                     <span className="text-muted-foreground text-xs">{p.api_host}</span>
@@ -509,7 +509,7 @@ export default function ProviderSettings() {
           {/* API format selector */}
           <div className="mb-4">
             <div className="text-foreground text-sm mb-2">API 格式</div>
-            <div className="flex gap-2 flex-wrap">
+            <div className="flex gap-3 flex-wrap">
               {(apiFormats.length > 0 ? apiFormats : [
                 { id: 'openai_chat', label: 'OpenAI Chat', desc: '/chat/completions' },
                 { id: 'openai_responses', label: 'OpenAI Responses', desc: '/responses' },
@@ -537,7 +537,7 @@ export default function ProviderSettings() {
           {/* Auth field selector */}
           <div className="mb-4">
             <div className="text-foreground text-sm mb-2">认证方式</div>
-            <div className="flex gap-2 flex-wrap">
+            <div className="flex gap-3 flex-wrap">
               {(authFields.length > 0 ? authFields : [
                 { id: 'bearer_token', label: 'Bearer Token', desc: 'Authorization: Bearer <key>' },
                 { id: 'x_api_key', label: 'x-api-key', desc: 'Anthropic 原生: x-api-key: <key>' },
@@ -588,7 +588,7 @@ export default function ProviderSettings() {
               className={inputClass}
             />
           </div>
-          <div className="flex gap-2 mt-4">
+          <div className="flex gap-3 mt-4">
             <button onClick={handleAdd} disabled={adding} className={btnPrimary}>
               {adding ? '添加中...' : '确认添加'}
             </button>
@@ -619,7 +619,7 @@ export default function ProviderSettings() {
             <div className="flex justify-between items-start mb-4">
               <div className="flex items-center gap-3">
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3">
                     <span className="text-foreground font-semibold text-lg">{provider.name}</span>
                     {isDefault && (
                       <span className="py-0.5 px-2 bg-success/10 border border-success/20 rounded text-success text-xs">默认</span>
@@ -633,7 +633,7 @@ export default function ProviderSettings() {
                   </div>
                 </div>
               </div>
-              <div className="flex gap-1.5">
+              <div className="flex gap-3">
                 {!isDefault && (
                   <button onClick={() => handleSetDefault(provider.id)} className={btnSmSuccess}>
                     设为默认
@@ -649,7 +649,7 @@ export default function ProviderSettings() {
             </div>
 
             {/* API Key */}
-            <div className="flex items-center gap-2 mb-3 p-2 bg-muted rounded-md">
+            <div className="flex items-center gap-3 mb-3 p-2 bg-muted rounded-md">
               <span className="text-muted-foreground text-sm min-w-[60px]">API Key</span>
               <code className="text-foreground text-sm font-mono">
                 {provider.api_key ? `${provider.api_key.slice(0, 8)}${'•'.repeat(20)}` : '(使用环境变量)'}
@@ -659,11 +659,11 @@ export default function ProviderSettings() {
             {/* Models */}
             <div>
               <div className="text-foreground text-sm mb-2">模型</div>
-              <div className="flex gap-1.5 flex-wrap mb-2">
+              <div className="flex gap-3 flex-wrap mb-2">
                 {(provider.models || []).map(m => (
                   <span
                     key={m.name}
-                    className={`py-1 px-2.5 rounded-md border text-sm flex items-center gap-1.5 ${m.enabled ? 'bg-primary/10 text-primary border-primary/20' : 'bg-muted text-muted-foreground border-border'}`}
+                    className={`py-1 px-2.5 rounded-md border text-sm flex items-center gap-3 ${m.enabled ? 'bg-primary/10 text-primary border-primary/20' : 'bg-muted text-muted-foreground border-border'}`}
                   >
                     {m.name}
                     <button onClick={() => handleRemoveModel(provider.id, m.name)} className="bg-transparent border-none text-error cursor-pointer p-0 text-xs">✕</button>
@@ -671,7 +671,7 @@ export default function ProviderSettings() {
                 ))}
                 {(!provider.models || provider.models.length === 0) && <span className="text-muted-foreground text-sm">暂无模型，请添加模型</span>}
               </div>
-              <div className="flex gap-1.5">
+              <div className="flex gap-3">
                 <input
                   id={`model_add_${provider.id}`}
                   placeholder="添加模型名称"

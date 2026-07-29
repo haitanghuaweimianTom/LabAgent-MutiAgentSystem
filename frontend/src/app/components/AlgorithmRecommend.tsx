@@ -28,27 +28,27 @@ export default function AlgorithmRecommend({ algorithms }: AlgorithmRecommendPro
       <div className="flex flex-col gap-[0.6rem]">
         {algorithms.map((algo, idx) => (
           <div key={algo.name_en} className="bg-black/20 border border-[#334155] rounded-[10px] overflow-hidden">
-            <div className="flex items-center gap-2 py-[0.6rem] px-[0.8rem] bg-[rgba(45,212,191,0.15)] border-b border-[#334155]">
+            <div className="flex items-center gap-3 py-[0.6rem] px-[0.8rem] bg-[rgba(45,212,191,0.15)] border-b border-[#334155]">
               <span className="text-[0.875rem] text-[#3498db] font-bold bg-[rgba(45,212,191,0.15)] py-[0.1rem] px-[0.4rem] rounded-[4px]">#{idx + 1}</span>
               <span className="text-[0.9375rem] text-[#F8FAFC] font-semibold">{algo.name_cn}</span>
               <span className="text-[0.875rem] text-[#94A3B8] italic">{algo.name_en}</span>
               <span className="ml-auto text-[0.72rem] text-[#2ecc71] font-semibold">相关度 {algo.relevance_score}</span>
             </div>
             <div className="py-[0.7rem] px-[0.8rem]">
-              <div className="flex gap-2 mb-[0.4rem] items-start">
+              <div className="flex gap-3 mb-[0.4rem] items-start">
                 <span className="text-[0.875rem] text-[#94A3B8] font-semibold min-w-[60px] shrink-0">描述</span>
                 <span className="text-[0.82rem] text-[#94A3B8] leading-[1.5]">{algo.description}</span>
               </div>
-              <div className="flex gap-2 mb-[0.4rem] items-start">
+              <div className="flex gap-3 mb-[0.4rem] items-start">
                 <span className="text-[0.875rem] text-[#94A3B8] font-semibold min-w-[60px] shrink-0">适用场景</span>
                 <span className="text-[0.82rem] text-[#94A3B8] leading-[1.5]">{algo.applicable_scenarios.slice(0, 3).join(' · ')}</span>
               </div>
-              <div className="flex gap-2 mb-[0.4rem] items-start">
+              <div className="flex gap-3 mb-[0.4rem] items-start">
                 <span className="text-[0.875rem] text-[#94A3B8] font-semibold min-w-[60px] shrink-0">数学模型</span>
                 <span className="text-[0.875rem] text-[#CBD5E1] font-mono leading-[1.5]">{algo.mathematical_model}</span>
               </div>
               {algo.subtypes && Object.keys(algo.subtypes).length > 0 && (
-                <div className="flex gap-2 mb-[0.4rem] items-start">
+                <div className="flex gap-3 mb-[0.4rem] items-start">
                   <span className="text-[0.875rem] text-[#94A3B8] font-semibold min-w-[60px] shrink-0">具体方法</span>
                   <div className="flex flex-wrap gap-[0.3rem]">
                     {Object.keys(algo.subtypes).map(st => (

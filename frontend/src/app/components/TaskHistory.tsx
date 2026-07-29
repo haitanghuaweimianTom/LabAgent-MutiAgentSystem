@@ -119,7 +119,7 @@ export default function TaskHistory() {
       <div className="bg-card border border-border rounded-xl p-4 overflow-y-auto max-h-[700px]">
         <div className="flex justify-between items-center mb-4">
           <span className="text-base text-foreground font-semibold">📋 历史任务</span>
-          <div className="flex gap-2 items-center">
+          <div className="flex gap-3 items-center">
             <button className="py-1.5 px-3 bg-muted border border-border rounded-md text-muted-foreground text-sm cursor-pointer transition-colors duration-150 hover:bg-muted/80 hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed" onClick={loadTaskList} disabled={loading}>
               {loading ? '加载中...' : '🔄 刷新'}
             </button>
@@ -146,12 +146,12 @@ export default function TaskHistory() {
         {loading && taskList.length === 0 && <div className="text-center p-8 text-muted-foreground text-sm">加载中...</div>}
         {!loading && taskList.length === 0 && <div className="text-center p-8 text-muted-foreground text-sm">暂无历史任务</div>}
 
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-3">
           {taskList.map(task => (
             <div
               key={task.task_id}
               className={cn(
-                'flex items-start gap-2 p-3 rounded-lg border border-border bg-muted cursor-pointer transition-colors duration-150 hover:bg-muted/60 hover:border-foreground/20',
+                'flex items-start gap-3 p-3 rounded-lg border border-border bg-muted cursor-pointer transition-colors duration-150 hover:bg-muted/60 hover:border-foreground/20',
                 detailTaskId === task.task_id && '!bg-primary/10 !border-primary/30'
               )}
               onClick={() => setDetailTaskId(task.task_id)}
@@ -173,7 +173,7 @@ export default function TaskHistory() {
                 <div className="text-sm text-muted-foreground leading-normal display-[-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical] overflow-hidden mb-1.5">
                   {task.problem_preview || '（无题目描述）'}
                 </div>
-                <div className="flex gap-2 items-center text-xs text-muted-foreground">
+                <div className="flex gap-3 items-center text-xs text-muted-foreground">
                   {task.template && <span>📄 {task.template}</span>}
                   {task.workflow_type && <span>⚙️ {task.workflow_type}</span>}
                   {task.current_step && <span>📍 {nodeLabel(task.current_step)}</span>}

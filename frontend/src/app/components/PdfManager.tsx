@@ -168,7 +168,7 @@ export default function PdfManager() {
 
       <div className="flex flex-col gap-2.5">
         <div className="text-sm text-muted-foreground font-semibold">上传 / 下载 PDF</div>
-        <div className="flex gap-2 items-center flex-wrap">
+        <div className="flex gap-3 items-center flex-wrap">
           <input
             type="file"
             accept=".pdf"
@@ -195,13 +195,13 @@ export default function PdfManager() {
 
       <div className="flex flex-col gap-2.5">
         <div className="text-sm text-muted-foreground font-semibold">解析策略</div>
-        <div className="flex gap-2 items-center flex-wrap">
+        <div className="flex gap-3 items-center flex-wrap">
           <select className="py-2 px-2.5 bg-muted border border-border rounded-md text-foreground text-sm" value={strategy} onChange={(e) => setStrategy(e.target.value)}>
             <option value="auto">自动选择</option>
             <option value="pymupdf4llm">PyMuPDF4LLM（本地保底）</option>
             <option value="vision">多模态视觉（限速）</option>
           </select>
-          <label className="flex items-center gap-2 text-muted-foreground text-sm cursor-pointer">
+          <label className="flex items-center gap-3 text-muted-foreground text-sm cursor-pointer">
             <input
               type="checkbox"
               checked={useVision}
@@ -233,16 +233,16 @@ export default function PdfManager() {
         {files.length === 0 ? (
           <div className="text-center p-8 text-muted-foreground text-sm">暂无 PDF 文件</div>
         ) : (
-          <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto">
+          <div className="flex flex-col gap-3 max-h-[300px] overflow-y-auto">
             {files.map((f) => (
               <div key={f.file_id} className="flex justify-between items-center py-3 px-3.5 bg-muted border border-border rounded-lg">
-                <div className="flex flex-col gap-1 flex-1 min-w-0">
+                <div className="flex flex-col gap-2.5 flex-1 min-w-0">
                   <span className="text-foreground text-sm font-medium whitespace-nowrap overflow-hidden text-ellipsis">{f.filename}</span>
                   <span className="text-muted-foreground text-sm">
                     {formatSize(f.size)} · {f.pages ?? '?'} 页 · {f.source}
                   </span>
                 </div>
-                <div className="flex gap-2 items-center">
+                <div className="flex gap-3 items-center">
                   <button
                     className="py-2 px-3.5 bg-primary text-primary-foreground border-none rounded-lg text-sm cursor-pointer transition-opacity duration-200 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                     onClick={() => handleParse(f.file_id)}
@@ -264,7 +264,7 @@ export default function PdfManager() {
         <div className="flex flex-col gap-2.5">
           <div className="text-sm text-muted-foreground font-semibold">解析结果</div>
           <div className="bg-muted border border-border rounded-lg p-4 max-h-[400px] overflow-y-auto">
-            <div className="flex gap-2 flex-wrap mb-2.5 pb-2.5 border-b border-border">
+            <div className="flex gap-3 flex-wrap mb-2.5 pb-2.5 border-b border-border">
               <span className="text-sm text-primary bg-primary/10 px-2 py-0.5 rounded">策略: {result.strategy}</span>
               <span className="text-sm text-primary bg-primary/10 px-2 py-0.5 rounded">页数: {result.pages}</span>
               {result.metadata?.total_pages && (
