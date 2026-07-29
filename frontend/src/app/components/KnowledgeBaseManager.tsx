@@ -561,7 +561,7 @@ export default function KnowledgeBaseManager() {
 
   const actionBtnBase = "py-1.5 px-3 bg-muted border border-border rounded-md text-muted-foreground text-xs cursor-pointer transition-colors duration-150 whitespace-nowrap hover:bg-accent hover:text-foreground";
   const actionBtnPrimary = "bg-primary text-primary-foreground border-primary hover:bg-primary hover:text-primary-foreground hover:opacity-90";
-  const modalInputBase = "py-2 px-2.5 bg-muted border border-border rounded-md text-foreground text-sm outline-none w-full focus:border-primary";
+  const modalInputBase = "py-2.5 px-3 bg-muted border border-border rounded-md text-foreground text-sm outline-none w-full focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground";
 
   return (
     <div className="flex h-full min-h-[500px] bg-card border border-border rounded-xl overflow-hidden">
@@ -910,7 +910,7 @@ export default function KnowledgeBaseManager() {
           <div className="bg-card border border-border rounded-xl p-6 w-[90%] max-w-[500px] flex flex-col gap-4" onClick={e => e.stopPropagation()}>
             <div className="text-base text-foreground font-semibold">{editingItem ? '编辑笔记' : '添加笔记'}</div>
             <textarea
-              className={cn(modalInputBase, 'min-h-[120px] resize-y font-[inherit]')}
+              className={cn(modalInputBase, 'min-h-[180px] resize-y leading-relaxed')}
               placeholder="输入笔记内容..."
               value={noteContent}
               onChange={e => setNoteContent(e.target.value)}

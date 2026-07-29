@@ -181,7 +181,7 @@ export default function MemoryManager() {
             <div className="text-base font-semibold text-foreground mb-4">➕ 添加经验</div>
             <div className="flex gap-2 mb-4 flex-wrap">
               <select
-                className="py-2 px-2.5 bg-muted border border-border rounded-md text-foreground text-sm"
+                className="py-2.5 px-3 bg-muted border border-border rounded-md text-foreground text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
                 value={newLesson.category}
                 onChange={(e) => setNewLesson({ ...newLesson, category: e.target.value })}
               >
@@ -192,19 +192,19 @@ export default function MemoryManager() {
                 <option value="writing">写作</option>
               </select>
               <input
-                className="py-2 px-2.5 bg-muted border border-border rounded-md text-foreground text-sm"
+                className="py-2.5 px-3 bg-muted border border-border rounded-md text-foreground text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
                 placeholder="问题类型"
                 value={newLesson.problem_type}
                 onChange={(e) => setNewLesson({ ...newLesson, problem_type: e.target.value })}
               />
               <input
-                className="py-2 px-2.5 bg-muted border border-border rounded-md text-foreground text-sm"
+                className="py-2.5 px-3 bg-muted border border-border rounded-md text-foreground text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
                 placeholder="方法/模型"
                 value={newLesson.method}
                 onChange={(e) => setNewLesson({ ...newLesson, method: e.target.value })}
               />
               <select
-                className="py-2 px-2.5 bg-muted border border-border rounded-md text-foreground text-sm"
+                className="py-2.5 px-3 bg-muted border border-border rounded-md text-foreground text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
                 value={newLesson.success ? 'true' : 'false'}
                 onChange={(e) => setNewLesson({ ...newLesson, success: e.target.value === 'true' })}
               >
@@ -213,7 +213,7 @@ export default function MemoryManager() {
               </select>
             </div>
             <textarea
-              className="w-full min-h-[80px] py-2 px-2.5 bg-muted border border-border rounded-md text-foreground text-sm font-[inherit] resize-y"
+              className="w-full min-h-[140px] py-2.5 px-3 bg-muted border border-border rounded-md text-foreground text-sm resize-y leading-relaxed focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
               placeholder="经验内容..."
               value={newLesson.content}
               onChange={(e) => setNewLesson({ ...newLesson, content: e.target.value })}
@@ -226,13 +226,13 @@ export default function MemoryManager() {
 
           <div className="flex gap-2 mb-4 flex-wrap">
             <input
-              className="py-2 px-2.5 bg-muted border border-border rounded-md text-foreground text-sm"
+              className="py-2.5 px-3 bg-muted border border-border rounded-md text-foreground text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
               placeholder="按类别筛选"
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
             />
             <input
-              className="py-2 px-2.5 bg-muted border border-border rounded-md text-foreground text-sm"
+              className="py-2.5 px-3 bg-muted border border-border rounded-md text-foreground text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
               placeholder="按问题类型筛选"
               value={problemTypeFilter}
               onChange={(e) => setProblemTypeFilter(e.target.value)}
@@ -276,7 +276,7 @@ export default function MemoryManager() {
         <>
           <div className="flex gap-2 mb-4">
             <input
-              className="py-2 px-2.5 bg-muted border border-border rounded-md text-foreground text-sm flex-1"
+              className="py-2.5 px-3 bg-muted border border-border rounded-md text-foreground text-sm flex-1 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
               placeholder="输入任务ID"
               value={taskId}
               onChange={(e) => setTaskId(e.target.value)}
