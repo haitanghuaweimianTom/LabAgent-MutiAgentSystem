@@ -215,7 +215,9 @@ export default function KnowledgeBaseManager() {
         setNewBaseName('');
         setNewBaseScope('global');
         setNewBaseProjectName('');
-        setBases(prev => [...prev, data.base]);
+        // 显式重新拉取列表，避免本地追加的对象与后端返回字段不一致
+        // （新建返回 items:[], 列表接口返回 item_count, 字段不同步会导致后续操作异常）
+        await loadBases();
         setActiveBaseId(data.base.id);
       } else {
         showMsg(data.detail || '创建失败', true);
@@ -566,7 +568,7 @@ export default function KnowledgeBaseManager() {
   return (
     <div className="flex h-full min-h-[500px] bg-card border border-border rounded-xl overflow-hidden">
       {/* Sidebar */}
-      <div className="w-[240px] min-w-[200px] flex flex-col border-r border-border bg-muted">
+      <div className="w-[280px] min-w-[240px] flex flex-col border-r border-border bg-muted">
         <div className="p-4 border-b border-border flex items-center justify-between">
           <span className="text-base text-foreground font-semibold">📚 知识库</span>
           <button className="py-1 px-2.5 bg-primary border border-primary rounded-md text-primary-foreground text-sm cursor-pointer font-semibold transition-opacity hover:opacity-90" onClick={() => setShowCreateBase(true)}>+ 新建</button>
@@ -631,7 +633,7 @@ export default function KnowledgeBaseManager() {
           <span className="text-base text-foreground font-semibold whitespace-nowrap overflow-hidden text-ellipsis">{activeBase ? activeBase.name : '请选择知识库'}</span>
           <div className="flex gap-2 items-center">
             <input
-              className="py-1.5 px-3 bg-muted border border-border rounded-md text-foreground text-sm w-[200px] outline-none focus:border-primary"
+              className="py-2 px-3 bg-muted border border-border rounded-md text-foreground text-sm w-[240px] outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
               placeholder="搜索知识库..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
@@ -678,7 +680,7 @@ export default function KnowledgeBaseManager() {
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-4 px-6">
+        <div className="flex-1 overflow-y-auto p-6">
           {msg && (
             <div className={cn('py-2 px-4 rounded-md text-sm text-center mb-4', msg.includes('失败') || msg.startsWith('✗') ? 'text-error bg-error/10' : 'text-success bg-success/10')}>
               {msg}
