@@ -4,7 +4,7 @@ import MemoryManager from '@/app/components/MemoryManager'
 
 export default function MemoryPage() {
   return (
-    <div className="p-6">
+    <div>
       <MemoryManager />
     </div>
   )

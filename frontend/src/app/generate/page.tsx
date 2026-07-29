@@ -65,7 +65,7 @@ export default function GeneratePage() {
   }
 
   return (
-    <div className="p-6">
+    <div>
       <ProblemInput
         onSubmit={handleSubmit}
         submitting={submitting}
