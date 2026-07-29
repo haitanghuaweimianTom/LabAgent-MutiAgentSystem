@@ -7,30 +7,30 @@ import { apiBase } from '@/lib/api';
 // v5.4.0 样式常量（仅保留 layout，颜色全部走 Tailwind 语义令牌）
 // =============================================================
 const fieldStyle: React.CSSProperties = {
-  padding: '6px 10px',
-  height: 32,
+  padding: '8px 12px',
+  height: 40,
   borderRadius: 6,
   fontSize: 14,
   outline: 'none',
 };
 
 const thStyle: React.CSSProperties = {
-  padding: '8px 10px',
-  fontSize: 12,
+  padding: '10px 12px',
+  fontSize: 13,
   fontWeight: 600,
   textAlign: 'left',
   whiteSpace: 'nowrap',
 };
 
 const tdStyle: React.CSSProperties = {
-  padding: '8px 10px',
-  fontSize: 13,
+  padding: '10px 12px',
+  fontSize: 14,
   verticalAlign: 'middle',
 };
 
 const primaryBtnStyle: React.CSSProperties = {
-  padding: '6px 16px',
-  height: 32,
+  padding: '8px 20px',
+  height: 40,
   borderRadius: 6,
   fontSize: 14,
   fontWeight: 600,
@@ -38,16 +38,16 @@ const primaryBtnStyle: React.CSSProperties = {
 };
 
 const primaryBtnSmStyle: React.CSSProperties = {
-  padding: '4px 10px',
+  padding: '6px 12px',
   borderRadius: 4,
-  fontSize: 12,
+  fontSize: 13,
   fontWeight: 600,
   cursor: 'pointer',
 };
 
 const secondaryBtnStyle: React.CSSProperties = {
-  padding: '6px 16px',
-  height: 32,
+  padding: '8px 20px',
+  height: 40,
   borderRadius: 6,
   fontSize: 14,
   cursor: 'pointer',
@@ -223,9 +223,9 @@ export default function EnvironmentManager() {
         </div>
       )}
 
-      <section className="bg-card border border-border rounded-xl p-5" style={{ marginBottom: 24 }}>
-        <h3 className="text-foreground" style={{ fontSize: 16, marginBottom: 12 }}>创建新环境</h3>
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+      <section className="bg-card border border-border rounded-xl p-7" style={{ marginBottom: 24 }}>
+        <h3 className="text-foreground" style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>创建新环境</h3>
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
           <select
             value={newBackend}
             onChange={(e) => setNewBackend(e.target.value)}

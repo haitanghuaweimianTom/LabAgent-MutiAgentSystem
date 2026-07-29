@@ -561,19 +561,19 @@ export default function KnowledgeBaseManager() {
     setSelectedItemIds(new Set());
   };
 
-  const actionBtnBase = "py-1.5 px-3 bg-muted border border-border rounded-md text-muted-foreground text-xs cursor-pointer transition-colors duration-150 whitespace-nowrap hover:bg-accent hover:text-foreground";
+  const actionBtnBase = "py-2 px-3.5 bg-muted border border-border rounded-md text-muted-foreground text-sm cursor-pointer transition-colors duration-150 whitespace-nowrap hover:bg-accent hover:text-foreground";
   const actionBtnPrimary = "bg-primary text-primary-foreground border-primary hover:bg-primary hover:text-primary-foreground hover:opacity-90";
   const modalInputBase = "py-2.5 px-3 bg-muted border border-border rounded-md text-foreground text-sm outline-none w-full focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground";
 
   return (
     <div className="flex h-full min-h-[500px] bg-card border border-border rounded-xl overflow-hidden">
       {/* Sidebar */}
-      <div className="w-[280px] min-w-[240px] flex flex-col border-r border-border bg-muted">
-        <div className="p-4 border-b border-border flex items-center justify-between">
-          <span className="text-base text-foreground font-semibold">📚 知识库</span>
-          <button className="py-1 px-2.5 bg-primary border border-primary rounded-md text-primary-foreground text-sm cursor-pointer font-semibold transition-opacity hover:opacity-90" onClick={() => setShowCreateBase(true)}>+ 新建</button>
+      <div className="w-[320px] min-w-[280px] flex flex-col border-r border-border bg-muted">
+        <div className="p-5 border-b border-border flex items-center justify-between">
+          <span className="text-lg text-foreground font-semibold">📚 知识库</span>
+          <button className="py-2 px-3.5 bg-primary border border-primary rounded-md text-primary-foreground text-sm cursor-pointer font-semibold transition-opacity hover:opacity-90" onClick={() => setShowCreateBase(true)}>+ 新建</button>
         </div>
-        <div className="flex gap-1 py-1.5 px-2.5 border-b border-border">
+        <div className="flex gap-2 py-3 px-5 border-b border-border">
           {(['all', 'global', 'project'] as const).map(s => (
             <button
               key={s}
@@ -585,22 +585,22 @@ export default function KnowledgeBaseManager() {
             </button>
           ))}
         </div>
-        <div className="flex-1 overflow-y-auto p-2">
+        <div className="flex-1 overflow-y-auto p-3">
           {bases.map(base => (
             <div
               key={base.id}
-              className={cn('flex items-center justify-between py-2 px-3 rounded-md cursor-pointer mb-1.5 transition-colors duration-150 border border-transparent hover:bg-accent', base.id === activeBaseId && 'bg-primary/10 border-primary/30')}
+              className={cn('flex items-center justify-between py-3 px-3.5 rounded-md cursor-pointer mb-2 transition-colors duration-150 border border-transparent hover:bg-accent', base.id === activeBaseId && 'bg-primary/10 border-primary/30')}
               onClick={() => { setActiveBaseId(base.id); setShowSearch(false); setSearchResults([]); }}
             >
               <div className="flex flex-col flex-1 min-w-0">
                 <span className={cn('text-muted-foreground text-sm font-medium whitespace-nowrap overflow-hidden text-ellipsis', base.id === activeBaseId && 'text-foreground')}>{base.name}</span>
-                <span className="text-xs text-primary mt-0.5">
+                <span className="text-xs text-primary mt-1">
                   {base.scope === 'project'
                     ? `📁 ${base.project_name || '项目'}`
                     : '🌐 全局'}
                 </span>
               </div>
-              <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded-lg ml-1.5">{base.item_count ?? 0}</span>
+              <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-lg ml-2">{base.item_count ?? 0}</span>
               <button
                 className="opacity-0 transition-opacity duration-150 ml-1 py-0.5 px-1 bg-transparent border-none text-muted-foreground cursor-pointer text-sm hover:opacity-100"
                 onClick={(e) => {
@@ -664,12 +664,12 @@ export default function KnowledgeBaseManager() {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-0 px-6 border-b border-border">
+        <div className="flex gap-3 px-6 border-b border-border">
           {TABS.map(tab => (
             <button
               key={tab.key}
               className={cn(
-                'py-2 px-4 bg-transparent border-none border-b-2 border-b-transparent text-muted-foreground text-sm cursor-pointer font-medium transition-colors duration-150 hover:text-foreground',
+                'py-3 px-3 bg-transparent border-none border-b-2 border-b-transparent text-muted-foreground text-sm cursor-pointer font-medium transition-colors duration-150 hover:text-foreground',
                 activeTab === tab.key && 'text-primary border-b-primary'
               )}
               onClick={() => { setActiveTab(tab.key); setShowSearch(false); }}
@@ -842,9 +842,9 @@ export default function KnowledgeBaseManager() {
 
       {/* Create Base Modal */}
       {showCreateBase && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[1000]" onClick={() => setShowCreateBase(false)}>
-          <div className="bg-card border border-border rounded-xl p-6 w-[90%] max-w-[500px] flex flex-col gap-4" onClick={e => e.stopPropagation()}>
-            <div className="text-base text-foreground font-semibold">新建知识库</div>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[1000] p-4" onClick={() => setShowCreateBase(false)}>
+          <div className="bg-card border border-border rounded-xl p-8 w-full max-w-[560px] flex flex-col gap-5" onClick={e => e.stopPropagation()}>
+            <div className="text-lg text-foreground font-semibold">新建知识库</div>
             <input
               className={modalInputBase}
               placeholder="知识库名称"
@@ -853,7 +853,7 @@ export default function KnowledgeBaseManager() {
               onKeyDown={e => e.key === 'Enter' && handleCreateBase()}
               autoFocus
             />
-            <div className="flex gap-2 mt-2.5">
+            <div className="flex gap-3">
               <button
                 className={cn(actionBtnBase, newBaseScope === 'global' && actionBtnPrimary)}
                 onClick={() => setNewBaseScope('global')}
@@ -871,13 +871,13 @@ export default function KnowledgeBaseManager() {
             </div>
             {newBaseScope === 'project' && (
               <input
-                className={cn(modalInputBase, 'mt-2')}
+                className={modalInputBase}
                 placeholder="项目名（如 work_2026_xxx）"
                 value={newBaseProjectName}
                 onChange={e => setNewBaseProjectName(e.target.value)}
               />
             )}
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-2 mt-2">
               <button className={actionBtnBase} onClick={() => setShowCreateBase(false)}>取消</button>
               <button className={cn(actionBtnBase, actionBtnPrimary)} onClick={handleCreateBase}>创建</button>
             </div>
