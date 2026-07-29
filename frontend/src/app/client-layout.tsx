@@ -54,7 +54,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
               animate="animate"
               exit="exit"
               transition={{ duration: 0.15, ease: 'easeInOut' }}
-              className="max-w-[1200px] mx-auto px-8 py-8"
+              className="max-w-[1200px] mx-auto px-6 py-10 md:px-10"
             >
               {children}
             </motion.div>

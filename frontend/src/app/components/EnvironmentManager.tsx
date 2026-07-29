@@ -7,15 +7,15 @@ import { apiBase } from '@/lib/api';
 // v5.4.0 样式常量（仅保留 layout，颜色全部走 Tailwind 语义令牌）
 // =============================================================
 const fieldStyle: React.CSSProperties = {
-  padding: '8px 12px',
+  padding: '8px 14px',
   height: 40,
-  borderRadius: 6,
+  borderRadius: 8,
   fontSize: 14,
   outline: 'none',
 };
 
 const thStyle: React.CSSProperties = {
-  padding: '10px 12px',
+  padding: '12px 14px',
   fontSize: 13,
   fontWeight: 600,
   textAlign: 'left',
@@ -23,54 +23,74 @@ const thStyle: React.CSSProperties = {
 };
 
 const tdStyle: React.CSSProperties = {
-  padding: '10px 12px',
+  padding: '12px 14px',
   fontSize: 14,
   verticalAlign: 'middle',
 };
 
 const primaryBtnStyle: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 4,
   padding: '8px 20px',
   height: 40,
-  borderRadius: 6,
+  borderRadius: 8,
   fontSize: 14,
   fontWeight: 600,
   cursor: 'pointer',
 };
 
 const primaryBtnSmStyle: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 4,
   padding: '6px 12px',
-  borderRadius: 4,
+  borderRadius: 6,
   fontSize: 13,
   fontWeight: 600,
   cursor: 'pointer',
 };
 
 const secondaryBtnStyle: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 4,
   padding: '8px 20px',
   height: 40,
-  borderRadius: 6,
+  borderRadius: 8,
   fontSize: 14,
   cursor: 'pointer',
 };
 
 const secondaryBtnSmStyle: React.CSSProperties = {
-  padding: '4px 10px',
-  borderRadius: 4,
-  fontSize: 12,
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 4,
+  padding: '6px 12px',
+  borderRadius: 6,
+  fontSize: 13,
   cursor: 'pointer',
 };
 
 const dangerBtnSmStyle: React.CSSProperties = {
-  padding: '4px 10px',
-  borderRadius: 4,
-  fontSize: 12,
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 4,
+  padding: '6px 12px',
+  borderRadius: 6,
+  fontSize: 13,
   cursor: 'pointer',
 };
 
 const disabledBtnStyle: React.CSSProperties = {
-  padding: '4px 10px',
-  borderRadius: 4,
-  fontSize: 12,
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 4,
+  padding: '6px 12px',
+  borderRadius: 6,
+  fontSize: 13,
   cursor: 'not-allowed',
   opacity: 0.6,
 };

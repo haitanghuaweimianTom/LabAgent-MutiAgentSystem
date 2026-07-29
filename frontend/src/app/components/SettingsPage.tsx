@@ -121,7 +121,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6 space-y-6">
       <div className="flex gap-2 flex-wrap">
         {TABS.map(tab => (
           <button

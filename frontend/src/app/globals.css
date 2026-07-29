@@ -59,10 +59,10 @@
   --radius-xl: 14px;
   --radius-2xl: 20px;
 
-  /* ===== 阴影（克制，弱阴影） ===== */
-  --shadow-glow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  /* ===== 阴影（克制，弱阴影——白卡从背景浮起） ===== */
+  --shadow-glow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06);
   --shadow-glow-lg: 0 2px 8px rgba(0, 0, 0, 0.06);
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06);
 
   /* ===== 间距 ===== */
   --spacing-header: 56px;
@@ -72,9 +72,9 @@
 
 /* 浅色模式已是 :root 默认，保留 .light 作兼容别名（无额外覆盖） */
 .light {
-  --shadow-glow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-glow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06);
   --shadow-glow-lg: 0 2px 8px rgba(0, 0, 0, 0.06);
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
 /* ===== 全局重置 ===== */
@@ -93,7 +93,7 @@ html {
 body {
   min-height: 100vh;
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.6;
   background: var(--color-background);
   color: var(--color-foreground);
@@ -186,11 +186,16 @@ body {
 
 /* ===== 主按钮（实色，Geist 风，无渐变无浮夸 hover） ===== */
 .btn-gradient {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 40px;
   background: var(--color-primary);
   color: var(--color-primary-foreground);
   border: none;
   border-radius: var(--radius-md);
-  padding: 8px 20px;
+  padding: 10px 20px;
   font-weight: 500;
   cursor: pointer;
   transition: opacity 0.15s ease;
@@ -336,7 +341,7 @@ body {
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --radius: 0.5rem;
+  --radius: 0.75rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);

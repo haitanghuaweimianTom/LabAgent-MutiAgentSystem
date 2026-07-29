@@ -141,11 +141,11 @@ export default function FileManager({ taskId }: FileManagerProps) {
   const allSelected = files.length > 0 && files.every((f) => selectedFiles.has(f.name));
 
   return (
-    <div className="bg-card border border-border rounded-xl p-5">
-      <div className="flex justify-between items-center mb-2">
+    <div className="bg-card border border-border rounded-xl p-5 space-y-4">
+      <div className="flex items-center justify-between gap-4">
         <span className="text-base text-foreground font-semibold">📁 数据文件管理{projectName ? ` · ${projectName}` : ''}</span>
         {tab === 'user_upload' && (
-          <label className="inline-flex items-center gap-2 py-2 px-4 bg-primary text-primary-foreground rounded-md cursor-pointer text-sm font-semibold transition-opacity duration-150 hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed">
+          <label className="inline-flex items-center gap-2 min-h-[40px] px-4 py-2 bg-primary text-primary-foreground rounded-lg cursor-pointer text-sm font-semibold transition-opacity duration-150 hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed">
             {uploading ? '上传中...' : '📤 批量上传'}
             <input
               type="file"
@@ -222,7 +222,7 @@ export default function FileManager({ taskId }: FileManagerProps) {
 
           <div className="flex flex-col gap-2">
             {files.map((f) => (
-              <div key={f.name} className="flex items-center gap-3 p-3 bg-muted rounded-md flex-wrap">
+              <div key={f.name} className="flex items-center gap-3 px-5 py-3 bg-muted rounded-lg flex-wrap transition-colors hover:bg-muted/70">
                 <input
                   type="checkbox"
                   className="accent-primary w-4 h-4 cursor-pointer"
@@ -275,7 +275,7 @@ export default function FileManager({ taskId }: FileManagerProps) {
             {files.map((f) => {
               const meta = f.meta;
               return (
-                <div key={f.name} className="flex items-center gap-3 p-3 bg-muted rounded-md flex-wrap">
+                <div key={f.name} className="flex items-center gap-3 px-5 py-3 bg-muted rounded-lg flex-wrap transition-colors hover:bg-muted/70">
                   <span className="inline-block text-xs py-0.5 px-2 bg-primary/10 text-primary rounded-full font-medium">🌐 自收集</span>
                   <span className="text-sm py-0.5 px-2 bg-primary/10 text-primary rounded font-semibold min-w-[50px] text-center">{f.type}</span>
                   <div className="flex-1">

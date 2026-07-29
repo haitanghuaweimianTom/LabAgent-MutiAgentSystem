@@ -561,19 +561,19 @@ export default function KnowledgeBaseManager() {
     setSelectedItemIds(new Set());
   };
 
-  const actionBtnBase = "py-2 px-3.5 bg-muted border border-border rounded-md text-muted-foreground text-sm cursor-pointer transition-colors duration-150 whitespace-nowrap hover:bg-accent hover:text-foreground";
+  const actionBtnBase = "inline-flex items-center gap-1.5 min-h-[34px] px-3.5 py-2 bg-muted border border-border rounded-lg text-muted-foreground text-sm cursor-pointer transition-colors duration-150 whitespace-nowrap hover:bg-accent hover:text-foreground";
   const actionBtnPrimary = "bg-primary text-primary-foreground border-primary hover:bg-primary hover:text-primary-foreground hover:opacity-90";
-  const modalInputBase = "py-2.5 px-3 bg-muted border border-border rounded-md text-foreground text-sm outline-none w-full focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground";
+  const modalInputBase = "h-10 px-3.5 bg-muted border border-border rounded-lg text-foreground text-sm outline-none w-full focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground";
 
   return (
-    <div className="flex h-full min-h-[500px] bg-card border border-border rounded-xl overflow-hidden">
+    <div className="flex h-full min-h-[500px] bg-card border border-border rounded-xl shadow-sm overflow-hidden">
       {/* Sidebar */}
-      <div className="w-[320px] min-w-[280px] flex flex-col border-r border-border bg-muted">
-        <div className="p-5 border-b border-border flex items-center justify-between">
+      <div className="w-72 shrink-0 flex flex-col border-r border-border bg-muted/50">
+        <div className="flex items-center justify-between px-5 h-14 border-b border-border shrink-0">
           <span className="text-lg text-foreground font-semibold">📚 知识库</span>
-          <button className="py-2 px-3.5 bg-primary border border-primary rounded-md text-primary-foreground text-sm cursor-pointer font-semibold transition-opacity hover:opacity-90" onClick={() => setShowCreateBase(true)}>+ 新建</button>
+          <button className="inline-flex items-center justify-center min-h-[34px] px-3.5 py-2 bg-primary border border-primary rounded-lg text-primary-foreground text-sm cursor-pointer font-semibold transition-opacity hover:opacity-90" onClick={() => setShowCreateBase(true)}>+ 新建</button>
         </div>
-        <div className="flex gap-2 py-3 px-5 border-b border-border">
+        <div className="flex items-center gap-1 h-11 px-5 border-b border-border shrink-0">
           {(['all', 'global', 'project'] as const).map(s => (
             <button
               key={s}
@@ -585,11 +585,11 @@ export default function KnowledgeBaseManager() {
             </button>
           ))}
         </div>
-        <div className="flex-1 overflow-y-auto p-3">
+        <div className="flex-1 overflow-y-auto p-2.5">
           {bases.map(base => (
             <div
               key={base.id}
-              className={cn('flex items-center justify-between py-3 px-3.5 rounded-md cursor-pointer mb-2 transition-colors duration-150 border border-transparent hover:bg-accent', base.id === activeBaseId && 'bg-primary/10 border-primary/30')}
+              className={cn('flex items-center justify-between py-3 px-3.5 rounded-lg cursor-pointer mb-1.5 transition-colors duration-150 border border-transparent hover:bg-accent', base.id === activeBaseId && 'bg-primary/10 border-primary/30')}
               onClick={() => { setActiveBaseId(base.id); setShowSearch(false); setSearchResults([]); }}
             >
               <div className="flex flex-col flex-1 min-w-0">
@@ -619,7 +619,7 @@ export default function KnowledgeBaseManager() {
             </div>
           ))}
           {bases.length === 0 && (
-            <div className="text-muted-foreground text-center py-8 px-2 text-sm">
+            <div className="flex-1 flex items-center justify-center text-center text-sm text-muted-foreground px-4 py-8">
               暂无知识库，点击「新建」创建
             </div>
           )}
@@ -627,13 +627,13 @@ export default function KnowledgeBaseManager() {
       </div>
 
       {/* Main */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 bg-card">
         {/* Header */}
-        <div className="py-4 px-6 border-b border-border flex items-center justify-between gap-4">
+        <div className="flex items-center justify-between px-5 h-14 border-b border-border shrink-0 gap-4">
           <span className="text-base text-foreground font-semibold whitespace-nowrap overflow-hidden text-ellipsis">{activeBase ? activeBase.name : '请选择知识库'}</span>
-          <div className="flex gap-2 items-center">
+          <div className="flex gap-2 items-center shrink-0">
             <input
-              className="py-2 px-3 bg-muted border border-border rounded-md text-foreground text-sm w-[240px] outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
+              className="h-10 px-3.5 bg-muted border border-border rounded-lg text-foreground text-sm w-[240px] outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
               placeholder="搜索知识库..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
@@ -664,12 +664,12 @@ export default function KnowledgeBaseManager() {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-3 px-6 border-b border-border">
+        <div className="flex items-center gap-1 h-11 px-5 border-b border-border shrink-0">
           {TABS.map(tab => (
             <button
               key={tab.key}
               className={cn(
-                'py-3 px-3 bg-transparent border-none border-b-2 border-b-transparent text-muted-foreground text-sm cursor-pointer font-medium transition-colors duration-150 hover:text-foreground',
+                'inline-flex items-center px-3 h-full bg-transparent border-none border-b-2 border-b-transparent text-muted-foreground text-sm cursor-pointer font-medium transition-colors duration-150 hover:text-foreground',
                 activeTab === tab.key && 'text-primary border-b-primary'
               )}
               onClick={() => { setActiveTab(tab.key); setShowSearch(false); }}
@@ -795,7 +795,7 @@ export default function KnowledgeBaseManager() {
                 </div>
               )}
               {filteredItems.length === 0 && (
-                <div className="text-muted-foreground text-center py-12 px-4 text-sm">
+                <div className="flex-1 flex flex-col items-center justify-center text-center text-muted-foreground px-4 py-8 text-sm" style={{ minHeight: '60%' }}>
                   该分类下暂无条目
                   {activeTab === 'file' && <div className="mt-2 text-sm">点击「上传文件」添加</div>}
                   {activeTab === 'note' && <div className="mt-2 text-sm">点击「添加笔记」添加</div>}
