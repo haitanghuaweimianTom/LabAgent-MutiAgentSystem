@@ -77,6 +77,14 @@
   --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
+/* 深色模式：卡片比背景更亮，需更高 alpha 的黑阴影才有可见层次
+ * （浅色 0.04 在深色底上完全不可见）。 */
+.dark {
+  --shadow-glow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-glow-lg: 0 2px 8px rgba(0, 0, 0, 0.5);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
 /* ===== 全局重置 ===== */
 *, *::before, *::after {
   box-sizing: border-box;
