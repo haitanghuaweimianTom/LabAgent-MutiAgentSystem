@@ -33,13 +33,13 @@ export function PreFlightPanel({ report, onConfirm, onAdjust, onApplyRecommended
   const adequacy = ADEQUACY_LABEL[report.data_adequacy] || { label: report.data_adequacy, color: '#9ca3af' };
 
   return (
-    <div style={{ background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, padding: '1rem', marginTop: '1rem' }}>
+    <div style={{ background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, padding: '1rem 1.5rem', marginTop: '1rem' }}>
       <div style={{ fontWeight: 600, fontSize: '1.05rem', marginBottom: '0.6rem', color: '#e0e0e0' }}>
         🔍 Preflight 预检报告
       </div>
 
       {report.data_mismatch_warning && (
-        <div style={{ background: 'rgba(220,38,38,0.12)', border: '1px solid rgba(220,38,38,0.3)', borderRadius: 8, padding: '0.6rem', color: '#fca5a5', marginBottom: '0.6rem' }}>
+        <div style={{ background: 'rgba(220,38,38,0.12)', border: '1px solid rgba(220,38,38,0.3)', borderRadius: 8, padding: '0.6rem 1rem', color: '#fca5a5', marginBottom: '0.6rem' }}>
           ⚠️ {report.data_mismatch_warning}
         </div>
       )}
@@ -65,7 +65,7 @@ export function PreFlightPanel({ report, onConfirm, onAdjust, onApplyRecommended
       {report.collection_plan && (
         <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#aaa' }}>
           <strong>数据搜集计划：</strong>
-          <div style={{ marginTop: '0.3rem', padding: '0.5rem', background: 'rgba(0,0,0,0.2)', borderRadius: 6 }}>
+          <div style={{ marginTop: '0.3rem', padding: '0.5rem 1rem', background: 'rgba(0,0,0,0.2)', borderRadius: 6 }}>
             {report.collection_plan}
           </div>
         </div>
@@ -76,7 +76,7 @@ export function PreFlightPanel({ report, onConfirm, onAdjust, onApplyRecommended
           {onApplyRecommended && (
             <button
               onClick={() => onApplyRecommended(report.recommended_template, report.recommended_workflow, report.recommended_mode)}
-              style={{ padding: '0.4rem 0.8rem', background: 'linear-gradient(135deg, #9b59b6, #8e44ad)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: '0.85rem' }}
+              style={{ padding: '0.4rem 1.25rem', background: 'linear-gradient(135deg, #9b59b6, #8e44ad)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: '0.85rem' }}
             >
               🎯 应用推荐配置
             </button>
@@ -84,7 +84,7 @@ export function PreFlightPanel({ report, onConfirm, onAdjust, onApplyRecommended
           {onConfirm && (
             <button
               onClick={onConfirm}
-              style={{ padding: '0.4rem 0.8rem', background: 'linear-gradient(135deg, #2ecc71, #27ae60)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: '0.85rem' }}
+              style={{ padding: '0.4rem 1.25rem', background: 'linear-gradient(135deg, #2ecc71, #27ae60)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: '0.85rem' }}
             >
               ✅ 确认推荐
             </button>
@@ -92,7 +92,7 @@ export function PreFlightPanel({ report, onConfirm, onAdjust, onApplyRecommended
           {onAdjust && (
             <button
               onClick={onAdjust}
-              style={{ padding: '0.4rem 0.8rem', background: 'rgba(52,152,219,0.15)', border: '1px solid rgba(52,152,219,0.3)', borderRadius: 6, color: '#3498db', cursor: 'pointer', fontSize: '0.85rem' }}
+              style={{ padding: '0.4rem 1.25rem', background: 'rgba(52,152,219,0.15)', border: '1px solid rgba(52,152,219,0.3)', borderRadius: 6, color: '#3498db', cursor: 'pointer', fontSize: '0.85rem' }}
             >
               ⚙️ 调整配置
             </button>

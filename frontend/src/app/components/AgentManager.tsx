@@ -169,7 +169,7 @@ export default function AgentManager() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       {/* Header */}
-      <div className="bg-card border border-border" style={{ borderRadius: 14, padding: '1.5rem' }}>
+      <div className="bg-card border border-border" style={{ borderRadius: 14, padding: '1.5rem 2rem' }}>
         <span className="text-foreground" style={{ fontSize: '1.1rem', fontWeight: 600 }}>🤖 Agent 团队模型配置</span>
         <div className="text-muted-foreground" style={{ fontSize: '0.8rem', marginTop: '0.3rem' }}>
           为每个 Agent 从可用 Provider 中选择模型，支持单独测试每个模型是否可用
@@ -191,7 +191,7 @@ export default function AgentManager() {
           const providerModels = currentProvider?.models?.filter(m => m.enabled) || [];
 
           return (
-            <div key={agent.name} className="bg-card border border-border" style={{ borderRadius: 10, padding: '1rem' }}>
+            <div key={agent.name} className="bg-card border border-border" style={{ borderRadius: 10, padding: '1rem 1.5rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.6rem' }}>
                 <span style={{ fontSize: '1.3rem' }}>{icon}</span>
                 <span className="text-foreground" style={{ fontWeight: 600, fontSize: '1rem' }}>{agent.label}</span>
@@ -215,7 +215,7 @@ export default function AgentManager() {
                         setModelTestResults({}); // clear model test results on provider change
                       }}
                       className="bg-muted border border-border text-foreground"
-                      style={{ width: '100%', padding: '0.5rem', borderRadius: 6, fontSize: '0.85rem' }}
+                      style={{ width: '100%', padding: '0.5rem 1rem', borderRadius: 6, fontSize: '0.85rem' }}
                     >
                       <option value="">选择 Provider</option>
                       {providers.map(p => (
@@ -234,7 +234,7 @@ export default function AgentManager() {
                         value={editModelName}
                         onChange={e => setEditModelName(e.target.value)}
                         className="bg-muted border border-border text-foreground"
-                        style={{ width: '100%', padding: '0.5rem', borderRadius: 6, fontSize: '0.85rem' }}
+                        style={{ width: '100%', padding: '0.5rem 1rem', borderRadius: 6, fontSize: '0.85rem' }}
                       >
                         {providerModels.map(m => (
                           <option key={m.name} value={m.name}>{m.display_name || m.name}</option>
@@ -246,7 +246,7 @@ export default function AgentManager() {
                         onChange={e => setEditModelName(e.target.value)}
                         placeholder="输入模型名称"
                         className="bg-muted border border-border text-foreground"
-                        style={{ width: '100%', padding: '0.5rem', borderRadius: 6, fontSize: '0.85rem' }}
+                        style={{ width: '100%', padding: '0.5rem 1rem', borderRadius: 6, fontSize: '0.85rem' }}
                       />
                     )}
                   </div>
@@ -258,7 +258,7 @@ export default function AgentManager() {
                         onClick={() => handleTestIndividualModel(editProviderId, editModelName)}
                         disabled={testingModel === `${editProviderId}/${editModelName}`}
                         className="bg-primary/10 border border-primary/20 text-primary"
-                        style={{ padding: '0.4rem 0.6rem', borderRadius: 6, fontSize: '0.75rem', cursor: 'pointer' }}
+                        style={{ padding: '0.4rem 1rem', borderRadius: 6, fontSize: '0.75rem', cursor: 'pointer' }}
                       >
                         {testingModel === `${editProviderId}/${editModelName}` ? '测试中...' : '🧪 测试此模型'}
                       </button>
@@ -278,14 +278,14 @@ export default function AgentManager() {
                     <button
                       onClick={() => handleSave(agent.name)}
                       className="bg-success/10 border border-success/20 text-success"
-                      style={{ padding: '0.4rem 0.8rem', borderRadius: 6, fontSize: '0.78rem', cursor: 'pointer', fontWeight: 600 }}
+                      style={{ padding: '0.4rem 1.25rem', borderRadius: 6, fontSize: '0.78rem', cursor: 'pointer', fontWeight: 600 }}
                     >
                       💾 保存
                     </button>
                     <button
                       onClick={() => setEditingAgent(null)}
                       className="bg-muted border border-border text-muted-foreground"
-                      style={{ padding: '0.4rem 0.8rem', borderRadius: 6, fontSize: '0.78rem', cursor: 'pointer' }}
+                      style={{ padding: '0.4rem 1.25rem', borderRadius: 6, fontSize: '0.78rem', cursor: 'pointer' }}
                     >
                       取消
                     </button>
@@ -306,7 +306,7 @@ export default function AgentManager() {
                     <button
                       onClick={() => startEdit(agent)}
                       className="bg-primary/10 border border-primary/20 text-primary"
-                      style={{ padding: '0.3rem 0.5rem', borderRadius: 6, fontSize: '0.7rem', cursor: 'pointer' }}
+                      style={{ padding: '0.3rem 1rem', borderRadius: 6, fontSize: '0.7rem', cursor: 'pointer' }}
                     >
                       修改
                     </button>
@@ -319,7 +319,7 @@ export default function AgentManager() {
                         onClick={() => handleTestAgentModel(agent.name, agent.provider_id, currentModelName)}
                         disabled={testingAgent === agent.name}
                         className="bg-primary/10 border border-primary/20 text-primary"
-                        style={{ padding: '0.3rem 0.5rem', borderRadius: 6, fontSize: '0.7rem', cursor: 'pointer' }}
+                        style={{ padding: '0.3rem 1rem', borderRadius: 6, fontSize: '0.7rem', cursor: 'pointer' }}
                       >
                         {testingAgent === agent.name ? '测试中...' : '🧪 测试当前模型'}
                       </button>

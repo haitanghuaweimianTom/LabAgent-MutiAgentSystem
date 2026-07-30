@@ -84,7 +84,7 @@ export function ActivityTimeline() {
   }, [])
 
   return (
-    <div className="rounded-xl border border-border bg-card/50 backdrop-blur p-4">
+    <div className="rounded-xl border border-border bg-card/50 backdrop-blur px-6 py-4">
       <div className="flex items-center gap-3 text-sm text-muted-foreground mb-3">
         <Activity className="w-4 h-4" />
         <span>近期活动</span>
@@ -115,7 +115,7 @@ export function ActivityTimeline() {
             <motion.div
               key={task.task_id}
               variants={itemVariants}
-              className="flex items-center gap-3 py-2 px-2 rounded-lg hover:bg-muted/50 transition-colors"
+              className="flex items-center gap-3 py-2 px-4 rounded-lg hover:bg-muted/50 transition-colors"
             >
               <StatusDot
                 status={STATUS_DOT_MAP[task.status] || 'idle'}

@@ -30,8 +30,8 @@ const MARKDOWN_STYLES = `
 `;
 
 const RENDER_CLASSES = {
-  codeBlock: 'bg-black/40 p-[0.8rem] rounded-[8px] overflow-x-auto mb-2.5',
-  mathBlock: 'bg-black/20 p-[0.8rem] rounded-[8px] my-2.5 text-center text-[#CBD5E1] font-[Times_New_Roman,serif] text-[0.95rem] overflow-x-auto',
+  codeBlock: 'bg-black/40 px-[1.25rem] py-[0.8rem] rounded-[8px] overflow-x-auto mb-2.5',
+  mathBlock: 'bg-black/20 px-[1.25rem] py-[0.8rem] rounded-[8px] my-2.5 text-center text-[#CBD5E1] font-[Times_New_Roman,serif] text-[0.95rem] overflow-x-auto',
   mathInline: 'text-[#CBD5E1] font-[Times_New_Roman,serif]',
   inlineCode: 'bg-[#334155] py-[0.1rem] px-[0.4rem] rounded-[4px] text-[#e0c080] font-mono text-[0.82rem]',
   img: 'max-w-full rounded-[6px] my-2.5',
@@ -104,24 +104,24 @@ export default function PaperPreview({ markdown, latexCode, abstract, keywords }
   return (
     <div className="bg-[#1E293B] border border-[#334155] rounded-[14px] overflow-hidden flex flex-col max-h-[700px]">
       <style>{MARKDOWN_STYLES}</style>
-      <div className="flex justify-between items-center py-[0.8rem] px-4 bg-black/20 border-b border-[#334155]">
+      <div className="flex justify-between items-center py-[0.8rem] px-6 bg-black/20 border-b border-[#334155]">
         <span className="text-[0.95rem] text-[#F8FAFC] font-semibold">📄 论文预览</span>
         <div className="flex gap-[0.3rem]">
           <button
-            className={`py-[0.3rem] px-[0.8rem] rounded-[6px] text-[0.875rem] cursor-pointer border border-[#334155] bg-[#1E293B] text-[#94A3B8] transition-all duration-200 hover:bg-[#334155] hover:text-[#CBD5E1] ${view === 'markdown' ? 'bg-[rgba(45,212,191,0.15)] border-[rgba(45,212,191,0.15)] text-[#3498db]' : ''}`}
+            className={`py-[0.3rem] px-[1.25rem] rounded-[6px] text-[0.875rem] cursor-pointer border border-[#334155] bg-[#1E293B] text-[#94A3B8] transition-all duration-200 hover:bg-[#334155] hover:text-[#CBD5E1] ${view === 'markdown' ? 'bg-[rgba(45,212,191,0.15)] border-[rgba(45,212,191,0.15)] text-[#3498db]' : ''}`}
             onClick={() => setView('markdown')}
           >Markdown</button>
           <button
-            className={`py-[0.3rem] px-[0.8rem] rounded-[6px] text-[0.875rem] cursor-pointer border border-[#334155] bg-[#1E293B] text-[#94A3B8] transition-all duration-200 hover:bg-[#334155] hover:text-[#CBD5E1] ${view === 'latex' ? 'bg-[rgba(45,212,191,0.15)] border-[rgba(45,212,191,0.15)] text-[#3498db]' : ''}`}
+            className={`py-[0.3rem] px-[1.25rem] rounded-[6px] text-[0.875rem] cursor-pointer border border-[#334155] bg-[#1E293B] text-[#94A3B8] transition-all duration-200 hover:bg-[#334155] hover:text-[#CBD5E1] ${view === 'latex' ? 'bg-[rgba(45,212,191,0.15)] border-[rgba(45,212,191,0.15)] text-[#3498db]' : ''}`}
             onClick={() => setView('latex')}
           >LaTeX</button>
         </div>
       </div>
 
       {view === 'markdown' && (
-        <div className="flex-1 overflow-y-auto p-4 bg-black/15">
+        <div className="flex-1 overflow-y-auto px-6 py-4 bg-black/15">
           {abstract && (
-            <div className="bg-[rgba(45,212,191,0.15)] border border-[rgba(45,212,191,0.15)] rounded-[10px] p-4 mb-4">
+            <div className="bg-[rgba(45,212,191,0.15)] border border-[rgba(45,212,191,0.15)] rounded-[10px] px-6 py-4 mb-4">
               <div className="text-[0.9375rem] text-[#3498db] font-bold mb-2">摘要</div>
               <p className="text-[0.9375rem] text-[#CBD5E1] leading-[1.7]">{abstract}</p>
               {keywords && keywords.length > 0 && (
@@ -141,9 +141,9 @@ export default function PaperPreview({ markdown, latexCode, abstract, keywords }
       )}
 
       {view === 'latex' && (
-        <div className="flex-1 overflow-y-auto p-4 bg-black/15">
+        <div className="flex-1 overflow-y-auto px-6 py-4 bg-black/15">
           {latexCode ? (
-            <pre className="bg-black/40 p-4 rounded-[8px] text-[#a0e0a0] font-mono text-[0.78rem] leading-[1.5] overflow-x-auto whitespace-pre"><code>{latexCode}</code></pre>
+            <pre className="bg-black/40 px-6 py-4 rounded-[8px] text-[#a0e0a0] font-mono text-[0.78rem] leading-[1.5] overflow-x-auto whitespace-pre"><code>{latexCode}</code></pre>
           ) : (
             <div className="text-center p-12 text-[#475569] text-[0.9375rem]">暂无 LaTeX 代码</div>
           )}

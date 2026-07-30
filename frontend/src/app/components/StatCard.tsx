@@ -22,7 +22,7 @@ export function StatCard({ icon: Icon, label, value, trend = 'neutral', classNam
 
   return (
     <div className={cn(
-      'rounded-xl border border-border bg-card/50 backdrop-blur p-4',
+      'rounded-xl border border-border bg-card/50 backdrop-blur px-6 py-4',
       'transition-shadow duration-300 hover:shadow-glow',
       className
     )}>

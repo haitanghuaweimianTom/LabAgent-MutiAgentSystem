@@ -20,7 +20,7 @@ export default function DetailPanel() {
           className="h-screen border-l border-border bg-slate-900/50 backdrop-blur-xl overflow-hidden flex flex-col"
         >
           {/* Header */}
-          <div className="h-14 flex items-center justify-between px-4 border-b border-border shrink-0">
+          <div className="h-14 flex items-center justify-between px-6 border-b border-border shrink-0">
             <div className="flex items-center gap-3">
               {detailPanelContent.type === 'agent' ? (
                 <Bot className="w-4 h-4 text-primary" />
@@ -42,7 +42,7 @@ export default function DetailPanel() {
           </div>
 
           {/* Content */}
-          <div className="flex-1 overflow-y-auto p-4">
+          <div className="flex-1 overflow-y-auto px-6 py-4">
             {detailPanelContent.type === 'agent' && detailPanelContent.agentName && (
               <AgentDetail agentName={detailPanelContent.agentName} />
             )}
@@ -77,7 +77,7 @@ function AgentDetail({ agentName }: { agentName: string }) {
       </div>
 
       {/* Status */}
-      <div className="rounded-lg border border-border bg-muted/30 p-3">
+      <div className="rounded-lg border border-border bg-muted/30 px-5 py-3">
         <div className="text-xs text-muted-foreground mb-1">状态</div>
         <div className="flex items-center gap-3">
           <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
@@ -86,7 +86,7 @@ function AgentDetail({ agentName }: { agentName: string }) {
       </div>
 
       {/* Description */}
-      <div className="rounded-lg border border-border bg-muted/30 p-3">
+      <div className="rounded-lg border border-border bg-muted/30 px-5 py-3">
         <div className="text-xs text-muted-foreground mb-1">职责描述</div>
         <p className="text-sm text-foreground/80 leading-relaxed">
           {getAgentDescription(agentName)}
@@ -99,7 +99,7 @@ function AgentDetail({ agentName }: { agentName: string }) {
 function TaskDetail({ taskId }: { taskId: string }) {
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border border-border bg-muted/30 p-3">
+      <div className="rounded-lg border border-border bg-muted/30 px-5 py-3">
         <div className="text-xs text-muted-foreground mb-1">任务 ID</div>
         <div className="text-sm text-foreground font-mono">{taskId}</div>
       </div>

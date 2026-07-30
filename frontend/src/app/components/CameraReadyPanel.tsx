@@ -68,7 +68,7 @@ export function CameraReadyPanel({ taskId, templateId, apiBase }: CameraReadyPan
 
   return (
     <div style={{
-      padding: 16,
+      padding: '16px 24px',
       border: `1px solid ${dark ? '#475569' : '#e5e7eb'}`,
       borderRadius: 8,
       background: dark ? '#1e293b' : '#f9fafb',
@@ -81,7 +81,7 @@ export function CameraReadyPanel({ taskId, templateId, apiBase }: CameraReadyPan
           disabled={loading}
           data-testid="camera-ready-build"
           style={{
-            padding: '8px 16px', background: '#2563eb', color: 'white',
+            padding: '8px 24px', background: '#2563eb', color: 'white',
             border: 'none', borderRadius: 6, cursor: loading ? 'wait' : 'pointer',
             fontSize: 13, fontWeight: 500,
           }}
@@ -92,7 +92,7 @@ export function CameraReadyPanel({ taskId, templateId, apiBase }: CameraReadyPan
 
       {error && (
         <div style={{
-          padding: 10, marginBottom: 12, borderRadius: 6, fontSize: 13,
+          padding: '10px 18px', marginBottom: 12, borderRadius: 6, fontSize: 13,
           background: dark ? '#7f1d1d' : '#fee2e2',
           color: dark ? '#fca5a5' : '#991b1b',
         }}>
@@ -126,7 +126,7 @@ export function CameraReadyPanel({ taskId, templateId, apiBase }: CameraReadyPan
               download
               data-testid="camera-ready-download"
               style={{
-                display: 'inline-block', padding: '10px 20px',
+                display: 'inline-block', padding: '10px 28px',
                 background: '#16a34a', color: 'white', textDecoration: 'none',
                 borderRadius: 6, fontSize: 13, fontWeight: 500,
               }}
@@ -138,7 +138,7 @@ export function CameraReadyPanel({ taskId, templateId, apiBase }: CameraReadyPan
           <details style={{ marginTop: 12, fontSize: 12 }}>
             <summary style={{ cursor: 'pointer', color: dark ? '#94a3b8' : '#6b7280' }}>产物目录</summary>
             <code style={{
-              display: 'block', padding: 8, marginTop: 4, borderRadius: 4,
+              display: 'block', padding: '8px 16px', marginTop: 4, borderRadius: 4,
               background: dark ? '#0f172a' : '#f3f4f6',
               color: dark ? '#94a3b8' : '#374151',
             }}>
@@ -154,7 +154,7 @@ export function CameraReadyPanel({ taskId, templateId, apiBase }: CameraReadyPan
 function Metric({ label, value, dark }: { label: string; value: number; dark: boolean }) {
   return (
     <div style={{
-      padding: 10, borderRadius: 6, textAlign: 'center',
+      padding: '10px 18px', borderRadius: 6, textAlign: 'center',
       background: dark ? '#0f172a' : 'white',
       border: `1px solid ${dark ? '#475569' : '#e5e7eb'}`,
     }}>

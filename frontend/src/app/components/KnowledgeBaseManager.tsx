@@ -561,22 +561,22 @@ export default function KnowledgeBaseManager() {
     setSelectedItemIds(new Set());
   };
 
-  const actionBtnBase = "inline-flex items-center gap-2 min-h-[34px] px-6 py-1.5 bg-muted border border-border rounded-md text-muted-foreground text-sm cursor-pointer transition-colors duration-150 whitespace-nowrap hover:bg-accent hover:text-foreground";
+  const actionBtnBase = "inline-flex items-center gap-2 min-h-[34px] px-8 py-1.5 bg-muted border border-border rounded-md text-muted-foreground text-sm cursor-pointer transition-colors duration-150 whitespace-nowrap leading-tight hover:bg-accent hover:text-foreground";
   const actionBtnPrimary = "bg-primary text-primary-foreground border-primary hover:bg-primary hover:text-primary-foreground hover:opacity-90";
-  const modalInputBase = "h-10 px-3.5 bg-muted border border-border rounded-lg text-foreground text-sm outline-none w-full focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground";
+  const modalInputBase = "h-10 px-5 bg-muted border border-border rounded-lg text-foreground text-sm outline-none w-full focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground";
   // scope 过滤胶囊：左栏窄(w-64)，用 px-3.5 防溢出；横(14)≥纵(6)×2 满足铁律
-  const scopeBtnBase = "inline-flex items-center justify-center gap-1 min-h-[30px] px-3.5 py-1.5 rounded-md text-sm cursor-pointer transition-colors duration-150 whitespace-nowrap border border-transparent text-muted-foreground hover:bg-accent hover:text-foreground";
+  const scopeBtnBase = "inline-flex items-center justify-center gap-1 min-h-[30px] px-5 py-1.5 rounded-md text-sm cursor-pointer transition-colors duration-150 whitespace-nowrap leading-tight border border-transparent text-muted-foreground hover:bg-accent hover:text-foreground";
   const scopeBtnActive = "bg-primary/10 text-primary border-primary/30";
 
   return (
     <div className="flex h-full min-h-[500px] bg-card border border-border rounded-xl shadow-[var(--shadow-card)] overflow-hidden">
       {/* Sidebar */}
-      <div className="w-64 shrink-0 flex flex-col border-r border-border bg-muted/40">
-        <div className="flex items-center justify-between px-5 h-14 border-b border-border shrink-0 gap-3">
+      <div className="w-72 shrink-0 flex flex-col border-r border-border bg-muted/40">
+        <div className="flex items-center justify-between px-6 h-14 border-b border-border shrink-0 gap-3">
           <span className="text-lg text-foreground font-semibold">📚 知识库</span>
-          <button className="inline-flex items-center justify-center min-h-[36px] px-7 py-2 bg-primary border border-primary rounded-md text-primary-foreground text-sm cursor-pointer font-semibold transition-opacity hover:opacity-90" onClick={() => setShowCreateBase(true)}>+ 新建</button>
+          <button className="inline-flex items-center justify-center min-h-[36px] px-10 py-2 bg-primary border border-primary rounded-md text-primary-foreground text-sm cursor-pointer font-semibold transition-opacity hover:opacity-90" onClick={() => setShowCreateBase(true)}>+ 新建</button>
         </div>
-        <div className="flex items-center gap-1 h-11 px-5 border-b border-border shrink-0">
+        <div className="flex items-center gap-1 h-11 px-6 border-b border-border shrink-0">
           {(['all', 'global', 'project'] as const).map(s => (
             <button
               key={s}
@@ -592,7 +592,7 @@ export default function KnowledgeBaseManager() {
           {bases.map(base => (
             <div
               key={base.id}
-              className={cn('flex items-center justify-between py-3 px-3.5 rounded-lg cursor-pointer mb-1.5 transition-colors duration-150 border border-transparent hover:bg-accent', base.id === activeBaseId && 'bg-primary/10 border-primary/30')}
+              className={cn('flex items-center justify-between py-3 px-5 rounded-lg cursor-pointer mb-1.5 transition-colors duration-150 border border-transparent hover:bg-accent', base.id === activeBaseId && 'bg-primary/10 border-primary/30')}
               onClick={() => { setActiveBaseId(base.id); setShowSearch(false); setSearchResults([]); }}
             >
               <div className="flex flex-col flex-1 min-w-0">
@@ -633,11 +633,11 @@ export default function KnowledgeBaseManager() {
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0 bg-card">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 h-14 border-b border-border shrink-0 gap-4">
+        <div className="flex items-center justify-between px-6 h-14 border-b border-border shrink-0 gap-4">
           <span className="text-base text-foreground font-semibold whitespace-nowrap overflow-hidden text-ellipsis" title={activeBase ? activeBase.name : undefined}>{activeBase ? activeBase.name : '请选择知识库'}</span>
           <div className="flex gap-3 items-center shrink-0">
             <input
-              className="h-10 px-3.5 bg-muted border border-border rounded-lg text-foreground text-sm w-[240px] outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
+              className="h-10 px-5 bg-muted border border-border rounded-lg text-foreground text-sm w-[240px] outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
               placeholder="搜索知识库..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
@@ -668,12 +668,12 @@ export default function KnowledgeBaseManager() {
         </div>
 
         {/* Tabs */}
-        <div className="flex items-center gap-1 h-11 px-5 border-b border-border shrink-0">
+        <div className="flex items-center gap-1 h-11 px-6 border-b border-border shrink-0">
           {TABS.map(tab => (
             <button
               key={tab.key}
               className={cn(
-                'inline-flex items-center px-4 h-full bg-transparent border-none border-b-2 border-b-transparent text-muted-foreground text-sm cursor-pointer font-medium transition-colors duration-150 hover:text-foreground',
+                'inline-flex items-center px-6 h-full bg-transparent border-none border-b-2 border-b-transparent text-muted-foreground text-sm cursor-pointer font-medium leading-tight transition-colors duration-150 hover:text-foreground',
                 activeTab === tab.key && 'text-primary border-b-primary'
               )}
               onClick={() => { setActiveTab(tab.key); setShowSearch(false); }}
@@ -701,7 +701,7 @@ export default function KnowledgeBaseManager() {
                 <div
                   key={r.id}
                   onClick={() => setSelectedResult(selectedResult?.id === r.id ? null : r)}
-                  className="py-3 px-4 bg-muted border border-border rounded-md mb-2 cursor-pointer hover:border-primary transition-colors"
+                  className="py-3 px-6 bg-muted border border-border rounded-md mb-2 cursor-pointer hover:border-primary transition-colors"
                 >
                   <div className="flex justify-between mb-1.5">
                     <span className="text-foreground font-semibold text-sm">{r.title}</span>
@@ -756,7 +756,7 @@ export default function KnowledgeBaseManager() {
                     {selectedResult.source && <span className="ml-3">来源: {selectedResult.source}</span>}
                   </div>
                   <button
-                    className="px-4 py-1.5 bg-primary text-primary-foreground text-sm rounded-md transition-opacity hover:opacity-90"
+                    className="inline-flex items-center justify-center min-h-[34px] px-8 py-1.5 bg-primary text-primary-foreground text-sm rounded-md transition-opacity hover:opacity-90"
                     onClick={() => {
                       navigator.clipboard.writeText(selectedResult.content);
                       showMsg('内容已复制到剪贴板');
@@ -789,7 +789,7 @@ export default function KnowledgeBaseManager() {
                         📥 批量下载 ({selectedItemIds.size})
                       </button>
                       <button
-                        className="inline-flex items-center justify-center gap-2 min-h-[34px] px-6 py-1.5 bg-error/10 border border-error/20 rounded-md text-error text-sm cursor-pointer transition-colors duration-150 whitespace-nowrap hover:bg-error/15"
+                        className="inline-flex items-center justify-center gap-2 min-h-[34px] px-8 py-1.5 bg-error/10 border border-error/20 rounded-md text-error text-sm cursor-pointer transition-colors duration-150 whitespace-nowrap hover:bg-error/15"
                         onClick={handleDeleteSelectedItems}
                       >
                         🗑️ 批量删除 ({selectedItemIds.size})
@@ -811,7 +811,7 @@ export default function KnowledgeBaseManager() {
                 const size = isFileMeta(item.content) ? item.content.size : undefined;
                 const isSelected = selectedItemIds.has(item.id);
                 return (
-                  <div key={item.id} className={cn('flex items-center gap-3 py-3 px-5 bg-muted border border-border rounded-md mb-2 transition-colors duration-150 hover:bg-foreground/5', isSelected && 'bg-primary/10')}>
+                  <div key={item.id} className={cn('flex items-center gap-3 py-3 px-7 bg-muted border border-border rounded-md mb-2 transition-colors duration-150 hover:bg-foreground/5', isSelected && 'bg-primary/10')}>
                     <input
                       type="checkbox"
                       checked={isSelected}
@@ -835,7 +835,7 @@ export default function KnowledgeBaseManager() {
                       {item.type === 'note' && (
                         <button className="inline-flex items-center justify-center p-2 bg-warning/10 border border-warning/20 rounded text-warning text-sm cursor-pointer opacity-0 transition-opacity duration-150 hover:opacity-100" onClick={() => openEditNote(item)} title="编辑">✏️</button>
                       )}
-                      <button className="inline-flex items-center justify-center py-1.5 px-3.5 bg-error/10 border border-error/20 rounded text-error text-sm cursor-pointer opacity-0 transition-opacity duration-150 hover:opacity-100" onClick={() => handleDeleteItem(item.id)}>删除</button>
+                      <button className="inline-flex items-center justify-center py-1.5 px-6 bg-error/10 border border-error/20 rounded text-error text-sm cursor-pointer opacity-0 transition-opacity duration-150 hover:opacity-100" onClick={() => handleDeleteItem(item.id)}>删除</button>
                     </div>
                   </div>
                 );
@@ -848,7 +848,7 @@ export default function KnowledgeBaseManager() {
       {/* Create Base Modal */}
       {showCreateBase && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[1000] p-4" onClick={() => setShowCreateBase(false)}>
-          <div className="bg-card border border-border rounded-xl p-8 w-full max-w-[560px] flex flex-col gap-5" onClick={e => e.stopPropagation()}>
+          <div className="bg-card border border-border rounded-xl px-10 py-8 w-full max-w-[560px] flex flex-col gap-5" onClick={e => e.stopPropagation()}>
             <div className="text-lg text-foreground font-semibold">新建知识库</div>
             <input
               className={modalInputBase}
@@ -893,7 +893,7 @@ export default function KnowledgeBaseManager() {
       {/* Rename Base Modal */}
       {showRenameBase && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[1000]" onClick={() => setShowRenameBase(false)}>
-          <div className="bg-card border border-border rounded-xl p-6 w-[90%] max-w-[500px] flex flex-col gap-4" onClick={e => e.stopPropagation()}>
+          <div className="bg-card border border-border rounded-xl px-8 py-6 w-[90%] max-w-[500px] flex flex-col gap-4" onClick={e => e.stopPropagation()}>
             <div className="text-base text-foreground font-semibold">重命名知识库</div>
             <input
               className={modalInputBase}
@@ -914,7 +914,7 @@ export default function KnowledgeBaseManager() {
       {/* Add / Edit Note Modal */}
       {showAddNote && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[1000]" onClick={closeAddNoteModal}>
-          <div className="bg-card border border-border rounded-xl p-6 w-[90%] max-w-[500px] flex flex-col gap-4" onClick={e => e.stopPropagation()}>
+          <div className="bg-card border border-border rounded-xl px-8 py-6 w-[90%] max-w-[500px] flex flex-col gap-4" onClick={e => e.stopPropagation()}>
             <div className="text-base text-foreground font-semibold">{editingItem ? '编辑笔记' : '添加笔记'}</div>
             <textarea
               className={cn(modalInputBase, 'min-h-[180px] resize-y leading-relaxed')}
@@ -945,7 +945,7 @@ export default function KnowledgeBaseManager() {
       {/* Settings Modal */}
       {showSettings && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[1000]" onClick={() => setShowSettings(false)}>
-          <div className="bg-card border border-border rounded-xl p-6 w-[90%] max-w-[500px] flex flex-col gap-4 max-h-[80vh] overflow-auto" onClick={e => e.stopPropagation()}>
+          <div className="bg-card border border-border rounded-xl px-8 py-6 w-[90%] max-w-[500px] flex flex-col gap-4 max-h-[80vh] overflow-auto" onClick={e => e.stopPropagation()}>
             <div className="text-base text-foreground font-semibold">模型配置</div>
             <div className="flex flex-col gap-3">
               <div>

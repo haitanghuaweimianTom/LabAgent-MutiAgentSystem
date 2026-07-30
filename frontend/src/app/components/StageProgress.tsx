@@ -43,7 +43,7 @@ export default function StageProgress({ stages, memoryPool, currentStep }: Stage
   const completedCount = stages.filter(s => s.status === 'completed').length;
 
   return (
-    <div className="bg-[#1E293B] border border-[#334155] rounded-[14px] p-[1.2rem] mb-4">
+    <div className="bg-[#1E293B] border border-[#334155] rounded-[14px] px-[1.7rem] py-[1.2rem] mb-4">
       <div className="flex justify-between items-center mb-4">
         <span className="text-[1rem] text-[#F8FAFC] font-semibold">📊 五阶段流水线</span>
         <span className="text-[0.875rem] text-[#94A3B8]">
@@ -66,7 +66,7 @@ export default function StageProgress({ stages, memoryPool, currentStep }: Stage
 
             <div className="w-full flex flex-col items-center gap-3">
               <div className={cn(
-                'flex items-center gap-[0.4rem] py-[0.4rem] px-[0.8rem] rounded-[20px] text-[0.82rem] font-semibold border border-[#334155] bg-[#1E293B] text-[#94A3B8] z-[1] whitespace-nowrap',
+                'flex items-center gap-[0.4rem] py-[0.4rem] px-[1.3rem] rounded-[20px] text-[0.82rem] font-semibold border border-[#334155] bg-[#1E293B] text-[#94A3B8] z-[1] whitespace-nowrap',
                 STATUS_CLASSES[stage.status]
               )}>
                 <span className="text-[0.9375rem]">{STAGE_ICONS[stage.id] || '●'}</span>
@@ -78,7 +78,7 @@ export default function StageProgress({ stages, memoryPool, currentStep }: Stage
               </div>
 
               {stage.status !== 'pending' && stage.status !== 'skipped' && (
-                <div className="w-full p-[0.6rem] bg-black/20 rounded-[8px] text-center">
+                <div className="w-full px-[1.1rem] py-[0.6rem] bg-black/20 rounded-[8px] text-center">
                   <div className="text-[0.875rem] text-[#94A3B8] leading-normal">{stage.description}</div>
                   {stage.progress > 0 && stage.status !== 'completed' && (
                     <div className="h-[3px] bg-[#334155] rounded-[2px] mt-[0.4rem] overflow-hidden">
@@ -98,7 +98,7 @@ export default function StageProgress({ stages, memoryPool, currentStep }: Stage
           <div className="text-[0.9375rem] text-[#f39c12] font-semibold mb-2">🧠 显式记忆池</div>
           <div className="flex flex-wrap gap-[0.4rem]">
             {memoryPool.map(m => (
-              <div key={m.key} className="flex items-center gap-[0.3rem] py-[0.3rem] px-[0.6rem] bg-[#1E293B] border border-[#334155] rounded-[6px]">
+              <div key={m.key} className="flex items-center gap-[0.3rem] py-[0.3rem] px-[1.1rem] bg-[#1E293B] border border-[#334155] rounded-[6px]">
                 <span className="text-[0.72rem] text-[#94A3B8] font-semibold whitespace-nowrap">{m.label}</span>
                 <span className="text-[0.72rem] text-[#64748B] max-w-[200px] overflow-hidden text-ellipsis whitespace-nowrap">{m.content}</span>
               </div>

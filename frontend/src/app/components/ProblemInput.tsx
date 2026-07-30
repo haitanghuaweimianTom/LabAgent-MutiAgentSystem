@@ -143,11 +143,11 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="bg-card border border-border rounded-xl p-5">
+      <div className="bg-card border border-border rounded-xl px-7 py-5">
         <div className="text-base text-foreground font-semibold mb-3">📝 研究问题输入</div>
         <div className="flex gap-3 items-center mb-2">
           <select
-            className="flex-1 p-2 bg-muted border border-border rounded-md text-foreground text-sm"
+            className="flex-1 px-4 py-2 bg-muted border border-border rounded-md text-foreground text-sm"
             value={activeProjectId || ''}
             onChange={e => {
               const id = e.target.value;
@@ -171,7 +171,7 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
                 await deleteProject(activeProjectId);
                 setProjectName('');
               }}
-              className="py-1.5 px-2.5 bg-error/10 border border-error/20 rounded-md text-error cursor-pointer text-sm transition-colors hover:bg-error/15"
+              className="py-1.5 px-5 bg-error/10 border border-error/20 rounded-md text-error cursor-pointer text-sm transition-colors hover:bg-error/15"
             >
               🗑️ 删除
             </button>
@@ -179,19 +179,19 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
           {showNewProject && (
             <div className="flex gap-3 items-center">
               <input
-                className="p-2 bg-muted border border-border rounded-md text-foreground text-sm w-36"
+                className="px-4 py-2 bg-muted border border-border rounded-md text-foreground text-sm w-36"
                 placeholder="项目名称"
                 value={newProjectName}
                 onChange={e => setNewProjectName(e.target.value)}
                 maxLength={60}
               />
-              <button onClick={handleCreateProject} className="py-1.5 px-2.5 bg-primary text-primary-foreground border-none rounded-md cursor-pointer text-sm transition-opacity hover:opacity-90">创建</button>
-              <button onClick={() => setShowNewProject(false)} className="py-1.5 px-2.5 bg-error/10 border border-error/20 rounded-md text-error cursor-pointer text-sm transition-colors hover:bg-error/15">取消</button>
+              <button onClick={handleCreateProject} className="py-1.5 px-5 bg-primary text-primary-foreground border-none rounded-md cursor-pointer text-sm transition-opacity hover:opacity-90">创建</button>
+              <button onClick={() => setShowNewProject(false)} className="py-1.5 px-5 bg-error/10 border border-error/20 rounded-md text-error cursor-pointer text-sm transition-colors hover:bg-error/15">取消</button>
             </div>
           )}
         </div>
         <input
-          className="w-full py-3 px-4 mb-2.5 bg-muted border border-border rounded-md text-foreground text-sm"
+          className="w-full py-3 px-6 mb-2.5 bg-muted border border-border rounded-md text-foreground text-sm"
           placeholder="输入项目名称（如：供应链优化 / CCF-A 论文 / 金融风控模型）"
           value={projectName}
           onChange={e => setProjectName(e.target.value)}
@@ -206,14 +206,14 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
               <button
                 type="button"
                 onClick={clearKBSelection}
-                className="py-0.5 px-2.5 bg-transparent text-muted-foreground border border-border rounded-md text-xs cursor-pointer"
+                className="py-0.5 px-5 bg-transparent text-muted-foreground border border-border rounded-md text-xs cursor-pointer"
               >
                 清空
               </button>
             )}
           </div>
           {knowledgeBases.length === 0 ? (
-            <div className="p-2 text-muted-foreground text-sm italic">
+            <div className="px-4 py-2 text-muted-foreground text-sm italic">
               暂无知识库；留空将自动使用项目私有 + 全局公共 KB
             </div>
           ) : (
@@ -228,7 +228,7 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
                     onClick={() => toggleKBSelection(kb.id)}
                     title={(kb as any).description || kb.name}
                     className={cn(
-                      'py-1.5 px-3 border rounded-2xl cursor-pointer text-sm transition-colors duration-150',
+                      'py-1.5 px-5 border rounded-2xl cursor-pointer text-sm transition-colors duration-150',
                       selected
                         ? 'bg-primary text-primary-foreground border-primary font-semibold'
                         : 'bg-muted text-muted-foreground border-border font-normal hover:border-foreground/20'
@@ -246,14 +246,14 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
           </div>
         </div>
         <div className="flex items-center gap-4 mb-3">
-          <label className="inline-flex items-center gap-3 py-2.5 px-5 bg-primary text-primary-foreground rounded-md cursor-pointer text-sm font-semibold transition-opacity duration-150 hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed">
+          <label className="inline-flex items-center gap-3 py-2.5 px-7 bg-primary text-primary-foreground rounded-md cursor-pointer text-sm font-semibold transition-opacity duration-150 hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed">
             {ocrLoading ? '识别中...' : '📷 上传问题图片 / PDF（OCR 提取文本）'}
             <input type="file" accept="image/*,.pdf" onChange={handleOcrUpload} className="hidden" disabled={ocrLoading} />
           </label>
           <span className="text-muted-foreground text-sm">支持 JPG / PNG / PDF，自动提取文本</span>
         </div>
         <textarea
-          className="w-full p-4 bg-muted border border-border rounded-md text-foreground text-sm font-[inherit] resize-y leading-relaxed focus:outline-none focus:border-primary placeholder:text-muted-foreground"
+          className="w-full px-6 py-4 bg-muted border border-border rounded-md text-foreground text-sm font-[inherit] resize-y leading-relaxed focus:outline-none focus:border-primary placeholder:text-muted-foreground"
           placeholder={'请描述您的研究问题，包括：\n1. 研究背景与目标\n2. 具体要求（优化/预测/评价/分类/仿真等）\n3. 数据情况（如有数据文件，请先到「数据」标签上传；无数据可选"系统自动搜集"）\n4. 约束条件或特殊要求\n5. 目标投稿会议/期刊（可选，系统会自动推荐模板）'}
           value={problemText}
           onChange={e => setProblemText(e.target.value)}
@@ -264,7 +264,7 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
           <div>
             <div className="text-sm text-muted-foreground font-semibold mb-2">问题类型</div>
             <select
-              className="w-full p-2 bg-muted border border-border rounded-md text-foreground text-sm"
+              className="w-full px-4 py-2 bg-muted border border-border rounded-md text-foreground text-sm"
               value={problemType}
               onChange={e => setProblemType(e.target.value)}
             >
@@ -284,7 +284,7 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
             <div>
               <div className="text-sm text-muted-foreground font-semibold mb-2">数据来源</div>
               <select
-                className="w-full p-2 bg-muted border border-border rounded-md text-foreground text-sm"
+                className="w-full px-4 py-2 bg-muted border border-border rounded-md text-foreground text-sm"
                 value={dataSource}
                 onChange={e => setDataSource(e.target.value as any)}
               >
@@ -303,14 +303,14 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
         )}
       </div>
 
-      <div className="bg-card border border-border rounded-xl p-5">
+      <div className="bg-card border border-border rounded-xl px-7 py-5">
         <div className="text-base text-foreground font-semibold mb-3">⚙️ 工作流与模板</div>
 
         <div className="mb-4">
           <div className="text-sm text-muted-foreground font-semibold mb-2">
             工作流模式（已由所选模板自动绑定：{currentWorkflowName}）
           </div>
-          <div className="p-3 bg-primary/10 border border-primary/20 rounded-md text-foreground text-sm">
+          <div className="px-5 py-3 bg-primary/10 border border-primary/20 rounded-md text-foreground text-sm">
             {currentTemplate
               ? `「${currentTemplate.name}」模板采用「${currentWorkflowName}」工作流：${WORKFLOWS.find((w) => w.id === workflow)?.desc}`
               : `当前工作流：${currentWorkflowName}`}
@@ -353,7 +353,7 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
       </div>
 
       {isRunning && (
-        <div className="bg-muted rounded-md py-3 px-4">
+        <div className="bg-muted rounded-md py-3 px-6">
           <div className="h-1.5 bg-muted rounded-sm overflow-hidden mb-1.5">
             <div className="h-full bg-primary rounded-sm transition-[width] duration-300 ease-in-out" style={{ width: progress + '%' }} />
           </div>
@@ -362,7 +362,7 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
       )}
 
       <div className="flex gap-3">
-        <button className="flex-1 py-3.5 px-8 bg-primary text-primary-foreground border-none rounded-lg text-base font-semibold cursor-pointer transition-opacity duration-150 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleSubmit} disabled={submitting || !problemText.trim() || isRunning}>
+        <button className="flex-1 py-3.5 px-10 bg-primary text-primary-foreground border-none rounded-lg text-base font-semibold cursor-pointer transition-opacity duration-150 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleSubmit} disabled={submitting || !problemText.trim() || isRunning}>
           {submitting ? '🚀 启动中...' : isRunning ? `🔄 生成中 ${progress}%` : '🚀 启动 LabAgent 生成'}
         </button>
       </div>

@@ -120,7 +120,7 @@ export default function LogStream({ taskId, className }: LogStreamProps) {
       {/* 头部 */}
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-muted/50 transition-colors"
+        className="w-full flex items-center justify-between px-6 py-2.5 hover:bg-muted/50 transition-colors"
       >
         <div className="flex items-center gap-3">
           <div className="relative">
@@ -151,13 +151,13 @@ export default function LogStream({ taskId, className }: LogStreamProps) {
             className="overflow-hidden"
           >
             {/* 过滤器 */}
-            <div className="flex items-center gap-2.5 px-4 py-1.5 border-b border-border">
+            <div className="flex items-center gap-2.5 px-6 py-1.5 border-b border-border">
               {(['all', 'agent', 'error'] as const).map((f) => (
                 <button
                   key={f}
                   onClick={() => setFilter(f)}
                   className={cn(
-                    'px-2 py-0.5 text-xs rounded transition-colors',
+                    'px-4 py-0.5 text-xs rounded transition-colors',
                     filter === f
                       ? 'bg-primary/20 text-primary'
                       : 'text-muted-foreground hover:text-foreground hover:bg-muted'
@@ -219,7 +219,7 @@ export default function LogStream({ taskId, className }: LogStreamProps) {
             </div>
 
             {/* 底部控制 */}
-            <div className="flex items-center justify-between px-4 py-1.5 border-t border-border">
+            <div className="flex items-center justify-between px-6 py-1.5 border-t border-border">
               <label className="flex items-center gap-3 text-xs text-muted-foreground cursor-pointer">
                 <input
                   type="checkbox"

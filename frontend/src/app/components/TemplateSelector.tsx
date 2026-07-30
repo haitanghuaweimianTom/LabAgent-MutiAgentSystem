@@ -122,7 +122,7 @@ export function TemplateSelector({ value, onChange, showCcfABadge = true, disabl
             disabled={disabled}
             data-testid={`template-${tpl.id}`}
             style={{
-              padding: 12,
+              padding: '12px 20px',
               textAlign: 'left',
               border: selected
                 ? '2px solid #3b82f6'
@@ -141,7 +141,7 @@ export function TemplateSelector({ value, onChange, showCcfABadge = true, disabl
               <span style={{ display: 'flex', gap: 4 }}>
                 {tpl.recommended && (
                   <span style={{
-                    fontSize: 10, padding: '2px 6px', borderRadius: 4,
+                    fontSize: 10, padding: '2px 12px', borderRadius: 4,
                     background: dark ? '#78350f' : '#fef3c7',
                     color: dark ? '#fde68a' : '#92400e',
                     fontWeight: 600,
@@ -151,7 +151,7 @@ export function TemplateSelector({ value, onChange, showCcfABadge = true, disabl
                 )}
                 {showCcfABadge && tpl.ccfA && (
                   <span style={{
-                    fontSize: 10, padding: '2px 6px', borderRadius: 4,
+                    fontSize: 10, padding: '2px 12px', borderRadius: 4,
                     background: dark ? '#1e3a5f' : '#dbeafe',
                     color: dark ? '#93c5fd' : '#1e40af',
                     fontWeight: 600,

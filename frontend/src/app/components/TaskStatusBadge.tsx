@@ -38,7 +38,7 @@ export function TaskStatusBadge({ state, progressPercentage, compact }: TaskStat
       data-testid={`task-status-${state}`}
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 6,
-        padding: compact ? '2px 8px' : '4px 12px',
+        padding: compact ? '2px 16px' : '4px 20px',
         background: meta.color + '15',
         color: meta.color,
         border: `1px solid ${meta.color}40`,

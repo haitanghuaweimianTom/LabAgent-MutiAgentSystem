@@ -191,7 +191,7 @@ export function Sidebar({ tasks = [] }: SidebarProps) {
 
       {/* Desktop sidebar */}
       <motion.aside
-        animate={{ width: collapsed ? 56 : 240 }}
+        animate={{ width: collapsed ? 56 : 200 }}
         transition={{ duration: 0.2, ease: 'easeInOut' }}
         className="hidden md:flex h-screen flex-col border-r border-border bg-card/80 backdrop-blur-xl"
       >

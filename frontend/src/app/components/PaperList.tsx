@@ -14,10 +14,10 @@ export default function PaperList({ papers, source }: PaperListProps) {
   if (!papers || papers.length === 0) {
     return (
       <div className="bg-card border border-border rounded-xl overflow-hidden flex flex-col mb-4">
-        <div className="flex justify-between items-center py-3 px-4 bg-muted/50 border-b border-border">
+        <div className="flex justify-between items-center py-3 px-6 bg-muted/50 border-b border-border">
           <span className="text-base text-foreground font-semibold">📚 相关文献</span>
         </div>
-        <div className="text-center p-8 text-muted-foreground text-sm">未检索到相关文献</div>
+        <div className="text-center px-10 py-8 text-muted-foreground text-sm">未检索到相关文献</div>
       </div>
     );
   }
@@ -33,14 +33,14 @@ export default function PaperList({ papers, source }: PaperListProps) {
 
   return (
     <div className="bg-card border border-border rounded-xl overflow-hidden flex flex-col mb-4">
-      <div className="flex justify-between items-center py-3 px-4 bg-muted/50 border-b border-border">
+      <div className="flex justify-between items-center py-3 px-6 bg-muted/50 border-b border-border">
         <span className="text-base text-foreground font-semibold">
           📚 相关文献（{papers.length} 篇）{sourceLabel}
         </span>
       </div>
-      <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2.5">
+      <div className="flex-1 overflow-y-auto px-5 py-3 flex flex-col gap-2.5">
         {papers.map((paper, idx) => (
-          <div key={`${paper.arxiv_id}-${idx}`} className="bg-muted/40 rounded-lg py-3 px-4 border border-border transition-colors duration-200 hover:border-primary/30">
+          <div key={`${paper.arxiv_id}-${idx}`} className="bg-muted/40 rounded-lg py-3 px-6 border border-border transition-colors duration-200 hover:border-primary/30">
             <div className="flex justify-between items-start gap-3 mb-1.5">
               <a
                 href={paper.url}
@@ -82,7 +82,7 @@ export default function PaperList({ papers, source }: PaperListProps) {
                   href={`https://doi.org/${paper.doi}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-sm text-primary no-underline py-0.5 px-1.5 border border-border rounded hover:bg-muted"
+                  className="text-sm text-primary no-underline py-0.5 px-3.5 border border-border rounded hover:bg-muted"
                 >
                   DOI
                 </a>
@@ -97,7 +97,7 @@ export default function PaperList({ papers, source }: PaperListProps) {
                   href={paper.pdf_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-sm text-error no-underline ml-auto py-0.5 px-1.5 border border-error/30 rounded hover:bg-error/10"
+                  className="text-sm text-error no-underline ml-auto py-0.5 px-3.5 border border-error/30 rounded hover:bg-error/10"
                 >
                   PDF
                 </a>
@@ -113,12 +113,12 @@ export default function PaperList({ papers, source }: PaperListProps) {
               </div>
             )}
             {paper.tldr && (
-              <div className="text-sm text-muted-foreground mb-2 py-1.5 px-2.5 bg-muted rounded-md border-l-2 border-l-primary/30 leading-relaxed">
+              <div className="text-sm text-muted-foreground mb-2 py-1.5 px-5 bg-muted rounded-md border-l-2 border-l-primary/30 leading-relaxed">
                 <span className="text-primary font-semibold mr-1.5">TL;DR:</span> {paper.tldr}
               </div>
             )}
             {paper.extraction && (
-              <div className="text-sm text-muted-foreground mb-2 py-2 px-3 bg-success/10 rounded-md border-l-2 border-l-success/30 leading-relaxed">
+              <div className="text-sm text-muted-foreground mb-2 py-2 px-5 bg-success/10 rounded-md border-l-2 border-l-success/30 leading-relaxed">
                 {paper.extraction.methods && <div className="mb-1"><strong className="text-success mr-1.5">方法：</strong> {paper.extraction.methods}</div>}
                 {paper.extraction.conclusion && <div className="mb-1"><strong className="text-success mr-1.5">结论：</strong> {paper.extraction.conclusion}</div>}
                 {paper.extraction.datasets && paper.extraction.datasets.length > 0 && <div className="mb-1"><strong className="text-success mr-1.5">数据集：</strong> {paper.extraction.datasets.join(', ')}</div>}
@@ -127,7 +127,7 @@ export default function PaperList({ papers, source }: PaperListProps) {
             )}
             <button
               type="button"
-              className="text-xs text-muted-foreground bg-transparent border-none cursor-pointer py-1 px-0 text-left hover:text-foreground"
+              className="text-xs text-muted-foreground bg-transparent border-none cursor-pointer py-1 px-2 text-left hover:text-foreground"
               onClick={() => toggleAbstract(idx)}
             >
               {expanded.has(idx) ? '收起摘要 ▲' : '查看摘要 ▼'}

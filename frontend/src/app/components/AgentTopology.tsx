@@ -115,7 +115,7 @@ export default function AgentTopology({ activeAgent, completedAgents, className 
   const nodeMap = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes])
 
   return (
-    <div className={cn('rounded-xl border border-border bg-card/50 backdrop-blur p-4 overflow-x-auto', className)}>
+    <div className={cn('rounded-xl border border-border bg-card/50 backdrop-blur px-6 py-4 overflow-x-auto', className)}>
       <h3 className="text-sm font-semibold text-foreground mb-3">Agent 执行拓扑</h3>
       <svg viewBox="0 0 600 720" className="w-full max-w-[600px] mx-auto">
         <defs>

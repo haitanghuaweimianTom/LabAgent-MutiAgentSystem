@@ -148,15 +148,15 @@ export default function MemoryManager() {
 
       {stats && (
         <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-4">
-          <div className="bg-card border border-border rounded-lg p-5 text-center shadow-[var(--shadow-card)]">
+          <div className="bg-card border border-border rounded-lg px-7 py-5 text-center shadow-[var(--shadow-card)]">
             <div className="text-2xl font-bold text-foreground">{stats.total_lessons}</div>
             <div className="text-sm text-muted-foreground mt-1.5">经验总数</div>
           </div>
-          <div className="bg-card border border-border rounded-lg p-5 text-center shadow-[var(--shadow-card)]">
+          <div className="bg-card border border-border rounded-lg px-7 py-5 text-center shadow-[var(--shadow-card)]">
             <div className="text-2xl font-bold text-foreground">{stats.active_task_memories}</div>
             <div className="text-sm text-muted-foreground mt-1.5">活跃任务记忆</div>
           </div>
-          <div className="bg-card border border-border rounded-lg p-5 text-center shadow-[var(--shadow-card)]">
+          <div className="bg-card border border-border rounded-lg px-7 py-5 text-center shadow-[var(--shadow-card)]">
             <div className="text-2xl font-bold text-foreground">{Object.keys(stats.by_category || {}).length}</div>
             <div className="text-sm text-muted-foreground mt-1.5">经验类别</div>
           </div>
@@ -164,24 +164,24 @@ export default function MemoryManager() {
       )}
 
       <div className="flex gap-3 border-b border-border pb-2">
-        <button className={cn('py-2 px-5 min-h-[36px] bg-transparent border border-border rounded-md text-muted-foreground cursor-pointer text-sm transition-colors', tab === 'lessons' && 'bg-primary/10 border-primary/30 text-primary')} onClick={() => setTab('lessons')}>
+        <button className={cn('py-2 px-8 min-h-[36px] bg-transparent border border-border rounded-md text-muted-foreground cursor-pointer text-sm transition-colors', tab === 'lessons' && 'bg-primary/10 border-primary/30 text-primary')} onClick={() => setTab('lessons')}>
           📚 经验教训
         </button>
-        <button className={cn('py-2 px-5 min-h-[36px] bg-transparent border border-border rounded-md text-muted-foreground cursor-pointer text-sm transition-colors', tab === 'task' && 'bg-primary/10 border-primary/30 text-primary')} onClick={() => setTab('task')}>
+        <button className={cn('py-2 px-8 min-h-[36px] bg-transparent border border-border rounded-md text-muted-foreground cursor-pointer text-sm transition-colors', tab === 'task' && 'bg-primary/10 border-primary/30 text-primary')} onClick={() => setTab('task')}>
           📋 任务记忆
         </button>
-        <button className={cn('py-2 px-5 min-h-[36px] bg-transparent border border-border rounded-md text-muted-foreground cursor-pointer text-sm transition-colors', tab === 'stats' && 'bg-primary/10 border-primary/30 text-primary')} onClick={() => setTab('stats')}>
+        <button className={cn('py-2 px-8 min-h-[36px] bg-transparent border border-border rounded-md text-muted-foreground cursor-pointer text-sm transition-colors', tab === 'stats' && 'bg-primary/10 border-primary/30 text-primary')} onClick={() => setTab('stats')}>
           📊 统计
         </button>
       </div>
 
       {tab === 'lessons' && (
         <>
-          <div className="bg-card border border-border rounded-lg p-5 shadow-[var(--shadow-card)]">
+          <div className="bg-card border border-border rounded-lg px-7 py-5 shadow-[var(--shadow-card)]">
             <div className="text-base font-semibold text-foreground mb-4">➕ 添加经验</div>
             <div className="flex gap-3 mb-4 flex-wrap">
               <select
-                className="h-10 px-3.5 bg-muted border border-border rounded-lg text-foreground text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
+                className="h-10 px-5 bg-muted border border-border rounded-lg text-foreground text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
                 value={newLesson.category}
                 onChange={(e) => setNewLesson({ ...newLesson, category: e.target.value })}
               >
@@ -192,19 +192,19 @@ export default function MemoryManager() {
                 <option value="writing">写作</option>
               </select>
               <input
-                className="h-10 px-3.5 bg-muted border border-border rounded-lg text-foreground text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
+                className="h-10 px-5 bg-muted border border-border rounded-lg text-foreground text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
                 placeholder="问题类型"
                 value={newLesson.problem_type}
                 onChange={(e) => setNewLesson({ ...newLesson, problem_type: e.target.value })}
               />
               <input
-                className="h-10 px-3.5 bg-muted border border-border rounded-lg text-foreground text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
+                className="h-10 px-5 bg-muted border border-border rounded-lg text-foreground text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
                 placeholder="方法/模型"
                 value={newLesson.method}
                 onChange={(e) => setNewLesson({ ...newLesson, method: e.target.value })}
               />
               <select
-                className="h-10 px-3.5 bg-muted border border-border rounded-lg text-foreground text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
+                className="h-10 px-5 bg-muted border border-border rounded-lg text-foreground text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
                 value={newLesson.success ? 'true' : 'false'}
                 onChange={(e) => setNewLesson({ ...newLesson, success: e.target.value === 'true' })}
               >
@@ -213,31 +213,31 @@ export default function MemoryManager() {
               </select>
             </div>
             <textarea
-              className="w-full min-h-[140px] py-2.5 px-3.5 bg-muted border border-border rounded-lg text-foreground text-sm resize-y leading-relaxed outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
+              className="w-full min-h-[140px] py-2.5 px-5 bg-muted border border-border rounded-lg text-foreground text-sm resize-y leading-relaxed outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
               placeholder="经验内容..."
               value={newLesson.content}
               onChange={(e) => setNewLesson({ ...newLesson, content: e.target.value })}
             />
             <div className="flex gap-3 mt-4">
-              <button className="inline-flex items-center justify-center gap-2 min-h-[36px] py-2 px-5 bg-primary text-primary-foreground rounded-md cursor-pointer text-sm font-semibold transition-opacity hover:opacity-90" onClick={addLesson}>添加经验</button>
-              <button className="inline-flex items-center justify-center py-1.5 px-3.5 min-h-[30px] bg-error/10 text-error border border-error/20 rounded-md cursor-pointer text-sm transition-colors hover:bg-error/15" onClick={clearLessons}>清空全部</button>
+              <button className="inline-flex items-center justify-center leading-tight gap-2 min-h-[36px] py-2 px-8 bg-primary text-primary-foreground rounded-md cursor-pointer text-sm font-semibold transition-opacity hover:opacity-90" onClick={addLesson}>添加经验</button>
+              <button className="inline-flex items-center justify-center leading-tight py-1.5 px-6 min-h-[30px] bg-error/10 text-error border border-error/20 rounded-md cursor-pointer text-sm transition-colors hover:bg-error/15" onClick={clearLessons}>清空全部</button>
             </div>
           </div>
 
           <div className="flex gap-3 flex-wrap">
             <input
-              className="h-10 px-3.5 bg-muted border border-border rounded-lg text-foreground text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
+              className="h-10 px-5 bg-muted border border-border rounded-lg text-foreground text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
               placeholder="按类别筛选"
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
             />
             <input
-              className="h-10 px-3.5 bg-muted border border-border rounded-lg text-foreground text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
+              className="h-10 px-5 bg-muted border border-border rounded-lg text-foreground text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
               placeholder="按问题类型筛选"
               value={problemTypeFilter}
               onChange={(e) => setProblemTypeFilter(e.target.value)}
             />
-            <button className="inline-flex items-center justify-center min-h-[36px] py-2 px-5 bg-primary/10 text-primary border border-primary/20 rounded-md cursor-pointer text-sm transition-colors hover:bg-primary/15" onClick={loadLessons}>刷新</button>
+            <button className="inline-flex items-center justify-center leading-tight min-h-[36px] py-2 px-8 bg-primary/10 text-primary border border-primary/20 rounded-md cursor-pointer text-sm transition-colors hover:bg-primary/15" onClick={loadLessons}>刷新</button>
           </div>
 
           {loading && lessons.length === 0 ? (
@@ -247,17 +247,17 @@ export default function MemoryManager() {
           ) : (
             <div className="flex flex-col gap-4">
               {lessons.map((lesson) => (
-                <div key={lesson.id} className="bg-card border border-border rounded-lg p-5 shadow-[var(--shadow-card)]">
+                <div key={lesson.id} className="bg-card border border-border rounded-lg px-7 py-5 shadow-[var(--shadow-card)]">
                   <div className="flex justify-between items-start gap-3 mb-2">
                     <div className="flex gap-2 flex-wrap">
-                      <span className="px-2 py-1 bg-primary/10 rounded text-sm text-primary">{lesson.category}</span>
-                      <span className={cn('px-2 py-1 rounded text-sm', lesson.success ? 'bg-primary/10 text-primary' : 'bg-warning/10 text-warning')}>
+                      <span className="px-4 py-1 bg-primary/10 rounded text-sm text-primary">{lesson.category}</span>
+                      <span className={cn('px-4 py-1 rounded text-sm', lesson.success ? 'bg-primary/10 text-primary' : 'bg-warning/10 text-warning')}>
                         {lesson.success ? '有效' : '教训'}
                       </span>
-                      {lesson.problem_type && <span className="px-2 py-1 bg-primary/10 rounded text-sm text-primary">{lesson.problem_type}</span>}
-                      {lesson.method && <span className="px-2 py-1 bg-primary/10 rounded text-sm text-primary">{lesson.method}</span>}
+                      {lesson.problem_type && <span className="px-4 py-1 bg-primary/10 rounded text-sm text-primary">{lesson.problem_type}</span>}
+                      {lesson.method && <span className="px-4 py-1 bg-primary/10 rounded text-sm text-primary">{lesson.method}</span>}
                     </div>
-                    <button className="inline-flex items-center justify-center py-1.5 px-3.5 min-h-[30px] bg-error/10 text-error border border-error/20 rounded-md cursor-pointer text-sm transition-colors hover:bg-error/15 shrink-0" onClick={() => deleteLesson(lesson.id)}>删除</button>
+                    <button className="inline-flex items-center justify-center leading-tight py-1.5 px-6 min-h-[30px] bg-error/10 text-error border border-error/20 rounded-md cursor-pointer text-sm transition-colors hover:bg-error/15 shrink-0" onClick={() => deleteLesson(lesson.id)}>删除</button>
                   </div>
                   <div className="text-sm leading-relaxed text-foreground">{lesson.content}</div>
                   <div className="flex gap-3 flex-wrap mt-2 text-xs text-muted-foreground">
@@ -276,17 +276,17 @@ export default function MemoryManager() {
         <>
           <div className="flex gap-3">
             <input
-              className="h-10 px-3.5 bg-muted border border-border rounded-lg text-foreground text-sm flex-1 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
+              className="h-10 px-5 bg-muted border border-border rounded-lg text-foreground text-sm flex-1 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
               placeholder="输入任务ID"
               value={taskId}
               onChange={(e) => setTaskId(e.target.value)}
             />
-            <button className="inline-flex items-center justify-center min-h-[36px] py-2 px-5 bg-primary/10 text-primary border border-primary/20 rounded-md cursor-pointer text-sm transition-colors hover:bg-primary/15 shrink-0" onClick={() => loadTaskMemory(taskId)}>加载</button>
+            <button className="inline-flex items-center justify-center leading-tight min-h-[36px] py-2 px-8 bg-primary/10 text-primary border border-primary/20 rounded-md cursor-pointer text-sm transition-colors hover:bg-primary/15 shrink-0" onClick={() => loadTaskMemory(taskId)}>加载</button>
           </div>
           {loading && !taskMemory ? (
             <div className="flex flex-col items-center justify-center text-center py-16 text-muted-foreground text-sm"><span className="text-3xl opacity-40 mb-2">⏳</span>加载中...</div>
           ) : taskMemory ? (
-            <pre className="bg-muted border border-border rounded-md p-4 font-mono text-sm text-foreground overflow-x-auto whitespace-pre-wrap break-word max-h-[500px] overflow-y-auto">{JSON.stringify(taskMemory, null, 2)}</pre>
+            <pre className="bg-muted border border-border rounded-md px-6 py-4 font-mono text-sm text-foreground overflow-x-auto whitespace-pre-wrap break-word max-h-[500px] overflow-y-auto">{JSON.stringify(taskMemory, null, 2)}</pre>
           ) : (
             <div className="flex flex-col items-center justify-center text-center py-16 text-muted-foreground text-sm"><span className="text-4xl opacity-40 mb-2">🧠</span>输入任务ID后加载工作记忆与情景记忆</div>
           )}
@@ -296,9 +296,9 @@ export default function MemoryManager() {
       {tab === 'stats' && stats && (
         <>
           <div className="text-base font-semibold text-foreground mb-4">按类别分布</div>
-          <pre className="bg-muted border border-border rounded-md p-4 font-mono text-sm text-foreground overflow-x-auto whitespace-pre-wrap break-word max-h-[500px] overflow-y-auto">{JSON.stringify(stats.by_category, null, 2)}</pre>
+          <pre className="bg-muted border border-border rounded-md px-6 py-4 font-mono text-sm text-foreground overflow-x-auto whitespace-pre-wrap break-word max-h-[500px] overflow-y-auto">{JSON.stringify(stats.by_category, null, 2)}</pre>
           <div className="text-base font-semibold text-foreground mt-4 mb-4">按问题类型分布</div>
-          <pre className="bg-muted border border-border rounded-md p-4 font-mono text-sm text-foreground overflow-x-auto whitespace-pre-wrap break-word max-h-[500px] overflow-y-auto">{JSON.stringify(stats.by_problem_type, null, 2)}</pre>
+          <pre className="bg-muted border border-border rounded-md px-6 py-4 font-mono text-sm text-foreground overflow-x-auto whitespace-pre-wrap break-word max-h-[500px] overflow-y-auto">{JSON.stringify(stats.by_problem_type, null, 2)}</pre>
         </>
       )}
     </div>

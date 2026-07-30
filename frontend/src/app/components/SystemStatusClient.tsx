@@ -80,14 +80,14 @@ const infoStore = {
 
 function SystemStatusSkeleton() {
   return (
-    <div className="bg-card border border-border rounded-[14px] p-[1.2rem] mb-4">
+    <div className="bg-card border border-border rounded-[14px] px-[1.7rem] py-[1.2rem] mb-4">
       <div className="flex justify-between items-center mb-4">
         <span className="text-[1rem] text-foreground font-semibold">🖥️ 系统状态</span>
-        <span className="text-[0.875rem] text-muted-foreground bg-muted py-0.5 px-2 rounded-[6px]">加载中...</span>
+        <span className="text-[0.875rem] text-muted-foreground bg-muted py-0.5 px-4 rounded-[6px]">加载中...</span>
       </div>
       <div className="grid grid-cols-2 gap-[0.6rem] mb-4">
         {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="flex flex-col gap-0.5 p-2 bg-muted/50 rounded-[8px]">
+          <div key={i} className="flex flex-col gap-0.5 px-4 py-2 bg-muted/50 rounded-[8px]">
             <span className="text-[0.72rem] text-muted-foreground font-semibold">加载中</span>
             <span className="text-[0.9375rem] text-muted-foreground">────</span>
           </div>
@@ -95,7 +95,7 @@ function SystemStatusSkeleton() {
       </div>
       <div className="text-[0.9375rem] text-muted-foreground font-semibold mb-2">Provider 配置状态</div>
       <div className="flex flex-col gap-[0.4rem]">
-        <div className="flex items-center gap-3 py-[0.4rem] px-[0.6rem] bg-muted/50 rounded-[6px] text-[0.82rem]">
+        <div className="flex items-center gap-3 py-[0.4rem] px-[1.1rem] bg-muted/50 rounded-[6px] text-[0.82rem]">
           <span className="w-2 h-2 rounded-full shrink-0 bg-muted-foreground" />
           <span className="text-muted-foreground">加载中...</span>
         </div>
@@ -106,10 +106,10 @@ function SystemStatusSkeleton() {
 
 function SystemStatusError() {
   return (
-    <div className="bg-card border border-border rounded-[14px] p-[1.2rem] mb-4">
+    <div className="bg-card border border-border rounded-[14px] px-[1.7rem] py-[1.2rem] mb-4">
       <div className="text-center p-4 text-error text-[0.9375rem]">❌ 无法连接到后端</div>
       <div className="text-center py-2 text-muted-foreground text-[0.82rem]">
-        请确认后端服务已启动：<code className="bg-muted py-[0.15rem] px-[0.4rem] rounded-[4px] text-success font-mono text-[0.78rem]">python -m backend.app.main</code>
+        请确认后端服务已启动：<code className="bg-muted py-[0.15rem] px-[0.9rem] rounded-[4px] text-success font-mono text-[0.78rem]">python -m backend.app.main</code>
       </div>
     </div>
   );
@@ -135,34 +135,34 @@ function SystemStatusContent({ info }: { info: SystemInfo }) {
   const defaultProviderName = info.default_provider?.name || info.default_llm_backend || '未配置';
 
   return (
-    <div className="bg-card border border-border rounded-[14px] p-[1.2rem] mb-4">
+    <div className="bg-card border border-border rounded-[14px] px-[1.7rem] py-[1.2rem] mb-4">
       <div className="flex justify-between items-center mb-4">
         <span className="text-[1rem] text-foreground font-semibold">🖥️ 系统状态</span>
-        <span className="text-[0.875rem] text-muted-foreground bg-muted py-0.5 px-2 rounded-[6px]">v{info.version}</span>
+        <span className="text-[0.875rem] text-muted-foreground bg-muted py-0.5 px-4 rounded-[6px]">v{info.version}</span>
       </div>
 
       <div className="grid grid-cols-2 gap-[0.6rem] mb-4">
-        <div className="flex flex-col gap-0.5 p-2 bg-muted/50 rounded-[8px]">
+        <div className="flex flex-col gap-0.5 px-4 py-2 bg-muted/50 rounded-[8px]">
           <span className="text-[0.72rem] text-muted-foreground font-semibold">默认模型</span>
           <span className="text-[0.9375rem] text-foreground">{defaultModel}</span>
           <span className="text-[0.875rem] text-muted-foreground break-all">{defaultProviderName}</span>
         </div>
-        <div className="flex flex-col gap-0.5 p-2 bg-muted/50 rounded-[8px]">
+        <div className="flex flex-col gap-0.5 px-4 py-2 bg-muted/50 rounded-[8px]">
           <span className="text-[0.72rem] text-muted-foreground font-semibold">Agent 团队</span>
           <span className="text-[0.9375rem] text-foreground">{info.agent_count} 个</span>
           <div className="flex flex-wrap gap-2.5 mt-[0.3rem]">
             {info.agents?.map(a => (
-              <span key={a.id} title={a.description} className="text-[0.7rem] text-muted-foreground bg-muted py-[0.15rem] px-[0.4rem] rounded-[4px] cursor-default">
+              <span key={a.id} title={a.description} className="text-[0.7rem] text-muted-foreground bg-muted py-[0.15rem] px-[0.9rem] rounded-[4px] cursor-default">
                 {a.label}
               </span>
             ))}
           </div>
         </div>
-        <div className="flex flex-col gap-0.5 p-2 bg-muted/50 rounded-[8px]">
+        <div className="flex flex-col gap-0.5 px-4 py-2 bg-muted/50 rounded-[8px]">
           <span className="text-[0.72rem] text-muted-foreground font-semibold">知识库</span>
           <span className="text-[0.9375rem] text-foreground">{info.knowledge_base_count} 个</span>
         </div>
-        <div className="flex flex-col gap-0.5 p-2 bg-muted/50 rounded-[8px]">
+        <div className="flex flex-col gap-0.5 px-4 py-2 bg-muted/50 rounded-[8px]">
           <span className="text-[0.72rem] text-muted-foreground font-semibold">任务</span>
           <span className="text-[0.9375rem] text-foreground">
             {info.active_tasks > 0 ? (
@@ -175,11 +175,11 @@ function SystemStatusContent({ info }: { info: SystemInfo }) {
             </span>
           </span>
         </div>
-        <div className="flex flex-col gap-0.5 p-2 bg-muted/50 rounded-[8px]">
+        <div className="flex flex-col gap-0.5 px-4 py-2 bg-muted/50 rounded-[8px]">
           <span className="text-[0.72rem] text-muted-foreground font-semibold">运行时长</span>
           <span className="text-[0.9375rem] text-foreground">{uptime || '-'}</span>
         </div>
-        <div className="flex flex-col gap-0.5 p-2 bg-muted/50 rounded-[8px]">
+        <div className="flex flex-col gap-0.5 px-4 py-2 bg-muted/50 rounded-[8px]">
           <span className="text-[0.72rem] text-muted-foreground font-semibold">后端连接</span>
           <span className="text-[0.9375rem] text-success">✅ 正常</span>
           <span className="text-[0.875rem] text-muted-foreground break-all">{apiBase()}</span>
@@ -192,10 +192,10 @@ function SystemStatusContent({ info }: { info: SystemInfo }) {
       ) : (
         <div className="flex flex-col gap-[0.4rem]">
           {info.providers.map(p => (
-            <div key={p.id} className="flex items-center gap-3 py-[0.4rem] px-[0.6rem] bg-muted/50 rounded-[6px] text-[0.82rem]">
+            <div key={p.id} className="flex items-center gap-3 py-[0.4rem] px-[1.1rem] bg-muted/50 rounded-[6px] text-[0.82rem]">
               <span className={cn('w-2 h-2 rounded-full shrink-0', p.available ? 'bg-success shadow-[0_0_6px_rgba(16,185,129,0.15)]' : 'bg-error shadow-[0_0_6px_rgba(239,68,68,0.15)]')} />
               <span className="text-foreground font-medium min-w-[120px]">{p.name}</span>
-              <span className="text-muted-foreground text-[0.8125rem] bg-muted py-[0.1rem] px-[0.35rem] rounded-[4px]">{p.type}</span>
+              <span className="text-muted-foreground text-[0.8125rem] bg-muted py-[0.1rem] px-[0.85rem] rounded-[4px]">{p.type}</span>
               {p.model && <span className="text-muted-foreground text-[0.875rem] ml-auto">{p.model}</span>}
             </div>
           ))}
@@ -204,7 +204,7 @@ function SystemStatusContent({ info }: { info: SystemInfo }) {
 
       <div className="text-[0.9375rem] text-muted-foreground font-semibold mb-2">工具链</div>
       <div className="flex flex-col gap-[0.4rem]">
-        <div className="flex items-center gap-3 py-[0.4rem] px-[0.6rem] bg-muted/50 rounded-[6px] text-[0.82rem]">
+        <div className="flex items-center gap-3 py-[0.4rem] px-[1.1rem] bg-muted/50 rounded-[6px] text-[0.82rem]">
           <span className={cn('w-2 h-2 rounded-full shrink-0', info.claude_code_available ? 'bg-success shadow-[0_0_6px_rgba(16,185,129,0.15)]' : 'bg-error shadow-[0_0_6px_rgba(239,68,68,0.15)]')} />
           <span className="text-foreground font-medium min-w-[120px]">Claude Code CLI</span>
           <span className="text-muted-foreground text-[0.875rem]">
@@ -215,7 +215,7 @@ function SystemStatusContent({ info }: { info: SystemInfo }) {
 
       <div className="text-[0.9375rem] text-muted-foreground font-semibold mb-2">CC Switch</div>
       <div className="flex flex-col gap-[0.4rem]">
-        <div className="flex items-center gap-3 py-[0.4rem] px-[0.6rem] bg-muted/50 rounded-[6px] text-[0.82rem]">
+        <div className="flex items-center gap-3 py-[0.4rem] px-[1.1rem] bg-muted/50 rounded-[6px] text-[0.82rem]">
           <span className={cn('w-2 h-2 rounded-full shrink-0', info.ccswitch_status?.installed ? 'bg-success shadow-[0_0_6px_rgba(16,185,129,0.15)]' : 'bg-error shadow-[0_0_6px_rgba(239,68,68,0.15)]')} />
           <span className="text-foreground font-medium min-w-[120px]">CC Switch</span>
           <span className="text-muted-foreground text-[0.875rem]">

@@ -7,7 +7,7 @@ import { apiBase } from '@/lib/api';
 // v5.4.0 样式常量（仅保留 layout，颜色全部走 Tailwind 语义令牌）
 // =============================================================
 const fieldStyle: React.CSSProperties = {
-  padding: '8px 14px',
+  padding: '8px 16px',
   height: 40,
   borderRadius: 8,
   fontSize: 14,
@@ -33,23 +33,25 @@ const primaryBtnStyle: React.CSSProperties = {
   alignItems: 'center',
   justifyContent: 'center',
   gap: 4,
-  padding: '8px 20px',
+  padding: '8px 24px',
   height: 40,
   borderRadius: 8,
   fontSize: 14,
   fontWeight: 600,
   cursor: 'pointer',
+  lineHeight: 1.25,
 };
 
 const primaryBtnSmStyle: React.CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
   gap: 4,
-  padding: '6px 12px',
+  padding: '6px 16px',
   borderRadius: 6,
   fontSize: 13,
   fontWeight: 600,
   cursor: 'pointer',
+  lineHeight: 1.25,
 };
 
 const secondaryBtnStyle: React.CSSProperties = {
@@ -57,42 +59,46 @@ const secondaryBtnStyle: React.CSSProperties = {
   alignItems: 'center',
   justifyContent: 'center',
   gap: 4,
-  padding: '8px 20px',
+  padding: '8px 24px',
   height: 40,
   borderRadius: 8,
   fontSize: 14,
   cursor: 'pointer',
+  lineHeight: 1.25,
 };
 
 const secondaryBtnSmStyle: React.CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
   gap: 4,
-  padding: '6px 12px',
+  padding: '6px 16px',
   borderRadius: 6,
   fontSize: 13,
   cursor: 'pointer',
+  lineHeight: 1.25,
 };
 
 const dangerBtnSmStyle: React.CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
   gap: 4,
-  padding: '6px 12px',
+  padding: '6px 16px',
   borderRadius: 6,
   fontSize: 13,
   cursor: 'pointer',
+  lineHeight: 1.25,
 };
 
 const disabledBtnStyle: React.CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
   gap: 4,
-  padding: '6px 12px',
+  padding: '6px 16px',
   borderRadius: 6,
   fontSize: 13,
   cursor: 'not-allowed',
   opacity: 0.6,
+  lineHeight: 1.25,
 };
 
 interface EnvironmentInfo {

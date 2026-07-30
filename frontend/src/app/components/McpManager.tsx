@@ -309,7 +309,7 @@ export default function McpManager() {
             key={sec.id}
             onClick={() => setActiveSection(sec.id)}
             style={{
-              padding: '0.5rem 1.2rem',
+              padding: '0.5rem 1.7rem',
               background: activeSection === sec.id ? 'rgba(52,152,219,0.15)' : 'rgba(255,255,255,0.05)',
               border: `1px solid ${activeSection === sec.id ? 'rgba(52,152,219,0.4)' : 'rgba(255,255,255,0.1)'}`,
               borderRadius: 8,
@@ -332,32 +332,32 @@ export default function McpManager() {
 
       {/* ===== MCP Servers ===== */}
       {activeSection === 'servers' && (
-        <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 14, padding: '1.5rem' }}>
+        <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 14, padding: '1.5rem 2rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
             <span style={{ fontSize: '1.1rem', color: '#fff', fontWeight: 600 }}>🔗 MCP 服务器</span>
             <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <button onClick={() => setShowJsonImport(!showJsonImport)} style={{ padding: '0.4rem 0.8rem', background: 'rgba(241,196,15,0.15)', border: '1px solid rgba(241,196,15,0.3)', borderRadius: 6, color: '#f1c40f', fontSize: '0.78rem', cursor: 'pointer' }}>📋 JSON 导入</button>
-              <button onClick={handleExportConfig} style={{ padding: '0.4rem 0.8rem', background: 'rgba(52,152,219,0.15)', border: '1px solid rgba(52,152,219,0.3)', borderRadius: 6, color: '#3498db', fontSize: '0.78rem', cursor: 'pointer' }}>💾 导出</button>
-              <button onClick={() => setShowAddServer(!showAddServer)} style={{ padding: '0.4rem 0.8rem', background: 'rgba(46,204,113,0.15)', border: '1px solid rgba(46,204,113,0.3)', borderRadius: 6, color: '#2ecc71', fontSize: '0.78rem', cursor: 'pointer' }}>+ 添加服务器</button>
+              <button onClick={() => setShowJsonImport(!showJsonImport)} style={{ padding: '0.4rem 1.3rem', background: 'rgba(241,196,15,0.15)', border: '1px solid rgba(241,196,15,0.3)', borderRadius: 6, color: '#f1c40f', fontSize: '0.78rem', cursor: 'pointer' }}>📋 JSON 导入</button>
+              <button onClick={handleExportConfig} style={{ padding: '0.4rem 1.3rem', background: 'rgba(52,152,219,0.15)', border: '1px solid rgba(52,152,219,0.3)', borderRadius: 6, color: '#3498db', fontSize: '0.78rem', cursor: 'pointer' }}>💾 导出</button>
+              <button onClick={() => setShowAddServer(!showAddServer)} style={{ padding: '0.4rem 1.3rem', background: 'rgba(46,204,113,0.15)', border: '1px solid rgba(46,204,113,0.3)', borderRadius: 6, color: '#2ecc71', fontSize: '0.78rem', cursor: 'pointer' }}>+ 添加服务器</button>
             </div>
           </div>
 
           {/* JSON import */}
           {showJsonImport && (
-            <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: 8, padding: '1rem', marginBottom: '1rem' }}>
+            <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: 8, padding: '1rem 1.5rem', marginBottom: '1rem' }}>
               <span style={{ color: '#f1c40f', fontSize: '0.9rem', fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>📋 粘贴 MCP JSON（Cherry Studio / Claude Desktop 格式）</span>
               <textarea
                 value={jsonText}
                 onChange={e => setJsonText(e.target.value)}
                 rows={8}
                 placeholder={`{\n  "mcpServers": {\n    "server_name": {\n      "command": "npx",\n      "args": ["-y", "@modelcontextprotocol/server-xxx"],\n      "env": {"API_KEY": "xxx"}\n    }\n  }\n}`}
-                style={{ width: '100%', padding: '0.75rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: '#e0e0e0', fontSize: '0.85rem', fontFamily: 'monospace', resize: 'vertical', boxSizing: 'border-box' }}
+                style={{ width: '100%', padding: '0.75rem 1.25rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: '#e0e0e0', fontSize: '0.85rem', fontFamily: 'monospace', resize: 'vertical', boxSizing: 'border-box' }}
               />
               <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.8rem' }}>
-                <button onClick={handleJsonImport} disabled={importingJson} style={{ padding: '0.5rem 1.2rem', background: 'linear-gradient(135deg, #f1c40f, #e67e22)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>
+                <button onClick={handleJsonImport} disabled={importingJson} style={{ padding: '0.5rem 1.7rem', background: 'linear-gradient(135deg, #f1c40f, #e67e22)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>
                   {importingJson ? '导入中...' : '确认导入'}
                 </button>
-                <button onClick={() => { setShowJsonImport(false); setJsonText(''); }} style={{ padding: '0.5rem 1.2rem', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: dark ? '#cbd5e1' : '#aaa', cursor: 'pointer' }}>
+                <button onClick={() => { setShowJsonImport(false); setJsonText(''); }} style={{ padding: '0.5rem 1.7rem', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: dark ? '#cbd5e1' : '#aaa', cursor: 'pointer' }}>
                   取消
                 </button>
               </div>
@@ -365,7 +365,7 @@ export default function McpManager() {
           )}
 
           {showAddServer && (
-            <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: 8, padding: '1rem', marginBottom: '1rem' }}>
+            <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: 8, padding: '1rem 1.5rem', marginBottom: '1rem' }}>
               <div style={{ marginBottom: '0.8rem' }}>
                 <div style={{ color: dark ? '#e2e8f0' : '#ddd', fontSize: '0.85rem', marginBottom: '0.5rem' }}>传输类型</div>
                 <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -374,7 +374,7 @@ export default function McpManager() {
                       key={tt.id}
                       onClick={() => setNewServer(s => ({ ...s, server_type: tt.id }))}
                       style={{
-                        padding: '0.4rem 0.7rem',
+                        padding: '0.4rem 1.2rem',
                         background: newServer.server_type === tt.id ? 'rgba(52,152,219,0.2)' : 'rgba(0,0,0,0.2)',
                         border: `1px solid ${newServer.server_type === tt.id ? 'rgba(52,152,219,0.5)' : 'rgba(255,255,255,0.1)'}`,
                         borderRadius: 8,
@@ -388,17 +388,17 @@ export default function McpManager() {
                   ))}
                 </div>
               </div>
-              <input value={newServer.name} onChange={e => setNewServer(s => ({ ...s, name: e.target.value }))} placeholder="服务器名称" style={{ width: '100%', padding: '0.6rem', marginBottom: '0.5rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: '#e0e0e0', fontSize: '0.9rem' }} />
+              <input value={newServer.name} onChange={e => setNewServer(s => ({ ...s, name: e.target.value }))} placeholder="服务器名称" style={{ width: '100%', padding: '0.6rem 1.1rem', marginBottom: '0.5rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: '#e0e0e0', fontSize: '0.9rem' }} />
               {newServer.server_type === 'stdio' ? (
                 <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                  <input value={newServer.command} onChange={e => setNewServer(s => ({ ...s, command: e.target.value }))} placeholder="命令 (如 npx)" style={{ flex: 1, padding: '0.6rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: '#e0e0e0', fontSize: '0.9rem' }} />
-                  <input value={newServer.args} onChange={e => setNewServer(s => ({ ...s, args: e.target.value }))} placeholder="参数 (空格分隔)" style={{ flex: 1, padding: '0.6rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: '#e0e0e0', fontSize: '0.9rem' }} />
+                  <input value={newServer.command} onChange={e => setNewServer(s => ({ ...s, command: e.target.value }))} placeholder="命令 (如 npx)" style={{ flex: 1, padding: '0.6rem 1.1rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: '#e0e0e0', fontSize: '0.9rem' }} />
+                  <input value={newServer.args} onChange={e => setNewServer(s => ({ ...s, args: e.target.value }))} placeholder="参数 (空格分隔)" style={{ flex: 1, padding: '0.6rem 1.1rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: '#e0e0e0', fontSize: '0.9rem' }} />
                 </div>
               ) : (
-                <input value={newServer.url} onChange={e => setNewServer(s => ({ ...s, url: e.target.value }))} placeholder="URL (如 http://localhost:3000/mcp)" style={{ width: '100%', padding: '0.6rem', marginBottom: '0.5rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: '#e0e0e0', fontSize: '0.9rem' }} />
+                <input value={newServer.url} onChange={e => setNewServer(s => ({ ...s, url: e.target.value }))} placeholder="URL (如 http://localhost:3000/mcp)" style={{ width: '100%', padding: '0.6rem 1.1rem', marginBottom: '0.5rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: '#e0e0e0', fontSize: '0.9rem' }} />
               )}
-              <input value={newServer.description} onChange={e => setNewServer(s => ({ ...s, description: e.target.value }))} placeholder="描述" style={{ width: '100%', padding: '0.6rem', marginBottom: '0.5rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: '#e0e0e0', fontSize: '0.9rem' }} />
-              <button onClick={handleAddServer} style={{ padding: '0.5rem 1rem', background: 'linear-gradient(135deg, #2ecc71, #27ae60)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>添加</button>
+              <input value={newServer.description} onChange={e => setNewServer(s => ({ ...s, description: e.target.value }))} placeholder="描述" style={{ width: '100%', padding: '0.6rem 1.1rem', marginBottom: '0.5rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: '#e0e0e0', fontSize: '0.9rem' }} />
+              <button onClick={handleAddServer} style={{ padding: '0.5rem 1.5rem', background: 'linear-gradient(135deg, #2ecc71, #27ae60)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>添加</button>
             </div>
           )}
 
@@ -408,7 +408,7 @@ export default function McpManager() {
             const isHttp = sType !== 'stdio';
             const installSource = srv.install_source || 'manual';
             return (
-              <div key={srv.name} style={{ padding: '0.8rem', marginBottom: '0.5rem', background: srv.enabled ? 'rgba(46,204,113,0.05)' : 'rgba(0,0,0,0.15)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8 }}>
+              <div key={srv.name} style={{ padding: '0.8rem 1.3rem', marginBottom: '0.5rem', background: srv.enabled ? 'rgba(46,204,113,0.05)' : 'rgba(0,0,0,0.15)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
                   <span style={{ width: 8, height: 8, borderRadius: '50%', background: srv.enabled ? '#2ecc71' : '#666' }} />
                   <span style={{ color: '#fff', fontWeight: 600 }}>{srv.name}</span>
@@ -440,7 +440,7 @@ export default function McpManager() {
                 )}
                 <span style={{ color: dark ? '#94a3b8' : '#888', fontSize: '0.85rem', flex: 1, display: 'block', marginTop: '0.3rem' }}>{srv.description}</span>
                 <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.4rem', marginLeft: '1.2rem' }}>
-                  <button onClick={() => handleToggleServer(srv.name, srv.enabled)} style={{ padding: '0.3rem 0.6rem', background: srv.enabled ? 'rgba(231,76,60,0.15)' : 'rgba(46,204,113,0.15)', border: `1px solid ${srv.enabled ? 'rgba(231,76,60,0.3)' : 'rgba(46,204,113,0.3)'}`, borderRadius: 6, color: srv.enabled ? '#e74c3c' : '#2ecc71', fontSize: '0.75rem', cursor: 'pointer' }}>
+                  <button onClick={() => handleToggleServer(srv.name, srv.enabled)} style={{ padding: '0.3rem 1.1rem', background: srv.enabled ? 'rgba(231,76,60,0.15)' : 'rgba(46,204,113,0.15)', border: `1px solid ${srv.enabled ? 'rgba(231,76,60,0.3)' : 'rgba(46,204,113,0.3)'}`, borderRadius: 6, color: srv.enabled ? '#e74c3c' : '#2ecc71', fontSize: '0.75rem', cursor: 'pointer' }}>
                     {srv.enabled ? '禁用' : '启用'}
                   </button>
                 </div>
@@ -452,30 +452,30 @@ export default function McpManager() {
 
       {/* ===== MCP Tools ===== */}
       {activeSection === 'tools' && (
-        <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 14, padding: '1.5rem' }}>
+        <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 14, padding: '1.5rem 2rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
             <span style={{ fontSize: '1.1rem', color: '#fff', fontWeight: 600 }}>🔧 MCP 工具</span>
-            <button onClick={() => setShowAddTool(!showAddTool)} style={{ padding: '0.4rem 0.8rem', background: 'rgba(46,204,113,0.15)', border: '1px solid rgba(46,204,113,0.3)', borderRadius: 6, color: '#2ecc71', fontSize: '0.78rem', cursor: 'pointer' }}>+ 添加工具</button>
+            <button onClick={() => setShowAddTool(!showAddTool)} style={{ padding: '0.4rem 1.3rem', background: 'rgba(46,204,113,0.15)', border: '1px solid rgba(46,204,113,0.3)', borderRadius: 6, color: '#2ecc71', fontSize: '0.78rem', cursor: 'pointer' }}>+ 添加工具</button>
           </div>
 
           {showAddTool && (
-            <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: 8, padding: '1rem', marginBottom: '1rem' }}>
+            <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: 8, padding: '1rem 1.5rem', marginBottom: '1rem' }}>
               <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                <input value={newTool.name} onChange={e => setNewTool(s => ({ ...s, name: e.target.value }))} placeholder="工具名称" style={{ flex: 1, padding: '0.6rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: '#e0e0e0', fontSize: '0.9rem' }} />
-                <select value={newTool.server} onChange={e => setNewTool(s => ({ ...s, server: e.target.value }))} style={{ flex: 1, padding: '0.6rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: '#e0e0e0', fontSize: '0.9rem' }}>
+                <input value={newTool.name} onChange={e => setNewTool(s => ({ ...s, name: e.target.value }))} placeholder="工具名称" style={{ flex: 1, padding: '0.6rem 1.1rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: '#e0e0e0', fontSize: '0.9rem' }} />
+                <select value={newTool.server} onChange={e => setNewTool(s => ({ ...s, server: e.target.value }))} style={{ flex: 1, padding: '0.6rem 1.1rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: '#e0e0e0', fontSize: '0.9rem' }}>
                   <option value="">选择服务器</option>
                   {servers.map(s => <option key={s.name} value={s.name}>{s.name}</option>)}
                 </select>
               </div>
-              <input value={newTool.description} onChange={e => setNewTool(s => ({ ...s, description: e.target.value }))} placeholder="描述" style={{ width: '100%', padding: '0.6rem', marginBottom: '0.5rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: '#e0e0e0', fontSize: '0.9rem' }} />
-              <button onClick={handleAddTool} style={{ padding: '0.5rem 1rem', background: 'linear-gradient(135deg, #2ecc71, #27ae60)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>添加</button>
+              <input value={newTool.description} onChange={e => setNewTool(s => ({ ...s, description: e.target.value }))} placeholder="描述" style={{ width: '100%', padding: '0.6rem 1.1rem', marginBottom: '0.5rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: '#e0e0e0', fontSize: '0.9rem' }} />
+              <button onClick={handleAddTool} style={{ padding: '0.5rem 1.5rem', background: 'linear-gradient(135deg, #2ecc71, #27ae60)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>添加</button>
             </div>
           )}
 
           {tools.length === 0 && <div style={{ color: dark ? '#94a3b8' : '#666', textAlign: 'center' }}>暂无 MCP 工具</div>}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '0.5rem' }}>
             {tools.map(tool => (
-              <div key={tool.name} style={{ padding: '0.6rem', background: 'rgba(0,0,0,0.15)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8 }}>
+              <div key={tool.name} style={{ padding: '0.6rem 1.1rem', background: 'rgba(0,0,0,0.15)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8 }}>
                 <div style={{ color: '#fff', fontWeight: 600 }}>{tool.name}</div>
                 <div style={{ color: dark ? '#94a3b8' : '#888', fontSize: '0.8rem' }}>服务器: {tool.server}</div>
                 <div style={{ color: dark ? '#cbd5e1' : '#aaa', fontSize: '0.85rem' }}>{tool.description}</div>
@@ -489,7 +489,7 @@ export default function McpManager() {
       {activeSection === 'agents' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           {/* 说明 */}
-          <div style={{ background: 'rgba(52,152,219,0.08)', border: '1px solid rgba(52,152,219,0.2)', borderRadius: 14, padding: '1.2rem' }}>
+          <div style={{ background: 'rgba(52,152,219,0.08)', border: '1px solid rgba(52,152,219,0.2)', borderRadius: 14, padding: '1.2rem 1.7rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
               <div>
                 <span style={{ fontSize: '1rem', color: '#3498db', fontWeight: 600 }}>🤖 Agent-MCP 配置</span>
@@ -503,7 +503,7 @@ export default function McpManager() {
               <button
                 onClick={applyRecommended}
                 style={{
-                  padding: '0.6rem 1.2rem',
+                  padding: '0.6rem 1.7rem',
                   background: 'linear-gradient(135deg, #3498db, #2980b9)',
                   color: '#fff',
                   border: 'none',
@@ -523,7 +523,7 @@ export default function McpManager() {
             const enabledServers = getEnabledServersForAgent(agent.id);
             const hasFileSystem = enabledServers.includes('file_system');
             return (
-              <div key={agent.id} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 14, padding: '1.2rem' }}>
+              <div key={agent.id} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 14, padding: '1.2rem 1.7rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.6rem', flexWrap: 'wrap', gap: '0.5rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                     <span style={{ fontSize: '1rem', color: '#fff', fontWeight: 600 }}>{agent.label}</span>
@@ -538,7 +538,7 @@ export default function McpManager() {
                     onClick={() => saveAgentTools(agent.id)}
                     disabled={savingAgent === agent.id}
                     style={{
-                      padding: '0.4rem 1rem',
+                      padding: '0.4rem 1.5rem',
                       background: 'linear-gradient(135deg, #2ecc71, #27ae60)',
                       color: '#fff',
                       border: 'none',
@@ -563,7 +563,7 @@ export default function McpManager() {
                         display: 'flex',
                         flexDirection: 'column',
                         gap: '0.3rem',
-                        padding: '0.6rem',
+                        padding: '0.6rem 1.1rem',
                         background: isChecked ? 'rgba(52,152,219,0.1)' : 'rgba(0,0,0,0.1)',
                         border: `1px solid ${isChecked ? 'rgba(52,152,219,0.3)' : 'rgba(255,255,255,0.08)'}`,
                         borderRadius: 8,
@@ -600,7 +600,7 @@ export default function McpManager() {
                   const currentTools = agentToolsMap[agent.id] || [];
                   if (currentTools.length === 0) return null;
                   return (
-                    <div style={{ marginTop: '0.8rem', padding: '0.5rem', background: 'rgba(0,0,0,0.15)', borderRadius: 6 }}>
+                    <div style={{ marginTop: '0.8rem', padding: '0.5rem 1rem', background: 'rgba(0,0,0,0.15)', borderRadius: 6 }}>
                       <span style={{ fontSize: '0.8rem', color: '#64748B' }}>已配置工具: </span>
                       {currentTools.map(t => (
                         <span key={t} style={{ display: 'inline-block', padding: '0.1rem 0.4rem', margin: '0.1rem', background: 'rgba(52,152,219,0.15)', border: '1px solid rgba(52,152,219,0.3)', borderRadius: 4, color: '#3498db', fontSize: '0.75rem' }}>{t}</span>

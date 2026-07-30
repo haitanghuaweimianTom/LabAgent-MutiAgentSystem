@@ -31,6 +31,8 @@
     ]
   },
   "env": {
-    "ANTHROPIC_AUTH_TOKEN": "your_api_key_here"
+    "ANTHROPIC_AUTH_TOKEN": "ark-8b02e574-b0dc-49a3-8c58-56dee78fb5a1-04335",
+    "ANTHROPIC_MODEL": "glm-5-2-260617",
+    "ANTHROPIC_BASE_URL": "https://ark.cn-beijing.volces.com/api/compatible"
   }
 }

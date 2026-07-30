@@ -20,7 +20,7 @@ export default function AlgorithmRecommend({ algorithms }: AlgorithmRecommendPro
   if (!algorithms || algorithms.length === 0) return null;
 
   return (
-    <div className="bg-[#1E293B] border border-[#334155] rounded-[14px] p-[1.2rem] mb-4">
+    <div className="bg-[#1E293B] border border-[#334155] rounded-[14px] px-[1.7rem] py-[1.2rem] mb-4">
       <div className="flex justify-between items-center mb-[0.8rem]">
         <span className="text-[0.95rem] text-[#F8FAFC] font-semibold">🔍 算法库推荐</span>
         <span className="text-[0.875rem] text-[#94A3B8]">基于问题特征自动检索</span>
@@ -28,13 +28,13 @@ export default function AlgorithmRecommend({ algorithms }: AlgorithmRecommendPro
       <div className="flex flex-col gap-[0.6rem]">
         {algorithms.map((algo, idx) => (
           <div key={algo.name_en} className="bg-black/20 border border-[#334155] rounded-[10px] overflow-hidden">
-            <div className="flex items-center gap-3 py-[0.6rem] px-[0.8rem] bg-[rgba(45,212,191,0.15)] border-b border-[#334155]">
-              <span className="text-[0.875rem] text-[#3498db] font-bold bg-[rgba(45,212,191,0.15)] py-[0.1rem] px-[0.4rem] rounded-[4px]">#{idx + 1}</span>
+            <div className="flex items-center gap-3 py-[0.6rem] px-[1.3rem] bg-[rgba(45,212,191,0.15)] border-b border-[#334155]">
+              <span className="text-[0.875rem] text-[#3498db] font-bold bg-[rgba(45,212,191,0.15)] py-[0.1rem] px-[0.6rem] rounded-[4px]">#{idx + 1}</span>
               <span className="text-[0.9375rem] text-[#F8FAFC] font-semibold">{algo.name_cn}</span>
               <span className="text-[0.875rem] text-[#94A3B8] italic">{algo.name_en}</span>
               <span className="ml-auto text-[0.72rem] text-[#2ecc71] font-semibold">相关度 {algo.relevance_score}</span>
             </div>
-            <div className="py-[0.7rem] px-[0.8rem]">
+            <div className="py-[0.7rem] px-[1.3rem]">
               <div className="flex gap-3 mb-[0.4rem] items-start">
                 <span className="text-[0.875rem] text-[#94A3B8] font-semibold min-w-[60px] shrink-0">描述</span>
                 <span className="text-[0.82rem] text-[#94A3B8] leading-[1.5]">{algo.description}</span>
@@ -52,7 +52,7 @@ export default function AlgorithmRecommend({ algorithms }: AlgorithmRecommendPro
                   <span className="text-[0.875rem] text-[#94A3B8] font-semibold min-w-[60px] shrink-0">具体方法</span>
                   <div className="flex flex-wrap gap-[0.3rem]">
                     {Object.keys(algo.subtypes).map(st => (
-                      <span key={st} className="text-[0.72rem] py-[0.15rem] px-2 bg-[rgba(155,89,182,0.15)] rounded-[10px] text-[#bb8fce]">{st}</span>
+                      <span key={st} className="text-[0.72rem] py-[0.15rem] px-4 bg-[rgba(155,89,182,0.15)] rounded-[10px] text-[#bb8fce]">{st}</span>
                     ))}
                   </div>
                 </div>

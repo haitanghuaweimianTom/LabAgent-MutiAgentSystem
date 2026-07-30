@@ -141,11 +141,11 @@ export default function FileManager({ taskId }: FileManagerProps) {
   const allSelected = files.length > 0 && files.every((f) => selectedFiles.has(f.name));
 
   return (
-    <div className="bg-card border border-border rounded-xl p-5 space-y-4">
+    <div className="bg-card border border-border rounded-xl px-7 py-5 space-y-4">
       <div className="flex items-center justify-between gap-4">
         <span className="text-base text-foreground font-semibold">📁 数据文件管理{projectName ? ` · ${projectName}` : ''}</span>
         {tab === 'user_upload' && (
-          <label className="inline-flex items-center gap-3 min-h-[40px] px-4 py-2 bg-primary text-primary-foreground rounded-lg cursor-pointer text-sm font-semibold transition-opacity duration-150 hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed">
+          <label className="inline-flex items-center leading-tight gap-3 min-h-[40px] px-8 py-2 bg-primary text-primary-foreground rounded-lg cursor-pointer text-sm font-semibold transition-opacity duration-150 hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed">
             {uploading ? '上传中...' : '📤 批量上传'}
             <input
               type="file"
@@ -162,7 +162,7 @@ export default function FileManager({ taskId }: FileManagerProps) {
       <div className="flex gap-3 mb-4 border-b border-border pb-0">
         <button
           className={cn(
-            'py-2.5 px-5 bg-transparent text-muted-foreground border-none border-b-2 border-transparent cursor-pointer text-sm font-medium transition-colors duration-150 -mb-px hover:text-foreground',
+            'py-2.5 px-8 bg-transparent text-muted-foreground border-none border-b-2 border-transparent cursor-pointer text-sm font-medium transition-colors duration-150 -mb-px hover:text-foreground',
             tab === 'user_upload' && 'text-primary border-b-primary font-semibold'
           )}
           onClick={() => setTab('user_upload')}
@@ -171,7 +171,7 @@ export default function FileManager({ taskId }: FileManagerProps) {
         </button>
         <button
           className={cn(
-            'py-2.5 px-5 bg-transparent text-muted-foreground border-none border-b-2 border-transparent cursor-pointer text-sm font-medium transition-colors duration-150 -mb-px hover:text-foreground',
+            'py-2.5 px-8 bg-transparent text-muted-foreground border-none border-b-2 border-transparent cursor-pointer text-sm font-medium transition-colors duration-150 -mb-px hover:text-foreground',
             tab === 'self_collected' && 'text-primary border-b-primary font-semibold'
           )}
           onClick={() => setTab('self_collected')}
@@ -180,7 +180,7 @@ export default function FileManager({ taskId }: FileManagerProps) {
         </button>
         <button
           className={cn(
-            'py-2.5 px-5 bg-transparent text-muted-foreground border-none border-b-2 border-transparent cursor-pointer text-sm font-medium transition-colors duration-150 -mb-px hover:text-foreground',
+            'py-2.5 px-8 bg-transparent text-muted-foreground border-none border-b-2 border-transparent cursor-pointer text-sm font-medium transition-colors duration-150 -mb-px hover:text-foreground',
             tab === 'knowledge_base' && 'text-primary border-b-primary font-semibold'
           )}
           onClick={() => setTab('knowledge_base')}
@@ -197,7 +197,7 @@ export default function FileManager({ taskId }: FileManagerProps) {
           </div>
 
           {files.length > 0 && (
-            <div className="flex items-center gap-4 mb-2.5 py-2 px-3.5 bg-muted rounded-md">
+            <div className="flex items-center gap-4 mb-2.5 py-2 px-5 bg-muted rounded-md">
               <label className="flex items-center gap-3 text-muted-foreground text-sm cursor-pointer">
                 <input
                   type="checkbox"
@@ -208,7 +208,7 @@ export default function FileManager({ taskId }: FileManagerProps) {
                 <span>全选</span>
               </label>
               {selectedFiles.size > 0 && (
-                <button className="py-1.5 px-3 bg-error/10 text-error border border-error/20 rounded-md cursor-pointer text-sm font-semibold transition-colors duration-150 hover:bg-error/15" onClick={handleBatchDelete}>
+                <button className="inline-flex items-center justify-center leading-tight min-h-[34px] px-8 py-1.5 bg-error/10 text-error border border-error/20 rounded-md cursor-pointer text-sm font-semibold transition-colors duration-150 hover:bg-error/15" onClick={handleBatchDelete}>
                   🗑️ 删除选中 ({selectedFiles.size})
                 </button>
               )}
@@ -225,14 +225,14 @@ export default function FileManager({ taskId }: FileManagerProps) {
 
           <div className="flex flex-col gap-3">
             {files.map((f) => (
-              <div key={f.name} className="flex items-center gap-3 px-5 py-3 bg-muted rounded-lg flex-wrap transition-colors hover:bg-muted/70">
+              <div key={f.name} className="flex items-center gap-3 px-7 py-3 bg-muted rounded-lg flex-wrap transition-colors hover:bg-muted/70">
                 <input
                   type="checkbox"
                   className="accent-primary w-4 h-4 cursor-pointer"
                   checked={selectedFiles.has(f.name)}
                   onChange={() => toggleFile(f.name)}
                 />
-                <span className="text-sm py-1.5 px-3.5 bg-primary/10 text-primary rounded font-semibold min-w-[50px] text-center">{f.type}</span>
+                <span className="text-sm py-1.5 px-5 bg-primary/10 text-primary rounded font-semibold min-w-[50px] text-center">{f.type}</span>
                 <div className="flex-1">
                   <span className="block text-sm text-foreground">{f.name}</span>
                   <span className="block text-xs text-muted-foreground mt-0.5">
@@ -243,12 +243,12 @@ export default function FileManager({ taskId }: FileManagerProps) {
                 {f.insights && f.insights.length > 0 && (
                   <div className="flex gap-3 flex-wrap">
                     {f.insights.slice(0, 2).map((ins, j) => (
-                      <span key={j} className="text-xs py-1.5 px-3.5 bg-success/10 rounded-full text-success">{ins}</span>
+                      <span key={j} className="text-xs py-1.5 px-5 bg-success/10 rounded-full text-success">{ins}</span>
                     ))}
                   </div>
                 )}
                 <button
-                  className="py-1.5 px-3.5 bg-error/10 text-error border border-error/20 rounded-md cursor-pointer text-sm transition-colors duration-150 hover:bg-error/15 ml-2 shrink-0"
+                  className="py-1.5 px-4 bg-error/10 text-error border border-error/20 rounded-md cursor-pointer text-sm transition-colors duration-150 hover:bg-error/15 ml-2 shrink-0"
                   onClick={() => handleDelete(f.name, 'user_upload')}
                   title="删除"
                 >
@@ -279,9 +279,9 @@ export default function FileManager({ taskId }: FileManagerProps) {
             {files.map((f) => {
               const meta = f.meta;
               return (
-                <div key={f.name} className="flex items-center gap-3 px-5 py-3 bg-muted rounded-lg flex-wrap transition-colors hover:bg-muted/70">
-                  <span className="inline-block text-xs py-1.5 px-3.5 bg-primary/10 text-primary rounded-full font-medium">🌐 自收集</span>
-                  <span className="text-sm py-1.5 px-3.5 bg-primary/10 text-primary rounded font-semibold min-w-[50px] text-center">{f.type}</span>
+                <div key={f.name} className="flex items-center gap-3 px-7 py-3 bg-muted rounded-lg flex-wrap transition-colors hover:bg-muted/70">
+                  <span className="inline-block text-xs py-1.5 px-5 bg-primary/10 text-primary rounded-full font-medium">🌐 自收集</span>
+                  <span className="text-sm py-1.5 px-5 bg-primary/10 text-primary rounded font-semibold min-w-[50px] text-center">{f.type}</span>
                   <div className="flex-1">
                     <span className="block text-sm text-foreground">{f.name}</span>
                     <span className="block text-xs text-muted-foreground mt-0.5">
@@ -302,7 +302,7 @@ export default function FileManager({ taskId }: FileManagerProps) {
                     </span>
                   )}
                   <button
-                    className="py-1.5 px-3.5 bg-error/10 text-error border border-error/20 rounded-md cursor-pointer text-sm transition-colors duration-150 hover:bg-error/15 shrink-0"
+                    className="py-1.5 px-4 bg-error/10 text-error border border-error/20 rounded-md cursor-pointer text-sm transition-colors duration-150 hover:bg-error/15 shrink-0"
                     onClick={() => handleDelete(f.name, 'self_collected')}
                     title="删除"
                   >
@@ -329,7 +329,7 @@ export default function FileManager({ taskId }: FileManagerProps) {
           <p className="text-muted-foreground my-1 text-sm">
             创建 KB / 上传文档 / 配置嵌入模型 → 任务提交时勾选注入
           </p>
-          <a href="#" onClick={(e) => { e.preventDefault(); window.dispatchEvent(new CustomEvent('mm:switch-tab', { detail: 'knowledge' })); }} className="inline-flex items-center justify-center mt-4 min-h-[36px] py-2 px-5 bg-primary text-primary-foreground rounded-md no-underline font-semibold text-sm transition-opacity hover:opacity-90">
+          <a href="#" onClick={(e) => { e.preventDefault(); window.dispatchEvent(new CustomEvent('mm:switch-tab', { detail: 'knowledge' })); }} className="inline-flex items-center justify-center leading-tight mt-4 min-h-[36px] py-2 px-8 bg-primary text-primary-foreground rounded-md no-underline font-semibold text-sm transition-opacity hover:opacity-90">
             前往知识库管理 →
           </a>
         </div>

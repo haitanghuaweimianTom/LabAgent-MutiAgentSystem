@@ -1,4 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
+import fs from 'fs';
+
+// 调试日志：把每次代理请求记到文件，便于定位"命令行正常浏览器失败"。
+const LOG_PATH = '/tmp/route-proxy.log';
+function log(line: string) {
+  try {
+    fs.appendFileSync(LOG_PATH, `[${new Date().toISOString()}] ${line}\n`);
+  } catch {}
+}
 
 // 同源反向代理：浏览器只请求 3002/api/...，由本 handler 转发到后端 8001。
 // 解决三大坑：
@@ -26,6 +35,10 @@ const RESP_HOP = new Set([
 async function handler(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
   const url = `${BACKEND_URL}${pathname}${search}`;
+  const startedAt = Date.now();
+  const origin = req.headers.get('origin') || '';
+  const referer = req.headers.get('referer') || '';
+  log(`START ${req.method} ${pathname}${search} origin=${origin} referer=${referer}`);
 
   const reqHeaders: Record<string, string> = {};
   req.headers.forEach((value, key) => {
@@ -51,11 +64,14 @@ async function handler(req: NextRequest) {
       redirect: 'manual',
     });
   } catch (e) {
+    const msg = e instanceof Error ? e.message : 'unknown';
+    log(`FETCH-ERR ${req.method} ${pathname} -> ${msg} (${Date.now() - startedAt}ms)`);
     return NextResponse.json(
-      { error: `Backend unreachable: ${e instanceof Error ? e.message : 'unknown'}` },
+      { error: `Backend unreachable: ${msg}` },
       { status: 502 }
     );
   }
+  log(`OK ${req.method} ${pathname} -> ${backendRes.status} (started ${Date.now() - startedAt}ms)`);
 
   const respHeaders = new Headers();
   backendRes.headers.forEach((value, key) => {
@@ -78,26 +94,33 @@ async function handler(req: NextRequest) {
   });
 
   // 流式透传 body（不缓冲全量，避免大响应/慢连接 socket 断开）
+  const streamPath = pathname;
+  const streamStart = Date.now();
+  let streamBytes = 0;
   const stream = new ReadableStream({
     async start(controller) {
       try {
         const reader = backendRes.body?.getReader();
         if (!reader) {
+          log(`STREAM-EMPTY ${streamPath} (${Date.now() - streamStart}ms)`);
           controller.close();
           return;
         }
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          controller.enqueue(value);
+          if (value) { streamBytes += value.byteLength; controller.enqueue(value); }
         }
         controller.close();
+        log(`STREAM-DONE ${streamPath} bytes=${streamBytes} (${Date.now() - streamStart}ms)`);
       } catch (e) {
+        const msg = e instanceof Error ? e.message : 'unknown';
+        log(`STREAM-ERR ${streamPath} bytes=${streamBytes} -> ${msg} (${Date.now() - streamStart}ms)`);
         controller.error(e);
       }
     },
     cancel() {
-      // 浏览器取消请求时，释放后端 reader
+      log(`STREAM-CANCEL ${streamPath} bytes=${streamBytes} (browser gave up, ${Date.now() - streamStart}ms)`);
     },
   });
 

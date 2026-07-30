@@ -50,7 +50,7 @@ interface Preset {
 }
 
 // 卡片容器（Geist 单色：浅色白卡/深色深卡，自适应）
-const cardClass = 'bg-card border border-border rounded-xl p-6 shadow-[var(--shadow-card)]';
+const cardClass = 'bg-card border border-border rounded-xl px-8 py-6 shadow-[var(--shadow-card)]';
 
 export default function ProviderSettings() {
   const [providers, setProviders] = useState<CustomProvider[]>([]);
@@ -355,23 +355,23 @@ export default function ProviderSettings() {
 
   if (loading) return <div className="text-center p-8 text-muted-foreground text-sm">加载中...</div>;
 
-  // 语义色按钮样式（Geist 单色）。比例铁律：横(px)≥纵(py)×2
-  const btnBase = 'inline-flex items-center justify-center gap-3 rounded-lg cursor-pointer font-semibold whitespace-nowrap transition-opacity duration-150 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed';
-  const btnPrimary = `${btnBase} py-2 px-5 min-h-[36px] text-sm bg-primary text-primary-foreground`;
-  const btnSuccess = `${btnBase} py-2 px-5 min-h-[36px] text-sm bg-success/10 text-success border border-success/20 hover:bg-success/15`;
-  const btnInfo = `${btnBase} py-2 px-5 min-h-[36px] text-sm bg-primary/10 text-primary border border-primary/20 hover:bg-primary/15`;
-  const btnDanger = `${btnBase} py-2 px-5 min-h-[36px] text-sm bg-error/10 text-error border border-error/20 hover:bg-error/15`;
-  const btnWarning = `${btnBase} py-2 px-5 min-h-[36px] text-sm bg-warning/10 text-warning border border-warning/20 hover:bg-warning/15`;
-  const btnPurple = `${btnBase} py-2 px-5 min-h-[36px] text-sm bg-primary/10 text-primary border border-primary/20 hover:bg-primary/15`;
-  const btnGhost = `${btnBase} py-2 px-5 min-h-[36px] text-sm bg-muted text-muted-foreground border border-border hover:bg-muted/70`;
+  // 语义色按钮样式（Geist 单色）。比例铁律：横(px)≥纵(py)×2；字离左右边≥24px 故 px≥6
+  const btnBase = 'inline-flex items-center justify-center gap-3 rounded-lg cursor-pointer font-semibold whitespace-nowrap leading-tight transition-opacity duration-150 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed';
+  const btnPrimary = `${btnBase} py-2 px-8 min-h-[36px] text-sm bg-primary text-primary-foreground`;
+  const btnSuccess = `${btnBase} py-2 px-8 min-h-[36px] text-sm bg-success/10 text-success border border-success/20 hover:bg-success/15`;
+  const btnInfo = `${btnBase} py-2 px-8 min-h-[36px] text-sm bg-primary/10 text-primary border border-primary/20 hover:bg-primary/15`;
+  const btnDanger = `${btnBase} py-2 px-8 min-h-[36px] text-sm bg-error/10 text-error border border-error/20 hover:bg-error/15`;
+  const btnWarning = `${btnBase} py-2 px-8 min-h-[36px] text-sm bg-warning/10 text-warning border border-warning/20 hover:bg-warning/15`;
+  const btnPurple = `${btnBase} py-2 px-8 min-h-[36px] text-sm bg-primary/10 text-primary border border-primary/20 hover:bg-primary/15`;
+  const btnGhost = `${btnBase} py-2 px-8 min-h-[36px] text-sm bg-muted text-muted-foreground border border-border hover:bg-muted/70`;
   // 小尺寸按钮（列表内操作：测试/删除/设为默认/自动获取）btn-sm：横(14)≥纵(6)×2
-  const btnSm = (extra: string) => `${btnBase} py-1.5 px-3.5 min-h-[30px] text-sm rounded-md ${extra}`;
+  const btnSm = (extra: string) => `${btnBase} py-1.5 px-6 min-h-[30px] text-sm rounded-md ${extra}`;
   const btnSmInfo = btnSm('bg-primary/10 text-primary border border-primary/20 hover:bg-primary/15');
   const btnSmSuccess = btnSm('bg-success/10 text-success border border-success/20 hover:bg-success/15');
   const btnSmDanger = btnSm('bg-error/10 text-error border border-error/20 hover:bg-error/15');
   const btnSmPurple = btnSm('bg-primary/10 text-primary border border-primary/20 hover:bg-primary/15');
 
-  const inputClass = 'w-full h-10 px-3.5 bg-muted border border-border rounded-lg text-foreground text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground';
+  const inputClass = 'w-full h-10 px-5 bg-muted border border-border rounded-lg text-foreground text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground';
 
   return (
     <div className="flex flex-col gap-6">
@@ -439,7 +439,7 @@ export default function ProviderSettings() {
               className={autoSync ? btnSuccess : btnGhost}
             >
               自动同步
-              <span className={`ml-1 px-2 py-0.5 rounded-full text-xs ${autoSync ? 'bg-success/30 text-success' : 'bg-muted-foreground/20 text-foreground'}`}>
+              <span className={`ml-1 px-4 py-0.5 rounded-full text-xs ${autoSync ? 'bg-success/30 text-success' : 'bg-muted-foreground/20 text-foreground'}`}>
                 {autoSync ? '开' : '关'}
               </span>
             </button>
@@ -454,11 +454,11 @@ export default function ProviderSettings() {
           </div>
         </div>
         {!ccswitchStatus?.installed && (
-          <div className="mt-4 p-3 bg-muted rounded-md text-sm text-muted-foreground leading-relaxed">
+          <div className="mt-4 px-5 py-3 bg-muted rounded-md text-sm text-muted-foreground leading-relaxed">
             <strong className="text-foreground">安装 cc-switch：</strong><br />
             cc-switch 是一个跨平台 CLI 工具，用于统一管理多个 LLM Provider 配置。<br />
             安装后系统会自动检测并同步您的 Provider 设置，无需手动配置。<br />
-            <code className="bg-card border border-border px-1.5 py-0.5 rounded text-foreground">
+            <code className="bg-card border border-border px-4 py-0.5 rounded text-foreground">
               npm install -g cc-switch
             </code>
           </div>
@@ -467,7 +467,7 @@ export default function ProviderSettings() {
 
       {/* JSON import modal */}
       {showJsonImport && (
-        <div className="bg-card border border-warning/20 rounded-xl p-5">
+        <div className="bg-card border border-warning/20 rounded-xl px-7 py-5">
           <span className="text-base text-warning font-semibold block mb-2">📋 粘贴 CC Switch JSON</span>
           <p className="text-muted-foreground text-sm mb-4 leading-relaxed">
             支持 CC Switch 配置 JSON，系统自动提取 API 地址、Key 和模型名称并创建 Provider。
@@ -477,7 +477,7 @@ export default function ProviderSettings() {
             onChange={e => setJsonText(e.target.value)}
             rows={10}
             placeholder={`{\n  "env": {\n    "ANTHROPIC_BASE_URL": "https://api.kimi.com/coding/",\n    "ANTHROPIC_AUTH_TOKEN": "sk-...",\n    "ANTHROPIC_MODEL": "kimi-for-coding"\n  },\n  "model": "kimi-for-coding"\n}`}
-            className="w-full p-3 bg-muted border border-border rounded-md text-foreground text-sm font-mono resize-y box-border focus:outline-none focus:border-primary placeholder:text-muted-foreground"
+            className="w-full px-5 py-3 bg-muted border border-border rounded-md text-foreground text-sm font-mono resize-y box-border focus:outline-none focus:border-primary placeholder:text-muted-foreground"
           />
           <div className="flex gap-3 mt-4">
             <button onClick={handleJsonImport} disabled={importingJson} className={btnPrimary}>
@@ -496,7 +496,7 @@ export default function ProviderSettings() {
           <span className="text-base text-foreground font-semibold block mb-4">📦 内置预设（点击导入）</span>
           {Object.entries(presetsByCategory).map(([cat, catPresets]) => (
             <div key={cat} className="mb-4">
-              <div className="inline-block py-0.5 px-2.5 rounded text-xs font-semibold mb-2 bg-primary/10 text-primary border border-primary/20">
+              <div className="inline-block py-0.5 px-5 rounded text-xs font-semibold mb-2 bg-primary/10 text-primary border border-primary/20">
                 {CATEGORY_LABEL(cat)}
               </div>
               <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(220px,1fr))]">
@@ -504,7 +504,7 @@ export default function ProviderSettings() {
                   <button
                     key={p.id}
                     onClick={() => handleImportPreset(p.id)}
-                    className="p-2.5 bg-muted border border-border rounded-md text-foreground cursor-pointer text-left flex flex-col gap-2.5 transition-colors hover:border-primary/40"
+                    className="px-5 py-2.5 bg-muted border border-border rounded-md text-foreground cursor-pointer text-left flex flex-col gap-2.5 transition-colors hover:border-primary/40"
                   >
                     <span className="text-foreground font-semibold text-sm">{p.icon} {p.name}</span>
                     <span className="text-muted-foreground text-xs">{p.api_host}</span>
@@ -636,13 +636,13 @@ export default function ProviderSettings() {
             className={`group bg-card border border-border rounded-xl overflow-hidden ${isDefault ? 'border-l-[3px] border-l-emerald-500' : ''}`}
           >
             {/* 头部 */}
-            <div className="flex items-center justify-between px-5 py-3.5 border-b border-border gap-4">
+            <div className="flex items-center justify-between px-7 py-3.5 border-b border-border gap-4">
               <div className="flex items-center gap-3 min-w-0">
                 <span className="text-foreground font-semibold text-lg truncate">{provider.name}</span>
                 {isDefault && (
-                  <span className="py-0.5 px-2 bg-success/10 border border-success/20 rounded text-success text-xs shrink-0">默认</span>
+                  <span className="py-0.5 px-4 bg-success/10 border border-success/20 rounded text-success text-xs shrink-0">默认</span>
                 )}
-                <span className="py-0.5 px-2 rounded text-xs bg-primary/10 text-primary border border-primary/20 shrink-0">
+                <span className="py-0.5 px-4 rounded text-xs bg-primary/10 text-primary border border-primary/20 shrink-0">
                   {CATEGORY_LABEL(provider.category || 'custom')}
                 </span>
               </div>
@@ -662,7 +662,7 @@ export default function ProviderSettings() {
             </div>
 
             {/* 身体：label 成列对齐（§7.1）+ 值 mono 截断（§7.2） */}
-            <div className="grid grid-cols-[88px_1fr] gap-x-4 gap-y-3 px-5 py-4 items-center">
+            <div className="grid grid-cols-[88px_1fr] gap-x-4 gap-y-3 px-7 py-4 items-center">
               <span className="text-muted-foreground text-sm">API 格式</span>
               <span className="text-foreground text-[13px] font-mono truncate">{apiFormat}</span>
 
@@ -683,13 +683,13 @@ export default function ProviderSettings() {
             </div>
 
             {/* 模型区：chip 行在上，输入框+获取在下（§9 D） */}
-            <div className="px-5 py-4 border-t border-border">
+            <div className="px-7 py-4 border-t border-border">
               <div className="text-foreground text-sm mb-2">模型</div>
               <div className="flex flex-wrap gap-2 mb-2">
                 {(provider.models || []).map(m => (
                   <span
                     key={m.name}
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[13px] ${m.enabled ? 'bg-primary/10 text-primary border border-primary/20' : 'bg-muted text-muted-foreground border border-border'}`}
+                    className={`inline-flex items-center gap-1.5 px-5 py-1 rounded-md text-[13px] ${m.enabled ? 'bg-primary/10 text-primary border border-primary/20' : 'bg-muted text-muted-foreground border border-border'}`}
                   >
                     {m.name}
                     <button onClick={() => handleRemoveModel(provider.id, m.name)} className="text-muted-foreground hover:text-red-500 cursor-pointer text-xs leading-none" title="移除模型">✕</button>
@@ -710,7 +710,7 @@ export default function ProviderSettings() {
                       }
                     }
                   }}
-                  className="flex-1 h-9 px-3.5 bg-muted border border-border rounded-md text-foreground text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
+                  className="flex-1 h-9 px-5 bg-muted border border-border rounded-md text-foreground text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
                 />
                 <button
                   onClick={() => handleAutoDetectModels(provider.id)}
@@ -723,7 +723,7 @@ export default function ProviderSettings() {
 
             {/* Test result */}
             {testResult[provider.id] && (
-              <div className={`mx-5 mb-4 p-2.5 rounded-md text-sm ${testResult[provider.id].startsWith('✓') ? 'bg-success/10 text-success' : 'bg-error/10 text-error'}`}>
+              <div className={`mx-5 mb-4 px-5 py-2.5 rounded-md text-sm ${testResult[provider.id].startsWith('✓') ? 'bg-success/10 text-success' : 'bg-error/10 text-error'}`}>
                 {testResult[provider.id]}
               </div>
             )}

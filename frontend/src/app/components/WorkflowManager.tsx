@@ -49,7 +49,7 @@ export default function WorkflowManager() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="bg-card border border-border rounded-xl p-5">
+      <div className="bg-card border border-border rounded-xl px-7 py-5">
         <div className="mb-4">
           <span className="text-base text-foreground font-semibold">🔄 工作流</span>
           <div className="mt-1 text-xs text-muted-foreground">
@@ -58,17 +58,17 @@ export default function WorkflowManager() {
         </div>
 
         {workflows.map(wf => (
-          <div key={wf.name} className="border border-border rounded-lg p-3 mb-3 last:mb-0">
+          <div key={wf.name} className="border border-border rounded-lg px-5 py-3 mb-3 last:mb-0">
             <div className="mb-2 flex items-center gap-3">
               <span className="text-foreground font-semibold">{wf.name}</span>
-              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-secondary text-secondary-foreground border border-border">
+              <span className="inline-flex items-center px-3.5 py-0.5 rounded text-xs bg-secondary text-secondary-foreground border border-border">
                 预定义
               </span>
             </div>
             <div className="text-sm text-muted-foreground mb-2">{wf.description}</div>
             <div className="flex gap-3 flex-wrap">
               {wf.steps.map((step, i) => (
-                <span key={i} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-secondary text-secondary-foreground border border-border">
+                <span key={i} className="inline-flex items-center px-4 py-0.5 rounded-full text-xs bg-secondary text-secondary-foreground border border-border">
                   {i + 1}. {AGENTS.find(a => a.id === step.agent)?.label || step.agent}
                 </span>
               ))}

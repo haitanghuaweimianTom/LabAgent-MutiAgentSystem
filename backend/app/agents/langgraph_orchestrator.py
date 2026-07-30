@@ -2277,6 +2277,41 @@ class LangGraphOrchestrator:
             })
         return gaps
 
+    # 数据集搜索停用词（中英），用于从 problem_text 抽取领域关键词供 self_collector 检索
+    _COLLECT_STOPWORDS = {
+        "的", "了", "和", "与", "及", "或", "一个", "进行", "需要", "根据", "基于", "通过",
+        "the", "a", "an", "of", "and", "or", "with", "for", "to", "in", "on", "by",
+        "based", "using", "use", "data", "dataset", "问题", "模型", "建立", "构建", "分析",
+    }
+
+    def _extract_collect_keywords(self, problem_text: str, issue_msgs: List[str]) -> List[str]:
+        """从问题文本 + 门禁 issue 描述中抽取数据集搜索关键词。
+
+        策略：problem_text 抽领域名词（如「沪深300」「动量」「回测」），
+        issue 描述提供数据缺失线索（如「指数行情」「价格」）。去停用词、去重、
+        限定数量，供 self_collector 的 GitHub/Kaggle/HF 四路检索使用。
+        """
+        import re
+        kws: List[str] = []
+        # 1. 中文词组：连续的中英数字符串（2 字符以上），剥离标点
+        for chunk in [problem_text] + issue_msgs:
+            for m in re.findall(r"[A-Za-z0-9一-鿿]{2,16}", chunk or ""):
+                low = m.lower()
+                if low in self._COLLECT_STOPWORDS:
+                    continue
+                if m not in kws and not any(m in k for k in kws):
+                    kws.append(m)
+        # 2. 英文 token（含下划线/连字符），便于 Kaggle/HF 匹配
+        for chunk in [problem_text] + issue_msgs:
+            for m in re.findall(r"[A-Za-z][A-Za-z0-9_\-]{2,24}", chunk or ""):
+                low = m.lower()
+                if low in self._COLLECT_STOPWORDS:
+                    continue
+                if m not in kws:
+                    kws.append(m)
+        # 限定关键词数量，避免搜索过散
+        return kws[:12]
+
     async def _node_data_quality_check(self, state: TaskState) -> TaskState:
         """数据质量门禁（pre 阶段）：插在 parallel_analysis 与建模 Agent 之间。
 
@@ -2623,10 +2658,29 @@ class LangGraphOrchestrator:
                 "_quality_issues": existing_issues,
             }
             if not passed:
+                # 门禁 fatal 时，构造自主采集信号，供下游 self_collect 节点搜索替代数据。
+                # _route_after_data_quality 会据此把流程路由到 self_collect 而非 abort。
+                # 采集关键词来源：fatal issue 的 message（中文数据描述）+ problem_text 领域词。
+                fatal_issues = [i for i in issues if i.get("severity") == "error"]
+                issue_msgs = [i.get("message", str(i)) for i in fatal_issues[:5]]
+                # 从 problem_text 抽取领域关键词：中文/英文词，去停用词，取前若干作为数据集搜索词
+                pt = state.get("problem_text", "") or ""
+                collect_keywords = self._extract_collect_keywords(pt, issue_msgs)
+                missing_desc = "；".join(issue_msgs) if issue_msgs else "原始数据文件缺失或质量不达标，需采集替代数据"
                 new_state["cannot_solve_report"] = {
                     "reason": "数据质量门禁未通过",
-                    "issues": [i.get("message", str(i)) for i in issues[:5]],
+                    "issues": issue_msgs,
+                    # 以下两字段是 self_collect 的采集信号（_node_self_collect 从 preflight 读取，
+                    # 门禁 fatal 时也写入 preflight 让其生效）
+                    "missing_data_description": missing_desc,
+                    "collect_keywords": collect_keywords,
+                    "source": "data_quality_check",  # 标记来源，_route_after_data_quality 据此识别
                 }
+                # 同步写入 preflight 字段（self_collect 从 state.preflight 读 missing_data_description）
+                preflight = dict(state.get("preflight") or {})
+                preflight["missing_data_description"] = missing_desc
+                preflight["collect_keywords"] = collect_keywords
+                new_state["preflight"] = preflight
 
             logger.info(
                 f"[LangGraph:{task_id}] data_quality_check: passed={passed}, "
@@ -2641,6 +2695,29 @@ class LangGraphOrchestrator:
                 exc_info=True,
             )
             return state
+
+    def _route_after_data_quality(self, state: TaskState) -> str:
+        """门禁后的路由：fatal 数据问题 → 自主采集替代数据；否则放行进 preflight_decision。
+
+        - 仅当 cannot_solve_report 来自 data_quality_check（source 字段标记）且尚未采集过
+          （phase != "self_collected"）时，才路由到 self_collect。这避免：
+            a) self_collect 自身失败设的 cannot_solve_report（source 不是门禁）→ 不会无限重采；
+            b) 已采集过仍 fatal（phase=self_collected）→ 不再采集，走 preflight_decision 由
+               _route_preflight 的 self_collected 分支直接进 analyzer，不 abort 不死循环。
+        - warning 类问题（缺失率偏高/常量列/对账偏差）不触发采集，正常放行。
+        """
+        report = state.get("cannot_solve_report") or {}
+        is_gate_fatal = (
+            report.get("source") == "data_quality_check"
+            and state.get("phase") != "self_collected"
+        )
+        if is_gate_fatal:
+            logger.info(
+                f"[LangGraph:{state.get('task_id')}] route_after_data_quality: "
+                f"门禁 fatal → 自主采集替代数据"
+            )
+            return "self_collect"
+        return "preflight_decision"
 
     async def _node_literature_dedup(self, state: TaskState) -> TaskState:
         """文献去重节点（pre 阶段）：在 writer 消费 literature 前做最终去重。
@@ -7654,7 +7731,18 @@ class LangGraphOrchestrator:
         # v8.4: requirement_decomposition → requirement_validation → data_quality_check → preflight_decision
         builder.add_edge("requirement_decomposition", "requirement_validation")
         builder.add_edge("requirement_validation", "data_quality_check")
-        builder.add_edge("data_quality_check", "preflight_decision")
+        # v8.2: 门禁 fatal 时路由到 self_collect 自主采集替代数据，而非直接放行（原无条件边
+        # → preflight_decision 导致门禁信号被吞：数据有问题仍继续，data_agent 拿坏数据报"分析完成"）。
+        # _route_after_data_quality：fatal 且未采集过 → self_collect；否则 → preflight_decision。
+        # self_collect 完成后走既有图边 → preflight_decision（phase=self_collected 防 abort/死循环）。
+        builder.add_conditional_edges(
+            "data_quality_check",
+            self._route_after_data_quality,
+            {
+                "self_collect": "self_collect",
+                "preflight_decision": "preflight_decision",
+            },
+        )
 
         return builder.compile()
 

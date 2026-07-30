@@ -496,7 +496,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: '12px 20px',
+    padding: '12px 28px',
     flexShrink: 0,
   },
   bannerLeft: {
@@ -516,11 +516,11 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 12,
     color: '#94A3B8',
     background: 'rgba(148,163,184,0.1)',
-    padding: '2px 8px',
+    padding: '2px 16px',
     borderRadius: 4,
   },
   humanBanner: {
-    padding: '10px 20px',
+    padding: '10px 28px',
     fontSize: 14,
     borderBottom: '1px solid rgba(255,255,255,0.05)',
     display: 'flex',
@@ -533,12 +533,12 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#94A3B8',
     fontSize: 18,
     cursor: 'pointer',
-    padding: '4px 8px',
+    padding: '4px 16px',
   },
   messagesContainer: {
     flex: 1,
     overflowY: 'auto',
-    padding: 16,
+    padding: '16px 24px',
   },
   emptyState: {
     display: 'flex',
@@ -577,7 +577,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderLeft: '3px solid #6B7280',
     background: 'rgba(255,255,255,0.03)',
     borderRadius: '0 8px 8px 0',
-    padding: '10px 14px',
+    padding: '10px 20px',
     marginBottom: 8,
   },
   messageUser: {
@@ -616,7 +616,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 600,
     background: 'rgba(16,185,129,0.15)',
     color: '#10B981',
-    padding: '1px 6px',
+    padding: '1px 12px',
     borderRadius: 4,
   },
   msgTime: {
@@ -633,7 +633,7 @@ const styles: Record<string, React.CSSProperties> = {
   votesSection: {
     marginTop: 8,
     marginBottom: 8,
-    padding: '8px 12px',
+    padding: '8px 20px',
     background: 'rgba(255,255,255,0.03)',
     borderRadius: 8,
   },
@@ -667,7 +667,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   roundConclusion: {
     marginTop: 8,
-    padding: '8px 12px',
+    padding: '8px 20px',
     background: 'rgba(16,185,129,0.06)',
     borderRadius: 8,
     fontSize: 13,
@@ -676,7 +676,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   actionBar: {
     borderTop: '1px solid rgba(255,255,255,0.06)',
-    padding: '12px 16px',
+    padding: '12px 24px',
     flexShrink: 0,
   },
   inputRow: {
@@ -689,7 +689,7 @@ const styles: Record<string, React.CSSProperties> = {
     background: '#0F172A',
     border: '1px solid rgba(255,255,255,0.1)',
     borderRadius: 8,
-    padding: '8px 12px',
+    padding: '8px 20px',
     color: '#E2E8F0',
     fontSize: 13,
     resize: 'none',
@@ -701,7 +701,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#fff',
     border: 'none',
     borderRadius: 8,
-    padding: '8px 16px',
+    padding: '8px 24px',
     fontSize: 13,
     fontWeight: 600,
     cursor: 'pointer',
@@ -713,7 +713,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   voteBar: {
     borderTop: '1px solid rgba(255,255,255,0.06)',
-    padding: '12px 16px',
+    padding: '12px 24px',
     flexShrink: 0,
   },
   voteBarTitle: {
@@ -728,7 +728,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   voteBtn: {
     flex: 1,
-    padding: '10px 0',
+    padding: '10px 16px',
     border: 'none',
     borderRadius: 8,
     fontSize: 14,
@@ -741,7 +741,7 @@ const styles: Record<string, React.CSSProperties> = {
   voteBtnAbstain: { background: '#6B7280' },
   decideBar: {
     borderTop: '1px solid rgba(255,255,255,0.06)',
-    padding: '10px 16px',
+    padding: '10px 24px',
     flexShrink: 0,
   },
   decideRow: {
@@ -754,14 +754,14 @@ const styles: Record<string, React.CSSProperties> = {
     background: '#0F172A',
     border: '1px solid rgba(255,255,255,0.1)',
     borderRadius: 8,
-    padding: '8px 12px',
+    padding: '8px 20px',
     color: '#E2E8F0',
     fontSize: 13,
     outline: 'none',
     fontFamily: 'inherit',
   },
   decideBtn: {
-    padding: '8px 14px',
+    padding: '8px 20px',
     border: 'none',
     borderRadius: 8,
     fontSize: 13,

@@ -216,10 +216,10 @@ export default function DatasourceSettings() {
     background: 'rgba(255,255,255,0.05)',
     border: '1px solid rgba(255,255,255,0.1)',
     borderRadius: 14,
-    padding: '1.5rem',
+    padding: '1.5rem 2rem',
   };
   const inputStyle: React.CSSProperties = {
-    padding: '0.6rem 0.75rem',
+    padding: '0.6rem 1.25rem',
     background: 'rgba(0,0,0,0.3)',
     border: '1px solid rgba(255,255,255,0.15)',
     borderRadius: 8,
@@ -234,7 +234,7 @@ export default function DatasourceSettings() {
     color: string,
     opts: Partial<React.CSSProperties> = {},
   ): React.CSSProperties => ({
-    padding: '0.4rem 0.8rem',
+    padding: '0.4rem 1.25rem',
     background: bg,
     border: `1px solid ${border}`,
     borderRadius: 8,
@@ -339,7 +339,7 @@ export default function DatasourceSettings() {
           {proxyTestResult && (
             <div
               style={{
-                padding: '0.5rem 0.75rem',
+                padding: '0.5rem 1.25rem',
                 background: proxyTestResult.startsWith('✓') ? 'rgba(46,204,113,0.1)' : 'rgba(231,76,60,0.1)',
                 borderRadius: 6,
                 fontSize: '0.82rem',
@@ -378,7 +378,7 @@ export default function DatasourceSettings() {
                   <span style={{ fontSize: '1.3rem' }}>{SOURCE_EMOJI[source] || '📦'}</span>
                   <span style={{ color: '#fff', fontWeight: 600, fontSize: '1.05rem' }}>{schema.label}</span>
                   {entry.configured && (
-                    <span style={{ padding: '0.15rem 0.5rem', background: 'rgba(46,204,113,0.15)', border: '1px solid rgba(46,204,113,0.3)', borderRadius: 4, color: '#2ecc71', fontSize: '0.7rem' }}>
+                    <span style={{ padding: '0.15rem 1rem', background: 'rgba(46,204,113,0.15)', border: '1px solid rgba(46,204,113,0.3)', borderRadius: 4, color: '#2ecc71', fontSize: '0.7rem' }}>
                       已配置
                     </span>
                   )}
@@ -405,7 +405,7 @@ export default function DatasourceSettings() {
 
             {/* 当前已存（脱敏） */}
             {entry.configured && (
-              <div style={{ marginBottom: '0.8rem', padding: '0.5rem 0.6rem', background: 'rgba(0,0,0,0.15)', borderRadius: 6 }}>
+              <div style={{ marginBottom: '0.8rem', padding: '0.5rem 1rem', background: 'rgba(0,0,0,0.15)', borderRadius: 6 }}>
                 {schema.fields.map((f) => (
                   <div key={f.name} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', marginBottom: '0.2rem' }}>
                     <span style={{ color: dark ? '#94a3b8' : '#888', minWidth: 90 }}>{f.label}</span>
@@ -447,7 +447,7 @@ export default function DatasourceSettings() {
               <div
                 style={{
                   marginTop: '0.8rem',
-                  padding: '0.5rem 0.6rem',
+                  padding: '0.5rem 1rem',
                   background: testResults[source].startsWith('✓') ? 'rgba(46,204,113,0.1)' : 'rgba(231,76,60,0.1)',
                   borderRadius: 6,
                   fontSize: '0.82rem',

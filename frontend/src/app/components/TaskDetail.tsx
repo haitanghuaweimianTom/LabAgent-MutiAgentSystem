@@ -199,7 +199,7 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
     <div
       key={msg.id}
       className={cn(
-        'p-3 mb-2 rounded-md border-l-2',
+        'px-5 py-3 mb-2 rounded-md border-l-2',
         msg.type === 'result'
           ? 'bg-primary/10 border-primary'
           : msg.type === 'user_input'
@@ -239,19 +239,19 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
         <span className="text-base text-foreground font-semibold">📄 任务详情: {taskId}</span>
         <div className="flex gap-3">
           {meta?.status === 'running' && !cancelled && (
-            <button className="py-1.5 px-3.5 bg-error/10 border border-error/20 rounded-md text-error text-sm cursor-pointer transition-all duration-200 hover:bg-error/10 disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleCancel} disabled={cancelling}>
+            <button className="py-1.5 px-5 bg-error/10 border border-error/20 rounded-md text-error text-sm cursor-pointer transition-all duration-200 hover:bg-error/10 disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleCancel} disabled={cancelling}>
               {cancelling ? '取消中...' : '⏹ 取消任务'}
             </button>
           )}
-          <button className="py-1.5 px-3.5 bg-success/10 border border-success/20 rounded-md text-success text-sm cursor-pointer transition-all duration-200 hover:bg-success/10 disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleExport} disabled={exporting}>
+          <button className="py-1.5 px-5 bg-success/10 border border-success/20 rounded-md text-success text-sm cursor-pointer transition-all duration-200 hover:bg-success/10 disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleExport} disabled={exporting}>
             {exporting ? '导出中...' : '💾 导出到桌面'}
           </button>
           {canRerun && (
-            <button className="py-1.5 px-3.5 bg-success/10 border border-success/20 rounded-md text-success text-sm cursor-pointer transition-all duration-200 hover:bg-success/10 disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleRerun} disabled={rerunning}>
+            <button className="py-1.5 px-5 bg-success/10 border border-success/20 rounded-md text-success text-sm cursor-pointer transition-all duration-200 hover:bg-success/10 disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleRerun} disabled={rerunning}>
               {rerunning ? '创建中...' : '🔄 重新执行'}
             </button>
           )}
-          <button className="py-1.5 px-3.5 bg-error/10 border border-error/20 rounded-md text-error text-sm cursor-pointer transition-all duration-200 hover:bg-error/10" onClick={onDelete}>🗑️ 删除</button>
+          <button className="py-1.5 px-5 bg-error/10 border border-error/20 rounded-md text-error text-sm cursor-pointer transition-all duration-200 hover:bg-error/10" onClick={onDelete}>🗑️ 删除</button>
         </div>
       </div>
 
@@ -279,7 +279,7 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
           <button
             key={t}
             className={cn(
-              'py-1.5 px-3 rounded-md text-sm cursor-pointer transition-colors duration-150 border border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground',
+              'py-1.5 px-5 rounded-md text-sm cursor-pointer transition-colors duration-150 border border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground',
               activeTab === t && 'bg-primary/10 border-primary/20 text-primary'
             )}
             onClick={() => setActiveTab(t)}
@@ -302,7 +302,7 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
           <div className="pt-[0.4rem] border-t border-border">
             <div className="flex gap-3 items-end">
               <textarea
-                className="flex-1 py-2 px-[0.7rem] bg-muted border border-border rounded-md text-foreground text-sm resize-none font-[inherit] leading-[1.5] focus:outline-none focus:border-primary placeholder:text-muted-foreground"
+                className="flex-1 py-2 px-[1.2rem] bg-muted border border-border rounded-md text-foreground text-sm resize-none font-[inherit] leading-[1.5] focus:outline-none focus:border-primary placeholder:text-muted-foreground"
                 placeholder="向团队追加消息或追问（@Agent名称 可指定专家）..."
                 value={userInput}
                 onChange={e => setUserInput(e.target.value)}
@@ -311,7 +311,7 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
                 disabled={sendingMsg}
               />
               <button
-                className="py-2.5 px-5 bg-primary text-primary-foreground border-none rounded-md text-sm font-semibold cursor-pointer transition-opacity duration-150 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90"
+                className="py-2.5 px-7 bg-primary text-primary-foreground border-none rounded-md text-sm font-semibold cursor-pointer transition-opacity duration-150 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90"
                 onClick={handleSendMessage}
                 disabled={!userInput.trim() || sendingMsg}
               >
@@ -344,10 +344,10 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
             keywords={keywords}
           />
           {result?.output?.analyses && result.output.analyses.length > 0 && (
-            <div className="bg-card border border-border rounded-lg p-4">
+            <div className="bg-card border border-border rounded-lg px-6 py-4">
               <div className="text-sm text-primary font-bold mb-2">📊 数据分析</div>
               {result.output.analyses.map((a: any, i: number) => (
-                <div key={i} className="bg-muted rounded-md p-3 mb-1.5 text-sm text-muted-foreground border border-border">
+                <div key={i} className="bg-muted rounded-md px-5 py-3 mb-1.5 text-sm text-muted-foreground border border-border">
                   <strong className="text-foreground">{a.file_name}</strong>
                   <span> {a.shape?.[0]}行 × {a.shape?.[1]}列</span>
                   <div>{a.data_quality?.missing_rate === 0 ? '✓ 无缺失值' : `⚠ 缺失率 ${a.data_quality?.missing_rate}`}</div>
@@ -360,7 +360,7 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
           )}
 
           {result?.output?.requirement_plan && (
-            <div className="bg-card border border-border rounded-lg p-4">
+            <div className="bg-card border border-border rounded-lg px-6 py-4">
               <div className="text-sm text-primary font-semibold mb-2">📋 需求分解计划</div>
               <div className="mb-2 text-primary font-medium">
                 {result.output.requirement_plan.research_goal}
@@ -399,13 +399,13 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
           )}
 
           {result?.output?.innovation_analysis && (
-            <div className="bg-card border border-border rounded-lg p-4">
+            <div className="bg-card border border-border rounded-lg px-6 py-4">
               <div className="text-sm text-primary font-semibold mb-2">💡 创新发现分析</div>
               {result.output.innovation_analysis.research_gaps?.length > 0 && (
                 <div className="mb-3">
                   <strong className="text-foreground">研究空白：</strong>
                   {result.output.innovation_analysis.research_gaps.map((g: any, i: number) => (
-                    <div key={i} className="ml-3 mt-1.5 px-2.5 py-1.5 bg-primary/10 rounded-md border-l-2 border-primary">
+                    <div key={i} className="ml-3 mt-1.5 px-4 py-1.5 bg-primary/10 rounded-md border-l-2 border-primary">
                       <div className="text-sm font-medium text-primary">
                         Gap #{g.gap_id} <span className={g.importance === 'high' ? 'text-error' : 'text-warning'}>({g.importance})</span>
                       </div>
@@ -419,7 +419,7 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
                 <div>
                   <strong className="text-foreground">创新方案：</strong>
                   {result.output.innovation_analysis.innovation_ideas.map((idea: any, i: number) => (
-                    <div key={i} className="ml-3 mt-1.5 px-2.5 py-1.5 bg-muted rounded-md border-l-2 border-foreground/30">
+                    <div key={i} className="ml-3 mt-1.5 px-4 py-1.5 bg-muted rounded-md border-l-2 border-foreground/30">
                       <div className="text-sm font-medium text-foreground">{idea.title}</div>
                       <div className="text-sm text-foreground">新颖性：{idea.novelty}</div>
                       <div className="text-xs text-muted-foreground">方法：{idea.methodology}</div>
@@ -429,7 +429,7 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
                 </div>
               )}
               {result.output.innovation_analysis.recommended_approach && (
-                <div className="mt-2 px-2.5 py-1.5 bg-success/10 rounded-md border-l-2 border-success">
+                <div className="mt-2 px-4 py-1.5 bg-success/10 rounded-md border-l-2 border-success">
                   <strong className="text-success">推荐方案：</strong>
                   <span className="text-sm text-foreground"> {result.output.innovation_analysis.recommended_approach}</span>
                 </div>
@@ -438,7 +438,7 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
           )}
 
           {result?.output?.task_summary && (
-            <div className="bg-card border border-border rounded-lg p-4">
+            <div className="bg-card border border-border rounded-lg px-6 py-4">
               <div className="text-sm text-primary font-semibold mb-2">📊 任务总结报告</div>
               {result.output.task_summary.research_summary && (
                 <div className="mb-2 text-sm text-foreground">
@@ -447,7 +447,7 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
               )}
               {result.output.task_summary.paper_quality && (
                 <div className="mb-2 flex gap-4 flex-wrap">
-                  <div className="px-2.5 py-1 bg-primary/10 rounded-md">
+                  <div className="px-4 py-1 bg-primary/10 rounded-md">
                     <span className="text-xs text-primary">论文质量 </span>
                     <span className="text-primary font-bold">{result.output.task_summary.paper_quality.overall_score}/100</span>
                   </div>
@@ -488,7 +488,7 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
       {!loading && activeTab === 'peer_review' && (
         <div className="flex-1 overflow-y-auto max-h-[520px] flex flex-col gap-3">
           {taskState.state?.peerReview ? (
-            <div className="bg-card border border-border rounded-lg p-4">
+            <div className="bg-card border border-border rounded-lg px-6 py-4">
               <div className="text-sm text-primary font-bold mb-2">🔍 同行评议结果</div>
               <div className="flex gap-4 py-2.5 border-b border-border items-start flex-wrap">
                 <span className="text-sm text-muted-foreground min-w-[80px] font-semibold">总体评分</span>
@@ -542,7 +542,7 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
                   <div className="flex flex-col gap-3 mb-3">
                     <label className="text-sm text-muted-foreground">整体评分</label>
                     <select
-                      className="p-2 bg-muted border border-border rounded-md text-foreground text-sm font-[inherit]"
+                      className="px-4 py-2 bg-muted border border-border rounded-md text-foreground text-sm font-[inherit]"
                       value={feedback.overall}
                       onChange={(e) => setFeedback({ ...feedback, overall: parseInt(e.target.value) })}
                     >
@@ -554,7 +554,7 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
                   <div className="flex flex-col gap-3 mb-3">
                     <label className="text-sm text-muted-foreground">类别</label>
                     <select
-                      className="p-2 bg-muted border border-border rounded-md text-foreground text-sm font-[inherit]"
+                      className="px-4 py-2 bg-muted border border-border rounded-md text-foreground text-sm font-[inherit]"
                       value={feedback.category}
                       onChange={(e) => setFeedback({ ...feedback, category: e.target.value })}
                     >
@@ -568,14 +568,14 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
                   <div className="flex flex-col gap-3 mb-3">
                     <label className="text-sm text-muted-foreground">建议/备注</label>
                     <textarea
-                      className="p-2 bg-muted border border-border rounded-md text-foreground text-sm font-[inherit] min-h-[80px] resize-y"
+                      className="px-4 py-2 bg-muted border border-border rounded-md text-foreground text-sm font-[inherit] min-h-[80px] resize-y"
                       value={feedback.comment}
                       onChange={(e) => setFeedback({ ...feedback, comment: e.target.value })}
                       placeholder="描述本次任务中有效的方法或需要改进的地方..."
                     />
                   </div>
                   <button
-                    className="py-2.5 px-5 bg-primary text-primary-foreground border-none rounded-md cursor-pointer text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90"
+                    className="py-2.5 px-7 bg-primary text-primary-foreground border-none rounded-md cursor-pointer text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90"
                     onClick={handleSubmitFeedback}
                     disabled={submittingFeedback}
                   >
@@ -621,7 +621,7 @@ function PeerReviewDetails({ taskId }: { taskId: string }) {
   return (
     <div>
       {Object.keys(scores).length > 0 && (
-        <div className="bg-card border border-border rounded-lg p-4">
+        <div className="bg-card border border-border rounded-lg px-6 py-4">
           <div className="text-sm text-primary font-bold mb-2">分项评分</div>
           {Object.entries(scores).map(([k, v]: [string, any]) => (
             <div key={k} className="flex gap-4 py-2.5 border-b border-border items-start flex-wrap">
@@ -632,7 +632,7 @@ function PeerReviewDetails({ taskId }: { taskId: string }) {
         </div>
       )}
       {(comments.major?.length > 0 || comments.minor?.length > 0) && (
-        <div className="bg-card border border-border rounded-lg p-4">
+        <div className="bg-card border border-border rounded-lg px-6 py-4">
           <div className="text-sm text-primary font-bold mb-2">评审意见</div>
           {(comments.major || []).map((c: string, i: number) => (
             <div key={`major-${i}`} className="pl-[0.5rem] text-muted-foreground">• <strong>Major:</strong> {c}</div>
@@ -643,7 +643,7 @@ function PeerReviewDetails({ taskId }: { taskId: string }) {
         </div>
       )}
       {edits.length > 0 && (
-        <div className="bg-card border border-border rounded-lg p-4">
+        <div className="bg-card border border-border rounded-lg px-6 py-4">
           <div className="text-sm text-primary font-bold mb-2">建议编辑</div>
           {edits.map((ed: any, i: number) => (
             <div key={i} className="pl-[0.5rem] text-muted-foreground">
@@ -697,10 +697,10 @@ function CameraReadyDownload({ taskId, templateId }: { taskId: string; templateI
   }, [taskId]);
 
   return (
-    <div className="bg-card border border-border rounded-lg p-4">
+    <div className="bg-card border border-border rounded-lg px-6 py-4">
       <div className="text-sm text-primary font-bold mb-2">📦 Camera-Ready 下载</div>
       {status === 'idle' && (
-        <button className="py-1.5 px-3.5 bg-success/10 border border-success/20 rounded-md text-success text-sm cursor-pointer transition-all duration-200 hover:bg-success/10" onClick={build}>生成并下载 zip</button>
+        <button className="py-1.5 px-5 bg-success/10 border border-success/20 rounded-md text-success text-sm cursor-pointer transition-all duration-200 hover:bg-success/10" onClick={build}>生成并下载 zip</button>
       )}
       {status === 'building' && <div>打包中...</div>}
       {status === 'error' && <div>打包失败，请稍后重试。</div>}

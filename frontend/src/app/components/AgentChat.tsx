@@ -218,36 +218,36 @@ export default function AgentChat({
     <div className="flex flex-col gap-4">
       <StageProgress stages={stages} currentStep={currentStep} />
 
-      <div className="bg-card border border-border rounded-[14px] p-5 flex flex-col gap-3">
+      <div className="bg-card border border-border rounded-[14px] px-7 py-5 flex flex-col gap-3">
         <div className="flex justify-between items-center flex-wrap gap-3">
           <div className="flex items-center gap-3 flex-wrap">
             <span className="text-lg text-foreground font-semibold">💬 Agent 团队实时讨论</span>
             <div className="flex gap-3 flex-wrap">
               {Object.entries(TEAM_LABELS).filter(([k]) => k !== 'system').map(([k, v]) => (
-                <span key={k} className="px-2 py-0.5 rounded-lg text-sm text-muted-foreground font-medium whitespace-nowrap bg-muted border border-border">{v}</span>
+                <span key={k} className="px-4 py-0.5 rounded-lg text-sm text-muted-foreground font-medium whitespace-nowrap bg-muted border border-border">{v}</span>
               ))}
             </div>
           </div>
           <div className="flex gap-3">
             {isRunning && !paused && (
               <>
-                <button className="py-1.5 px-3 bg-warning/15 border border-warning/30 rounded-md text-warning text-sm cursor-pointer transition-colors duration-150 hover:bg-warning/20" onClick={onPause}>⏸ 暂停</button>
+                <button className="py-1.5 px-5 bg-warning/15 border border-warning/30 rounded-md text-warning text-sm cursor-pointer transition-colors duration-150 hover:bg-warning/20" onClick={onPause}>⏸ 暂停</button>
                 {onCancel && (
-                  <button className="py-1.5 px-3 bg-error/10 border border-error/20 rounded-md text-error text-sm cursor-pointer transition-colors duration-150 hover:bg-error/15 disabled:opacity-50 disabled:cursor-not-allowed" onClick={onCancel} disabled={cancelling}>
+                  <button className="py-1.5 px-5 bg-error/10 border border-error/20 rounded-md text-error text-sm cursor-pointer transition-colors duration-150 hover:bg-error/15 disabled:opacity-50 disabled:cursor-not-allowed" onClick={onCancel} disabled={cancelling}>
                     {cancelling ? '取消中...' : '⏹ 取消'}
                   </button>
                 )}
               </>
             )}
             {paused && (
-              <button className="py-1.5 px-3 bg-success/10 border border-success/20 rounded-md text-success text-sm cursor-pointer transition-colors duration-150 hover:bg-success/15 disabled:opacity-50 disabled:cursor-not-allowed" onClick={onResume} disabled={resuming}>
+              <button className="py-1.5 px-5 bg-success/10 border border-success/20 rounded-md text-success text-sm cursor-pointer transition-colors duration-150 hover:bg-success/15 disabled:opacity-50 disabled:cursor-not-allowed" onClick={onResume} disabled={resuming}>
                 {resuming ? '继续中...' : '▶ 继续执行'}
               </button>
             )}
           </div>
         </div>
 
-        <div className="h-[480px] overflow-y-auto p-3 bg-muted/50 rounded-md relative" ref={messagesContainerRef}>
+        <div className="h-[480px] overflow-y-auto px-5 py-3 bg-muted/50 rounded-md relative" ref={messagesContainerRef}>
           {allMessages.length === 0 && (
             <div className="text-center p-12 text-muted-foreground text-sm">提交问题后，各 Agent 将在此展开协作讨论</div>
           )}
@@ -255,7 +255,7 @@ export default function AgentChat({
             <div
               key={msg.id}
               className={cn(
-                'p-3 mb-2 rounded-md border-l-2',
+                'px-5 py-3 mb-2 rounded-md border-l-2',
                 msg.type === 'result'
                   ? 'bg-primary/10 border-primary'
                   : msg.type === 'user_input'
@@ -269,9 +269,9 @@ export default function AgentChat({
                 <span className="font-semibold text-foreground">
                   {msg.sender === 'user' ? '👤 ' : ''}{msg.sender_label}
                 </span>
-                {msg.type === 'result' && <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded-lg font-semibold">📋 详细结果</span>}
-                {msg.type === 'discussion' && <span className="text-xs px-2 py-0.5 bg-muted text-foreground rounded-lg font-semibold">💬 讨论</span>}
-                {msg.type === 'user_input' && <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded-lg font-semibold">👤 用户</span>}
+                {msg.type === 'result' && <span className="text-xs px-4 py-0.5 bg-primary/10 text-primary rounded-lg font-semibold">📋 详细结果</span>}
+                {msg.type === 'discussion' && <span className="text-xs px-4 py-0.5 bg-muted text-foreground rounded-lg font-semibold">💬 讨论</span>}
+                {msg.type === 'user_input' && <span className="text-xs px-4 py-0.5 bg-primary/10 text-primary rounded-lg font-semibold">👤 用户</span>}
                 <span className="text-muted-foreground text-sm">{formatTime(msg.timestamp)}</span>
               </div>
               <div className={cn(
@@ -292,7 +292,7 @@ export default function AgentChat({
           <div ref={messagesEndRef} />
           {showScrollButton && (
             <button
-              className="sticky bottom-2 left-1/2 -translate-x-1/2 py-1.5 px-3.5 bg-primary/10 border-none rounded-2xl text-foreground text-sm font-semibold cursor-pointer shadow-md transition-colors duration-150 hover:bg-primary/15 z-10"
+              className="sticky bottom-2 left-1/2 -translate-x-1/2 py-1.5 px-5 bg-primary/10 border-none rounded-2xl text-foreground text-sm font-semibold cursor-pointer shadow-md transition-colors duration-150 hover:bg-primary/15 z-10"
               onClick={() => scrollToBottom('instant')}
               title="回到最新消息"
             >
@@ -304,7 +304,7 @@ export default function AgentChat({
         <div className="mt-2 pt-[0.5rem] border-t border-border">
           <div className="flex gap-3 items-end">
             <textarea
-              className="flex-1 py-2.5 px-3 bg-background border border-input rounded-md text-foreground text-sm resize-none font-inherit leading-relaxed focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
+              className="flex-1 py-2.5 px-5 bg-background border border-input rounded-md text-foreground text-sm resize-none font-inherit leading-relaxed focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
               placeholder={isWaiting ? 'Agent 正在等待您的反馈，请输入意见...' : '参与讨论：输入您的想法、建议或修正方向...'}
               value={userInput}
               onChange={e => setUserInput(e.target.value)}
@@ -313,7 +313,7 @@ export default function AgentChat({
               disabled={sending}
             />
             <button
-              className="py-2.5 px-4 bg-primary text-primary-foreground border-none rounded-md text-sm font-semibold cursor-pointer transition-opacity duration-150 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90"
+              className="py-2.5 px-6 bg-primary text-primary-foreground border-none rounded-md text-sm font-semibold cursor-pointer transition-opacity duration-150 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90"
               onClick={handleSend}
               disabled={!userInput.trim() || sending}
             >
