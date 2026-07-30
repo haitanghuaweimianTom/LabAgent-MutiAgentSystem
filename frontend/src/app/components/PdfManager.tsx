@@ -169,7 +169,7 @@ export default function PdfManager() {
       {/* 上传 / 下载 */}
       <section className="flex flex-col gap-2.5">
         <div className="text-sm text-muted-foreground font-semibold">上传 / 下载 PDF</div>
-        <div className="flex gap-3 items-center flex-wrap">
+        <div className="flex gap-4 items-center flex-wrap">
           <input
             type="file"
             accept=".pdf"
@@ -178,17 +178,17 @@ export default function PdfManager() {
             id="pdf-upload"
             onChange={handleFileChange}
           />
-          <label htmlFor="pdf-upload" className="inline-flex items-center justify-center leading-tight gap-2 min-h-[40px] py-2 px-8 bg-primary/10 text-primary border border-primary/20 rounded-lg text-sm cursor-pointer transition-colors hover:bg-primary/20">
+          <label htmlFor="pdf-upload" className="inline-flex items-center justify-center gap-3 min-h-[40px] py-2 px-8 bg-primary/10 text-primary border border-primary/20 rounded-lg text-sm cursor-pointer transition-colors hover:bg-primary/20 shrink-0">
             {loading ? '处理中...' : '📤 选择 PDF 上传'}
           </label>
           <input
             type="text"
-            className="flex-1 min-w-[200px] h-10 px-5 bg-muted border border-border rounded-lg text-foreground text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
+            className="flex-1 min-w-[220px] max-w-[420px] h-10 px-5 bg-muted border border-border rounded-lg text-foreground text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
             placeholder="输入 PDF 链接或 arXiv 摘要页 URL"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
           />
-          <button className="inline-flex items-center justify-center leading-tight gap-2 min-h-[40px] py-2 px-8 bg-primary text-primary-foreground rounded-lg text-sm cursor-pointer transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed shrink-0" onClick={handleDownload} disabled={loading || !url.trim()}>
+          <button className="inline-flex items-center justify-center gap-3 min-h-[40px] py-2 px-10 bg-primary text-primary-foreground rounded-lg text-sm cursor-pointer transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed shrink-0" onClick={handleDownload} disabled={loading || !url.trim()}>
             ⬇️ 下载
           </button>
         </div>
@@ -250,7 +250,7 @@ export default function PdfManager() {
                 </div>
                 <div className="flex gap-3 items-center shrink-0">
                   <button
-                    className="inline-flex items-center justify-center leading-tight gap-2 min-h-[36px] py-2 px-8 bg-primary text-primary-foreground rounded-lg text-sm cursor-pointer transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="inline-flex items-center justify-center gap-3 min-h-[36px] py-2 px-8 bg-primary text-primary-foreground rounded-lg text-sm cursor-pointer transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                     onClick={() => handleParse(f.file_id)}
                     disabled={parsing === f.file_id}
                   >

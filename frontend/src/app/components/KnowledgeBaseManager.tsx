@@ -561,11 +561,11 @@ export default function KnowledgeBaseManager() {
     setSelectedItemIds(new Set());
   };
 
-  const actionBtnBase = "inline-flex items-center gap-2 min-h-[34px] px-8 py-1.5 bg-muted border border-border rounded-md text-muted-foreground text-sm cursor-pointer transition-colors duration-150 whitespace-nowrap leading-tight hover:bg-accent hover:text-foreground";
+  const actionBtnBase = "inline-flex items-center gap-3 min-h-[34px] px-8 py-1.5 bg-muted border border-border rounded-md text-muted-foreground text-sm cursor-pointer transition-colors duration-150 whitespace-nowrap leading-tight hover:bg-accent hover:text-foreground";
   const actionBtnPrimary = "bg-primary text-primary-foreground border-primary hover:bg-primary hover:text-primary-foreground hover:opacity-90";
   const modalInputBase = "h-10 px-5 bg-muted border border-border rounded-lg text-foreground text-sm outline-none w-full focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground";
   // scope 过滤胶囊：左栏窄(w-64)，用 px-3.5 防溢出；横(14)≥纵(6)×2 满足铁律
-  const scopeBtnBase = "inline-flex items-center justify-center gap-1 min-h-[30px] px-5 py-1.5 rounded-md text-sm cursor-pointer transition-colors duration-150 whitespace-nowrap leading-tight border border-transparent text-muted-foreground hover:bg-accent hover:text-foreground";
+  const scopeBtnBase = "inline-flex items-center justify-center gap-2 min-h-[30px] px-5 py-1.5 rounded-md text-sm cursor-pointer transition-colors duration-150 whitespace-nowrap leading-tight border border-transparent text-muted-foreground hover:bg-accent hover:text-foreground";
   const scopeBtnActive = "bg-primary/10 text-primary border-primary/30";
 
   return (
