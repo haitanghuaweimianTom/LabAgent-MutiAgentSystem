@@ -50,7 +50,7 @@ interface Preset {
 }
 
 // 卡片容器（Geist 单色：浅色白卡/深色深卡，自适应）
-const cardClass = 'bg-card border border-border rounded-xl p-5';
+const cardClass = 'bg-card border border-border rounded-xl p-6 shadow-[var(--shadow-card)]';
 
 export default function ProviderSettings() {
   const [providers, setProviders] = useState<CustomProvider[]>([]);
@@ -355,36 +355,36 @@ export default function ProviderSettings() {
 
   if (loading) return <div className="text-center p-8 text-muted-foreground text-sm">加载中...</div>;
 
-  // 语义色按钮样式（Geist 单色）
-  const btnBase = 'inline-flex items-center justify-center gap-3 rounded-lg cursor-pointer font-semibold transition-opacity duration-150 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed';
-  const btnPrimary = `${btnBase} py-2.5 px-5 text-sm bg-primary text-primary-foreground`;
-  const btnSuccess = `${btnBase} py-2.5 px-5 text-sm bg-success/10 text-success border border-success/20 hover:bg-success/15`;
-  const btnInfo = `${btnBase} py-2.5 px-5 text-sm bg-primary/10 text-primary border border-primary/20 hover:bg-primary/15`;
-  const btnDanger = `${btnBase} py-2.5 px-5 text-sm bg-error/10 text-error border border-error/20 hover:bg-error/15`;
-  const btnWarning = `${btnBase} py-2.5 px-5 text-sm bg-warning/10 text-warning border border-warning/20 hover:bg-warning/15`;
-  const btnPurple = `${btnBase} py-2.5 px-5 text-sm bg-primary/10 text-primary border border-primary/20 hover:bg-primary/15`;
-  const btnGhost = `${btnBase} py-2.5 px-5 text-sm bg-muted text-muted-foreground border border-border hover:bg-muted/70`;
-  // 小尺寸按钮（列表内操作：测试/删除/设为默认/自动获取）
-  const btnSm = (extra: string) => `${btnBase} py-2 px-4 text-sm rounded-md ${extra}`;
+  // 语义色按钮样式（Geist 单色）。比例铁律：横(px)≥纵(py)×2
+  const btnBase = 'inline-flex items-center justify-center gap-3 rounded-lg cursor-pointer font-semibold whitespace-nowrap transition-opacity duration-150 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed';
+  const btnPrimary = `${btnBase} py-2 px-5 min-h-[36px] text-sm bg-primary text-primary-foreground`;
+  const btnSuccess = `${btnBase} py-2 px-5 min-h-[36px] text-sm bg-success/10 text-success border border-success/20 hover:bg-success/15`;
+  const btnInfo = `${btnBase} py-2 px-5 min-h-[36px] text-sm bg-primary/10 text-primary border border-primary/20 hover:bg-primary/15`;
+  const btnDanger = `${btnBase} py-2 px-5 min-h-[36px] text-sm bg-error/10 text-error border border-error/20 hover:bg-error/15`;
+  const btnWarning = `${btnBase} py-2 px-5 min-h-[36px] text-sm bg-warning/10 text-warning border border-warning/20 hover:bg-warning/15`;
+  const btnPurple = `${btnBase} py-2 px-5 min-h-[36px] text-sm bg-primary/10 text-primary border border-primary/20 hover:bg-primary/15`;
+  const btnGhost = `${btnBase} py-2 px-5 min-h-[36px] text-sm bg-muted text-muted-foreground border border-border hover:bg-muted/70`;
+  // 小尺寸按钮（列表内操作：测试/删除/设为默认/自动获取）btn-sm：横(14)≥纵(6)×2
+  const btnSm = (extra: string) => `${btnBase} py-1.5 px-3.5 min-h-[30px] text-sm rounded-md ${extra}`;
   const btnSmInfo = btnSm('bg-primary/10 text-primary border border-primary/20 hover:bg-primary/15');
   const btnSmSuccess = btnSm('bg-success/10 text-success border border-success/20 hover:bg-success/15');
   const btnSmDanger = btnSm('bg-error/10 text-error border border-error/20 hover:bg-error/15');
   const btnSmPurple = btnSm('bg-primary/10 text-primary border border-primary/20 hover:bg-primary/15');
 
-  const inputClass = 'flex-1 py-2 px-3 bg-muted border border-border rounded-md text-foreground text-sm focus:outline-none focus:border-primary placeholder:text-muted-foreground';
+  const inputClass = 'w-full h-10 px-3.5 bg-muted border border-border rounded-lg text-foreground text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground';
 
   return (
     <div className="flex flex-col gap-6">
       {/* Header */}
       <div className={cardClass}>
-        <div className="flex justify-between items-center mb-2">
+        <div className="flex justify-between items-center gap-4 flex-wrap mb-2">
           <div>
             <span className="text-lg text-foreground font-semibold">🔌 多 Provider 配置</span>
             <div className="text-muted-foreground text-sm mt-1">
               CC Switch 风格：支持导入内置预设，自定义 API 格式（OpenAI/Anthropic/Ollama 等）
             </div>
           </div>
-          <div className="flex gap-3">
+          <div className="flex gap-3 shrink-0 items-center">
             <button onClick={() => setShowJsonImport(!showJsonImport)} className={btnWarning}>📋 JSON 导入</button>
             <button onClick={() => setShowPresets(!showPresets)} className={btnPurple}>📦 内置预设</button>
             <button onClick={() => setShowAdd(!showAdd)} className={btnSuccess}>+ 添加 Provider</button>
@@ -404,16 +404,31 @@ export default function ProviderSettings() {
                 <span className="w-2 h-2 rounded-full bg-muted-foreground inline-block" />
               )}
             </div>
-            <div className="text-muted-foreground text-sm leading-relaxed">
+            <div className="text-sm leading-relaxed">
               {ccswitchStatus?.installed ? (
-                <>
-                  已检测到 cc-switch
-                  {ccswitchStatus.db_path && <> · 数据库: {ccswitchStatus.db_path}</>}
-                  {ccswitchStatus.current_provider && <> · 当前 Provider: {ccswitchStatus.current_provider}</>}
-                  {ccswitchStatus.last_sync && <> · 上次同步: {ccswitchStatus.last_sync}</>}
-                </>
+                <div className="flex flex-wrap gap-x-5 gap-y-1 text-muted-foreground">
+                  <span>已检测到 cc-switch</span>
+                  {ccswitchStatus.db_path && (
+                    <span className="flex items-center gap-3 min-w-0">
+                      <span className="shrink-0">数据库</span>
+                      <code className="font-mono text-[13px] text-foreground truncate max-w-[280px]" title={ccswitchStatus.db_path}>{ccswitchStatus.db_path}</code>
+                    </span>
+                  )}
+                  {ccswitchStatus.current_provider && (
+                    <span className="flex items-center gap-3 min-w-0">
+                      <span className="shrink-0">当前 Provider</span>
+                      <span className="text-foreground truncate max-w-[200px]" title={ccswitchStatus.current_provider}>{ccswitchStatus.current_provider}</span>
+                    </span>
+                  )}
+                  {ccswitchStatus.last_sync && (
+                    <span className="flex items-center gap-3">
+                      <span className="shrink-0">上次同步</span>
+                      <span className="text-foreground">{ccswitchStatus.last_sync}</span>
+                    </span>
+                  )}
+                </div>
               ) : (
-                <>未检测到 cc-switch</>
+                <span className="text-muted-foreground">未检测到 cc-switch</span>
               )}
             </div>
           </div>
@@ -423,7 +438,10 @@ export default function ProviderSettings() {
               disabled={!ccswitchStatus?.installed}
               className={autoSync ? btnSuccess : btnGhost}
             >
-              自动同步: {autoSync ? '开' : '关'}
+              自动同步
+              <span className={`ml-1 px-2 py-0.5 rounded-full text-xs ${autoSync ? 'bg-success/30 text-success' : 'bg-muted-foreground/20 text-foreground'}`}>
+                {autoSync ? '开' : '关'}
+              </span>
             </button>
             <button
               onClick={handleCcswitchSync}
@@ -481,7 +499,7 @@ export default function ProviderSettings() {
               <div className="inline-block py-0.5 px-2.5 rounded text-xs font-semibold mb-2 bg-primary/10 text-primary border border-primary/20">
                 {CATEGORY_LABEL(cat)}
               </div>
-              <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
+              <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(220px,1fr))]">
                 {catPresets.map((p: Preset) => (
                   <button
                     key={p.id}
@@ -601,39 +619,34 @@ export default function ProviderSettings() {
 
       {/* Provider list */}
       {providers.length === 0 && !showAdd && (
-        <div className="bg-card border border-border rounded-xl p-12 text-center">
-          <div className="text-2xl mb-2">🔌</div>
-          <div className="text-muted-foreground text-sm">暂无自定义 Provider，请点击「内置预设」快速导入，或「添加 Provider」手动配置</div>
+        <div className="bg-card border border-border rounded-xl py-16 flex flex-col items-center justify-center text-center">
+          <span className="text-4xl opacity-40 mb-2">🔌</span>
+          <div className="text-muted-foreground text-sm max-w-md">暂无自定义 Provider，请点击「内置预设」快速导入，或「添加 Provider」手动配置</div>
         </div>
       )}
 
       {providers.map(provider => {
         const isDefault = provider.id === defaultProviderId;
         const apiFormat = provider.meta?.api_format || provider.type || 'openai_chat';
+        const maskedKey = provider.api_key ? `${provider.api_key.slice(0, 8)}${'•'.repeat(20)}` : '(使用环境变量)';
 
         return (
           <div
             key={provider.id}
-            className={`border rounded-xl p-5 ${isDefault ? 'bg-success/5 border-success/30' : 'bg-card border-border'}`}
+            className={`group bg-card border border-border rounded-xl overflow-hidden ${isDefault ? 'border-l-[3px] border-l-emerald-500' : ''}`}
           >
-            <div className="flex justify-between items-start mb-4">
-              <div className="flex items-center gap-3">
-                <div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-foreground font-semibold text-lg">{provider.name}</span>
-                    {isDefault && (
-                      <span className="py-0.5 px-2 bg-success/10 border border-success/20 rounded text-success text-xs">默认</span>
-                    )}
-                    <span className="py-0.5 px-1.5 rounded text-xs bg-primary/10 text-primary border border-primary/20">
-                      {CATEGORY_LABEL(provider.category || 'custom')}
-                    </span>
-                  </div>
-                  <div className="text-muted-foreground text-sm">
-                    {apiFormat} · {provider.api_host}
-                  </div>
-                </div>
+            {/* 头部 */}
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-border gap-4">
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="text-foreground font-semibold text-lg truncate">{provider.name}</span>
+                {isDefault && (
+                  <span className="py-0.5 px-2 bg-success/10 border border-success/20 rounded text-success text-xs shrink-0">默认</span>
+                )}
+                <span className="py-0.5 px-2 rounded text-xs bg-primary/10 text-primary border border-primary/20 shrink-0">
+                  {CATEGORY_LABEL(provider.category || 'custom')}
+                </span>
               </div>
-              <div className="flex gap-3">
+              <div className="flex gap-3 shrink-0 items-center">
                 {!isDefault && (
                   <button onClick={() => handleSetDefault(provider.id)} className={btnSmSuccess}>
                     设为默认
@@ -642,36 +655,49 @@ export default function ProviderSettings() {
                 <button onClick={() => handleTest(provider)} disabled={testing === provider.id} className={btnSmInfo}>
                   {testing === provider.id ? '测试中...' : '🧪 测试'}
                 </button>
-                <button onClick={() => handleDelete(provider.id, provider.name)} className={btnSmDanger}>
+                <button onClick={() => handleDelete(provider.id, provider.name)} className={btnSmDanger} title="删除">
                   🗑️
                 </button>
               </div>
             </div>
 
-            {/* API Key */}
-            <div className="flex items-center gap-3 mb-3 p-2 bg-muted rounded-md">
-              <span className="text-muted-foreground text-sm min-w-[60px]">API Key</span>
-              <code className="text-foreground text-sm font-mono">
-                {provider.api_key ? `${provider.api_key.slice(0, 8)}${'•'.repeat(20)}` : '(使用环境变量)'}
-              </code>
+            {/* 身体：label 成列对齐（§7.1）+ 值 mono 截断（§7.2） */}
+            <div className="grid grid-cols-[88px_1fr] gap-x-4 gap-y-3 px-5 py-4 items-center">
+              <span className="text-muted-foreground text-sm">API 格式</span>
+              <span className="text-foreground text-[13px] font-mono truncate">{apiFormat}</span>
+
+              <span className="text-muted-foreground text-sm">Base URL</span>
+              <span className="font-mono text-[13px] text-foreground truncate" title={provider.api_host}>{provider.api_host}</span>
+
+              <span className="text-muted-foreground text-sm">API Key</span>
+              <div className="flex items-center gap-3 min-w-0">
+                <code className="text-foreground text-[13px] font-mono truncate" title={provider.api_key || '使用环境变量'}>{maskedKey}</code>
+                {provider.api_key && (
+                  <button
+                    onClick={() => { navigator.clipboard.writeText(provider.api_key); setMsg('✓ API Key 已复制'); }}
+                    className="text-muted-foreground hover:text-foreground text-sm p-1 rounded transition-colors opacity-0 group-hover:opacity-100 shrink-0"
+                    title="复制 API Key"
+                  >📋</button>
+                )}
+              </div>
             </div>
 
-            {/* Models */}
-            <div>
+            {/* 模型区：chip 行在上，输入框+获取在下（§9 D） */}
+            <div className="px-5 py-4 border-t border-border">
               <div className="text-foreground text-sm mb-2">模型</div>
-              <div className="flex gap-3 flex-wrap mb-2">
+              <div className="flex flex-wrap gap-2 mb-2">
                 {(provider.models || []).map(m => (
                   <span
                     key={m.name}
-                    className={`py-1 px-2.5 rounded-md border text-sm flex items-center gap-3 ${m.enabled ? 'bg-primary/10 text-primary border-primary/20' : 'bg-muted text-muted-foreground border-border'}`}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[13px] ${m.enabled ? 'bg-primary/10 text-primary border border-primary/20' : 'bg-muted text-muted-foreground border border-border'}`}
                   >
                     {m.name}
-                    <button onClick={() => handleRemoveModel(provider.id, m.name)} className="bg-transparent border-none text-error cursor-pointer p-0 text-xs">✕</button>
+                    <button onClick={() => handleRemoveModel(provider.id, m.name)} className="text-muted-foreground hover:text-red-500 cursor-pointer text-xs leading-none" title="移除模型">✕</button>
                   </span>
                 ))}
                 {(!provider.models || provider.models.length === 0) && <span className="text-muted-foreground text-sm">暂无模型，请添加模型</span>}
               </div>
-              <div className="flex gap-3">
+              <div className="flex items-center gap-2 mt-2">
                 <input
                   id={`model_add_${provider.id}`}
                   placeholder="添加模型名称"
@@ -684,11 +710,11 @@ export default function ProviderSettings() {
                       }
                     }
                   }}
-                  className="flex-1 py-1.5 px-2.5 bg-muted border border-border rounded-md text-foreground text-sm focus:outline-none focus:border-primary placeholder:text-muted-foreground"
+                  className="flex-1 h-9 px-3.5 bg-muted border border-border rounded-md text-foreground text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
                 />
                 <button
                   onClick={() => handleAutoDetectModels(provider.id)}
-                  className={btnSmPurple}
+                  className={`${btnSmPurple} shrink-0`}
                 >
                   🔍 自动获取
                 </button>
@@ -697,7 +723,7 @@ export default function ProviderSettings() {
 
             {/* Test result */}
             {testResult[provider.id] && (
-              <div className={`mt-3 p-2 rounded-md text-sm ${testResult[provider.id].startsWith('✓') ? 'bg-success/10 text-success' : 'bg-error/10 text-error'}`}>
+              <div className={`mx-5 mb-4 p-2.5 rounded-md text-sm ${testResult[provider.id].startsWith('✓') ? 'bg-success/10 text-success' : 'bg-error/10 text-error'}`}>
                 {testResult[provider.id]}
               </div>
             )}
