@@ -561,7 +561,7 @@ export default function KnowledgeBaseManager() {
     setSelectedItemIds(new Set());
   };
 
-  const actionBtnBase = "inline-flex items-center gap-3 min-h-[40px] px-5 py-3 bg-muted border border-border rounded-lg text-muted-foreground text-sm cursor-pointer transition-colors duration-150 whitespace-nowrap hover:bg-accent hover:text-foreground";
+  const actionBtnBase = "inline-flex items-center gap-2 min-h-[34px] px-6 py-1.5 bg-muted border border-border rounded-md text-muted-foreground text-sm cursor-pointer transition-colors duration-150 whitespace-nowrap hover:bg-accent hover:text-foreground";
   const actionBtnPrimary = "bg-primary text-primary-foreground border-primary hover:bg-primary hover:text-primary-foreground hover:opacity-90";
   const modalInputBase = "h-10 px-3.5 bg-muted border border-border rounded-lg text-foreground text-sm outline-none w-full focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground";
 
@@ -569,11 +569,11 @@ export default function KnowledgeBaseManager() {
     <div className="flex h-full min-h-[500px] bg-card border border-border rounded-xl shadow-sm overflow-hidden">
       {/* Sidebar */}
       <div className="w-72 shrink-0 flex flex-col border-r border-border bg-muted/50">
-        <div className="flex items-center justify-between pl-5 pr-6 h-14 border-b border-border shrink-0 gap-3">
+        <div className="flex items-center justify-between pl-5 pr-7 h-14 border-b border-border shrink-0 gap-3">
           <span className="text-lg text-foreground font-semibold">📚 知识库</span>
-          <button className="inline-flex items-center justify-center min-h-[40px] px-6 py-3 bg-primary border border-primary rounded-lg text-primary-foreground text-sm cursor-pointer font-semibold transition-opacity hover:opacity-90" onClick={() => setShowCreateBase(true)}>+ 新建</button>
+          <button className="inline-flex items-center justify-center min-h-[36px] px-7 py-2 bg-primary border border-primary rounded-md text-primary-foreground text-sm cursor-pointer font-semibold transition-opacity hover:opacity-90" onClick={() => setShowCreateBase(true)}>+ 新建</button>
         </div>
-        <div className="flex items-center gap-2.5 h-11 pl-5 pr-6 py-2 border-b border-border shrink-0">
+        <div className="flex items-center gap-2.5 h-11 pl-5 pr-7 py-2 border-b border-border shrink-0">
           {(['all', 'global', 'project'] as const).map(s => (
             <button
               key={s}
@@ -629,7 +629,7 @@ export default function KnowledgeBaseManager() {
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0 bg-card">
         {/* Header */}
-        <div className="flex items-center justify-between pl-6 pr-5 h-14 border-b border-border shrink-0 gap-4">
+        <div className="flex items-center justify-between pl-8 pr-5 h-14 border-b border-border shrink-0 gap-4">
           <span className="text-base text-foreground font-semibold whitespace-nowrap overflow-hidden text-ellipsis">{activeBase ? activeBase.name : '请选择知识库'}</span>
           <div className="flex gap-3 items-center shrink-0">
             <input
@@ -664,7 +664,7 @@ export default function KnowledgeBaseManager() {
         </div>
 
         {/* Tabs */}
-        <div className="flex items-center gap-2.5 h-11 pl-6 pr-5 border-b border-border shrink-0">
+        <div className="flex items-center gap-2.5 h-11 pl-8 pr-5 border-b border-border shrink-0">
           {TABS.map(tab => (
             <button
               key={tab.key}
