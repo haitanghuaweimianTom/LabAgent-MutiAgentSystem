@@ -215,9 +215,12 @@ export default function FileManager({ taskId }: FileManagerProps) {
             </div>
           )}
 
-          {loading && files.length === 0 && <div className="text-center p-8 text-muted-foreground text-sm">加载中...</div>}
+          {loading && files.length === 0 && <div className="flex flex-col items-center justify-center text-center py-16 text-muted-foreground text-sm"><span className="text-3xl opacity-40 mb-2">⏳</span>加载中...</div>}
           {files.length === 0 && !loading && (
-            <div className="text-center p-8 text-muted-foreground text-sm">暂无用户上传文件，请上传数据文件</div>
+            <div className="flex flex-col items-center justify-center text-center py-16 text-muted-foreground text-sm">
+              <span className="text-4xl opacity-40 mb-2">📁</span>
+              暂无用户上传文件，请上传数据文件
+            </div>
           )}
 
           <div className="flex flex-col gap-3">
@@ -264,9 +267,10 @@ export default function FileManager({ taskId }: FileManagerProps) {
             带原 URL 和来源关键词，点击文件名跳转。
           </div>
 
-          {loading && files.length === 0 && <div className="text-center p-8 text-muted-foreground text-sm">加载中...</div>}
+          {loading && files.length === 0 && <div className="flex flex-col items-center justify-center text-center py-16 text-muted-foreground text-sm"><span className="text-3xl opacity-40 mb-2">⏳</span>加载中...</div>}
           {files.length === 0 && !loading && (
-            <div className="text-center p-8 text-muted-foreground text-sm">
+            <div className="flex flex-col items-center justify-center text-center py-16 text-muted-foreground text-sm">
+              <span className="text-4xl opacity-40 mb-2">🌐</span>
               暂无自收集文件。提交任务时启用「自主搜集数据」即可。
             </div>
           )}
@@ -318,13 +322,14 @@ export default function FileManager({ taskId }: FileManagerProps) {
       )}
 
       {tab === 'knowledge_base' && (
-        <div className="p-6 text-center bg-muted rounded-md">
-          <p className="text-muted-foreground my-2 text-sm">📚 知识库是独立管理的向量数据库系统。</p>
-          <p className="text-muted-foreground my-2 text-sm">支持全局公共 + 项目私有两级 scope，可与多个任务关联。</p>
-          <p className="text-muted-foreground my-2 text-sm">
+        <div className="flex flex-col items-center justify-center text-center py-16 bg-muted rounded-md">
+          <span className="text-4xl opacity-40 mb-3">📚</span>
+          <p className="text-muted-foreground my-1 text-sm">知识库是独立管理的向量数据库系统。</p>
+          <p className="text-muted-foreground my-1 text-sm">支持全局公共 + 项目私有两级 scope，可与多个任务关联。</p>
+          <p className="text-muted-foreground my-1 text-sm">
             创建 KB / 上传文档 / 配置嵌入模型 → 任务提交时勾选注入
           </p>
-          <a href="#" onClick={(e) => { e.preventDefault(); window.dispatchEvent(new CustomEvent('mm:switch-tab', { detail: 'knowledge' })); }} className="inline-block mt-2 py-2.5 px-5 bg-primary text-primary-foreground rounded-md no-underline font-semibold text-sm transition-opacity duration-150 hover:opacity-90">
+          <a href="#" onClick={(e) => { e.preventDefault(); window.dispatchEvent(new CustomEvent('mm:switch-tab', { detail: 'knowledge' })); }} className="inline-flex items-center justify-center mt-4 min-h-[36px] py-2 px-5 bg-primary text-primary-foreground rounded-md no-underline font-semibold text-sm transition-opacity hover:opacity-90">
             前往知识库管理 →
           </a>
         </div>
