@@ -564,20 +564,23 @@ export default function KnowledgeBaseManager() {
   const actionBtnBase = "inline-flex items-center gap-2 min-h-[34px] px-6 py-1.5 bg-muted border border-border rounded-md text-muted-foreground text-sm cursor-pointer transition-colors duration-150 whitespace-nowrap hover:bg-accent hover:text-foreground";
   const actionBtnPrimary = "bg-primary text-primary-foreground border-primary hover:bg-primary hover:text-primary-foreground hover:opacity-90";
   const modalInputBase = "h-10 px-3.5 bg-muted border border-border rounded-lg text-foreground text-sm outline-none w-full focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground";
+  // scope 过滤胶囊：左栏窄(w-64)，用 px-3.5 防溢出；横(14)≥纵(6)×2 满足铁律
+  const scopeBtnBase = "inline-flex items-center justify-center gap-1 min-h-[30px] px-3.5 py-1.5 rounded-md text-sm cursor-pointer transition-colors duration-150 whitespace-nowrap border border-transparent text-muted-foreground hover:bg-accent hover:text-foreground";
+  const scopeBtnActive = "bg-primary/10 text-primary border-primary/30";
 
   return (
-    <div className="flex h-full min-h-[500px] bg-card border border-border rounded-xl shadow-sm overflow-hidden">
+    <div className="flex h-full min-h-[500px] bg-card border border-border rounded-xl shadow-[var(--shadow-card)] overflow-hidden">
       {/* Sidebar */}
-      <div className="w-72 shrink-0 flex flex-col border-r border-border bg-muted/50">
-        <div className="flex items-center justify-between pl-5 pr-7 h-14 border-b border-border shrink-0 gap-3">
+      <div className="w-64 shrink-0 flex flex-col border-r border-border bg-muted/40">
+        <div className="flex items-center justify-between px-5 h-14 border-b border-border shrink-0 gap-3">
           <span className="text-lg text-foreground font-semibold">📚 知识库</span>
           <button className="inline-flex items-center justify-center min-h-[36px] px-7 py-2 bg-primary border border-primary rounded-md text-primary-foreground text-sm cursor-pointer font-semibold transition-opacity hover:opacity-90" onClick={() => setShowCreateBase(true)}>+ 新建</button>
         </div>
-        <div className="flex items-center gap-2.5 h-11 pl-5 pr-7 py-2 border-b border-border shrink-0">
+        <div className="flex items-center gap-1 h-11 px-5 border-b border-border shrink-0">
           {(['all', 'global', 'project'] as const).map(s => (
             <button
               key={s}
-              className={cn(actionBtnBase, scopeFilter === s && actionBtnPrimary)}
+              className={cn(scopeBtnBase, scopeFilter === s && scopeBtnActive)}
               onClick={() => setScopeFilter(s)}
               type="button"
             >
@@ -585,7 +588,7 @@ export default function KnowledgeBaseManager() {
             </button>
           ))}
         </div>
-        <div className="flex-1 overflow-y-auto p-2.5">
+        <div className="flex-1 flex flex-col overflow-y-auto p-2.5">
           {bases.map(base => (
             <div
               key={base.id}
@@ -619,7 +622,8 @@ export default function KnowledgeBaseManager() {
             </div>
           ))}
           {bases.length === 0 && (
-            <div className="flex-1 flex items-center justify-center text-center text-sm text-muted-foreground px-4 py-8">
+            <div className="flex-1 flex flex-col items-center justify-center text-center text-sm text-muted-foreground px-4 py-8">
+              <span className="text-4xl opacity-40 mb-2">📚</span>
               暂无知识库，点击「新建」创建
             </div>
           )}
@@ -629,8 +633,8 @@ export default function KnowledgeBaseManager() {
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0 bg-card">
         {/* Header */}
-        <div className="flex items-center justify-between pl-8 pr-5 h-14 border-b border-border shrink-0 gap-4">
-          <span className="text-base text-foreground font-semibold whitespace-nowrap overflow-hidden text-ellipsis">{activeBase ? activeBase.name : '请选择知识库'}</span>
+        <div className="flex items-center justify-between px-5 h-14 border-b border-border shrink-0 gap-4">
+          <span className="text-base text-foreground font-semibold whitespace-nowrap overflow-hidden text-ellipsis" title={activeBase ? activeBase.name : undefined}>{activeBase ? activeBase.name : '请选择知识库'}</span>
           <div className="flex gap-3 items-center shrink-0">
             <input
               className="h-10 px-3.5 bg-muted border border-border rounded-lg text-foreground text-sm w-[240px] outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
@@ -664,12 +668,12 @@ export default function KnowledgeBaseManager() {
         </div>
 
         {/* Tabs */}
-        <div className="flex items-center gap-2.5 h-11 pl-8 pr-5 border-b border-border shrink-0">
+        <div className="flex items-center gap-1 h-11 px-5 border-b border-border shrink-0">
           {TABS.map(tab => (
             <button
               key={tab.key}
               className={cn(
-                'inline-flex items-center px-3 h-full bg-transparent border-none border-b-2 border-b-transparent text-muted-foreground text-sm cursor-pointer font-medium transition-colors duration-150 hover:text-foreground',
+                'inline-flex items-center px-4 h-full bg-transparent border-none border-b-2 border-b-transparent text-muted-foreground text-sm cursor-pointer font-medium transition-colors duration-150 hover:text-foreground',
                 activeTab === tab.key && 'text-primary border-b-primary'
               )}
               onClick={() => { setActiveTab(tab.key); setShowSearch(false); }}
@@ -680,7 +684,7 @@ export default function KnowledgeBaseManager() {
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 flex flex-col overflow-y-auto p-6">
           {msg && (
             <div className={cn('py-2 px-4 rounded-md text-sm text-center mb-4', msg.includes('失败') || msg.startsWith('✗') ? 'text-error bg-error/10' : 'text-success bg-success/10')}>
               {msg}
@@ -697,7 +701,7 @@ export default function KnowledgeBaseManager() {
                 <div
                   key={r.id}
                   onClick={() => setSelectedResult(selectedResult?.id === r.id ? null : r)}
-                  className="py-3 px-3 bg-muted border border-border rounded-md mb-2 cursor-pointer hover:border-primary transition-colors"
+                  className="py-3 px-4 bg-muted border border-border rounded-md mb-2 cursor-pointer hover:border-primary transition-colors"
                 >
                   <div className="flex justify-between mb-1.5">
                     <span className="text-foreground font-semibold text-sm">{r.title}</span>
@@ -715,7 +719,7 @@ export default function KnowledgeBaseManager() {
                   {r.source && <div className="text-muted-foreground text-xs mt-0.5">来源: {r.source}</div>}
                 </div>
               ))}
-              {searchResults.length === 0 && <div className="text-muted-foreground text-center py-12 px-4 text-sm">无匹配结果</div>}
+              {searchResults.length === 0 && <div className="flex flex-col items-center justify-center text-center py-12 text-muted-foreground text-sm"><span className="text-3xl opacity-40 mb-2">🔍</span>无匹配结果</div>}
             </div>
           )}
 
@@ -779,13 +783,13 @@ export default function KnowledgeBaseManager() {
                   {selectedItemIds.size > 0 && (
                     <>
                       <button
-                        className={cn(actionBtnBase, actionBtnPrimary, 'py-1 px-2.5')}
+                        className={cn(actionBtnBase, actionBtnPrimary)}
                         onClick={handleDownloadSelectedItems}
                       >
                         📥 批量下载 ({selectedItemIds.size})
                       </button>
                       <button
-                        className="py-1 px-2.5 bg-error/10 border border-error/20 rounded-md text-error text-xs cursor-pointer transition-colors duration-150 whitespace-nowrap hover:bg-error/15"
+                        className="inline-flex items-center justify-center gap-2 min-h-[34px] px-6 py-1.5 bg-error/10 border border-error/20 rounded-md text-error text-sm cursor-pointer transition-colors duration-150 whitespace-nowrap hover:bg-error/15"
                         onClick={handleDeleteSelectedItems}
                       >
                         🗑️ 批量删除 ({selectedItemIds.size})
@@ -795,7 +799,8 @@ export default function KnowledgeBaseManager() {
                 </div>
               )}
               {filteredItems.length === 0 && (
-                <div className="flex-1 flex flex-col items-center justify-center text-center text-muted-foreground px-4 py-8 text-sm" style={{ minHeight: '60%' }}>
+                <div className="flex-1 min-h-[400px] flex flex-col items-center justify-center text-center text-muted-foreground px-4 py-16 text-sm">
+                  <span className="text-4xl opacity-40 mb-2">📭</span>
                   该分类下暂无条目
                   {activeTab === 'file' && <div className="mt-2 text-sm">点击「上传文件」添加</div>}
                   {activeTab === 'note' && <div className="mt-2 text-sm">点击「添加笔记」添加</div>}
@@ -806,7 +811,7 @@ export default function KnowledgeBaseManager() {
                 const size = isFileMeta(item.content) ? item.content.size : undefined;
                 const isSelected = selectedItemIds.has(item.id);
                 return (
-                  <div key={item.id} className={cn('flex items-center gap-3 py-3 px-3.5 bg-muted border border-border rounded-md mb-2 transition-colors duration-150 hover:bg-foreground/5', isSelected && 'bg-primary/10')}>
+                  <div key={item.id} className={cn('flex items-center gap-3 py-3 px-5 bg-muted border border-border rounded-md mb-2 transition-colors duration-150 hover:bg-foreground/5', isSelected && 'bg-primary/10')}>
                     <input
                       type="checkbox"
                       checked={isSelected}
@@ -815,22 +820,22 @@ export default function KnowledgeBaseManager() {
                     />
                     <span className="text-lg w-[1.5rem] text-center shrink-0">{typeIcon(item.type)}</span>
                     <div className="flex-1 min-w-0">
-                      <div className="text-foreground text-sm font-medium whitespace-nowrap overflow-hidden text-ellipsis">{name}</div>
+                      <div className="text-foreground text-sm font-medium whitespace-nowrap overflow-hidden text-ellipsis" title={name}>{name}</div>
                       {item.source && <div className="text-muted-foreground text-sm mt-0.5">{item.source}</div>}
                     </div>
-                    <div className="flex items-center gap-2.5 shrink-0">
+                    <div className="flex items-center gap-3 shrink-0">
                       {size !== undefined && <span className="text-muted-foreground text-xs">{formatBytes(size)}</span>}
                       {item.type === 'file' && <span className="text-sm" title={item.processingStatus}>{statusIcon(item.processingStatus)}</span>}
                       {item.type === 'file' && isFileMeta(item.content) && (
-                        <button className="py-0.5 px-1.5 bg-primary/10 border border-primary/20 rounded text-primary text-sm cursor-pointer opacity-0 transition-opacity duration-150 hover:opacity-100" onClick={() => handleDownloadItem(item)} title="下载">📥</button>
+                        <button className="inline-flex items-center justify-center p-2 bg-primary/10 border border-primary/20 rounded text-primary text-sm cursor-pointer opacity-0 transition-opacity duration-150 hover:opacity-100" onClick={() => handleDownloadItem(item)} title="下载">📥</button>
                       )}
                       {item.type === 'file' && isFileMeta(item.content) && (
-                        <button className="py-0.5 px-1.5 bg-primary/10 border border-primary/20 rounded text-primary text-sm cursor-pointer opacity-0 transition-opacity duration-150 hover:opacity-100" onClick={() => triggerReplaceFile(item)} title="替换文件">🔄</button>
+                        <button className="inline-flex items-center justify-center p-2 bg-primary/10 border border-primary/20 rounded text-primary text-sm cursor-pointer opacity-0 transition-opacity duration-150 hover:opacity-100" onClick={() => triggerReplaceFile(item)} title="替换文件">🔄</button>
                       )}
                       {item.type === 'note' && (
-                        <button className="py-0.5 px-1.5 bg-warning/10 border border-warning/20 rounded text-warning text-sm cursor-pointer opacity-0 transition-opacity duration-150 hover:opacity-100" onClick={() => openEditNote(item)} title="编辑">✏️</button>
+                        <button className="inline-flex items-center justify-center p-2 bg-warning/10 border border-warning/20 rounded text-warning text-sm cursor-pointer opacity-0 transition-opacity duration-150 hover:opacity-100" onClick={() => openEditNote(item)} title="编辑">✏️</button>
                       )}
-                      <button className="py-0.5 px-1.5 bg-error/10 border border-error/20 rounded text-error text-sm cursor-pointer opacity-0 transition-opacity duration-150 hover:opacity-100" onClick={() => handleDeleteItem(item.id)}>删除</button>
+                      <button className="inline-flex items-center justify-center py-1.5 px-3.5 bg-error/10 border border-error/20 rounded text-error text-sm cursor-pointer opacity-0 transition-opacity duration-150 hover:opacity-100" onClick={() => handleDeleteItem(item.id)}>删除</button>
                     </div>
                   </div>
                 );
