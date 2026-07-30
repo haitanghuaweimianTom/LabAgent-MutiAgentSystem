@@ -17,6 +17,7 @@ export default function DetailPanel() {
           animate={{ width: 380, opacity: 1 }}
           exit={{ width: 0, opacity: 0 }}
           transition={{ duration: 0.2, ease: 'easeInOut' }}
+          data-design-exclude="detail"
           className="h-screen border-l border-border bg-slate-900/50 backdrop-blur-xl overflow-hidden flex flex-col"
         >
           {/* Header */}

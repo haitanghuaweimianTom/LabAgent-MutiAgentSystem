@@ -13,9 +13,9 @@ export default function PaperList({ papers, source }: PaperListProps) {
 
   if (!papers || papers.length === 0) {
     return (
-      <div className="bg-card border border-border rounded-xl overflow-hidden flex flex-col mb-4">
+      <div data-design-id="report:card-papers" className="bg-card border border-border rounded-xl overflow-hidden flex flex-col mb-4 mx-auto w-full max-w-[1320px]">
         <div className="flex justify-between items-center py-3 px-6 bg-muted/50 border-b border-border">
-          <span className="text-base text-foreground font-semibold">📚 相关文献</span>
+          <span data-design-id="report:title-papers" className="text-lg text-foreground font-semibold">📚 相关文献</span>
         </div>
         <div className="text-center px-10 py-8 text-muted-foreground text-sm">未检索到相关文献</div>
       </div>
@@ -32,9 +32,9 @@ export default function PaperList({ papers, source }: PaperListProps) {
   const sourceLabel = source ? `（来自 ${source}）` : '';
 
   return (
-    <div className="bg-card border border-border rounded-xl overflow-hidden flex flex-col mb-4">
+    <div data-design-id="report:card-papers" className="bg-card border border-border rounded-xl overflow-hidden flex flex-col mb-4 mx-auto w-full max-w-[1320px]">
       <div className="flex justify-between items-center py-3 px-6 bg-muted/50 border-b border-border">
-        <span className="text-base text-foreground font-semibold">
+        <span data-design-id="report:title-papers" className="text-lg text-foreground font-semibold">
           📚 相关文献（{papers.length} 篇）{sourceLabel}
         </span>
       </div>
@@ -127,6 +127,7 @@ export default function PaperList({ papers, source }: PaperListProps) {
             )}
             <button
               type="button"
+              data-design-id="report:btn-abstract"
               className="text-xs text-muted-foreground bg-transparent border-none cursor-pointer py-1 px-2 text-left hover:text-foreground"
               onClick={() => toggleAbstract(idx)}
             >

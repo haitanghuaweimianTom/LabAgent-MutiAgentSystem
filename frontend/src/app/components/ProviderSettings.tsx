@@ -374,7 +374,7 @@ export default function ProviderSettings() {
   const inputClass = 'w-full h-10 px-5 bg-muted border border-border rounded-lg text-foreground text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground';
 
   return (
-    <div className="flex flex-col gap-6">
+    <div data-design-id="settings:providers" className="flex flex-col gap-6 mx-auto w-full max-w-[1320px]">
       {/* Header */}
       <div className={cardClass}>
         <div className="flex justify-between items-center gap-4 flex-wrap mb-2">
@@ -387,7 +387,7 @@ export default function ProviderSettings() {
           <div className="flex gap-3 shrink-0 items-center">
             <button onClick={() => setShowJsonImport(!showJsonImport)} className={btnWarning}>📋 JSON 导入</button>
             <button onClick={() => setShowPresets(!showPresets)} className={btnPurple}>📦 内置预设</button>
-            <button onClick={() => setShowAdd(!showAdd)} className={btnSuccess}>+ 添加 Provider</button>
+            <button data-design-id="settings:btn-add-provider" onClick={() => setShowAdd(!showAdd)} className={btnSuccess}>+ 添加 Provider</button>
           </div>
         </div>
       </div>

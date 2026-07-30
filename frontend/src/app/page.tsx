@@ -36,7 +36,7 @@ export default function DashboardPage() {
   }, [])
 
   return (
-    <div className="p-6 space-y-6">
+    <div data-design-id="dashboard:root" className="mx-auto w-full max-w-[1320px] p-6 space-y-6">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard icon={ClipboardList} label="Total Tasks" value={taskCounts.total} />
         <StatCard icon={PlayCircle} label="Running" value={taskCounts.running} trend={taskCounts.running > 0 ? 'up' : 'neutral'} />

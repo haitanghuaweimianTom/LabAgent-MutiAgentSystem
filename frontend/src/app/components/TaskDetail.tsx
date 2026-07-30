@@ -234,24 +234,24 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
   const markdown = result?.output?.markdown || result?.output?.paper || '';
 
   return (
-    <div className="flex flex-col gap-3 h-full">
+    <div data-design-id="history:detail-card" className="flex flex-col gap-3 h-full">
       <div className="flex justify-between items-center flex-wrap gap-3">
-        <span className="text-base text-foreground font-semibold">📄 任务详情: {taskId}</span>
-        <div className="flex gap-3">
+        <span data-design-id="history:detail-title" className="text-lg text-foreground font-semibold">📄 任务详情: {taskId}</span>
+        <div data-design-id="history:detail-actions" className="flex gap-3">
           {meta?.status === 'running' && !cancelled && (
-            <button className="py-1.5 px-5 bg-error/10 border border-error/20 rounded-md text-error text-sm cursor-pointer transition-all duration-200 hover:bg-error/10 disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleCancel} disabled={cancelling}>
+            <button data-design-id="history:btn-cancel" className="inline-flex items-center justify-center gap-3 min-h-[36px] py-1.5 px-6 bg-error/10 text-error border border-error/20 rounded-md text-sm cursor-pointer transition-colors hover:bg-error/15 disabled:opacity-50 disabled:cursor-not-allowed shrink-0" onClick={handleCancel} disabled={cancelling}>
               {cancelling ? '取消中...' : '⏹ 取消任务'}
             </button>
           )}
-          <button className="py-1.5 px-5 bg-success/10 border border-success/20 rounded-md text-success text-sm cursor-pointer transition-all duration-200 hover:bg-success/10 disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleExport} disabled={exporting}>
+          <button data-design-id="history:btn-export" className="inline-flex items-center justify-center gap-3 min-h-[40px] py-2 px-8 bg-primary text-primary-foreground rounded-lg text-sm cursor-pointer transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed shrink-0" onClick={handleExport} disabled={exporting}>
             {exporting ? '导出中...' : '💾 导出到桌面'}
           </button>
           {canRerun && (
-            <button className="py-1.5 px-5 bg-success/10 border border-success/20 rounded-md text-success text-sm cursor-pointer transition-all duration-200 hover:bg-success/10 disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleRerun} disabled={rerunning}>
+            <button data-design-id="history:btn-rerun" className="inline-flex items-center justify-center gap-3 min-h-[40px] py-2 px-8 bg-primary text-primary-foreground rounded-lg text-sm cursor-pointer transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed shrink-0" onClick={handleRerun} disabled={rerunning}>
               {rerunning ? '创建中...' : '🔄 重新执行'}
             </button>
           )}
-          <button className="py-1.5 px-5 bg-error/10 border border-error/20 rounded-md text-error text-sm cursor-pointer transition-all duration-200 hover:bg-error/10" onClick={onDelete}>🗑️ 删除</button>
+          <button data-design-id="history:btn-delete" className="inline-flex items-center justify-center gap-3 min-h-[36px] py-1.5 px-6 bg-error/10 text-error border border-error/20 rounded-md text-sm cursor-pointer transition-colors hover:bg-error/15 shrink-0" onClick={onDelete}>🗑️ 删除</button>
         </div>
       </div>
 
@@ -274,7 +274,7 @@ export default function TaskDetail({ taskId, onDelete, onRerun }: TaskDetailProp
         </div>
       )}
 
-      <div className="flex gap-3 border-b border-border pb-2">
+      <div data-design-id="history:tab-row" className="flex gap-3 border-b border-border pb-2">
         {(['messages', 'result', 'peer_review', 'info'] as const).map(t => (
           <button
             key={t}

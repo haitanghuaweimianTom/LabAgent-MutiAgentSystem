@@ -254,7 +254,7 @@ export default function DatasourceSettings() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+    <div data-design-id="settings:datasources" className="mx-auto w-full max-w-[1320px]" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       {/* 代理卡 */}
       <div style={cardStyle}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
@@ -318,6 +318,7 @@ export default function DatasourceSettings() {
 
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
             <button
+              data-design-id="settings:btn-save-proxy"
               onClick={handleSaveProxy}
               disabled={proxySaving}
               style={btn('rgba(46,204,113,0.15)', 'rgba(46,204,113,0.3)', '#2ecc71')}

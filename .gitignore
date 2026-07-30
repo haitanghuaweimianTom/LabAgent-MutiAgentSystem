@@ -66,6 +66,9 @@ dist/
 out/
 *.tsbuildinfo
 
+# 设计模式交接物（临时落盘，写回源码后即清）
+frontend/.design-overrides.json
+
 # Backup
 backups/
 

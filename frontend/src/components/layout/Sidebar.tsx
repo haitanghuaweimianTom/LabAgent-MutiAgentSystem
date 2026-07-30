@@ -171,6 +171,7 @@ export function Sidebar({ tasks = [] }: SidebarProps) {
       {/* Mobile hamburger */}
       <button
         onClick={() => setMobileOpen(true)}
+        data-design-exclude="sidebar"
         className="md:hidden fixed top-3 left-3 z-50 p-2 rounded-lg bg-card/80 backdrop-blur border border-border text-muted-foreground hover:text-foreground transition-colors"
       >
         <Menu className="w-5 h-5" />
@@ -183,6 +184,7 @@ export function Sidebar({ tasks = [] }: SidebarProps) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            data-design-exclude="sidebar"
             className="md:hidden fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
             onClick={() => setMobileOpen(false)}
           />
@@ -193,6 +195,7 @@ export function Sidebar({ tasks = [] }: SidebarProps) {
       <motion.aside
         animate={{ width: collapsed ? 56 : 200 }}
         transition={{ duration: 0.2, ease: 'easeInOut' }}
+        data-design-exclude="sidebar"
         className="hidden md:flex h-screen flex-col border-r border-border bg-card/80 backdrop-blur-xl"
       >
         {sidebarContent}
@@ -206,6 +209,7 @@ export function Sidebar({ tasks = [] }: SidebarProps) {
             animate={{ x: 0 }}
             exit={{ x: -280 }}
             transition={{ duration: 0.2, ease: 'easeInOut' }}
+            data-design-exclude="sidebar"
             className="md:hidden fixed inset-y-0 left-0 z-50 w-[260px] flex flex-col border-r border-border bg-card/95 backdrop-blur-xl"
           >
             {sidebarContent}

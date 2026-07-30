@@ -163,13 +163,13 @@ export default function PdfManager() {
   };
 
   return (
-    <div className="bg-card border border-border rounded-xl px-8 py-6 shadow-[var(--shadow-card)] flex flex-col gap-5">
-      <div className="text-lg text-foreground font-semibold">📄 PDF 解析中心</div>
+    <div data-design-id="pdf:card" className="bg-card border border-border rounded-xl px-8 py-6 shadow-[var(--shadow-card)] flex flex-col items-center gap-5 mx-auto w-full max-w-[1320px]">
+      <div data-design-id="pdf:title" className="text-lg text-foreground font-semibold">📄 PDF 解析中心</div>
 
       {/* 上传 / 下载 */}
-      <section className="flex flex-col gap-2.5">
-        <div className="text-sm text-muted-foreground font-semibold">上传 / 下载 PDF</div>
-        <div className="flex gap-4 items-center flex-wrap">
+      <section className="flex flex-col items-center gap-2.5 w-full">
+        <div data-design-id="pdf:label-upload" className="text-sm text-muted-foreground font-semibold">上传 / 下载 PDF</div>
+        <div data-design-id="pdf:row-upload" className="flex gap-4 items-center flex-wrap">
           <input
             type="file"
             accept=".pdf"
@@ -178,32 +178,33 @@ export default function PdfManager() {
             id="pdf-upload"
             onChange={handleFileChange}
           />
-          <label htmlFor="pdf-upload" className="inline-flex items-center justify-center gap-3 min-h-[40px] py-2 px-8 bg-primary/10 text-primary border border-primary/20 rounded-lg text-sm cursor-pointer transition-colors hover:bg-primary/20 shrink-0">
+          <label data-design-id="pdf:btn-upload" htmlFor="pdf-upload" className="inline-flex items-center justify-center gap-3 min-h-[40px] py-2 px-8 bg-primary/10 text-primary border border-primary/20 rounded-lg text-sm cursor-pointer transition-colors hover:bg-primary/20 shrink-0">
             {loading ? '处理中...' : '📤 选择 PDF 上传'}
           </label>
           <input
+            data-design-id="pdf:input-url"
             type="text"
-            className="flex-1 min-w-[220px] max-w-[420px] h-10 px-5 bg-muted border border-border rounded-lg text-foreground text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
+            className="flex-1 min-w-[330px] max-w-[630px] h-10 px-5 bg-muted border border-border rounded-lg text-foreground text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
             placeholder="输入 PDF 链接或 arXiv 摘要页 URL"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
           />
-          <button className="inline-flex items-center justify-center gap-3 min-h-[40px] py-2 px-10 bg-primary text-primary-foreground rounded-lg text-sm cursor-pointer transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed shrink-0" onClick={handleDownload} disabled={loading || !url.trim()}>
+          <button data-design-id="pdf:btn-download" className="inline-flex items-center justify-center gap-3 min-h-[40px] py-2 px-10 bg-primary text-primary-foreground rounded-lg text-sm cursor-pointer transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed shrink-0" onClick={handleDownload} disabled={loading || !url.trim()}>
             ⬇️ 下载
           </button>
         </div>
       </section>
 
       {/* 解析策略 */}
-      <section className="flex flex-col gap-2.5">
-        <div className="text-sm text-muted-foreground font-semibold">解析策略</div>
-        <div className="flex gap-3 items-center flex-wrap">
-          <select className="h-10 px-5 bg-muted border border-border rounded-lg text-foreground text-sm outline-none focus:border-primary" value={strategy} onChange={(e) => setStrategy(e.target.value)}>
-            <option value="auto">自动选择</option>
-            <option value="pymupdf4llm">PyMuPDF4LLM（本地保底）</option>
-            <option value="vision">多模态视觉（限速）</option>
+      <section className="flex flex-col items-center gap-2.5 w-full">
+        <div data-design-id="pdf:label-strategy" className="text-sm text-muted-foreground font-semibold">解析策略</div>
+        <div data-design-id="pdf:row-strategy" className="flex gap-3 items-center flex-wrap">
+          <select data-design-id="pdf:select-strategy" className="h-10 px-5 bg-muted border border-border rounded-lg text-foreground text-sm text-center outline-none focus:border-primary" value={strategy} onChange={(e) => setStrategy(e.target.value)}>
+            <option value="auto" className="text-center">自动选择</option>
+            <option value="pymupdf4llm" className="text-center">PyMuPDF4LLM（本地保底）</option>
+            <option value="vision" className="text-center">多模态视觉（限速）</option>
           </select>
-          <label className="flex items-center gap-3 text-muted-foreground text-sm cursor-pointer">
+          <label data-design-id="pdf:vision-toggle" className="flex items-center gap-3 text-muted-foreground text-sm cursor-pointer">
             <input
               type="checkbox"
               checked={useVision}
@@ -213,6 +214,7 @@ export default function PdfManager() {
           </label>
           {useVision && (
             <select
+              data-design-id="pdf:select-provider"
               className="h-10 px-5 bg-muted border border-border rounded-lg text-foreground text-sm outline-none focus:border-primary"
               value={visionProvider}
               onChange={(e) => setVisionProvider(e.target.value)}
@@ -231,8 +233,8 @@ export default function PdfManager() {
       {error && <div className="text-error text-sm px-5 py-2.5 bg-error/10 rounded-md">{error}</div>}
 
       {/* 已下载列表 */}
-      <section className="flex flex-col gap-2.5">
-        <div className="text-sm text-muted-foreground font-semibold">已下载 PDF</div>
+      <section className="flex flex-col items-center gap-2.5 w-full">
+        <div data-design-id="pdf:label-files" className="text-sm text-muted-foreground font-semibold">已下载 PDF</div>
         {files.length === 0 ? (
           <div className="flex flex-col items-center justify-center text-center py-16 text-muted-foreground text-sm">
             <span className="text-4xl opacity-40 mb-2">📄</span>
@@ -250,6 +252,7 @@ export default function PdfManager() {
                 </div>
                 <div className="flex gap-3 items-center shrink-0">
                   <button
+                    data-design-id="pdf:btn-parse"
                     className="inline-flex items-center justify-center gap-3 min-h-[36px] py-2 px-8 bg-primary text-primary-foreground rounded-lg text-sm cursor-pointer transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                     onClick={() => handleParse(f.file_id)}
                     disabled={parsing === f.file_id}
@@ -267,7 +270,7 @@ export default function PdfManager() {
       </section>
 
       {result && (
-        <section className="flex flex-col gap-2.5">
+        <section className="flex flex-col items-center gap-2.5 w-full">
           <div className="text-sm text-muted-foreground font-semibold">解析结果</div>
           <div className="bg-muted border border-border rounded-lg px-6 py-4 max-h-[400px] overflow-y-auto">
             <div className="flex gap-3 flex-wrap mb-2.5 pb-2.5 border-b border-border">

@@ -1,11 +1,12 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Search, Sun, Moon, Bell, FileText, Loader2, CheckCircle2, XCircle, Clock, AlertTriangle } from 'lucide-react'
+import { Search, Sun, Moon, Bell, FileText, Loader2, CheckCircle2, XCircle, Clock, AlertTriangle, Pencil, Save } from 'lucide-react'
 import { useTheme } from '@/hooks/useTheme'
 import { usePathname, useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { apiBase } from '@/lib/api'
+import { useDesignStore } from '@/lib/design-mode/store'
 
 interface TopBarProps {
   title: string
@@ -23,6 +24,26 @@ interface TaskResult {
 
 export function TopBar({ title, subtitle, className }: TopBarProps) {
   const { theme, toggleTheme } = useTheme()
+  const designMode = useDesignStore((s) => s.mode)
+  const toggleDesign = useDesignStore((s) => s.toggleMode)
+  const exportJSON = useDesignStore((s) => s.exportJSON)
+  const markSaved = useDesignStore((s) => s.markSaved)
+  const [saving, setSaving] = useState(false)
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      await fetch('/api/design', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: exportJSON(),
+      })
+      markSaved()
+    } catch (e) {
+      console.error('保存设计失败', e)
+    } finally {
+      setSaving(false)
+    }
+  }
   const [showSearch, setShowSearch] = useState(false)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<TaskResult[]>([])
@@ -116,34 +137,37 @@ export function TopBar({ title, subtitle, className }: TopBarProps) {
   return (
     <>
       <header
+        data-design-id="topbar:header"
         className={cn(
           'h-14 flex items-center justify-between px-6 border-b border-border',
           'bg-background/80 backdrop-blur-sm',
           className
         )}
       >
-        <div>
+        <div data-design-id="topbar:title">
           <h1 className="text-base font-semibold text-foreground">{title}</h1>
           {subtitle && (
             <p className="text-xs text-muted-foreground">{subtitle}</p>
           )}
         </div>
 
-        <div className="flex items-center gap-3">
-          {/* Search */}
+        <div data-design-id="topbar:actions" className="flex items-center gap-3">
+          {/* Search —— 拉长为标准按钮的 1.5 倍宽（设计模式定死） */}
           <button
+            data-design-id="topbar:btn-search"
             onClick={() => setShowSearch(true)}
-            className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            className="inline-flex h-9 w-[54px] items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             title="搜索 (Ctrl+K)"
           >
             <Search className="w-4 h-4" />
           </button>
 
           {/* Notifications */}
-          <div className="relative" ref={notifRef}>
+          <div className="relative inline-flex" ref={notifRef}>
             <button
+              data-design-id="topbar:btn-notif"
               onClick={() => { setShowNotif(prev => !prev); setShowSearch(false) }}
-              className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors relative"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors relative"
             >
               <Bell className="w-4 h-4" />
               {notifTasks.length > 0 && (
@@ -151,7 +175,7 @@ export function TopBar({ title, subtitle, className }: TopBarProps) {
               )}
             </button>
             {showNotif && (
-              <div className="absolute right-0 top-full mt-2 w-[360px] bg-card border border-border rounded-xl shadow-md z-50" onClick={e => e.stopPropagation()}>
+              <div data-design-exclude="topbar" className="absolute right-0 top-full mt-2 w-[360px] bg-card border border-border rounded-xl shadow-md z-50" onClick={e => e.stopPropagation()}>
                 <div className="flex justify-between items-center px-4 py-3 border-b border-border">
                   <span className="text-foreground font-semibold text-sm">通知</span>
                   <button onClick={() => setShowNotif(false)} className="text-muted-foreground hover:text-foreground text-xs">关闭</button>
@@ -181,17 +205,47 @@ export function TopBar({ title, subtitle, className }: TopBarProps) {
 
           {/* Theme Toggle */}
           <button
+            data-design-id="topbar:btn-theme"
             onClick={toggleTheme}
-            className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
           >
             {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
+
+          {/* Design Mode Toggle（桌面端创作工具）—— exclude：必须保留功能（进/出设计模式入口） */}
+          <button
+            data-design-exclude="topbar"
+            onClick={toggleDesign}
+            className={cn(
+              'hidden md:inline-flex h-9 w-9 items-center justify-center rounded-lg transition-colors',
+              designMode === 'edit'
+                ? 'text-warning bg-warning/10'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted',
+            )}
+            title="设计模式"
+          >
+            <Pencil className="w-4 h-4" />
+          </button>
+
+          {/* 设计模式：保存（落盘交接物，仅 edit 模式显示） */}
+          {designMode === 'edit' && (
+            <button
+              data-design-exclude="topbar"
+              onClick={handleSave}
+              disabled={saving}
+              className="hidden md:inline-flex items-center gap-1.5 h-9 px-4 rounded-lg text-sm bg-primary text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-50"
+              title="保存设计（落盘交接给 Claude 写回源码）"
+            >
+              <Save className="w-3.5 h-3.5" />
+              {saving ? '保存中…' : '保存'}
+            </button>
+          )}
         </div>
       </header>
 
       {/* 全局搜索弹窗 */}
       {showSearch && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] bg-black/50" onClick={() => setShowSearch(false)}>
+        <div data-design-exclude="topbar" className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] bg-black/50" onClick={() => setShowSearch(false)}>
           <div className="bg-card border border-border rounded-xl w-[520px] shadow-md" onClick={e => e.stopPropagation()}>
             <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
               <Search className="w-4 h-4 text-muted-foreground shrink-0" />

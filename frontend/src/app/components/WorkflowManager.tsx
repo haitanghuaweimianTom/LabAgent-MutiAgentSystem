@@ -48,10 +48,10 @@ export default function WorkflowManager() {
   if (loading) return <div className="text-center text-muted-foreground py-8">加载中...</div>;
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="bg-card border border-border rounded-xl px-7 py-5">
+    <div className="flex flex-col gap-6 mx-auto w-full max-w-[1320px] items-center">
+      <div data-design-id="workflows:card" className="bg-card border border-border rounded-xl px-7 py-5 mx-auto w-full max-w-[1320px]">
         <div className="mb-4">
-          <span className="text-base text-foreground font-semibold">🔄 工作流</span>
+          <span data-design-id="workflows:title" className="text-lg text-foreground font-semibold">🔄 工作流</span>
           <div className="mt-1 text-xs text-muted-foreground">
             工作流已由模板自动绑定，此处仅展示各模板对应的 Agent 执行路径。
           </div>

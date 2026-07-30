@@ -567,19 +567,23 @@ export default function KnowledgeBaseManager() {
   // scope 过滤胶囊：左栏窄(w-64)，用 px-3.5 防溢出；横(14)≥纵(6)×2 满足铁律
   const scopeBtnBase = "inline-flex items-center justify-center gap-2 min-h-[30px] px-5 py-1.5 rounded-md text-sm cursor-pointer transition-colors duration-150 whitespace-nowrap leading-tight border border-transparent text-muted-foreground hover:bg-accent hover:text-foreground";
   const scopeBtnActive = "bg-primary/10 text-primary border-primary/30";
+  // 规范按钮（弹窗/顶部主按钮用）：铁律 px-8(8) ≥ py-2(2)×2=4
+  const specPrimary = "inline-flex items-center justify-center gap-3 min-h-[40px] py-2 px-8 bg-primary text-primary-foreground rounded-lg text-sm cursor-pointer transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed shrink-0";
+  const specGhost = "inline-flex items-center justify-center gap-3 min-h-[40px] py-2 px-8 bg-primary/10 text-primary border border-primary/20 rounded-lg text-sm cursor-pointer transition-colors hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed shrink-0";
 
   return (
-    <div className="flex h-full min-h-[500px] bg-card border border-border rounded-xl shadow-[var(--shadow-card)] overflow-hidden">
+    <div data-design-id="kb:card" className="flex h-full min-h-[500px] bg-card border border-border rounded-xl shadow-[var(--shadow-card)] overflow-hidden mx-auto w-full max-w-[1320px]">
       {/* Sidebar */}
-      <div className="w-72 shrink-0 flex flex-col border-r border-border bg-muted/40">
+      <div data-design-id="kb:sidebar" className="w-72 shrink-0 flex flex-col border-r border-border bg-muted/40">
         <div className="flex items-center justify-between px-6 h-14 border-b border-border shrink-0 gap-3">
-          <span className="text-lg text-foreground font-semibold">📚 知识库</span>
-          <button className="inline-flex items-center justify-center min-h-[36px] px-10 py-2 bg-primary border border-primary rounded-md text-primary-foreground text-sm cursor-pointer font-semibold transition-opacity hover:opacity-90" onClick={() => setShowCreateBase(true)}>+ 新建</button>
+          <span data-design-id="kb:title" className="text-lg text-foreground font-semibold">📚 知识库</span>
+          <button data-design-id="kb:btn-new" className={specPrimary} onClick={() => setShowCreateBase(true)}>+ 新建</button>
         </div>
-        <div className="flex items-center gap-1 h-11 px-6 border-b border-border shrink-0">
+        <div data-design-id="kb:row-scope" className="flex items-center gap-1 h-11 px-6 border-b border-border shrink-0">
           {(['all', 'global', 'project'] as const).map(s => (
             <button
               key={s}
+              data-design-id={s === 'all' ? 'kb:scope-all' : s === 'global' ? 'kb:scope-global' : 'kb:scope-project'}
               className={cn(scopeBtnBase, scopeFilter === s && scopeBtnActive)}
               onClick={() => setScopeFilter(s)}
               type="button"
@@ -631,25 +635,26 @@ export default function KnowledgeBaseManager() {
       </div>
 
       {/* Main */}
-      <div className="flex-1 flex flex-col min-w-0 bg-card">
+      <div data-design-id="kb:main" className="flex-1 flex flex-col min-w-0 bg-card">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 h-14 border-b border-border shrink-0 gap-4">
+        <div data-design-id="kb:row-header" className="flex items-center justify-between px-6 h-14 border-b border-border shrink-0 gap-4">
           <span className="text-base text-foreground font-semibold whitespace-nowrap overflow-hidden text-ellipsis" title={activeBase ? activeBase.name : undefined}>{activeBase ? activeBase.name : '请选择知识库'}</span>
           <div className="flex gap-3 items-center shrink-0">
             <input
+              data-design-id="kb:input-search"
               className="h-10 px-5 bg-muted border border-border rounded-lg text-foreground text-sm w-[240px] outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
               placeholder="搜索知识库..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleSearch()}
             />
-            <button className={actionBtnBase} onClick={handleSearch} disabled={searching}>
+            <button data-design-id="kb:btn-search" className={specGhost} onClick={handleSearch} disabled={searching}>
               {searching ? '搜索中...' : '🔍'}
             </button>
             {activeBaseId && (
               <>
-                <button className={actionBtnBase} onClick={openSettings} title="模型配置">⚙️</button>
-                <label className={cn(actionBtnBase, actionBtnPrimary, uploading && 'cursor-not-allowed')}>
+                <button data-design-id="kb:btn-settings" className={specGhost} onClick={openSettings} title="模型配置">⚙️</button>
+                <label data-design-id="kb:btn-upload" className={cn(specPrimary, uploading && 'cursor-not-allowed')}>
                   {uploading ? '上传中...' : '📤 上传文件'}
                   <input
                     ref={fileInputRef}
@@ -661,17 +666,18 @@ export default function KnowledgeBaseManager() {
                     disabled={uploading}
                   />
                 </label>
-                <button className={actionBtnBase} onClick={() => setShowAddNote(true)}>📝 添加笔记</button>
+                <button data-design-id="kb:btn-note" className={specGhost} onClick={() => setShowAddNote(true)}>📝 添加笔记</button>
               </>
             )}
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="flex items-center gap-1 h-11 px-6 border-b border-border shrink-0">
+        <div data-design-id="kb:row-tabs" className="flex items-center gap-1 h-11 px-6 border-b border-border shrink-0">
           {TABS.map(tab => (
             <button
               key={tab.key}
+              data-design-id={`kb:tab-${tab.key}`}
               className={cn(
                 'inline-flex items-center px-6 h-full bg-transparent border-none border-b-2 border-b-transparent text-muted-foreground text-sm cursor-pointer font-medium leading-tight transition-colors duration-150 hover:text-foreground',
                 activeTab === tab.key && 'text-primary border-b-primary'
@@ -848,7 +854,7 @@ export default function KnowledgeBaseManager() {
       {/* Create Base Modal */}
       {showCreateBase && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[1000] p-4" onClick={() => setShowCreateBase(false)}>
-          <div className="bg-card border border-border rounded-xl px-10 py-8 w-full max-w-[560px] flex flex-col gap-5" onClick={e => e.stopPropagation()}>
+          <div data-design-id="kb:modal-create" className="bg-card border border-border rounded-xl px-10 py-8 w-full max-w-[560px] flex flex-col gap-5" onClick={e => e.stopPropagation()}>
             <div className="text-lg text-foreground font-semibold">新建知识库</div>
             <input
               className={modalInputBase}
@@ -860,14 +866,16 @@ export default function KnowledgeBaseManager() {
             />
             <div className="flex gap-3">
               <button
-                className={cn(actionBtnBase, newBaseScope === 'global' && actionBtnPrimary)}
+                data-design-id="kb:btn-scope-global"
+                className={newBaseScope === 'global' ? specPrimary : specGhost}
                 onClick={() => setNewBaseScope('global')}
                 type="button"
               >
                 🌐 全局公共
               </button>
               <button
-                className={cn(actionBtnBase, newBaseScope === 'project' && actionBtnPrimary)}
+                data-design-id="kb:btn-scope-project"
+                className={newBaseScope === 'project' ? specPrimary : specGhost}
                 onClick={() => setNewBaseScope('project')}
                 type="button"
               >
@@ -883,8 +891,8 @@ export default function KnowledgeBaseManager() {
               />
             )}
             <div className="flex justify-end gap-3 mt-2">
-              <button className={actionBtnBase} onClick={() => setShowCreateBase(false)}>取消</button>
-              <button className={cn(actionBtnBase, actionBtnPrimary)} onClick={handleCreateBase}>创建</button>
+              <button data-design-id="kb:btn-cancel" className={specGhost} onClick={() => setShowCreateBase(false)}>取消</button>
+              <button data-design-id="kb:btn-confirm" className={specPrimary} onClick={handleCreateBase}>创建</button>
             </div>
           </div>
         </div>
@@ -893,7 +901,7 @@ export default function KnowledgeBaseManager() {
       {/* Rename Base Modal */}
       {showRenameBase && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[1000]" onClick={() => setShowRenameBase(false)}>
-          <div className="bg-card border border-border rounded-xl px-8 py-6 w-[90%] max-w-[500px] flex flex-col gap-4" onClick={e => e.stopPropagation()}>
+          <div data-design-id="kb:modal-rename" className="bg-card border border-border rounded-xl px-8 py-6 w-[90%] max-w-[500px] flex flex-col gap-4" onClick={e => e.stopPropagation()}>
             <div className="text-base text-foreground font-semibold">重命名知识库</div>
             <input
               className={modalInputBase}
@@ -904,8 +912,8 @@ export default function KnowledgeBaseManager() {
               autoFocus
             />
             <div className="flex justify-end gap-3">
-              <button className={actionBtnBase} onClick={() => setShowRenameBase(false)}>取消</button>
-              <button className={cn(actionBtnBase, actionBtnPrimary)} onClick={handleRenameBase}>确认</button>
+              <button data-design-id="kb:btn-cancel" className={specGhost} onClick={() => setShowRenameBase(false)}>取消</button>
+              <button data-design-id="kb:btn-confirm" className={specPrimary} onClick={handleRenameBase}>确认</button>
             </div>
           </div>
         </div>
@@ -914,7 +922,7 @@ export default function KnowledgeBaseManager() {
       {/* Add / Edit Note Modal */}
       {showAddNote && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[1000]" onClick={closeAddNoteModal}>
-          <div className="bg-card border border-border rounded-xl px-8 py-6 w-[90%] max-w-[500px] flex flex-col gap-4" onClick={e => e.stopPropagation()}>
+          <div data-design-id="kb:modal-note" className="bg-card border border-border rounded-xl px-8 py-6 w-[90%] max-w-[500px] flex flex-col gap-4" onClick={e => e.stopPropagation()}>
             <div className="text-base text-foreground font-semibold">{editingItem ? '编辑笔记' : '添加笔记'}</div>
             <textarea
               className={cn(modalInputBase, 'min-h-[180px] resize-y leading-relaxed')}
@@ -924,8 +932,8 @@ export default function KnowledgeBaseManager() {
               autoFocus
             />
             <div className="flex justify-end gap-3">
-              <button className={actionBtnBase} onClick={closeAddNoteModal}>取消</button>
-              <button className={cn(actionBtnBase, actionBtnPrimary)} onClick={handleAddNote}>
+              <button data-design-id="kb:btn-cancel" className={specGhost} onClick={closeAddNoteModal}>取消</button>
+              <button data-design-id="kb:btn-confirm" className={specPrimary} onClick={handleAddNote}>
                 {editingItem ? '保存' : '添加'}
               </button>
             </div>
@@ -945,7 +953,7 @@ export default function KnowledgeBaseManager() {
       {/* Settings Modal */}
       {showSettings && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[1000]" onClick={() => setShowSettings(false)}>
-          <div className="bg-card border border-border rounded-xl px-8 py-6 w-[90%] max-w-[500px] flex flex-col gap-4 max-h-[80vh] overflow-auto" onClick={e => e.stopPropagation()}>
+          <div data-design-id="kb:modal-settings" className="bg-card border border-border rounded-xl px-8 py-6 w-[90%] max-w-[500px] flex flex-col gap-4 max-h-[80vh] overflow-auto" onClick={e => e.stopPropagation()}>
             <div className="text-base text-foreground font-semibold">模型配置</div>
             <div className="flex flex-col gap-3">
               <div>
@@ -1043,8 +1051,8 @@ export default function KnowledgeBaseManager() {
               </div>
             </div>
             <div className="flex justify-end gap-3">
-              <button className={actionBtnBase} onClick={() => setShowSettings(false)}>取消</button>
-              <button className={cn(actionBtnBase, actionBtnPrimary)} onClick={saveSettings}>保存</button>
+              <button data-design-id="kb:btn-cancel" className={specGhost} onClick={() => setShowSettings(false)}>取消</button>
+              <button data-design-id="kb:btn-confirm" className={specPrimary} onClick={saveSettings}>保存</button>
             </div>
           </div>
         </div>

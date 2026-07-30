@@ -4,6 +4,11 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* 设计模式 overlay 依赖这两个类让根层透传点击 / 手柄壳接收点击。
+   Tailwind v4 自动检测对 portal 渲染的 className 不稳，强制 safelist。 */
+@source inline("pointer-events-none");
+@source inline("pointer-events-auto");
+
 /* =============================================================
  * LabAgent — 设计系统 v8.2
  *
@@ -404,4 +409,20 @@ body {
   html {
     @apply font-sans;
   }
+}
+
+/* 设计模式：编辑时全局禁用文本选择 + 原生拖放，杜绝"拖元素时复制文字/触发搜索"。
+   input 仍可聚焦输入（focus 不依赖 mousedown 选词），只是不能鼠标拖选文本。
+   view 模式不挂 .design-editing，业务完全不受影响。 */
+html.design-editing,
+html.design-editing * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+html.design-editing img,
+html.design-editing a,
+html.design-editing button,
+html.design-editing label,
+html.design-editing [draggable="true"] {
+  -webkit-user-drag: none !important;
 }

@@ -21,7 +21,7 @@ export function StatCard({ icon: Icon, label, value, trend = 'neutral', classNam
   const TrendIcon = trendConfig[trend].icon
 
   return (
-    <div className={cn(
+    <div data-design-id="dashboard:stat" className={cn(
       'rounded-xl border border-border bg-card/50 backdrop-blur px-6 py-4',
       'transition-shadow duration-300 hover:shadow-glow',
       className

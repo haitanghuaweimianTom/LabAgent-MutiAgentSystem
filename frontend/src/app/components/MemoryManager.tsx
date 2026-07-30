@@ -141,13 +141,13 @@ export default function MemoryManager() {
   }, [tab, categoryFilter, problemTypeFilter]);
 
   return (
-    <div className="flex flex-col gap-6">
+    <div data-design-id="memory:root" className="mx-auto w-full max-w-[1320px] flex flex-col items-center gap-6">
       <div className="flex justify-between items-center">
-        <span className="text-xl font-bold text-foreground">🧠 记忆管理</span>
+        <span data-design-id="memory:title" className="text-lg text-foreground font-semibold">🧠 记忆管理</span>
       </div>
 
       {stats && (
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-4">
+        <div data-design-id="memory:row-stats" className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-4 w-full">
           <div className="bg-card border border-border rounded-lg px-7 py-5 text-center shadow-[var(--shadow-card)]">
             <div className="text-2xl font-bold text-foreground">{stats.total_lessons}</div>
             <div className="text-sm text-muted-foreground mt-1.5">经验总数</div>
@@ -163,23 +163,23 @@ export default function MemoryManager() {
         </div>
       )}
 
-      <div className="flex gap-3 border-b border-border pb-2">
-        <button className={cn('py-2 px-8 min-h-[36px] bg-transparent border border-border rounded-md text-muted-foreground cursor-pointer text-sm transition-colors', tab === 'lessons' && 'bg-primary/10 border-primary/30 text-primary')} onClick={() => setTab('lessons')}>
+      <div data-design-id="memory:row-tabs" className="flex gap-3 border-b border-border pb-2 w-full">
+        <button data-design-id="memory:tab-lessons" className={cn('inline-flex items-center justify-center gap-3 min-h-[40px] py-2 px-8 bg-transparent border border-border rounded-lg text-muted-foreground cursor-pointer text-sm transition-colors shrink-0', tab === 'lessons' && 'bg-primary/10 border-primary/30 text-primary')} onClick={() => setTab('lessons')}>
           📚 经验教训
         </button>
-        <button className={cn('py-2 px-8 min-h-[36px] bg-transparent border border-border rounded-md text-muted-foreground cursor-pointer text-sm transition-colors', tab === 'task' && 'bg-primary/10 border-primary/30 text-primary')} onClick={() => setTab('task')}>
+        <button data-design-id="memory:tab-task" className={cn('inline-flex items-center justify-center gap-3 min-h-[40px] py-2 px-8 bg-transparent border border-border rounded-lg text-muted-foreground cursor-pointer text-sm transition-colors shrink-0', tab === 'task' && 'bg-primary/10 border-primary/30 text-primary')} onClick={() => setTab('task')}>
           📋 任务记忆
         </button>
-        <button className={cn('py-2 px-8 min-h-[36px] bg-transparent border border-border rounded-md text-muted-foreground cursor-pointer text-sm transition-colors', tab === 'stats' && 'bg-primary/10 border-primary/30 text-primary')} onClick={() => setTab('stats')}>
+        <button data-design-id="memory:tab-stats" className={cn('inline-flex items-center justify-center gap-3 min-h-[40px] py-2 px-8 bg-transparent border border-border rounded-lg text-muted-foreground cursor-pointer text-sm transition-colors shrink-0', tab === 'stats' && 'bg-primary/10 border-primary/30 text-primary')} onClick={() => setTab('stats')}>
           📊 统计
         </button>
       </div>
 
       {tab === 'lessons' && (
         <>
-          <div className="bg-card border border-border rounded-lg px-7 py-5 shadow-[var(--shadow-card)]">
-            <div className="text-base font-semibold text-foreground mb-4">➕ 添加经验</div>
-            <div className="flex gap-3 mb-4 flex-wrap">
+          <div data-design-id="memory:card-add" className="bg-card border border-border rounded-lg px-7 py-5 shadow-[var(--shadow-card)] w-full">
+            <div data-design-id="memory:title-add" className="text-base font-semibold text-foreground mb-4">➕ 添加经验</div>
+            <div data-design-id="memory:row-form" className="flex gap-3 mb-4 flex-wrap">
               <select
                 className="h-10 px-5 bg-muted border border-border rounded-lg text-foreground text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
                 value={newLesson.category}
@@ -213,18 +213,19 @@ export default function MemoryManager() {
               </select>
             </div>
             <textarea
+              data-design-id="memory:input-content"
               className="w-full min-h-[140px] py-2.5 px-5 bg-muted border border-border rounded-lg text-foreground text-sm resize-y leading-relaxed outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
               placeholder="经验内容..."
               value={newLesson.content}
               onChange={(e) => setNewLesson({ ...newLesson, content: e.target.value })}
             />
             <div className="flex gap-3 mt-4">
-              <button className="inline-flex items-center justify-center leading-tight gap-2 min-h-[36px] py-2 px-8 bg-primary text-primary-foreground rounded-md cursor-pointer text-sm font-semibold transition-opacity hover:opacity-90" onClick={addLesson}>添加经验</button>
-              <button className="inline-flex items-center justify-center leading-tight py-1.5 px-6 min-h-[30px] bg-error/10 text-error border border-error/20 rounded-md cursor-pointer text-sm transition-colors hover:bg-error/15" onClick={clearLessons}>清空全部</button>
+              <button data-design-id="memory:btn-add" className="inline-flex items-center justify-center gap-3 min-h-[40px] py-2 px-8 bg-primary text-primary-foreground rounded-lg text-sm cursor-pointer transition-opacity hover:opacity-90 shrink-0" onClick={addLesson}>添加经验</button>
+              <button data-design-id="memory:btn-clear" className="inline-flex items-center justify-center gap-3 min-h-[36px] py-1.5 px-6 bg-error/10 text-error border border-error/20 rounded-md text-sm cursor-pointer transition-colors hover:bg-error/15 shrink-0" onClick={clearLessons}>清空全部</button>
             </div>
           </div>
 
-          <div className="flex gap-3 flex-wrap">
+          <div data-design-id="memory:row-filter" className="flex gap-3 flex-wrap w-full">
             <input
               className="h-10 px-5 bg-muted border border-border rounded-lg text-foreground text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
               placeholder="按类别筛选"
@@ -237,15 +238,15 @@ export default function MemoryManager() {
               value={problemTypeFilter}
               onChange={(e) => setProblemTypeFilter(e.target.value)}
             />
-            <button className="inline-flex items-center justify-center leading-tight min-h-[36px] py-2 px-8 bg-primary/10 text-primary border border-primary/20 rounded-md cursor-pointer text-sm transition-colors hover:bg-primary/15" onClick={loadLessons}>刷新</button>
+            <button data-design-id="memory:btn-refresh" className="inline-flex items-center justify-center gap-3 min-h-[40px] py-2 px-8 bg-primary/10 text-primary border border-primary/20 rounded-lg text-sm cursor-pointer transition-colors hover:bg-primary/20 shrink-0" onClick={loadLessons}>刷新</button>
           </div>
 
           {loading && lessons.length === 0 ? (
-            <div className="flex flex-col items-center justify-center text-center py-16 text-muted-foreground text-sm"><span className="text-3xl opacity-40 mb-2">⏳</span>加载中...</div>
+            <div className="flex flex-col items-center justify-center text-center py-16 text-muted-foreground text-sm w-full"><span className="text-3xl opacity-40 mb-2">⏳</span>加载中...</div>
           ) : lessons.length === 0 ? (
-            <div className="flex flex-col items-center justify-center text-center py-16 text-muted-foreground text-sm"><span className="text-4xl opacity-40 mb-2">📭</span>暂无经验教训</div>
+            <div className="flex flex-col items-center justify-center text-center py-16 text-muted-foreground text-sm w-full"><span className="text-4xl opacity-40 mb-2">📭</span>暂无经验教训</div>
           ) : (
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-4 w-full">
               {lessons.map((lesson) => (
                 <div key={lesson.id} className="bg-card border border-border rounded-lg px-7 py-5 shadow-[var(--shadow-card)]">
                   <div className="flex justify-between items-start gap-3 mb-2">
@@ -274,31 +275,31 @@ export default function MemoryManager() {
 
       {tab === 'task' && (
         <>
-          <div className="flex gap-3">
+          <div data-design-id="memory:row-task" className="flex gap-3 w-full">
             <input
               className="h-10 px-5 bg-muted border border-border rounded-lg text-foreground text-sm flex-1 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
               placeholder="输入任务ID"
               value={taskId}
               onChange={(e) => setTaskId(e.target.value)}
             />
-            <button className="inline-flex items-center justify-center leading-tight min-h-[36px] py-2 px-8 bg-primary/10 text-primary border border-primary/20 rounded-md cursor-pointer text-sm transition-colors hover:bg-primary/15 shrink-0" onClick={() => loadTaskMemory(taskId)}>加载</button>
+            <button data-design-id="memory:btn-load" className="inline-flex items-center justify-center gap-3 min-h-[40px] py-2 px-8 bg-primary/10 text-primary border border-primary/20 rounded-lg text-sm cursor-pointer transition-colors hover:bg-primary/20 shrink-0" onClick={() => loadTaskMemory(taskId)}>加载</button>
           </div>
           {loading && !taskMemory ? (
-            <div className="flex flex-col items-center justify-center text-center py-16 text-muted-foreground text-sm"><span className="text-3xl opacity-40 mb-2">⏳</span>加载中...</div>
+            <div className="flex flex-col items-center justify-center text-center py-16 text-muted-foreground text-sm w-full"><span className="text-3xl opacity-40 mb-2">⏳</span>加载中...</div>
           ) : taskMemory ? (
-            <pre className="bg-muted border border-border rounded-md px-6 py-4 font-mono text-sm text-foreground overflow-x-auto whitespace-pre-wrap break-word max-h-[500px] overflow-y-auto">{JSON.stringify(taskMemory, null, 2)}</pre>
+            <pre className="bg-muted border border-border rounded-md px-6 py-4 font-mono text-sm text-foreground overflow-x-auto whitespace-pre-wrap break-word max-h-[500px] overflow-y-auto w-full">{JSON.stringify(taskMemory, null, 2)}</pre>
           ) : (
-            <div className="flex flex-col items-center justify-center text-center py-16 text-muted-foreground text-sm"><span className="text-4xl opacity-40 mb-2">🧠</span>输入任务ID后加载工作记忆与情景记忆</div>
+            <div className="flex flex-col items-center justify-center text-center py-16 text-muted-foreground text-sm w-full"><span className="text-4xl opacity-40 mb-2">🧠</span>输入任务ID后加载工作记忆与情景记忆</div>
           )}
         </>
       )}
 
       {tab === 'stats' && stats && (
         <>
-          <div className="text-base font-semibold text-foreground mb-4">按类别分布</div>
-          <pre className="bg-muted border border-border rounded-md px-6 py-4 font-mono text-sm text-foreground overflow-x-auto whitespace-pre-wrap break-word max-h-[500px] overflow-y-auto">{JSON.stringify(stats.by_category, null, 2)}</pre>
-          <div className="text-base font-semibold text-foreground mt-4 mb-4">按问题类型分布</div>
-          <pre className="bg-muted border border-border rounded-md px-6 py-4 font-mono text-sm text-foreground overflow-x-auto whitespace-pre-wrap break-word max-h-[500px] overflow-y-auto">{JSON.stringify(stats.by_problem_type, null, 2)}</pre>
+          <div className="text-base font-semibold text-foreground mb-4 w-full">按类别分布</div>
+          <pre className="bg-muted border border-border rounded-md px-6 py-4 font-mono text-sm text-foreground overflow-x-auto whitespace-pre-wrap break-word max-h-[500px] overflow-y-auto w-full">{JSON.stringify(stats.by_category, null, 2)}</pre>
+          <div className="text-base font-semibold text-foreground mt-4 mb-4 w-full">按问题类型分布</div>
+          <pre className="bg-muted border border-border rounded-md px-6 py-4 font-mono text-sm text-foreground overflow-x-auto whitespace-pre-wrap break-word max-h-[500px] overflow-y-auto w-full">{JSON.stringify(stats.by_problem_type, null, 2)}</pre>
         </>
       )}
     </div>

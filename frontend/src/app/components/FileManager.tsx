@@ -141,11 +141,11 @@ export default function FileManager({ taskId }: FileManagerProps) {
   const allSelected = files.length > 0 && files.every((f) => selectedFiles.has(f.name));
 
   return (
-    <div className="bg-card border border-border rounded-xl px-7 py-5 space-y-4">
-      <div className="flex items-center justify-between gap-4">
-        <span className="text-base text-foreground font-semibold">📁 数据文件管理{projectName ? ` · ${projectName}` : ''}</span>
+    <div data-design-id="files:card" className="bg-card border border-border rounded-xl px-7 py-5 mx-auto w-full max-w-[1320px] flex flex-col items-center gap-4">
+      <div className="flex items-center justify-between gap-4 w-full">
+        <span data-design-id="files:title" className="text-lg text-foreground font-semibold">📁 数据文件管理{projectName ? ` · ${projectName}` : ''}</span>
         {tab === 'user_upload' && (
-          <label className="inline-flex items-center leading-tight gap-3 min-h-[40px] px-8 py-2 bg-primary text-primary-foreground rounded-lg cursor-pointer text-sm font-semibold transition-opacity duration-150 hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed">
+          <label data-design-id="files:btn-upload" className="inline-flex items-center justify-center gap-3 min-h-[40px] py-2 px-8 bg-primary text-primary-foreground rounded-lg text-sm cursor-pointer transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed shrink-0">
             {uploading ? '上传中...' : '📤 批量上传'}
             <input
               type="file"
@@ -159,8 +159,9 @@ export default function FileManager({ taskId }: FileManagerProps) {
         )}
       </div>
 
-      <div className="flex gap-3 mb-4 border-b border-border pb-0">
+      <div data-design-id="files:row-tabs" className="flex gap-3 mb-4 border-b border-border pb-0 w-full">
         <button
+          data-design-id="files:tab-upload"
           className={cn(
             'py-2.5 px-8 bg-transparent text-muted-foreground border-none border-b-2 border-transparent cursor-pointer text-sm font-medium transition-colors duration-150 -mb-px hover:text-foreground',
             tab === 'user_upload' && 'text-primary border-b-primary font-semibold'
@@ -170,6 +171,7 @@ export default function FileManager({ taskId }: FileManagerProps) {
           📤 用户上传
         </button>
         <button
+          data-design-id="files:tab-self"
           className={cn(
             'py-2.5 px-8 bg-transparent text-muted-foreground border-none border-b-2 border-transparent cursor-pointer text-sm font-medium transition-colors duration-150 -mb-px hover:text-foreground',
             tab === 'self_collected' && 'text-primary border-b-primary font-semibold'
@@ -179,6 +181,7 @@ export default function FileManager({ taskId }: FileManagerProps) {
           🌐 系统自收集
         </button>
         <button
+          data-design-id="files:tab-kb"
           className={cn(
             'py-2.5 px-8 bg-transparent text-muted-foreground border-none border-b-2 border-transparent cursor-pointer text-sm font-medium transition-colors duration-150 -mb-px hover:text-foreground',
             tab === 'knowledge_base' && 'text-primary border-b-primary font-semibold'
@@ -191,13 +194,13 @@ export default function FileManager({ taskId }: FileManagerProps) {
 
       {tab === 'user_upload' && (
         <>
-          <div className="text-muted-foreground text-sm mb-4">
+          <div className="text-muted-foreground text-sm mb-4 w-full">
             支持 CSV · Excel · JSON · 图片 · PDF · 可多选批量删除
             {projectName ? ' · 文件将保存到项目目录' : ' · 全局文件池'}
           </div>
 
           {files.length > 0 && (
-            <div className="flex items-center gap-4 mb-2.5 py-2 px-5 bg-muted rounded-md">
+            <div data-design-id="files:row-select" className="flex items-center gap-4 mb-2.5 py-2 px-5 bg-muted rounded-md w-full">
               <label className="flex items-center gap-3 text-muted-foreground text-sm cursor-pointer">
                 <input
                   type="checkbox"
@@ -208,7 +211,7 @@ export default function FileManager({ taskId }: FileManagerProps) {
                 <span>全选</span>
               </label>
               {selectedFiles.size > 0 && (
-                <button className="inline-flex items-center justify-center leading-tight min-h-[34px] px-8 py-1.5 bg-error/10 text-error border border-error/20 rounded-md cursor-pointer text-sm font-semibold transition-colors duration-150 hover:bg-error/15" onClick={handleBatchDelete}>
+                <button data-design-id="files:btn-batchdelete" className="inline-flex items-center justify-center min-h-[36px] py-1.5 px-6 bg-error/10 text-error border border-error/20 rounded-md text-sm cursor-pointer transition-colors hover:bg-error/15 shrink-0" onClick={handleBatchDelete}>
                   🗑️ 删除选中 ({selectedFiles.size})
                 </button>
               )}
@@ -223,7 +226,7 @@ export default function FileManager({ taskId }: FileManagerProps) {
             </div>
           )}
 
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-3 w-full">
             {files.map((f) => (
               <div key={f.name} className="flex items-center gap-3 px-7 py-3 bg-muted rounded-lg flex-wrap transition-colors hover:bg-muted/70">
                 <input
@@ -262,7 +265,7 @@ export default function FileManager({ taskId }: FileManagerProps) {
 
       {tab === 'self_collected' && (
         <>
-          <div className="text-muted-foreground text-sm mb-4">
+          <div className="text-muted-foreground text-sm mb-4 w-full">
             系统在任务执行期间自动下载的公开数据（Kaggle / UCI / arXiv / 政府开放数据等）。
             带原 URL 和来源关键词，点击文件名跳转。
           </div>
@@ -275,7 +278,7 @@ export default function FileManager({ taskId }: FileManagerProps) {
             </div>
           )}
 
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-3 w-full">
             {files.map((f) => {
               const meta = f.meta;
               return (
@@ -314,7 +317,7 @@ export default function FileManager({ taskId }: FileManagerProps) {
           </div>
 
           {selfIndex.length > 0 && (
-            <div className="mt-4 text-xs text-muted-foreground">
+            <div className="mt-4 text-xs text-muted-foreground w-full">
               共索引 {selfIndex.length} 条下载记录（{selfIndex.filter(i => i.error).length} 条失败）
             </div>
           )}
@@ -322,7 +325,7 @@ export default function FileManager({ taskId }: FileManagerProps) {
       )}
 
       {tab === 'knowledge_base' && (
-        <div className="flex flex-col items-center justify-center text-center py-16 bg-muted rounded-md">
+        <div className="flex flex-col items-center justify-center text-center py-16 bg-muted rounded-md w-full">
           <span className="text-4xl opacity-40 mb-3">📚</span>
           <p className="text-muted-foreground my-1 text-sm">知识库是独立管理的向量数据库系统。</p>
           <p className="text-muted-foreground my-1 text-sm">支持全局公共 + 项目私有两级 scope，可与多个任务关联。</p>

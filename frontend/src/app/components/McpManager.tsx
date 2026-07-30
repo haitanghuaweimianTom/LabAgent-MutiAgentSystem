@@ -297,7 +297,7 @@ export default function McpManager() {
   if (loading) return <div style={{ color: dark ? '#cbd5e1' : '#aaa', textAlign: 'center', padding: '2rem' }}>加载中...</div>;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+    <div data-design-id="settings:mcp" className="mx-auto w-full max-w-[1320px]" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       {/* Section tabs */}
       <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
         {[
@@ -338,7 +338,7 @@ export default function McpManager() {
             <div style={{ display: 'flex', gap: '0.5rem' }}>
               <button onClick={() => setShowJsonImport(!showJsonImport)} style={{ padding: '0.4rem 1.3rem', background: 'rgba(241,196,15,0.15)', border: '1px solid rgba(241,196,15,0.3)', borderRadius: 6, color: '#f1c40f', fontSize: '0.78rem', cursor: 'pointer' }}>📋 JSON 导入</button>
               <button onClick={handleExportConfig} style={{ padding: '0.4rem 1.3rem', background: 'rgba(52,152,219,0.15)', border: '1px solid rgba(52,152,219,0.3)', borderRadius: 6, color: '#3498db', fontSize: '0.78rem', cursor: 'pointer' }}>💾 导出</button>
-              <button onClick={() => setShowAddServer(!showAddServer)} style={{ padding: '0.4rem 1.3rem', background: 'rgba(46,204,113,0.15)', border: '1px solid rgba(46,204,113,0.3)', borderRadius: 6, color: '#2ecc71', fontSize: '0.78rem', cursor: 'pointer' }}>+ 添加服务器</button>
+              <button data-design-id="settings:btn-add-server" onClick={() => setShowAddServer(!showAddServer)} style={{ padding: '0.4rem 1.3rem', background: 'rgba(46,204,113,0.15)', border: '1px solid rgba(46,204,113,0.3)', borderRadius: 6, color: '#2ecc71', fontSize: '0.78rem', cursor: 'pointer' }}>+ 添加服务器</button>
             </div>
           </div>
 

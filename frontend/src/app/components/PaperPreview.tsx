@@ -102,17 +102,19 @@ export default function PaperPreview({ markdown, latexCode, abstract, keywords }
     s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
   return (
-    <div className="bg-[#1E293B] border border-[#334155] rounded-[14px] overflow-hidden flex flex-col max-h-[700px]">
+    <div data-design-id="report:card-preview" className="bg-[#1E293B] border border-[#334155] rounded-[14px] overflow-hidden flex flex-col max-h-[700px] mx-auto w-full max-w-[1320px]">
       <style>{MARKDOWN_STYLES}</style>
       <div className="flex justify-between items-center py-[0.8rem] px-6 bg-black/20 border-b border-[#334155]">
-        <span className="text-[0.95rem] text-[#F8FAFC] font-semibold">📄 论文预览</span>
+        <span data-design-id="report:title-preview" className="text-[0.95rem] text-[#F8FAFC] font-semibold">📄 论文预览</span>
         <div className="flex gap-[0.3rem]">
           <button
-            className={`py-[0.3rem] px-[1.25rem] rounded-[6px] text-[0.875rem] cursor-pointer border border-[#334155] bg-[#1E293B] text-[#94A3B8] transition-all duration-200 hover:bg-[#334155] hover:text-[#CBD5E1] ${view === 'markdown' ? 'bg-[rgba(45,212,191,0.15)] border-[rgba(45,212,191,0.15)] text-[#3498db]' : ''}`}
+            data-design-id="report:btn-markdown"
+            className={`inline-flex items-center justify-center gap-3 min-h-[40px] py-2 px-8 bg-primary/10 text-primary border border-primary/20 rounded-lg text-sm cursor-pointer transition-colors hover:bg-primary/20 shrink-0 ${view === 'markdown' ? 'bg-[rgba(45,212,191,0.15)] border-[rgba(45,212,191,0.15)] text-[#3498db]' : ''}`}
             onClick={() => setView('markdown')}
           >Markdown</button>
           <button
-            className={`py-[0.3rem] px-[1.25rem] rounded-[6px] text-[0.875rem] cursor-pointer border border-[#334155] bg-[#1E293B] text-[#94A3B8] transition-all duration-200 hover:bg-[#334155] hover:text-[#CBD5E1] ${view === 'latex' ? 'bg-[rgba(45,212,191,0.15)] border-[rgba(45,212,191,0.15)] text-[#3498db]' : ''}`}
+            data-design-id="report:btn-latex"
+            className={`inline-flex items-center justify-center gap-3 min-h-[40px] py-2 px-8 bg-primary/10 text-primary border border-primary/20 rounded-lg text-sm cursor-pointer transition-colors hover:bg-primary/20 shrink-0 ${view === 'latex' ? 'bg-[rgba(45,212,191,0.15)] border-[rgba(45,212,191,0.15)] text-[#3498db]' : ''}`}
             onClick={() => setView('latex')}
           >LaTeX</button>
         </div>

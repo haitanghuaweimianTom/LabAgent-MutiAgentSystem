@@ -115,16 +115,17 @@ export default function TaskHistory() {
   };
 
   return (
-    <div className="grid grid-cols-[320px_1fr] gap-4 min-h-[600px] max-md:grid-cols-1">
-      <div className="bg-card border border-border rounded-xl px-6 py-4 overflow-y-auto max-h-[700px]">
+    <div data-design-id="history:root" className="grid grid-cols-[320px_1fr] gap-4 min-h-[600px] max-md:grid-cols-1 mx-auto w-full max-w-[1320px]">
+      <div data-design-id="history:card-list" className="bg-card border border-border rounded-xl px-6 py-4 overflow-y-auto max-h-[700px]">
         <div className="flex justify-between items-center mb-4">
-          <span className="text-base text-foreground font-semibold">📋 历史任务</span>
-          <div className="flex gap-3 items-center">
-            <button className="py-1.5 px-5 bg-muted border border-border rounded-md text-muted-foreground text-sm cursor-pointer transition-colors duration-150 hover:bg-muted/80 hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed" onClick={loadTaskList} disabled={loading}>
+          <span data-design-id="history:title" className="text-lg text-foreground font-semibold">📋 历史任务</span>
+          <div data-design-id="history:row-actions" className="flex gap-3 items-center">
+            <button data-design-id="history:btn-refresh" className="inline-flex items-center justify-center gap-3 min-h-[40px] py-2 px-8 bg-primary/10 text-primary border border-primary/20 rounded-lg text-sm cursor-pointer transition-colors hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed shrink-0" onClick={loadTaskList} disabled={loading}>
               {loading ? '加载中...' : '🔄 刷新'}
             </button>
             <button
-              className="py-1.5 px-5 bg-primary/10 border border-primary/20 rounded-md text-primary text-sm cursor-pointer transition-colors duration-150 hover:bg-primary/15"
+              data-design-id="history:btn-selectall"
+              className="inline-flex items-center justify-center gap-3 min-h-[40px] py-2 px-8 bg-primary/10 text-primary border border-primary/20 rounded-lg text-sm cursor-pointer transition-colors hover:bg-primary/20 shrink-0"
               onClick={() => {
                 if (selectedIds.size === taskList.length) {
                   setSelectedIds(new Set());
@@ -136,7 +137,7 @@ export default function TaskHistory() {
               {selectedIds.size === taskList.length && taskList.length > 0 ? '☑️ 取消全选' : '⬜ 全选'}
             </button>
             {selectedIds.size > 0 && (
-              <button className="py-1.5 px-5 bg-error/10 border border-error/20 rounded-md text-error text-sm cursor-pointer transition-colors duration-150 hover:bg-error/15 disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleBatchDelete} disabled={batchDeleting}>
+              <button data-design-id="history:btn-batchdelete" className="inline-flex items-center justify-center gap-3 min-h-[36px] py-1.5 px-6 bg-error/10 text-error border border-error/20 rounded-md text-sm cursor-pointer transition-colors hover:bg-error/15 disabled:opacity-50 disabled:cursor-not-allowed shrink-0" onClick={handleBatchDelete} disabled={batchDeleting}>
                 🗑️ 批量删除({selectedIds.size})
               </button>
             )}
@@ -188,7 +189,7 @@ export default function TaskHistory() {
         </div>
       </div>
 
-      <div className="bg-card border border-border rounded-xl px-6 py-4 overflow-hidden flex flex-col min-h-[400px]">
+      <div data-design-id="history:card-detail" className="bg-card border border-border rounded-xl px-6 py-4 overflow-hidden flex flex-col min-h-[400px]">
         {detailTaskId ? (
           <TaskDetail
             taskId={detailTaskId}

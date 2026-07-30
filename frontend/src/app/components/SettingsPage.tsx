@@ -121,13 +121,14 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="flex flex-col gap-6 space-y-6">
-      <div className="flex gap-3 flex-wrap">
+    <div data-design-id="settings:root" className="flex flex-col gap-6 space-y-6 mx-auto w-full max-w-[1320px] items-center">
+      <div data-design-id="settings:row-tabs" className="flex gap-3 flex-wrap w-full">
         {TABS.map(tab => (
           <button
             key={tab.id}
+            data-design-id={`settings:tab-${tab.id}`}
             onClick={() => setActiveTab(tab.id)}
-            className={`py-2 px-7 rounded-md cursor-pointer text-sm transition-colors border ${
+            className={`inline-flex items-center justify-center min-h-[40px] py-2 px-8 rounded-lg cursor-pointer text-sm transition-colors border shrink-0 ${
               activeTab === tab.id
                 ? 'bg-primary/10 border-primary/40 text-primary font-semibold'
                 : 'bg-muted border-border text-muted-foreground font-normal'
@@ -139,20 +140,36 @@ export default function SettingsPage() {
       </div>
 
       {settingsMsg && (
-        <div className={`text-sm text-center ${settingsMsg.includes('✓') ? 'text-success' : 'text-error'}`}>
+        <div className={`text-sm text-center w-full ${settingsMsg.includes('✓') ? 'text-success' : 'text-error'}`}>
           {settingsMsg}
         </div>
       )}
 
-      {activeTab === 'providers' && <ProviderSettings />}
-      {activeTab === 'datasources' && <DatasourceSettings />}
-      {activeTab === 'mcp' && <McpManager />}
-      {activeTab === 'knowledge' && <KnowledgeBaseManager />}
+      {activeTab === 'providers' && (
+        <div className="w-full">
+          <ProviderSettings />
+        </div>
+      )}
+      {activeTab === 'datasources' && (
+        <div className="w-full">
+          <DatasourceSettings />
+        </div>
+      )}
+      {activeTab === 'mcp' && (
+        <div className="w-full">
+          <McpManager />
+        </div>
+      )}
+      {activeTab === 'knowledge' && (
+        <div className="w-full">
+          <KnowledgeBaseManager />
+        </div>
+      )}
 
       {activeTab === 'system' && (
-        <div className="flex flex-col gap-6">
-          <div className="bg-card border border-border rounded-lg px-7 py-5">
-            <span className="text-sm text-foreground font-semibold">🤖 Claude Code CLI 配置</span>
+        <div className="flex flex-col gap-6 w-full">
+          <div data-design-id="settings:card-claude" className="bg-card border border-border rounded-lg px-7 py-5">
+            <span className="text-lg text-foreground font-semibold">🤖 Claude Code CLI 配置</span>
 
             <div className="mb-3 flex items-center gap-3 mt-4">
               <span className={`w-2 h-2 rounded-full ${sysInfo?.claude_code_available ? 'bg-success' : 'bg-muted-foreground'}`} />
@@ -165,7 +182,7 @@ export default function SettingsPage() {
               <div className="text-sm text-muted-foreground font-semibold">Claude 模型</div>
               <div className="flex gap-3">
                 <select
-                  className="flex-1 text-foreground bg-muted border border-border px-4 py-2 rounded-md"
+                  className="flex-1 h-10 px-5 bg-muted border border-border rounded-lg text-foreground text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
                   value={claudeModel}
                   onChange={e => setClaudeModel(e.target.value)}
                 >
@@ -183,7 +200,7 @@ export default function SettingsPage() {
             <div className="flex flex-col gap-3 mb-4">
               <div className="text-sm text-muted-foreground font-semibold">MCP 工具（逗号分隔）</div>
               <div className="flex gap-3">
-                <input type="text" className="flex-1 text-foreground bg-muted border border-border px-4 py-2 rounded-md" placeholder="bing_search,web_search,paper_search,sequentialthinking" value={claudeMcpTools} onChange={e => setClaudeMcpTools(e.target.value)} />
+                <input type="text" className="flex-1 h-10 px-5 bg-muted border border-border rounded-lg text-foreground text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground" placeholder="bing_search,web_search,paper_search,sequentialthinking" value={claudeMcpTools} onChange={e => setClaudeMcpTools(e.target.value)} />
               </div>
               <div className="text-xs text-muted-foreground">可用: bing_search, web_search, paper_search, python_execute, sequentialthinking</div>
             </div>
@@ -191,21 +208,21 @@ export default function SettingsPage() {
             <div className="flex flex-col gap-3 mb-4">
               <div className="text-sm text-muted-foreground font-semibold">MCP 配置文件路径</div>
               <div className="flex gap-3">
-                <input type="text" className="flex-1 text-foreground bg-muted border border-border px-4 py-2 rounded-md" placeholder="留空则自动搜索" value={claudeMcpConfigPath} onChange={e => setClaudeMcpConfigPath(e.target.value)} />
+                <input type="text" className="flex-1 h-10 px-5 bg-muted border border-border rounded-lg text-foreground text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground" placeholder="留空则自动搜索" value={claudeMcpConfigPath} onChange={e => setClaudeMcpConfigPath(e.target.value)} />
               </div>
             </div>
 
             <div className="flex flex-col gap-3 mb-4">
               <div className="text-sm text-muted-foreground font-semibold">温度</div>
               <div className="flex gap-3">
-                <input type="number" className="flex-1 text-foreground bg-muted border border-border px-4 py-2 rounded-md" placeholder="0.3" value={claudeTemperature} onChange={e => setClaudeTemperature(e.target.value)} min="0" max="1" step="0.1" />
+                <input type="number" className="flex-1 h-10 px-5 bg-muted border border-border rounded-lg text-foreground text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground" placeholder="0.3" value={claudeTemperature} onChange={e => setClaudeTemperature(e.target.value)} min="0" max="1" step="0.1" />
               </div>
             </div>
 
             <div className="flex flex-col gap-3 mb-4">
               <div className="text-sm text-muted-foreground font-semibold">最大输出 Token</div>
               <div className="flex gap-3">
-                <input type="number" className="flex-1 text-foreground bg-muted border border-border px-4 py-2 rounded-md" placeholder="8192" value={claudeMaxTokens} onChange={e => setClaudeMaxTokens(e.target.value)} min="100" max="32000" />
+                <input type="number" className="flex-1 h-10 px-5 bg-muted border border-border rounded-lg text-foreground text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground" placeholder="8192" value={claudeMaxTokens} onChange={e => setClaudeMaxTokens(e.target.value)} min="100" max="32000" />
               </div>
             </div>
 
@@ -220,13 +237,13 @@ export default function SettingsPage() {
               </label>
             </div>
 
-            <div className="flex gap-3 mt-4">
-              <button className="bg-primary text-primary-foreground border-none py-2.5 px-7 rounded-md cursor-pointer font-semibold hover:opacity-90" onClick={handleSaveClaudeSettings}>💾 保存 Claude Code 配置</button>
+            <div data-design-id="settings:row-save" className="flex gap-3 mt-4">
+              <button data-design-id="settings:btn-save" className="inline-flex items-center justify-center gap-3 min-h-[40px] py-2 px-8 bg-primary text-primary-foreground rounded-lg text-sm cursor-pointer transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed shrink-0" onClick={handleSaveClaudeSettings}>💾 保存 Claude Code 配置</button>
             </div>
           </div>
 
-          <div className="bg-card border border-border rounded-lg px-7 py-5">
-            <span className="text-sm text-foreground font-semibold">ℹ️ 系统信息</span>
+          <div data-design-id="settings:card-info" className="bg-card border border-border rounded-lg px-7 py-5">
+            <span className="text-lg text-foreground font-semibold">ℹ️ 系统信息</span>
             <div className="mt-4 px-6 py-4 bg-muted rounded-md text-sm text-muted-foreground leading-relaxed">
               <strong className="text-foreground">📍 访问地址：</strong>
               <code className="text-warning">本机: http://localhost:3000</code><br />

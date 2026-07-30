@@ -6,6 +6,7 @@ import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
 import DetailPanel from './components/DetailPanel'
 import { TAB_META } from '@/lib/constants'
+import { DesignModeProvider } from '@/lib/design-mode/DesignModeProvider'
 
 const pageVariants = {
   initial: { opacity: 0 },
@@ -41,27 +42,29 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   const meta = getRouteMeta(pathname)
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-        <TopBar title={meta.title} subtitle={meta.subtitle} />
-        <main className="flex-1 overflow-y-auto">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={pathname}
-              variants={pageVariants}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              transition={{ duration: 0.15, ease: 'easeInOut' }}
-              className="w-full max-w-[1680px] mx-auto px-8 md:px-12 xl:px-14 2xl:px-16 py-8 md:py-10"
-            >
-              {children}
-            </motion.div>
-          </AnimatePresence>
-        </main>
+    <DesignModeProvider>
+      <div className="flex h-screen overflow-hidden">
+        <Sidebar />
+        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+          <TopBar title={meta.title} subtitle={meta.subtitle} />
+          <main className="flex-1 overflow-y-auto">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={pathname}
+                variants={pageVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                transition={{ duration: 0.15, ease: 'easeInOut' }}
+                className="w-full max-w-[1680px] mx-auto px-8 md:px-12 xl:px-14 2xl:px-16 py-8 md:py-10"
+              >
+                {children}
+              </motion.div>
+            </AnimatePresence>
+          </main>
+        </div>
+        <DetailPanel />
       </div>
-      <DetailPanel />
-    </div>
+    </DesignModeProvider>
   )
 }

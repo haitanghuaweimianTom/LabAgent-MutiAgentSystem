@@ -142,9 +142,9 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
   const currentWorkflowName = WORKFLOWS.find((w) => w.id === workflow)?.name || workflow;
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="bg-card border border-border rounded-xl px-7 py-5">
-        <div className="text-base text-foreground font-semibold mb-3">📝 研究问题输入</div>
+    <div data-design-id="generate:root" className="flex flex-col gap-4 mx-auto w-full max-w-[1320px]">
+      <div data-design-id="generate:card-input" className="bg-card border border-border rounded-xl px-7 py-5 w-full">
+        <div data-design-id="generate:title-input" className="text-lg text-foreground font-semibold mb-3">📝 研究问题输入</div>
         <div className="flex gap-3 items-center mb-2">
           <select
             className="flex-1 px-4 py-2 bg-muted border border-border rounded-md text-foreground text-sm"
@@ -191,6 +191,7 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
           )}
         </div>
         <input
+          data-design-id="generate:input-project"
           className="w-full py-3 px-6 mb-2.5 bg-muted border border-border rounded-md text-foreground text-sm"
           placeholder="输入项目名称（如：供应链优化 / CCF-A 论文 / 金融风控模型）"
           value={projectName}
@@ -217,7 +218,7 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
               暂无知识库；留空将自动使用项目私有 + 全局公共 KB
             </div>
           ) : (
-            <div className="flex flex-wrap gap-3">
+            <div data-design-id="generate:row-kb" className="flex flex-wrap gap-3">
               {knowledgeBases.map((kb) => {
                 const selected = selectedKBIds.has(kb.id);
                 const isProject = (kb as any).scope === 'project';
@@ -246,13 +247,14 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
           </div>
         </div>
         <div className="flex items-center gap-4 mb-3">
-          <label className="inline-flex items-center gap-3 py-2.5 px-7 bg-primary text-primary-foreground rounded-md cursor-pointer text-sm font-semibold transition-opacity duration-150 hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed">
+          <label data-design-id="generate:btn-ocr" className="inline-flex items-center gap-3 py-2.5 px-7 bg-primary text-primary-foreground rounded-md cursor-pointer text-sm font-semibold transition-opacity duration-150 hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed">
             {ocrLoading ? '识别中...' : '📷 上传问题图片 / PDF（OCR 提取文本）'}
             <input type="file" accept="image/*,.pdf" onChange={handleOcrUpload} className="hidden" disabled={ocrLoading} />
           </label>
           <span className="text-muted-foreground text-sm">支持 JPG / PNG / PDF，自动提取文本</span>
         </div>
         <textarea
+          data-design-id="generate:input-problem"
           className="w-full px-6 py-4 bg-muted border border-border rounded-md text-foreground text-sm font-[inherit] resize-y leading-relaxed focus:outline-none focus:border-primary placeholder:text-muted-foreground"
           placeholder={'请描述您的研究问题，包括：\n1. 研究背景与目标\n2. 具体要求（优化/预测/评价/分类/仿真等）\n3. 数据情况（如有数据文件，请先到「数据」标签上传；无数据可选"系统自动搜集"）\n4. 约束条件或特殊要求\n5. 目标投稿会议/期刊（可选，系统会自动推荐模板）'}
           value={problemText}
@@ -303,8 +305,8 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
         )}
       </div>
 
-      <div className="bg-card border border-border rounded-xl px-7 py-5">
-        <div className="text-base text-foreground font-semibold mb-3">⚙️ 工作流与模板</div>
+      <div data-design-id="generate:card-template" className="bg-card border border-border rounded-xl px-7 py-5 w-full">
+        <div data-design-id="generate:title-template" className="text-lg text-foreground font-semibold mb-3">⚙️ 工作流与模板</div>
 
         <div className="mb-4">
           <div className="text-sm text-muted-foreground font-semibold mb-2">
@@ -362,7 +364,7 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
       )}
 
       <div className="flex gap-3">
-        <button className="flex-1 py-3.5 px-10 bg-primary text-primary-foreground border-none rounded-lg text-base font-semibold cursor-pointer transition-opacity duration-150 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleSubmit} disabled={submitting || !problemText.trim() || isRunning}>
+        <button data-design-id="generate:btn-submit" className="flex-1 py-3.5 px-10 bg-primary text-primary-foreground border-none rounded-lg text-base font-semibold cursor-pointer transition-opacity duration-150 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleSubmit} disabled={submitting || !problemText.trim() || isRunning}>
           {submitting ? '🚀 启动中...' : isRunning ? `🔄 生成中 ${progress}%` : '🚀 启动 LabAgent 生成'}
         </button>
       </div>

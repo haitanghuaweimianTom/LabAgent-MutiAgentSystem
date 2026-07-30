@@ -210,15 +210,16 @@ export default function TaskDetailPage() {
   }
 
   return (
-    <div className="p-6 space-y-4">
+    <div data-design-id="task:root" className="mx-auto w-full max-w-[1320px] p-6 space-y-4 flex flex-col items-center">
       {/* Phase Controls */}
       {(phase === 'idle' && taskId && taskStatus !== 'running' && taskStatus !== 'completed') && (
-        <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+        <div data-design-id="task:card-phase" className="w-full rounded-xl border border-primary/20 bg-primary/5 p-4">
           <div className="flex items-center gap-3 mb-2">
             <span className="text-primary font-semibold">分阶段工作流</span>
             <button
               onClick={handlePhase1}
-              className="px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20 text-primary text-sm hover:bg-primary/20 transition-colors"
+              data-design-id="task:btn-phase1"
+              className="inline-flex items-center justify-center gap-3 min-h-[40px] py-2 px-8 bg-primary text-primary-foreground rounded-lg text-sm cursor-pointer transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
             >
               启动阶段1（分析+数据）
             </button>
@@ -229,9 +230,9 @@ export default function TaskDetailPage() {
 
       {/* Phase 2 Confirm */}
       {phase === 'phase2_confirm' && (
-        <div className="rounded-xl border border-success/20 bg-success/5 p-4">
+        <div data-design-id="task:card-phase2" className="w-full rounded-xl border border-success/20 bg-success/5 p-4">
           <span className="text-success font-semibold block mb-3">阶段1已完成 — 确认子问题后启动阶段2</span>
-          <div className="space-y-2 mb-4">
+          <div data-design-id="task:row-subproblems" className="space-y-2 mb-4">
             {subProblems.map((sp, idx) => (
               <div key={idx} className="flex items-center gap-2">
                 <span className="text-warning text-sm w-5">{idx + 1}.</span>
@@ -243,9 +244,9 @@ export default function TaskDetailPage() {
                 <button onClick={() => setSubProblems(subProblems.filter((_, i) => i !== idx))} className="px-2 py-1 rounded text-error text-xs hover:bg-error/10">✕</button>
               </div>
             ))}
-            <button onClick={() => setSubProblems([...subProblems, ''])} className="px-3 py-1 rounded-lg bg-primary/10 text-primary text-xs hover:bg-primary/20">+ 添加子问题</button>
+            <button onClick={() => setSubProblems([...subProblems, ''])} data-design-id="task:btn-addsub" className="inline-flex items-center justify-center gap-2 min-h-[28px] py-1 px-3 bg-primary/10 text-primary border border-primary/20 rounded-lg text-xs cursor-pointer transition-colors hover:bg-primary/20 shrink-0">+ 添加子问题</button>
           </div>
-          <div className="flex items-center gap-4 mb-4">
+          <div data-design-id="task:row-solvemode" className="flex items-center gap-4 mb-4">
             <span className="text-sm text-muted-foreground">求解策略：</span>
             <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
               <input type="radio" checked={solveMode === 'sequential'} onChange={() => setSolveMode('sequential')} /> 逐个递进
@@ -254,16 +255,16 @@ export default function TaskDetailPage() {
               <input type="radio" checked={solveMode === 'batch'} onChange={() => setSolveMode('batch')} /> 批量并行
             </label>
           </div>
-          <div className="flex gap-2">
-            <button onClick={handleConfirmSubproblems} disabled={submitting} className="btn-gradient">启动阶段2</button>
-            <button onClick={() => { setPhase('idle'); setSubProblems([]) }} className="px-4 py-2 rounded-lg border border-border text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">取消</button>
+          <div className="flex gap-3 items-center flex-wrap">
+            <button onClick={handleConfirmSubproblems} disabled={submitting} data-design-id="task:btn-phase2" className="btn-gradient">启动阶段2</button>
+            <button onClick={() => { setPhase('idle'); setSubProblems([]) }} data-design-id="task:btn-cancel" className="inline-flex items-center justify-center gap-3 min-h-[40px] py-2 px-8 bg-primary/10 text-primary border border-primary/20 rounded-lg text-sm cursor-pointer transition-colors hover:bg-primary/20 shrink-0">取消</button>
           </div>
         </div>
       )}
 
       {/* Progress Bar */}
       {(taskStatus === 'running' || taskStatus === 'phase1' || taskStatus === 'phase2') && (
-        <div className="space-y-2">
+        <div data-design-id="task:row-progress" className="w-full space-y-2">
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">{nodeLabel(currentStep) || '准备中...'}</span>
             <span className="text-primary font-medium">{Math.round(progress)}%</span>
@@ -276,43 +277,43 @@ export default function TaskDetailPage() {
 
       {/* Agent Topology */}
       {taskId && ['running', 'paused', 'phase1', 'phase2'].includes(taskStatus) && (
-        <AgentTopology activeAgent={activeAgent} />
+        <div data-design-id="task:card-topology" className="w-full"><AgentTopology activeAgent={activeAgent} /></div>
       )}
 
       {/* Control Buttons */}
       {taskId && taskStatus !== 'completed' && taskStatus !== 'cancelled' && (
-        <div className="flex gap-2">
+        <div data-design-id="task:row-controls" className="flex gap-3 items-center flex-wrap w-full">
           {paused ? (
-            <button onClick={handleResume} disabled={resuming} className="btn-gradient">{resuming ? '恢复中...' : '恢复'}</button>
+            <button onClick={handleResume} disabled={resuming} data-design-id="task:btn-resume" className="btn-gradient">{resuming ? '恢复中...' : '恢复'}</button>
           ) : (
-            <button onClick={handlePause} className="px-4 py-2 rounded-lg border border-border text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">暂停</button>
+            <button onClick={handlePause} data-design-id="task:btn-pause" className="inline-flex items-center justify-center gap-3 min-h-[40px] py-2 px-8 bg-primary/10 text-primary border border-primary/20 rounded-lg text-sm cursor-pointer transition-colors hover:bg-primary/20 shrink-0">暂停</button>
           )}
-          <button onClick={handleCancel} disabled={cancelling} className="px-4 py-2 rounded-lg border border-error/30 text-error text-sm hover:bg-error/10 transition-colors">
+          <button onClick={handleCancel} disabled={cancelling} data-design-id="task:btn-cancel-task" className="inline-flex items-center justify-center gap-3 min-h-[36px] py-1.5 px-6 bg-error/10 text-error border border-error/20 rounded-md text-sm cursor-pointer transition-colors hover:bg-error/15 disabled:opacity-50 disabled:cursor-not-allowed shrink-0">
             {cancelling ? '取消中...' : '终止'}
           </button>
         </div>
       )}
 
       {/* Preflight Report */}
-      {preflightReport && <PreFlightPanel report={preflightReport} />}
+      {preflightReport && <div data-design-id="task:card-preflight" className="w-full"><PreFlightPanel report={preflightReport} /></div>}
 
       {/* Discussion Panel Toggle */}
       {taskId && (taskStatus === 'running' || taskStatus === 'paused') && (
-        <button onClick={() => setShowDiscussion(!showDiscussion)} className="px-4 py-2 rounded-lg bg-primary/10 border border-primary/20 text-primary text-sm hover:bg-primary/20 transition-colors">
+        <button onClick={() => setShowDiscussion(!showDiscussion)} data-design-id="task:btn-discussion" className="inline-flex items-center justify-center gap-3 min-h-[40px] py-2 px-8 bg-primary/10 text-primary border border-primary/20 rounded-lg text-sm cursor-pointer transition-colors hover:bg-primary/20 shrink-0">
           {showDiscussion ? '关闭讨论面板' : 'Agent 讨论面板'}
         </button>
       )}
 
-      {showDiscussion && taskId && <DiscussionPanel taskId={taskId} onClose={() => setShowDiscussion(false)} />}
+      {showDiscussion && taskId && <div data-design-id="task:card-discussion" className="w-full"><DiscussionPanel taskId={taskId} onClose={() => setShowDiscussion(false)} /></div>}
 
       {/* Log Stream */}
       {taskId && ['running', 'paused', 'phase1', 'phase2'].includes(taskStatus) && (
-        <LogStream taskId={taskId} />
+        <div data-design-id="task:card-logs" className="w-full"><LogStream taskId={taskId} /></div>
       )}
 
       {/* Message List */}
       {taskId && messages.length > 0 && (
-        <div className="rounded-xl border border-border bg-card">
+        <div data-design-id="task:card-messages" className="w-full rounded-xl border border-border bg-card">
           <div className="px-4 py-3 border-b border-border">
             <span className="text-sm font-medium text-foreground">对话记录</span>
             <span className="text-xs text-muted-foreground ml-2">({messages.length})</span>
@@ -339,20 +340,22 @@ export default function TaskDetailPage() {
 
       {/* Chat Input */}
       {taskId && ['running', 'paused', 'phase1', 'phase2', 'completed'].includes(taskStatus) && (
-        <div className="sticky bottom-0 bg-background/95 backdrop-blur border-t border-border p-4">
-          <div className="flex gap-2">
+        <div data-design-id="task:row-chat" className="w-full sticky bottom-0 bg-background/95 backdrop-blur border-t border-border p-4">
+          <div className="flex gap-3 items-center flex-wrap">
             <input
               type="text"
               value={newMessage}
               onChange={e => setNewMessage(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } }}
               placeholder="输入消息与 Agent 交互..."
-              className="flex-1 px-4 py-2.5 rounded-xl bg-muted border border-border text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-colors"
+              data-design-id="task:input-chat"
+              className="flex-1 min-w-[280px] h-10 px-5 bg-muted border border-border rounded-lg text-foreground text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground transition-colors"
             />
             <button
               onClick={sendMessage}
               disabled={!newMessage.trim()}
-              className="px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              data-design-id="task:btn-send"
+              className="inline-flex items-center justify-center gap-3 min-h-[40px] py-2 px-8 bg-primary text-primary-foreground rounded-lg text-sm cursor-pointer transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
             >
               发送
             </button>
@@ -362,7 +365,7 @@ export default function TaskDetailPage() {
 
       {/* Camera Ready */}
       {taskState.state?.name === 'completed' && taskId && (
-        <CameraReadyPanel taskId={taskId} templateId={taskState.state?.templateId || 'math_modeling'} />
+        <div data-design-id="task:card-camera" className="w-full"><CameraReadyPanel taskId={taskId} templateId={taskState.state?.templateId || 'math_modeling'} /></div>
       )}
     </div>
   )

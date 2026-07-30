@@ -80,7 +80,7 @@ const infoStore = {
 
 function SystemStatusSkeleton() {
   return (
-    <div className="bg-card border border-border rounded-[14px] px-[1.7rem] py-[1.2rem] mb-4">
+    <div data-design-id="dashboard:status" className="bg-card border border-border rounded-[14px] px-[1.7rem] py-[1.2rem] mb-4">
       <div className="flex justify-between items-center mb-4">
         <span className="text-[1rem] text-foreground font-semibold">🖥️ 系统状态</span>
         <span className="text-[0.875rem] text-muted-foreground bg-muted py-0.5 px-4 rounded-[6px]">加载中...</span>
@@ -106,7 +106,7 @@ function SystemStatusSkeleton() {
 
 function SystemStatusError() {
   return (
-    <div className="bg-card border border-border rounded-[14px] px-[1.7rem] py-[1.2rem] mb-4">
+    <div data-design-id="dashboard:status" className="bg-card border border-border rounded-[14px] px-[1.7rem] py-[1.2rem] mb-4">
       <div className="text-center p-4 text-error text-[0.9375rem]">❌ 无法连接到后端</div>
       <div className="text-center py-2 text-muted-foreground text-[0.82rem]">
         请确认后端服务已启动：<code className="bg-muted py-[0.15rem] px-[0.9rem] rounded-[4px] text-success font-mono text-[0.78rem]">python -m backend.app.main</code>
@@ -135,7 +135,7 @@ function SystemStatusContent({ info }: { info: SystemInfo }) {
   const defaultProviderName = info.default_provider?.name || info.default_llm_backend || '未配置';
 
   return (
-    <div className="bg-card border border-border rounded-[14px] px-[1.7rem] py-[1.2rem] mb-4">
+    <div data-design-id="dashboard:status" className="bg-card border border-border rounded-[14px] px-[1.7rem] py-[1.2rem] mb-4">
       <div className="flex justify-between items-center mb-4">
         <span className="text-[1rem] text-foreground font-semibold">🖥️ 系统状态</span>
         <span className="text-[0.875rem] text-muted-foreground bg-muted py-0.5 px-4 rounded-[6px]">v{info.version}</span>

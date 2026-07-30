@@ -111,7 +111,7 @@ export function TemplateSelector({ value, onChange, showCcfABadge = true, disabl
   const dark = theme === 'dark';
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
+    <div data-design-id="generate:template-selector" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
       {TEMPLATE_OPTIONS.map((tpl) => {
         const selected = tpl.id === value;
         return (
