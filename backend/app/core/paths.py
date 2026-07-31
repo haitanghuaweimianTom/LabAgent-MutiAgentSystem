@@ -187,6 +187,30 @@ def ensure_dirs() -> None:
     get_output_dir()
 
 
+def resolve_data_path(fp: str | os.PathLike) -> Path:
+    """把数据文件路径解析为可访问的绝对路径（基于项目根，不依赖 cwd）。
+
+    背景：state["files"] 存的是相对项目根的路径（如 outputs/xxx/data/self_collected/a.csv），
+    由 self_collector 用 get_project_data_subdir（基于 _PROJECT_ROOT）写入。但后端进程
+    cwd=backend/，直接 Path(fp).exists() 会按 backend/ 解析 → 文件明明存在却判 file_missing
+    → 数据质量门禁误报 fatal → data_agent 分析失败 → 前端显示 "未知: ?"。本函数统一化解：
+
+    - 绝对路径 / 已能在 cwd 下找到 → 原样返回（不破坏现有绝对路径调用方）
+    - 相对路径在 cwd 下找不到 → 按 _PROJECT_ROOT 解析；解析后仍不存在再退回原值
+      （让上层报真实的 not found，而不是因为 cwd 错位误判）
+    """
+    p = Path(fp)
+    if p.is_absolute() and p.exists():
+        return p
+    if p.exists():  # 相对路径但在 cwd 下能找到
+        return p.resolve()
+    # cwd 下找不到 → 按项目根解析
+    rooted = _PROJECT_ROOT / p
+    if rooted.exists():
+        return rooted
+    return p  # 仍按原值返回，由调用方报真实缺失
+
+
 # 加上 logger（兼容 verbose 输出）
 import logging
 logger = logging.getLogger(__name__)

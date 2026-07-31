@@ -45,6 +45,9 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
 
   const activeProject = projects.find((p) => p.id === activeProjectId);
   const selectedFiles = useAppStore((s) => s.selectedFiles);
+  const toggleFile = useAppStore((s) => s.toggleFileSelection);
+  const selectAllFiles = useAppStore((s) => s.selectAllFiles);
+  const clearFileSelection = useAppStore((s) => s.clearFileSelection);
   const [projectName, setProjectName] = useState(activeProject?.name || '');
   const [problemText, setProblemText] = useState('');
   const [workflow, setWorkflow] = useState('standard');
@@ -137,6 +140,50 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
   };
 
   const isRunning = taskStatus === 'running' || taskStatus === 'phase1' || taskStatus === 'phase2';
+
+  // 数据文件预览+选择
+  const [availableFiles, setAvailableFiles] = useState<Array<{name: string; size: number; type: string; source?: string; modified?: number}>>([])
+  const [expandedFile, setExpandedFile] = useState<string | null>(null)
+  const [previewCache, setPreviewCache] = useState<Record<string, any>>({})
+  const [filesLoading, setFilesLoading] = useState(false)
+  useEffect(() => {
+    let cancelled = false
+    async function loadFiles() {
+      setFilesLoading(true)
+      try {
+        const params = new URLSearchParams()
+        if (projectName) params.set('project_name', projectName)
+        params.set('source', 'both')
+        const res = await fetch(apiBase() + '/data/files?' + params.toString())
+        if (res.ok && !cancelled) {
+          const list: any[] = await res.json()
+          // 过滤掉非表格文件但保留PDF/image? 不,全部列,预览时会显示unsupported
+          const filtered = list.filter((f: any) => !f.name.startsWith('.'))
+          setAvailableFiles(filtered)
+          // 默认全选：selectAll(names) 替换为传入的文件名集合
+          selectAllFiles(filtered.map((f: any) => f.name))
+        }
+      } catch {} finally { if (!cancelled) setFilesLoading(false) }
+    }
+    loadFiles()
+    return () => { cancelled = true }
+  }, [projectName])
+
+  async function toggleExpandPreview(name: string) {
+    if (expandedFile === name) { setExpandedFile(null); return }
+    setExpandedFile(name)
+    if (previewCache[name]) return
+    try {
+      const params = new URLSearchParams()
+      params.set('filename', name)
+      if (projectName) params.set('project_name', projectName)
+      const res = await fetch(apiBase() + '/data/preview?' + params.toString())
+      if (res.ok) {
+        const data = await res.json()
+        setPreviewCache(prev => ({...prev, [name]: data}))
+      }
+    } catch {}
+  }
 
   const currentTemplate = TEMPLATE_OPTIONS.find((t) => t.id === template);
   const currentWorkflowName = WORKFLOWS.find((w) => w.id === workflow)?.name || workflow;
@@ -299,8 +346,82 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
         </div>
 
         {dataSource !== 'self_collect' && currentTemplate?.domain !== 'research_survey' && (
-          <div className="mt-2 text-muted-foreground text-sm">
-            已勾选 {selectedFiles.size} 个数据文件（请到「数据」标签上传并勾选）
+          <div data-design-id="generate:row-files" className="mt-2 w-full">
+            <div className="text-muted-foreground text-sm mb-2">
+              已选 {selectedFiles.size} / {availableFiles.length} 个数据文件（点文件名展开预览，勾选框控制是否参与本次任务）
+            </div>
+            {filesLoading && <div className="text-xs text-muted-foreground py-2">加载数据文件中...</div>}
+            {!filesLoading && availableFiles.length === 0 && (
+              <div className="text-xs text-muted-foreground py-2">暂无数据文件，请先到「文件管理」上传，或选择"系统自己搜集数据"。</div>
+            )}
+            <div className="flex flex-col gap-2 max-h-[360px] overflow-y-auto pr-1">
+              {availableFiles.map(f => {
+                const checked = selectedFiles.has(f.name)
+                const preview = previewCache[f.name]
+                const isExpanded = expandedFile === f.name
+                return (
+                  <div key={f.name} className="border border-border rounded-lg bg-muted/40 overflow-hidden">
+                    <div className="flex items-center gap-2 px-3 py-2">
+                      <input
+                        type="checkbox"
+                        className="accent-primary w-4 h-4 cursor-pointer shrink-0"
+                        checked={checked}
+                        onChange={() => toggleFile(f.name)}
+                      />
+                      <button
+                        type="button"
+                        className="flex-1 text-left text-sm text-foreground hover:text-primary transition-colors truncate"
+                        onClick={() => toggleExpandPreview(f.name)}
+                        title={f.name}
+                      >
+                        {isExpanded ? '▼ ' : '▶ '}{f.name}
+                        <span className="ml-2 text-xs text-muted-foreground">{(f.size/1024).toFixed(1)} KB · {f.type || '未知类型'}</span>
+                      </button>
+                    </div>
+                    {isExpanded && preview && (
+                      <div className="px-3 pb-3 pt-1 border-t border-border bg-background/60 text-xs">
+                        {preview.preview_type === 'table' ? (
+                          <>
+                            <div className="text-muted-foreground mb-1">
+                              {preview.columns.length} 列{preview.rows_total_estimate ? `，约 ${preview.rows_total_estimate} 行` : ''}
+                            </div>
+                            <div className="flex flex-wrap gap-1 mb-2">
+                              {preview.columns.map((col: string) => (
+                                <span key={col} className="px-2 py-0.5 bg-primary/10 text-primary rounded border border-primary/20">{col}</span>
+                              ))}
+                            </div>
+                            {preview.preview_rows?.length > 0 && (
+                              <div className="overflow-x-auto">
+                                <table className="min-w-full text-xs">
+                                  <thead>
+                                    <tr className="border-b border-border">
+                                      {preview.columns.map((col: string) => <th key={col} className="px-2 py-1 text-left text-muted-foreground font-normal">{col}</th>)}
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {preview.preview_rows.map((row: any, i: number) => (
+                                      <tr key={i} className="border-b border-border/50">
+                                        {preview.columns.map((col: string) => <td key={col} className="px-2 py-1 text-foreground">{String(row[col] ?? '')}</td>)}
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                          </>
+                        ) : preview.preview_type === 'unsupported' ? (
+                          <div className="text-muted-foreground">非表格文件（{preview.type}），不支持预览表头。</div>
+                        ) : preview.preview_type === 'error' ? (
+                          <div className="text-error">预览失败: {preview.error}</div>
+                        ) : (
+                          <div className="text-muted-foreground">加载中...</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
           </div>
         )}
       </div>

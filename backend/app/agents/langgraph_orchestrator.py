@@ -34,7 +34,7 @@ from ..services.result_validator import get_result_validator, get_cross_validato
 from ..services.code_manifest import parse_manifest_from_dict, validate_manifest
 from ..services.contract_validator import get_contract_validator
 from ..services.fact_checker import get_fact_checker
-from ..core.paths import get_project_output_dir
+from ..core.paths import get_project_output_dir, resolve_data_path
 from ..core.state_store import get_task_result_store, _ref_key
 
 logger = logging.getLogger(__name__)
@@ -2335,6 +2335,9 @@ class LangGraphOrchestrator:
                 logger.info(f"[LangGraph:{task_id}] data_quality_check: 无数据文件，跳过门禁")
                 return {**state, "current_step": "data_quality_check"}
 
+            # files 存的是相对项目根路径（self_collector 用 _PROJECT_ROOT 写入），但后端
+            # cwd=backend/，直接 Path(fp).exists() 会误判 file_missing。统一按项目根解析。
+
             self._update_progress(task_id, state["problem_text"], 32, "数据质量门禁校验中")
 
             from ..services.data_schema import get_schema_extractor
@@ -2359,7 +2362,7 @@ class LangGraphOrchestrator:
 
             # ===== 步骤 2 文件级门禁（数据缺失检测） + 步骤 3 脏数据检测 =====
             for fp in files:
-                path = Path(fp)
+                path = resolve_data_path(fp)
                 file_name = path.name
 
                 # --- 文件缺失 ---

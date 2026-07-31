@@ -180,6 +180,92 @@ async def trigger_self_collect(
     }
 
 
+@router.get("/preview", response_model=None)
+async def preview_file(
+    filename: str = Query(..., description="文件名(从 /data/files 返回的name)"),
+    project_name: str = Query(None),
+    source: DataSource = Query(None, description="数据来源；不传则自动在user_upload和self_collected查找"),
+    n_rows: int = Query(3, ge=1, le=20, description="预览行数(1-20)"),
+) -> Dict[str, Any]:
+    """预览数据文件：返回行列数、列名、前N行内容(只读表头+少量行,轻量快速)。
+    供前端"选择数据文件"功能使用,让用户看表头决定哪些数据参与任务。
+    支持 csv/xlsx/xls/json/tsv/parquet；非表格文件(png/pdf等)返回type=unsupported。
+    """
+    from ..core.paths import resolve_data_path
+    import pandas as pd
+
+    safe_name = sanitize_filename(filename)
+    # 找文件:按指定 source 找,没指定就两边找
+    candidates: list[Path] = []
+    if source:
+        d = get_project_data_subdir(project_name, source=source)
+        candidates.append(d / safe_name)
+    else:
+        for s in ("user_upload", "self_collected"):
+            d = get_project_data_subdir(project_name, source=s)
+            candidates.append(d / safe_name)
+        # 全局旧目录兜底
+        candidates.append(DATA_DIR / safe_name)
+    path = None
+    for p in candidates:
+        # validate_path_within 防路径穿越（逐个基目录校验）
+        ok = False
+        for base in (get_project_data_dir(project_name), DATA_DIR):
+            try:
+                validate_path_within(p, base)
+                ok = True
+                break
+            except HTTPException:
+                continue
+        if not ok:
+            continue
+        if p.exists() and p.is_file():
+            # 用 resolve_data_path 再保险（cwd错位兜底）
+            path = resolve_data_path(str(p))
+            break
+    if not path:
+        raise HTTPException(status_code=404, detail=f"文件未找到: {safe_name}")
+
+    suffix = path.suffix.lower()
+    result: Dict[str, Any] = {"name": path.name, "size": path.stat().st_size, "type": suffix}
+    try:
+        if suffix == ".csv":
+            df = pd.read_csv(path, nrows=max(n_rows, 100))
+        elif suffix in (".xlsx", ".xls"):
+            df = pd.read_excel(path, nrows=max(n_rows, 100))
+        elif suffix == ".json":
+            df = pd.read_json(path)
+            df = df.head(max(n_rows, 100))
+        elif suffix in (".tsv", ".txt"):
+            df = pd.read_csv(path, sep="\t", nrows=max(n_rows, 100))
+        elif suffix == ".parquet":
+            df = pd.read_parquet(path).head(max(n_rows, 100))
+        else:
+            result["preview_type"] = "unsupported"
+            return result
+        result.update({
+            "preview_type": "table",
+            "rows_total_estimate": None,
+            "columns": list(df.columns.astype(str)),
+            "row_count": len(df),
+            "preview_rows": df.head(n_rows).fillna("").astype(str).to_dict(orient="records"),
+        })
+        # 行数估计(对于小文件可全算,大文件只读前N行)
+        if suffix == ".csv" and result["size"] < 5 * 1024 * 1024:  # <5MB 全算
+            try:
+                import csv
+                with open(path, "rb") as fh:
+                    # 统计行数(不算表头,近似)
+                    result["rows_total_estimate"] = sum(1 for _ in fh) - 1
+            except Exception:
+                pass
+    except Exception as e:
+        logger.warning(f"preview {path.name} failed: {e}")
+        result["preview_type"] = "error"
+        result["error"] = str(e)[:200]
+    return result
+
+
 @router.get("/analyze")
 async def analyze_file(
     dataset_name: str = Query(...),

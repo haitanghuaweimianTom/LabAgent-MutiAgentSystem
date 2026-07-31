@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from .base import BaseAgent, AgentFactory
 from ..core.security import wrap_user_content
+from ..core.paths import resolve_data_path
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +66,7 @@ class DataAgent(BaseAgent):
 
     def analyze_file(self, file_path: str) -> Dict[str, Any]:
         """分析数据文件（基础结构分析）"""
-        path = Path(file_path)
+        path = resolve_data_path(file_path)
         suffix = path.suffix.lower()
 
         try:
@@ -88,7 +89,8 @@ class DataAgent(BaseAgent):
         import json as _json
         import tempfile
 
-        path = Path(file_path)
+        path = resolve_data_path(file_path)
+        file_path = str(path)
         suffix = path.suffix.lower()
 
         # 读取数据到DataFrame
@@ -174,6 +176,7 @@ class DataAgent(BaseAgent):
         """构建Python分析代码模板"""
         import os
         # 安全转义路径，防止代码注入
+        file_path = str(resolve_data_path(file_path))  # 按项目根解析，cwd=backend 会错位
         safe_path = os.path.realpath(file_path).replace("\\", "\\\\").replace("'", "\\'")
         path = Path(file_path)
         suffix = path.suffix.lower()
