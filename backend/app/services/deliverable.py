@@ -246,17 +246,20 @@ def _build_paper(d: Path, results: Dict, output_dir: Path, task_id: str = "") ->
         (d / "paper.md").write_text(md, encoding="utf-8")
 
     # ---- PDF 导出 ----
-    # 优先级：1) camera_ready 编译的 PDF  2) final/ 目录  3) _global 根目录
+    # 优先级：1) camera_ready 编译的 PDF（output_dir/camera_ready_<task_id>/main.pdf，
+    #            由 camera_ready.build 写入）  2) output_dir/paper_<task_id>.pdf
+    #            （camera_ready.build 编译成功后复制到 output_dir 根目录）
+    #            3) final/ 目录  4) 历史遗留的 _global/papers/ 位置
     pdf_candidates = [
         output_dir / "final" / "main.pdf",
         output_dir / "main.pdf",
     ]
     if task_id:
-        global_dir = output_dir.parent / "_global"
         pdf_candidates.extend([
-            global_dir / f"camera_ready_{task_id}" / "main.pdf",
-            global_dir / f"paper_{task_id}.pdf",
-            global_dir / "papers" / f"paper_{task_id}.pdf",
+            output_dir / f"camera_ready_{task_id}" / "main.pdf",
+            output_dir / f"paper_{task_id}.pdf",
+            # 兼容旧版本：曾把 PDF 复制到 _global/papers/paper_<task_id>.pdf
+            output_dir.parent / "_global" / "papers" / f"paper_{task_id}.pdf",
         ])
     for candidate in pdf_candidates:
         if candidate.exists():
@@ -824,20 +827,20 @@ def _build_figures(d: Path, results: Dict, output_dir: Path) -> None:
     """08_图表: 复制已生成的图表文件。"""
     saved = []
 
-    # 从 figure_agent 结果获取图表路径
+    # 从 figure_agent 结果获取图表路径（figure_agent 返回 figure_path 键）
     figure = results.get("figure_agent", {})
     if isinstance(figure, dict):
         for fig in figure.get("figures", []):
             if isinstance(fig, dict):
-                path = fig.get("path", fig.get("file_path", ""))
-                if path and Path(path).exists():
+                path = fig.get("figure_path", fig.get("path", fig.get("file_path", "")))
+                if path and Path(path).is_file() and Path(path).exists():
                     try:
                         shutil.copy2(path, d / Path(path).name)
                         saved.append(Path(path).name)
                     except Exception:
                         pass
 
-    # 扫描图表目录（figure_agent 保存到 output_dir/figures/ 和 _global/figures/）
+    # 扫描图表目录（figure_agent 保存到 output_dir/figures/ 和 output_dir/final/figures/）
     # 同时扫描 camera_ready 包内的 figures/ —— Writer 生成的 main.tex 引用的
     # 图片名（语义命名，如 correlation_heatmap.png）可能与 figure_agent 实际写出的
     # 文件名（如 city_heatmap.png）不一致；camera_ready.build 会把语义命名图复制
@@ -846,7 +849,6 @@ def _build_figures(d: Path, results: Dict, output_dir: Path) -> None:
     scan_dirs = [
         output_dir / "figures",
         output_dir / "final" / "figures",
-        output_dir.parent / "_global" / "figures",  # figure_agent 默认路径
     ]
     # 追加所有 camera_ready_<task>/figures/ 目录
     for cr_dir in output_dir.glob("camera_ready_*/figures"):

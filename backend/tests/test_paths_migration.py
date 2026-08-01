@@ -179,3 +179,73 @@ def test_migrate_legacy_skips_global_project(tmp_outputs_dir):
     assert stats["projects_scanned"] == 0
     # _global/data 文件不应被移动
     assert (global_dir / "data" / "system.csv").exists()
+
+
+
+# =====================================================
+# v8.4.6 回归测试：get_uploaded_files 必须遍历子目录
+# 背景：原实现用 iterdir() 只遍历 data 根目录，v5.3.0 后文件移到
+# user_upload/ self_collected/ 子目录 → 用户上传文件不可见 → 任务判无数据
+# =====================================================
+
+
+def test_get_uploaded_files_finds_user_upload_subdir(tmp_outputs_dir, monkeypatch):
+    """get_uploaded_files 应发现 outputs/<proj>/data/user_upload/ 下的文件。"""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from app.routers import tasks as tasks_mod
+
+    # 切 tasks 模块的 PROJECT_ROOT / DATA_DIR 到 tmp
+    from app.core import paths
+    monkeypatch.setattr(tasks_mod, "PROJECT_ROOT", tmp_outputs_dir.parent)
+    monkeypatch.setattr(tasks_mod, "DATA_DIR", paths.DATA_DIR)
+
+    proj = "v846_test_uu"
+    uu = tmp_outputs_dir / proj / "data" / "user_upload"
+    uu.mkdir(parents=True)
+    (uu / "data.csv").write_text("a,b\n1,2\n")
+
+    files = tasks_mod.get_uploaded_files(project_name=proj)
+    names = {Path(f).name for f in files}
+    assert "data.csv" in names, f"user_upload/data.csv not found! got {names}"
+
+
+def test_get_uploaded_files_finds_self_collected_subdir(tmp_outputs_dir, monkeypatch):
+    """get_uploaded_files 应发现 outputs/<proj>/data/self_collected/ 下的文件。"""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from app.routers import tasks as tasks_mod
+    from app.core import paths
+    monkeypatch.setattr(tasks_mod, "PROJECT_ROOT", tmp_outputs_dir.parent)
+    monkeypatch.setattr(tasks_mod, "DATA_DIR", paths.DATA_DIR)
+
+    proj = "v846_test_sc"
+    sc = tmp_outputs_dir / proj / "data" / "self_collected"
+    sc.mkdir(parents=True)
+    (sc / "akshare.csv").write_text("x")
+    (sc / "_index.json").write_text("[]")  # 元数据应被跳过
+
+    files = tasks_mod.get_uploaded_files(project_name=proj)
+    names = {Path(f).name for f in files}
+    assert "akshare.csv" in names
+    assert "_index.json" not in names
+
+
+def test_get_uploaded_files_selected_names_filter(tmp_outputs_dir, monkeypatch):
+    """selected_names 应正确过滤子目录中的文件。"""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from app.routers import tasks as tasks_mod
+    from app.core import paths
+    monkeypatch.setattr(tasks_mod, "PROJECT_ROOT", tmp_outputs_dir.parent)
+    monkeypatch.setattr(tasks_mod, "DATA_DIR", paths.DATA_DIR)
+
+    proj = "v846_test_sel"
+    uu = tmp_outputs_dir / proj / "data" / "user_upload"
+    uu.mkdir(parents=True)
+    (uu / "a.csv").write_text("a")
+    (uu / "b.csv").write_text("b")
+
+    files = tasks_mod.get_uploaded_files(selected_names=["b.csv"], project_name=proj)
+    names = {Path(f).name for f in files}
+    assert names == {"b.csv"}

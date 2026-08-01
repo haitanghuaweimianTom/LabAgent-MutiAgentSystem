@@ -188,15 +188,16 @@ def collect_artifacts(
         # final/ 都没有，但 latex_code 可能从 task_result.json 拿到了；继续收集其他产物
         skipped.append("final dir not found")
 
-    # 2. figures — 搜 final/figures → stage_7_charts → 项目output/figures → _global/figures（figure_agent 默认写图位置）
+    # 2. figures — 搜 final/figures → stage_7_charts → 项目output/figures
     fig_search_dirs = []
     if final_dir.exists():
         fig_search_dirs.append(final_dir / "figures")
         fig_search_dirs.append(task_output_dir / "stage_7_charts")
     fig_search_dirs.append(task_output_dir / "figures")  # 项目专属figures目录
-    # v8.4.5: figure_agent 无项目名时写到 _global/figures
-    from ..core.paths import OUTPUT_DIR
-    fig_search_dirs.append(OUTPUT_DIR / "figures")
+    # 注意：不再追加全局 OUTPUT_DIR/figures —— figure_agent 无项目名时本就写到
+    # outputs/_global/figures，而无项目任务时 task_output_dir 即 OUTPUT_DIR，
+    # task_output_dir/figures 已覆盖该目录；对项目任务追加全局目录会把其他任务的
+    # 图混入本任务包（跨任务污染），历史 bug。
 
     seen_figs: set = set()
     for fig_dir in fig_search_dirs:
@@ -752,6 +753,11 @@ def build(
             path = match.group(2).strip()
             # 提取纯文件名，去掉所有路径前缀
             filename = Path(path).name
+            # xelatex 无法直接 include SVG（需 inkscape + svg 宏包）。figure_agent
+            # 保存图时总是同时写 .svg/.png/.pdf 三种格式（见 save_figure），
+            # 因此把 SVG 引用改写为同名的 PDF，保证编译不崩溃。
+            if filename.lower().endswith(".svg"):
+                filename = Path(filename).stem + ".pdf"
             return f"\\includegraphics{options}{{figures/{filename}}}"
 
         latex_code = re.sub(

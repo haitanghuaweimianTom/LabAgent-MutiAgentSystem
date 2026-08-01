@@ -194,6 +194,9 @@ class LangGraphOrchestrator:
         model_dir = str(Path(__file__).resolve().parent.parent.parent / "data" / "models")
         self._bandit = ContextualBanditDecision(model_dir=model_dir)
 
+        # v8.4.6: 懒加载 drift 校验（避开 module-level 循环导入）
+        self._check_problem_types_drift()
+
     def _resolve_results(self, state: TaskState) -> Dict[str, Any]:
         """把 state 中的 result 引用还原为实际 Agent 输出。"""
         refs = state.get("results", {})
@@ -779,6 +782,8 @@ class LangGraphOrchestrator:
 
     # ------------------------------------------------------------------
     # 数据驱动的 Agent 裁剪配置（按 problem_type 跳过不必要的 Agent）
+    # v8.4.6: 子集的键必须 ⊆ preflight.PROBLEM_TYPES 单一可信源（审计 #4）。
+    #   因 preflight ↔ agents 存在 module-level 循环导入，drift 校验放 __init__ 懒加载。
     # ------------------------------------------------------------------
 
     # 不需要 data_agent（纯理论 / 算法类）
@@ -793,6 +798,24 @@ class LangGraphOrchestrator:
         "仿真",   # 仿真建模——基于机理/数值方法，通常不需文献
         "未知",   # 类型不明时不过度搜索，避免无效联网
     }
+
+    @classmethod
+    def _check_problem_types_drift(cls) -> None:
+        """v8.4.6: 懒加载校验两个子集 ⊆ preflight.PROBLEM_TYPES（防漂移，仅执行一次）。"""
+        if getattr(cls, "_drift_checked", False):
+            return
+        try:
+            from ..services.preflight import PROBLEM_TYPES as _canonical
+            _canon = set(_canonical)
+            _extra_data = cls._PROBLEM_TYPES_NO_DATA - _canon
+            if _extra_data:
+                raise AssertionError(f"_PROBLEM_TYPES_NO_DATA 含未规范化值: {_extra_data}")
+            _extra_res = cls._PROBLEM_TYPES_NO_RESEARCH - _canon
+            if _extra_res:
+                raise AssertionError(f"_PROBLEM_TYPES_NO_RESEARCH 含未规范化值: {_extra_res}")
+            cls._drift_checked = True
+        except ImportError:
+            pass
 
     @classmethod
     def _should_skip_data(cls, problem_type: str, has_data_files: bool) -> bool:

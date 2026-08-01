@@ -101,12 +101,20 @@ def test_cumcm_matches_legacy_chapter_count():
     assert "附录" in titles
 
 
-def test_cumcm_preamble_has_mcmthesis_and_baominghao():
+def test_cumcm_preamble_uses_ctexart_documentclass():
+    """CUMCM 模板（v4b94d258 起）使用 ctexart 文档类，不再依赖 mcmthesis。
+
+    同步保证：system_prompt 不再指示 LLM 使用 cumcmthesis 文档类（否则
+    LLM 会生成 \\baominghao/\\schoolname 等 mcmthesis 宏导致 ctexart 编译失败）。
+    """
     tpl = load_template("math_modeling")
-    assert "cumcmthesis" in tpl.preamble
-    assert "\\baominghao{" in tpl.preamble
-    assert "\\schoolname{" in tpl.preamble
-    assert "\\membera{" in tpl.preamble
+    assert "\\documentclass{ctexart}" in tpl.preamble
+    assert "cumcmthesis" not in tpl.preamble
+    # system_prompt 与 documentclass 对齐
+    assert "ctexart" in tpl.system_prompt
+    assert "cumcmthesis" not in tpl.system_prompt
+    # 仍保留承诺书所需的标准命令
+    assert "\\maketitle" in tpl.preamble
 
 
 def test_coursework_uses_article_documentclass():

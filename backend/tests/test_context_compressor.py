@@ -25,20 +25,31 @@ from app.core.context_compressor import (
     ContextCompressor,
     DROPPABLE_FIELDS,
     PROTECTED_FIELDS,
+    _TIKTOKEN_AVAILABLE,
     estimate_tokens,
     get_compressor,
     reset_compressor,
     soft_compress,
 )
 
+if _TIKTOKEN_AVAILABLE:
+    import tiktoken  # type: ignore
+else:
+    tiktoken = None  # type: ignore[assignment]
+
 
 # ==================== 1. estimate_tokens ====================
 
 def test_estimate_tokens_string():
-    """estimate_tokens: 字符串按字符/3 估算。"""
+    """estimate_tokens: 字符串按 tiktoken 精确计数（未安装时回退字符/3）。"""
     assert estimate_tokens("hello") == max(1, 5 // 3)  # 5 chars → 1 token
-    assert estimate_tokens("a" * 300) == 100
-    assert estimate_tokens("") == 1  # 至少 1
+    # tiktoken 已安装时是精确编码（空串=0）；未安装时是字符/3 粗估（至少 1）
+    if _TIKTOKEN_AVAILABLE:
+        assert estimate_tokens("") == 0
+        assert estimate_tokens("a" * 300) == len(tiktoken.get_encoding("cl100k_base").encode("a" * 300))
+    else:
+        assert estimate_tokens("") == 1  # 至少 1
+        assert estimate_tokens("a" * 300) == 100
 
 
 def test_estimate_tokens_nested():

@@ -712,11 +712,9 @@ def financial_analysis(
         "n_observations": int(len(returns)),
         "risk_note": "回测结果不代表未来表现；实际交易需考虑手续费、滑点、流动性等。",
     }
-    if is_synthetic:
-        result["_data_source"] = "synthetic"
-        result["_data_warning"] = "⚠️ 本报告使用合成数据（随机 walk），仅供参考。真实分析需要提供实际市场数据。"
-    else:
-        result["_data_source"] = "real"
+    # v8.4.6: 移除 is_synthetic 分支（变量未定义，且合成数据已被 AST 审计禁止）。
+    # financial_analysis 入口已 raise ValueError 拒绝无数据调用，走到这里必有真实数据。
+    result["_data_source"] = "real"
     return result
 
 
@@ -1902,8 +1900,11 @@ class SolverAgent(BaseAgent):
                     logger.warning(f"[{self.name}] 自修复重试调用失败: {e}")
 
         except Exception as e:
-            logger.error(f"SolverAgent LLM失败: {e}")
-            raise RuntimeError(f"求解代码生成失败：LLM 调用异常 ({e})") from e
+            logger.error(f"SolverAgent LLM失败: {e}，转交 _run_code_with_autofix（CLI/HTTP）重新生成")
+            # 不 raise：call_llm 失败时降级到 _run_code_with_autofix（Claude CLI/HTTP），
+            # 从问题上下文重新生成并执行代码，避免单次 LLM 故障中断整个求解流程。
+            raw_code = ""
+            result = {}
 
         # 即使 call_llm 未返回可解析代码（doubao 输出不稳定，常返回散文而非代码块），
         # 也交给 _run_code_with_autofix（CLI/HTTP）从问题上下文重新生成+执行，

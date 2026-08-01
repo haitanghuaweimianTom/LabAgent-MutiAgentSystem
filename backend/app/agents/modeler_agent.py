@@ -383,9 +383,10 @@ class ModelerAgent(BaseAgent):
                     import asyncio
                     await asyncio.sleep(2)
 
-        # 重试全部失败，终止
+        # 重试全部失败 → 使用智能模板兜底（返回占位模型，标记降级模式）
         sp_name = sub_problem.get("name", f"子问题{sub_idx+1}")
-        raise RuntimeError(f"建模失败：LLM 调用多次失败 (子问题={sp_name})")
+        logger.warning(f"ModelerAgent: LLM 建模失败，子问题 '{sp_name}' 使用兜底模板")
+        return self._smart_template_fallback(sub_problem, suggested_method, problem_type)
 
     async def _build_all_models(self, task_input: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
         """一次性为所有子问题建立数学模型"""

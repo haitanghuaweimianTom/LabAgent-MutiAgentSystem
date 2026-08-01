@@ -962,6 +962,21 @@ def _ensure_listings_preamble(preamble: str) -> str:
     return preamble + "\n" + block
 
 
+def _ensure_float_preamble(preamble: str) -> str:
+    """幂等注入 \\usepackage{float}，保证 `[H]` 定位符可用。
+
+    Writer 生成的正文常使用 `\\begin{{figure}}[H]` 强制图片就地排版，
+    而 `[H]` 由 float 宏包提供；多数模板 preamble 未加载该包，直接编译
+    会因 `Unknown float option 'H'` 报错。仅当包缺失时注入，避免重复加载。
+    """
+    if re.search(r"\\usepackage(\[[^\]]*\])?\{[^}]*\bfloat\b", preamble):
+        return preamble
+    block = r"\usepackage{float}"
+    if r"\begin{document}" in preamble:
+        return preamble.replace(r"\begin{document}", block + "\n" + r"\begin{document}", 1)
+    return preamble + "\n" + block
+
+
 def _resolve_acceptance_threshold(template_id: str) -> int:
     """统一桥接 acceptance_threshold（CCF-A 默认 85，竞赛 75）。"""
     try:
@@ -1221,7 +1236,7 @@ class WriterAgent(BaseAgent):
         return result
 
     def _discover_available_figures(self, project_name: Optional[str]) -> List[str]:
-        """扫描项目输出目录，发现可用图表文件。
+        r"""扫描项目输出目录，发现可用图表文件。
 
         扫描范围：项目 output 根目录及其 code/figures 子目录、项目基目录，
         以及全局 outputs/_global/figures（求解器实际写图位置，旧版漏扫导致
@@ -2149,6 +2164,8 @@ class WriterAgent(BaseAgent):
 
         # v5.6: 幂等注入共享代码块样式 papercode（全模板统一 listings 排版，详见 _ensure_listings_preamble）。
         preamble = _ensure_listings_preamble(preamble)
+        # v8.5: 幂等注入 float 宏包，保证正文 `[H]` 定位符可编译（见 _ensure_float_preamble）。
+        preamble = _ensure_float_preamble(preamble)
 
         body_parts: List[str] = []
         sections_summary: Dict[str, str] = {}

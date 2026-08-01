@@ -58,7 +58,7 @@ def compile_latex(
 
     last_rc = -1
     last_stderr = ""
-    for _ in range(passes_to_run):
+    for i in range(passes_to_run):
         try:
             proc = subprocess.run(
                 cmd, cwd=work_dir, capture_output=True, text=True, timeout=timeout
@@ -75,6 +75,22 @@ def compile_latex(
                 "success": False, "engine": engine, "returncode": -1,
                 "pdf_path": None, "stderr_snippet": str(exc)[:2000],
             }
+        # 首趟之后、下一趟之前运行 bibtex：\cite 需要 .aux 里的 \citation 记录
+        # 生成 .bbl，第二趟才能解析为编号而非 "?"。仅当 main.bib 存在且 .aux
+        # 声明了 \bibdata 时运行（无参考文献则跳过，避免无谓报错）。
+        if i == 0 and passes_to_run > 1 and shutil.which("bibtex"):
+            work = Path(work_dir)
+            aux_path = work / f"{tex_path.stem}.aux"
+            if aux_path.exists() and (work / f"{tex_path.stem}.bib").exists():
+                aux_text = aux_path.read_text(encoding="utf-8", errors="replace")
+                if "\\bibdata" in aux_text:
+                    try:
+                        subprocess.run(
+                            ["bibtex", tex_path.stem], cwd=work_dir,
+                            capture_output=True, text=True, timeout=60,
+                        )
+                    except (subprocess.TimeoutExpired, Exception):  # noqa: BLE001
+                        pass
 
     pdf_path = tex_path.with_suffix(".pdf")
     success = pdf_path.exists()

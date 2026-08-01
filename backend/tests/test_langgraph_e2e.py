@@ -280,6 +280,10 @@ async def test_langgraph_deep_research_workflow(
 ):
     """场景 3：深度研究模式，多轮文献搜集。"""
     agents = _make_agents()
+    # v8.4.2: "优化" 已被加入 _PROBLEM_TYPES_NO_RESEARCH（纯建模题跳过文献检索），
+    # 本场景是"前沿课题深度研究"，mock 的问题类型必须是需文献支撑的类型（如"预测"），
+    # 否则 research_vote 快路径会跳过文献检索，导致 3 次 search 调用永远不触发。
+    agents["analyzer_agent"]._response["problem_type"] = "预测"
     orch = LangGraphOrchestrator(agents)
 
     result = await orch.run(

@@ -17,12 +17,12 @@ from typing import Dict, Any
 # ============================================================================
 
 def mock_llm_response(content: str, tool_calls=None) -> Dict[str, Any]:
-    """构造 Mock LLM 响应。"""
+    """构造 Mock LLM 响应（与 base.call_llm 返回格式一致：choices[0].message.content）。"""
     msg = {"role": "assistant", "content": content}
     if tool_calls:
         msg["tool_calls"] = tool_calls
     return {
-        "choices": [msg],
+        "choices": [{"message": msg}],
         "model": "test-model",
         "usage": {"prompt_tokens": 100, "completion_tokens": 50},
     }
@@ -257,7 +257,10 @@ class TestWriterAgent:
                 previous_issues=[],
             )
         # 修复前这里会 raise RuntimeError，根本到不了下面的断言
-        assert latex and "\\section" in latex
+        assert latex  # 非空降级 LaTeX
+        # 兜底内容不含 \section —— 由 _assemble_paper 统一注入章节标题，
+        # 否则会出现重复 \section 双重编号（writer_agent._chapter_fallback 注释）
+        assert "\\section" not in latex
         assert "DEGRADED" in latex  # 占位标记（% [DEGRADED]）
         assert "DEGRADED" in summary
         assert mock_llm.await_count == 3  # 3 次重试都失败才兜底

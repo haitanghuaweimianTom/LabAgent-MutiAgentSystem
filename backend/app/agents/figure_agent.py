@@ -829,13 +829,16 @@ print("FIGURE_DONE")
                 )
 
             if result.returncode == 0 and "FIGURE_DONE" in result.stdout:
-                # 查找生成的文件
+                # 查找生成的文件（含子目录递归，防止 LLM 把图存到子目录）
                 for ext in [".png", ".svg", ".pdf"]:
-                    candidate = output_dir / f"{figure_id}{ext}"
-                    if candidate.exists():
-                        return candidate
-                # 如果没找到精确匹配，返回目录
-                return output_dir
+                    for candidate in output_dir.rglob(f"*{ext}"):
+                        if candidate.is_file():
+                            return candidate
+                # 未找到任何图片文件 → 返回 None，让上层按失败处理
+                # （不能返回目录本身：调用方会把它当作有效 figure_path，
+                #   后续 copy 目录或 include 目录都会失败）
+                logger.warning(f"[FigureAgent] code ran but no image file found for {figure_id}")
+                return None
             else:
                 logger.warning(f"[FigureAgent] code execution failed: {result.stderr[:300]}")
                 return None

@@ -53,7 +53,11 @@ async def test_decide_with_data(preflight_service):
 
 
 @pytest.mark.asyncio
-async def test_decide_without_data_triggers_collection(preflight_service):
+async def test_standard_workflow_without_data_downgrades_to_sufficient(preflight_service):
+    # v8.4.5: standard/math_modeling 工作流允许无数据运行（建模在沙箱内生成），
+    # 即使 LLM 判 missing+should_collect 也会降级为 sufficient 且不强制采集，
+    # 仅保留 collection_plan 供用户主动选择 self_collect 时使用。
+    # （审计 #3 指出该降级可能掩盖真实数据需求，属已知权衡，逻辑本身不在本次改动范围）
     preflight_service._schema_extractor.extract = MagicMock(return_value=None)
     preflight_service._list_template_ids = MagicMock(return_values=["math_modeling"])
     preflight_service._call_llm_for_decision = AsyncMock(return_value={
@@ -73,8 +77,8 @@ async def test_decide_without_data_triggers_collection(preflight_service):
         data_files=[],
     )
 
-    assert report.data_adequacy == DataAdequacy.MISSING
-    assert report.llm_should_collect is True
+    assert report.data_adequacy == DataAdequacy.SUFFICIENT
+    assert report.llm_should_collect is False
     assert "Kaggle" in report.collection_plan or "搜索" in report.collection_plan
 
 

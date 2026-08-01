@@ -250,6 +250,26 @@ class PeerReviewAgent(BaseAgent):
         if rec == "reject" and overall >= 2.5:
             rec = "revise"
 
+        # 防呆：LLM 可能把 comments 输出成字符串/list，而不是 {"major":[], "minor":[]}
+        comments_raw = data.get("comments", {})
+        if isinstance(comments_raw, dict):
+            major = comments_raw.get("major", []) or []
+            minor = comments_raw.get("minor", []) or []
+        elif isinstance(comments_raw, list):
+            major, minor = comments_raw, []
+        elif isinstance(comments_raw, str) and comments_raw.strip():
+            major, minor = [comments_raw], []
+        else:
+            major, minor = [], []
+        if not isinstance(major, list):
+            major = [str(major)]
+        if not isinstance(minor, list):
+            minor = [str(minor)]
+
+        suggested_edits = data.get("suggested_edits", []) or []
+        if not isinstance(suggested_edits, list):
+            suggested_edits = [str(suggested_edits)]
+
         return {
             "scores": {
                 "novelty": novelty,
@@ -258,10 +278,7 @@ class PeerReviewAgent(BaseAgent):
                 "significance": significance,
             },
             "overall_score": overall,
-            "comments": {
-                "major": list(data.get("comments", {}).get("major", []) or []),
-                "minor": list(data.get("comments", {}).get("minor", []) or []),
-            },
+            "comments": {"major": major, "minor": minor},
             "reproducibility": data.get("reproducibility", {
                 "has_train_script": False,
                 "has_random_seed": False,
@@ -271,7 +288,7 @@ class PeerReviewAgent(BaseAgent):
                 "score": 3,
             }),
             "recommendation": rec,
-            "suggested_edits": list(data.get("suggested_edits", []) or []),
+            "suggested_edits": suggested_edits,
             "confidence": clamp(int(data.get("confidence", 3))),
         }
 

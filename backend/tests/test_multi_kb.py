@@ -81,12 +81,27 @@ class _StubAgent:
         self, query_text, top_k=3, base_id=None,
         base_ids=None, project_name=None,
     ):
-        # 复用 BaseAgent 真实实现
+        # 复用 BaseAgent 真实实现（async）
         from app.agents.base import BaseAgent
-        return BaseAgent._inject_knowledge_context(
+        import asyncio
+        return asyncio.run(BaseAgent._inject_knowledge_context(
             self, query_text, top_k=top_k, base_id=base_id,
             base_ids=base_ids, project_name=project_name,
+        ))
+
+    def _search_knowledge_bases(
+        self, km, base_ids, query_text, top_k, project_name,
+    ):
+        # 复用 BaseAgent 真实实现（_inject_knowledge_context 内部调用）
+        from app.agents.base import BaseAgent
+        return BaseAgent._search_knowledge_bases(
+            self, km, base_ids, query_text, top_k, project_name,
         )
+
+    def _format_knowledge_context(self, results, source_label):
+        # 复用 BaseAgent 真实实现（_inject_knowledge_context 内部调用）
+        from app.agents.base import BaseAgent
+        return BaseAgent._format_knowledge_context(self, results, source_label)
 
 
 def _patch_km(monkeypatch, km):
@@ -95,19 +110,21 @@ def _patch_km(monkeypatch, km):
     monkeypatch.setattr(km_mod, "get_knowledge_manager", lambda: km)
 
 
+def _fake_results(content="ctx", title="doc"):
+    return [{"title": title, "content": content, "source": "test", "score": 0.9, "retrieval_method": "hybrid"}]
+
+
 def test_inject_knowledge_context_uses_base_ids(monkeypatch, km):
-    """base_ids 显式传入 → 应走 query_context_for_task。"""
+    """base_ids 显式传入 → 每个 KB 都走 km.search。"""
     _patch_km(monkeypatch, km)
-    captured = {}
+    searched = {}
 
-    def fake_query_context_for_task(task_project_name, base_ids, query, top_k=3, max_chars=4000):
-        captured["task_project_name"] = task_project_name
-        captured["base_ids"] = list(base_ids)
-        captured["query"] = query
-        captured["max_chars"] = max_chars
-        return "merged-context"
+    def fake_search(base_id, query, top_k=5, min_score=0.0):
+        searched["base_id"] = base_id
+        searched["query"] = query
+        return _fake_results(content="merged-context")
 
-    monkeypatch.setattr(km, "query_context_for_task", fake_query_context_for_task)
+    monkeypatch.setattr(km, "search", fake_search)
 
     agent = _StubAgent(name="test_agent")
     result = agent._inject_knowledge_context(
@@ -117,98 +134,109 @@ def test_inject_knowledge_context_uses_base_ids(monkeypatch, km):
     )
 
     assert "merged-context" in result
-    assert captured["base_ids"] == ["kb_a", "kb_b"]
-    assert captured["task_project_name"] == "proj1"
-    assert captured["max_chars"] == 4000
+    assert searched["base_id"] == "kb_b"  # 最后调用的是第二个 KB
+    assert searched["query"] == "hello"
 
 
 def test_inject_knowledge_context_uses_instance_attrs(monkeypatch, km):
     """agent._knowledge_base_ids 设置后 → 应被使用。"""
     _patch_km(monkeypatch, km)
-    captured = {}
+    searched = []
 
-    def fake_query_context_for_task(task_project_name, base_ids, query, top_k=3, max_chars=4000):
-        captured["base_ids"] = list(base_ids)
-        captured["project_name"] = task_project_name
-        return "ctx"
+    def fake_search(base_id, query, top_k=5, min_score=0.0):
+        searched.append(base_id)
+        return _fake_results(content="ctx")
 
-    monkeypatch.setattr(km, "query_context_for_task", fake_query_context_for_task)
+    monkeypatch.setattr(km, "search", fake_search)
 
     agent = _StubAgent(name="test_agent2")
     agent._knowledge_base_ids = ["kb_x"]
     agent._task_project_name = "proj_x"
 
-    agent._inject_knowledge_context(query_text="q")
-    assert captured["base_ids"] == ["kb_x"]
-    assert captured["project_name"] == "proj_x"
+    result = agent._inject_knowledge_context(query_text="q")
+    assert searched == ["kb_x"]
+    assert "ctx" in result
 
 
 def test_inject_knowledge_context_fallback_to_base_id(monkeypatch, km):
-    """没 base_ids 时退回 base_id → query_context。"""
+    """没 base_ids 时退回 base_id → km.search(单 KB)。"""
     _patch_km(monkeypatch, km)
-    captured = {}
+    searched = []
 
-    def fake_query_context(base_id, query, top_k=3, max_chars=1500):
-        captured["base_id"] = base_id
-        captured["max_chars"] = max_chars
-        return "single-ctx"
+    def fake_search(base_id, query, top_k=5, min_score=0.0):
+        searched.append(base_id)
+        return _fake_results(content="single-ctx")
 
-    monkeypatch.setattr(km, "query_context", fake_query_context)
+    monkeypatch.setattr(km, "search", fake_search)
 
     agent = _StubAgent(name="test_agent3")
     agent._knowledge_base_id = "kb_legacy"
 
     result = agent._inject_knowledge_context(query_text="q")
+    assert searched == ["kb_legacy"]
     assert "single-ctx" in result
-    assert captured["base_id"] == "kb_legacy"
 
 
 def test_inject_knowledge_context_auto_select_by_project(monkeypatch, km):
-    """没 base_ids + 有 project → 自动选 (query_context_for_task)。"""
+    """没 ids + 有 project + use_global_kb → 自动选（global + 项目私有）。"""
+    from app.core.knowledge_manager import KnowledgeBaseConfig
+
     _patch_km(monkeypatch, km)
-    captured = {}
+    km._bases = {
+        "g1": KnowledgeBaseConfig(id="g1", name="g1"),
+        "p1": KnowledgeBaseConfig(id="p1", name="p1", scope="project", project_name="auto_proj"),
+        "p2": KnowledgeBaseConfig(id="p2", name="p2", scope="project", project_name="other_proj"),
+    }
+    searched = []
 
-    def fake_query_context_for_task(task_project_name, base_ids, query, top_k=3, max_chars=4000):
-        captured["project"] = task_project_name
-        captured["base_ids"] = base_ids
-        return "auto-ctx"
+    def fake_search(base_id, query, top_k=5, min_score=0.0):
+        searched.append(base_id)
+        return _fake_results(content="auto-ctx")
 
-    monkeypatch.setattr(km, "query_context_for_task", fake_query_context_for_task)
+    monkeypatch.setattr(km, "search", fake_search)
 
     agent = _StubAgent(name="test_agent4")
     agent._task_project_name = "auto_proj"
+    agent.use_global_kb = True
 
     result = agent._inject_knowledge_context(query_text="q")
     assert "auto-ctx" in result
-    assert captured["project"] == "auto_proj"
-    assert captured["base_ids"] is None
+    assert set(searched) == {"g1", "p1"}  # p2 属于其他项目，不搜
 
 
 def test_inject_knowledge_context_fallback_to_all(monkeypatch, km):
-    """什么都没设 → query_all_context。"""
+    """什么都没设 + use_global_kb → 全部 KB。"""
+    from app.core.knowledge_manager import KnowledgeBaseConfig
+
     _patch_km(monkeypatch, km)
-    captured = {}
+    km._bases = {
+        "b1": KnowledgeBaseConfig(id="b1", name="b1"),
+        "b2": KnowledgeBaseConfig(id="b2", name="b2"),
+    }
+    searched = []
 
-    def fake_query_all_context(query, top_k=3, max_chars=1500):
-        captured["query"] = query
-        return "all-ctx"
+    def fake_search(base_id, query, top_k=5, min_score=0.0):
+        searched.append(base_id)
+        return _fake_results(content="all-ctx")
 
-    monkeypatch.setattr(km, "query_all_context", fake_query_all_context)
+    monkeypatch.setattr(km, "search", fake_search)
 
     agent = _StubAgent(name="test_agent5")
+    agent.use_global_kb = True
+
     result = agent._inject_knowledge_context(query_text="q")
     assert "all-ctx" in result
-    assert captured["query"] == "q"
+    assert set(searched) == {"b1", "b2"}
 
 
 def test_inject_knowledge_context_silent_on_error(monkeypatch, km):
     """KB 查询异常时静默失败 → 返回 ""。"""
     _patch_km(monkeypatch, km)
 
-    def fake_query_context_for_task(*args, **kwargs):
+    def fake_search(*args, **kwargs):
         raise RuntimeError("simulated")
 
-    monkeypatch.setattr(km, "query_context_for_task", fake_query_context_for_task)
+    monkeypatch.setattr(km, "search", fake_search)
 
     agent = _StubAgent(name="test_agent6")
     agent._knowledge_base_ids = ["kb_x"]

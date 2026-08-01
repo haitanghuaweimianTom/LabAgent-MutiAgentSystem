@@ -224,3 +224,79 @@ async def test_fetch_one_too_large(tmp_paths, tmp_project):
     )
     assert result.error is not None
     assert "too_large" in result.error
+
+
+
+# =====================================================
+# v8.4.6 回归测试：金融标的识别（指数 + 个股）
+# =====================================================
+
+
+def test_detect_financial_symbols_index():
+    """应识别常见指数（含扩充后的关键词）。"""
+    from app.services.self_collector import _detect_financial_symbols
+    # 原有关键词
+    syms = _detect_financial_symbols("分析沪深300指数走势")
+    assert any(s["code"] == "sh000300" for s in syms)
+    # v8.4.6 新增关键词
+    syms2 = _detect_financial_symbols("基于沪深三百构建投资组合")
+    assert any(s["code"] == "sh000300" for s in syms2)
+    syms3 = _detect_financial_symbols("研究纳斯达克指数")
+    assert any(s["code"] == "usIXIC" for s in syms3)
+
+
+def test_detect_financial_symbols_individual_stock():
+    """v8.4.6: 应识别 6 位数字个股代码。"""
+    from app.services.self_collector import _detect_financial_symbols
+    syms = _detect_financial_symbols("分析贵州茅台(600519)与五粮液(000858)")
+    codes = {s["code"] for s in syms}
+    assert "600519" in codes, f"600519 not detected: {syms}"
+    assert "000858" in codes, f"000858 not detected: {syms}"
+    # 个股 kind 应为 stock
+    stock = next(s for s in syms if s["code"] == "600519")
+    assert stock["kind"] == "stock"
+
+
+def test_detect_financial_symbols_no_false_positive_long_number():
+    """7+ 位数字不应被误识别为股票代码。"""
+    from app.services.self_collector import _detect_financial_symbols
+    syms = _detect_financial_symbols("订单号 1234567890 的数据")
+    assert all(s["kind"] != "stock" for s in syms), f"误识别: {syms}"
+
+
+# =====================================================
+# v8.4.6 回归测试：CSV 编码 fallback（read_csv_safe）
+# =====================================================
+
+
+def test_read_csv_safe_gbk():
+    """read_csv_safe 应能读取 GBK 编码的中文 CSV。"""
+    import tempfile, os
+    from app.core.data_assets import read_csv_safe
+
+    with tempfile.NamedTemporaryFile(suffix=".csv", delete=False, mode="w", encoding="gbk") as f:
+        f.write("姓名,年龄\n张三,25\n李四,30\n")
+        path = f.name
+    try:
+        df = read_csv_safe(path)
+        assert list(df.columns) == ["姓名", "年龄"]
+        assert len(df) == 2
+        assert df.iloc[0]["姓名"] == "张三"
+    finally:
+        os.unlink(path)
+
+
+def test_read_csv_safe_utf8_bom():
+    """read_csv_safe 应能读取 UTF-8 BOM 编码的 CSV。"""
+    import tempfile, os
+    from app.core.data_assets import read_csv_safe
+
+    with tempfile.NamedTemporaryFile(suffix=".csv", delete=False, mode="wb") as f:
+        f.write("\ufeffa,b\n1,2\n3,4\n".encode("utf-8"))
+        path = f.name
+    try:
+        df = read_csv_safe(path)
+        assert list(df.columns) == ["a", "b"]  # BOM 不应出现在列名
+        assert len(df) == 2
+    finally:
+        os.unlink(path)

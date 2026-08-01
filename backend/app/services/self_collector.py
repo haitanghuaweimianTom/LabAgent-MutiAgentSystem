@@ -371,15 +371,25 @@ def extract_urls_from_search_result(result: Any) -> List[str]:
 # ──────────────────────────────────────────────────────────────────────
 
 # 常见指数关键词 → akshare 新浪源代码（stock_zh_index_daily）
+# v8.4.6: 扩充关键词覆盖（原仅 13 条，遗漏常见叫法如"大盘"、"沪深三百"等）。
 _INDEX_KEYWORDS: List[tuple] = [
     ("沪深300", "sh000300"), ("沪深300指数", "sh000300"), ("csi300", "sh000300"),
+    ("沪深三百", "sh000300"), ("hs300", "sh000300"),
     ("上证指数", "sh000001"), ("上证综指", "sh000001"), ("上证综合", "sh000001"),
-    ("深证成指", "sz399001"), ("深证成份", "sz399001"),
-    ("中证500", "sh000905"), ("中证500指数", "sh000905"),
-    ("创业板指", "sz399006"), ("创业板指数", "sz399006"),
-    ("科创50", "sh000688"), ("上证50", "sh000016"), ("上证50指数", "sh000016"),
-    ("恒生指数", "hkHSI"), ("恒指", "hkHSI"),
-    ("道琼斯", "usDJI"), ("标普500", "usSPX"), ("纳斯达克", "usIXIC"),
+    ("上证综", "sh000001"), ("大盘", "sh000001"), ("沪指", "sh000001"),
+    ("深证成指", "sz399001"), ("深证成份", "sz399001"), ("深成指", "sz399001"),
+    ("中证500", "sh000905"), ("中证500指数", "sh000905"), ("中证五百", "sh000905"),
+    ("csi500", "sh000905"),
+    ("创业板指", "sz399006"), ("创业板指数", "sz399006"), ("创业板", "sz399006"),
+    ("科创50", "sh000688"), ("科创板", "sh000688"),
+    ("上证50", "sh000016"), ("上证50指数", "sh000016"), ("sse50", "sh000016"),
+    ("中证1000", "sh000852"), ("中证1000指数", "sh000852"),
+    ("恒生指数", "hkHSI"), ("恒指", "hkHSI"), ("hang seng", "hkHSI"),
+    ("道琼斯", "usDJI"), ("道指", "usDJI"), ("dow jones", "usDJI"),
+    ("标普500", "usSPX"), ("标普500指数", "usSPX"), ("s&p500", "usSPX"), ("spx", "usSPX"),
+    ("纳斯达克", "usIXIC"), ("纳指", "usIXIC"), ("nasdaq", "usIXIC"),
+    ("日经225", "usN225"), ("日经指数", "usN225"), ("nikkei", "usN225"),
+    ("富时a50", "usFTSEA50"), ("ftse a50", "usFTSEA50"),
 ]
 
 
@@ -387,8 +397,11 @@ def _detect_financial_symbols(problem_text: str) -> List[Dict[str, str]]:
     """从题目文本识别要采集的指数/标的。
 
     返回 [{"code": "sh000300", "name": "沪深300", "kind": "index"}, ...]。
-    指数用 stock_zh_index_daily（新浪源，稳定）；个股（6位数字代码）暂不采
-    （东财源 stock_zh_a_hist 易被反爬限流，且需逐个识别，留作后续扩展）。
+    指数用 stock_zh_index_daily（新浪源，稳定）。
+
+    v8.4.6: 新增个股检测——题目中出现 6 位数字股票代码（如 600519 贵州茅台）时，
+    用 ak.stock_zh_a_hist 采集（东财源，可能限流，采集失败不影响指数采集结果）。
+    沪市 6/9 开头、深市 0/3 开头、北交所 8/4 开头。
     """
     if not problem_text:
         return []
@@ -399,6 +412,16 @@ def _detect_financial_symbols(problem_text: str) -> List[Dict[str, str]]:
         if kw.lower() in text.lower() and code not in seen:
             hits.append({"code": code, "name": kw, "kind": "index"})
             seen.add(code)
+
+    # v8.4.6: 个股代码检测（6 位数字，沪 6/9、深 0/3、北 8/4 开头）
+    import re as _re
+    for m in _re.finditer(r"(?<![0-9])([69][0-9]{5}|[03][0-9]{5}|[84][0-9]{5})(?![0-9])", text):
+        stock_code = m.group(1)
+        if stock_code in seen:
+            continue
+        seen.add(stock_code)
+        hits.append({"code": stock_code, "name": stock_code, "kind": "stock"})
+
     return hits
 
 
@@ -430,8 +453,11 @@ async def collect_financial_data(
 
     for sym in symbols:
         code, name = sym["code"], sym["name"]
+        kind = sym.get("kind", "index")
+        # v8.4.6: 个股用 stock_zh_a_hist（东财源），指数用 stock_zh_index_daily（新浪源）
+        ak_func_name = "stock_zh_a_hist" if kind == "stock" else "stock_zh_index_daily"
         res = DownloadResult(
-            url=f"akshare://stock_zh_index_daily/{code}",
+            url=f"akshare://{ak_func_name}/{code}",
             source_query=source_query or f"金融行情:{name}",
             downloaded_at=int(datetime.now(timezone.utc).timestamp() * 1000),
         )
@@ -439,10 +465,25 @@ async def collect_financial_data(
             import asyncio
             # akshare 是同步库，放 executor 避免阻塞事件循环
             loop = asyncio.get_event_loop()
-            df = await loop.run_in_executor(
-                None,
-                lambda c=code: ak.stock_zh_index_daily(symbol=c),
-            )
+            if kind == "stock":
+                # 个股：东财源 stock_zh_a_hist，需指定 period + 日期范围
+                from datetime import datetime as _dt, timedelta as _td
+                _end = _dt.now()
+                _start = _end - _td(days=365 * 5)  # 近 5 年日线
+                df = await loop.run_in_executor(
+                    None,
+                    lambda c=code, s=_start, e=_end: ak.stock_zh_a_hist(
+                        symbol=c, period="daily",
+                        start_date=s.strftime("%Y%m%d"),
+                        end_date=e.strftime("%Y%m%d"),
+                        adjust="qfq",  # 前复权，回测常用
+                    ),
+                )
+            else:
+                df = await loop.run_in_executor(
+                    None,
+                    lambda c=code: ak.stock_zh_index_daily(symbol=c),
+                )
             if df is None or len(df) == 0:
                 res.error = "empty_dataframe"
                 results.append(res)

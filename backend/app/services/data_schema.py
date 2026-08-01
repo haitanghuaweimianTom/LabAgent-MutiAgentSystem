@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 class DataSchemaExtractor:
     """从数据文件中提取 schema：列名、类型、取值范围、缺失值、示例行"""
 
-    SUPPORTED_EXTS = {".csv", ".xlsx", ".xls", ".parquet", ".json"}
+    SUPPORTED_EXTS = {".csv", ".tsv", ".xlsx", ".xls", ".parquet", ".json"}  # v8.4.6: +tsv
 
     def extract(self, file_path: str | Path) -> Optional[Dict[str, Any]]:
         path = Path(file_path)
@@ -99,7 +99,13 @@ class DataSchemaExtractor:
     def _read_file(path: Path) -> Optional[pd.DataFrame]:
         suffix = path.suffix.lower()
         if suffix == ".csv":
-            return pd.read_csv(path)
+            # v8.4.6: 中文 CSV 常用 GBK/GB18030，单一 utf-8 会 UnicodeDecodeError
+            # → schema 提取失败 → solver 无数据上下文。按编码候选链 fallback。
+            from ..core.data_assets import read_csv_safe
+            return read_csv_safe(path)
+        if suffix == ".tsv":
+            from ..core.data_assets import read_csv_safe
+            return read_csv_safe(path, sep="\t")
         if suffix in {".xlsx", ".xls"}:
             return pd.read_excel(path)
         if suffix == ".parquet":

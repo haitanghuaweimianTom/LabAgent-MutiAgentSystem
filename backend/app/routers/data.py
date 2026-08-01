@@ -230,13 +230,19 @@ async def preview_file(
     result: Dict[str, Any] = {"name": path.name, "size": path.stat().st_size, "type": suffix}
     try:
         if suffix == ".csv":
-            df = pd.read_csv(path, nrows=max(n_rows, 100))
+            # v8.4.6: 中文 CSV 用 GBK/GB18030，按编码候选链 fallback
+            from ..core.data_assets import read_csv_safe
+            df = read_csv_safe(path, nrows=max(n_rows, 100))
         elif suffix in (".xlsx", ".xls"):
             df = pd.read_excel(path, nrows=max(n_rows, 100))
         elif suffix == ".json":
             df = pd.read_json(path)
             df = df.head(max(n_rows, 100))
-        elif suffix in (".tsv", ".txt"):
+        elif suffix == ".tsv":
+            # v8.4.6: tsv 用编码 fallback（原与 .txt 合并，但 txt 不一定是 tsv）
+            from ..core.data_assets import read_csv_safe
+            df = read_csv_safe(path, sep="\t", nrows=max(n_rows, 100))
+        elif suffix == ".txt":
             df = pd.read_csv(path, sep="\t", nrows=max(n_rows, 100))
         elif suffix == ".parquet":
             df = pd.read_parquet(path).head(max(n_rows, 100))

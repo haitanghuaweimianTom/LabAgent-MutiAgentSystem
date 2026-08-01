@@ -17,43 +17,99 @@ from ..core.security import wrap_user_content
 logger = logging.getLogger(__name__)
 
 
-# 问题类型定义（来自 math_modeling_paper_system）
+# v8.4.6: 子问题编号识别正则 —— 支持 问题1 / 问题 1 / 第1问 / 第1题 / Problem 1 /
+# 子问题1 / 问题一 等多种格式（审计 #5：原仅匹配 "问题N"）。
+# 两条分支：
+# - 分支 A（group 1）: 子问题|问题|Problem|problem 前缀 + 数字/中文数字
+# - 分支 B（group 2）: 第 + 数字/中文数字 + 问|题 后缀
+_SUB_PROBLEM_RE = re.compile(
+    r'(?:子问题|问题|Problem|problem)\s*(\d+|[一二三四五六七八九十])'
+    r'|第(\d+|[一二三四五六七八九十])[问题]'
+)
+
+# 中文数字 → int 映射（用于 _sub_problem_number）
+_CN_NUMERAL_MAP = {
+    "一": 1, "二": 2, "三": 3, "四": 4, "五": 5,
+    "六": 6, "七": 7, "八": 8, "九": 9, "十": 10,
+}
+
+
+def _sub_problem_number(m: "re.Match") -> int:
+    """从 _SUB_PROBLEM_RE 的匹配中提取子问题编号（兼容两分支 + 中文数字）。"""
+    raw = m.group(1) or m.group(2)
+    if raw is None:
+        return -1
+    if raw in _CN_NUMERAL_MAP:
+        return _CN_NUMERAL_MAP[raw]
+    try:
+        return int(raw)
+    except ValueError:
+        return -1
+
+
+def _find_sub_problem_matches(text: str) -> List["re.Match"]:
+    """返回 text 中所有子问题编号匹配（按位置排序）。"""
+    return list(_SUB_PROBLEM_RE.finditer(text))
+
+
+# v8.4.6: 问题类型关键词配置。
+# - 键（优化/预测/...）必须 ⊆ preflight.PROBLEM_TYPES 单一可信源（审计 #4）
+# - 因 preflight ↔ agents 存在 module-level 循环导入，此处不能 top-level import，
+#   改在 _check_problem_types_drift() 里懒加载校验（首次调用执行一次）。
 PROBLEM_TYPES = {
-    "optimization": {
+    "优化": {
         "keywords": ["优化", "最小化", "最大化", "最优", "调度", "配置", "分配", "规划", "订货", "采购", "库存"],
         "description": "优化问题",
         "typical_methods": ["线性规划", "整数规划", "非线性规划", "遗传算法", "粒子群优化", "模拟退火"],
     },
-    "prediction": {
+    "预测": {
         "keywords": ["预测", "预报", "估计", "未来", "趋势", "需求", "forecast", "时间序列", "ARIMA", "LSTM"],
         "description": "预测问题",
         "typical_methods": ["时间序列分析", "回归分析", "灰色预测", "神经网络", "LSTM", "ARIMA", "Prophet"],
     },
-    "evaluation": {
+    "评价": {
         "keywords": ["评价", "评估", "排序", "选择", "比较", "优先级", "topsis", "ahp", "层次分析", "综合"],
         "description": "评价问题",
         "typical_methods": ["层次分析法(AHP)", "熵权法", "TOPSIS", "模糊综合评价", "主成分分析"],
     },
-    "classification": {
+    "分类": {
         "keywords": ["分类", "聚类", "识别", "判别", "分组", "分割", "cluster"],
         "description": "分类/聚类问题",
         "typical_methods": ["K-means聚类", "支持向量机", "决策树", "随机森林", "神经网络"],
     },
-    "simulation": {
+    "仿真": {
         "keywords": ["模拟", "仿真", "蒙特卡罗", "随机", "风险", "simulation"],
         "description": "模拟仿真问题",
         "typical_methods": ["蒙特卡罗模拟", "系统动力学", "元胞自动机", "排队论"],
     },
-    "network": {
+    "网络": {
         "keywords": ["网络", "图", "路径", "连通", "最短路", "最大流", "network", "graph"],
         "description": "网络图论问题",
         "typical_methods": ["最短路算法", "最大流算法", "最小生成树", "旅行商问题"],
     },
 }
 
+_drift_checked = False
+
+
+def _check_problem_types_drift() -> None:
+    """v8.4.6: 懒加载校验 PROBLEM_TYPES 键 ⊆ preflight.PROBLEM_TYPES（防漂移，仅执行一次）。"""
+    global _drift_checked
+    if _drift_checked:
+        return
+    try:
+        from ..services.preflight import PROBLEM_TYPES as _canonical
+        _extra = set(PROBLEM_TYPES.keys()) - set(_canonical)
+        if _extra:
+            raise AssertionError(f"analyzer PROBLEM_TYPES 多出未规范化键: {_extra}")
+        _drift_checked = True
+    except ImportError:
+        pass
+
 
 def classify_by_keywords(text: str) -> List[Tuple]:
     """通过关键词匹配识别问题类型"""
+    _check_problem_types_drift()
     text_lower = text.lower()
     scores = []
     for ptype, config in PROBLEM_TYPES.items():
@@ -74,16 +130,19 @@ def _extract_sub_problems(text: str) -> List[Tuple[int, str]]:
     - "问题N"后面紧跟空格→新问题，内容是"问题N"之后到下一"问题M"之前
     - "问题N"后面紧跟"请/的/等"→引用（如"问题2请根据"、"问题1的"），内容被前一个任务吞掉，跳过
     - 太短的描述（<20字符）且后面紧跟中文→引用，跳过
+
+    v8.4.6: 用 _SUB_PROBLEM_RE 替换硬编码 ``问题(\\d+)``，支持
+    问题1/问题 1/第1问/Problem 1/子问题1/问题一 等格式（审计 #5）。
     """
-    import re
     tasks: List[Tuple[int, str]] = []
 
     try:
-        pattern = r'问题(\d+)'
-        matches = list(re.finditer(pattern, text))
+        matches = _find_sub_problem_matches(text)
 
         for i, m in enumerate(matches):
-            num = int(m.group(1))
+            num = _sub_problem_number(m)
+            if num < 0:
+                continue
             next_char = text[m.end()] if m.end() < len(text) else ''
 
             # 如果后面紧跟常见的引用性词语（如"的"、"请"）且描述很短→ 引用，跳过
@@ -95,7 +154,7 @@ def _extract_sub_problems(text: str) -> List[Tuple[int, str]]:
             if next_char in '的的请了并且但若如要能可应被让给被会已曾还正将将才就便就那就的话' and is_short and already_have_this_num:
                 continue
             
-            # start: after the match (position right after "问题N")
+            # start: after the match (position right after "问题N" / "第1问" etc.)
             start = m.end()
             # end: start of the next match (NOT end of next match)
             end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
@@ -113,13 +172,13 @@ def _extract_sub_problems(text: str) -> List[Tuple[int, str]]:
                     # We already have a long description for this number → this is a reference, skip
                     continue
                 # Otherwise try to get the full content
-                full_start = m.start()  # start from "问题N" itself
+                full_start = m.start()  # start from the marker itself
                 full_end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
                 full_desc = text[full_start:full_end].strip()
-                # Remove the "问题N" prefix from the beginning
-                full_desc = re.sub(rf'^问题{num}\s*', '', full_desc, count=1)
-                # Also truncate at next "问题" occurrence to avoid "问题1的" leaking
-                next_prob_m = re.search(r'问题', full_desc)
+                # Strip the leading marker (问题N / 第1问 / Problem 1 / 子问题1 / 问题一)
+                full_desc = re.sub(rf'^{re.escape(m.group(0))}\s*', '', full_desc, count=1)
+                # Truncate at next sub-problem marker to avoid "问题1的" leaking
+                next_prob_m = _SUB_PROBLEM_RE.search(full_desc)
                 if next_prob_m and next_prob_m.start() < 10:
                     full_desc = full_desc[:next_prob_m.start()].strip()
                 if len(full_desc) >= 20:
@@ -129,19 +188,18 @@ def _extract_sub_problems(text: str) -> List[Tuple[int, str]]:
                     continue
 
             if len(desc) >= 5:
-                # 截断到下一个"问题N"之前，但要注意区分"问题1的"（引用）与"问题2请根据"（新问题开头）
+                # 截断到下一个子问题标记之前，但要注意区分"问题1的"（引用）与"问题2请根据"（新问题开头）
                 # "问题1的" → 前面是"的"，是小编号引用，应该截断
                 # "问题2请" / "问题3光" → 前面是数字或空白，是新问题开始，不截断
-                next_prob_match = re.search(r'问题(\d+)', desc)
+                next_prob_match = _SUB_PROBLEM_RE.search(desc)
                 if next_prob_match:
-                    m_num = int(next_prob_match.group(1))
+                    m_num = _sub_problem_number(next_prob_match)
                     m_start = next_prob_match.start()
-                    # 如果匹配到"问题N"且N比当前编号大，说明是新问题，跳过不截断
+                    # 如果匹配到子问题标记且N比当前编号大，说明是新问题，跳过不截断
                     if m_num > num:
                         pass  # 不截断，继续使用完整desc
                     elif m_start < 5:
                         # "问题1的"在小编号引用这种情况下才截断
-                        # 检查前面是否是已有的子问题描述中引用的格式
                         desc = desc[:m_start].strip()
                 if len(desc) >= 5:
                     tasks.append((num, desc[:300]))
@@ -157,25 +215,23 @@ def _extract_sub_problems(text: str) -> List[Tuple[int, str]]:
     result = [(k, v) for k, v in sorted(seen.items(), key=lambda x: x[0])]
 
     # 如果只有1个或2个子问题但题目明确有3个问题，说明可能漏了问题2
-    # 手动检测：题目中有"问题1"和"问题3"但没有"问题2"的结果 → 问题2被漏
+    # 手动检测：题目中有"问题2"和"问题3"但没有"问题2"的结果 → 问题2被漏
+    # v8.4.6: 用 _SUB_PROBLEM_RE 支持多种编号格式（第2问/Problem 2/子问题2/问题二 等）
     if len(result) <= 2:
-        problem_2_match = re.search(r'问题2', text)
-        problem_3_match = re.search(r'问题3', text)
+        all_matches = _find_sub_problem_matches(text)
+        problem_2_match = next((m for m in all_matches if _sub_problem_number(m) == 2), None)
+        problem_3_match = next((m for m in all_matches if _sub_problem_number(m) == 3), None)
         if problem_2_match and problem_3_match:
             # 提取问题2的内容（在"问题2"和"问题3"之间）
             p2_start = problem_2_match.end()
             p2_end = problem_3_match.start()
             p2_desc = text[p2_start:p2_end].strip()
             # 去除开头的前文引用形式（如"请根据问题1的数学模型，"），但保留后面的主要内容
-            # 先把"请根据问题1的数学模型，"去掉
             p2_desc = re.sub(r'^请根据问题1的数学模型[，,]\s*', '', p2_desc, count=1)
-            # 再把"请根据"去掉
             p2_desc = re.sub(r'^请根据\s*', '', p2_desc, count=1)
-            # 再把开头的"的"去掉（来自"问题1的"这种引用）
             p2_desc = re.sub(r'^的\s*', '', p2_desc, count=1)
             p2_desc = p2_desc.strip()
             if len(p2_desc) >= 20:
-                # 检查result里是否已有问题2
                 existing_nums = {num for num, _ in result}
                 if 2 not in existing_nums:
                     result.append((2, p2_desc[:300]))
@@ -309,9 +365,10 @@ class AnalyzerAgent(BaseAgent):
     async def execute(self, task_input: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
         problem_text = task_input.get("problem_text", context.get("problem_text", ""))
 
-        # 预分析：统计"问题N"的数量，提前告知LLM
-        problem_markers = re.findall(r'问题(\d+)', problem_text)
-        unique_markers = sorted(set(int(m) for m in problem_markers))
+        # 预分析：统计子问题标记的数量，提前告知LLM
+        # v8.4.6: 用 _SUB_PROBLEM_RE 支持 问题1/第1问/Problem 1/子问题1/问题一 等格式
+        problem_markers = [_sub_problem_number(m) for m in _find_sub_problem_matches(problem_text)]
+        unique_markers = sorted(set(n for n in problem_markers if n > 0))
         marker_hint = f"本题包含 {len(unique_markers)} 个子问题：{unique_markers}。请为每个子问题输出一个条目。"
         logger.info(f"AnalyzerAgent: 分析问题 (检测到问题标记: {unique_markers}) {problem_text[:80]}...")
 
@@ -379,6 +436,17 @@ class AnalyzerAgent(BaseAgent):
                 if any(kw in desc_lower for kw in ["干涉", "光束", "外延", "厚度", "折射率", "光程差", "波数", "反射率", "多光束", "薄膜", "红外", "光学", "物理"]):
                     sp_type = "物理/光学测量类"
                     sp_method = "干涉法建模"
+                # v8.4.6: 综述/调研类（审计 #7：原 fallback 无 survey 分支）
+                elif any(kw in desc_lower for kw in ["综述", "调研", "现状", "文献综述", "review", "survey", "进展", "前沿"]):
+                    sp_type = "综述/调研问题"
+                    sp_method = "文献综述法"
+                # v8.4.6: 金融分析类（审计 #7：原 fallback 无 financial 分支）
+                elif any(kw in desc_lower for kw in ["金融", "股票", "投资", "风险评估", "收益", "证券", "期货", "期权", "量化", "回测", "组合投资"]):
+                    sp_type = "金融分析问题"
+                    if "风险" in desc_lower: sp_method = "VaR/压力测试风险评估"
+                    elif "回测" in desc_lower or "量化" in desc_lower: sp_method = "量化回测分析"
+                    elif "组合" in desc_lower or "配置" in desc_lower: sp_method = "Markowitz投资组合优化"
+                    else: sp_method = "金融建模与收益分析"
                 elif "预测" in desc or "forecast" in desc_lower:
                     sp_type = "预测问题"
                     if "lstm" in desc_lower: sp_method = "LSTM神经网络"
@@ -433,9 +501,14 @@ class AnalyzerAgent(BaseAgent):
             difficulty = "困难"
 
         # 如果有物理/光学关键词，整体类型改为物理/光学测量类
+        # v8.4.6: 增加 金融/综述 整体类型识别（审计 #7）
         text_lower = text.lower()
         if any(kw in text_lower for kw in ["干涉", "外延", "厚度", "折射率", "光程差", "波数", "反射率", "多光束", "碳化硅", "红外"]):
             final_problem_type = "物理/光学测量类"
+        elif any(kw in text_lower for kw in ["综述", "调研", "现状", "文献综述", "review", "survey", "进展", "前沿"]):
+            final_problem_type = "综述/调研问题"
+        elif any(kw in text_lower for kw in ["金融", "股票", "投资", "风险评估", "收益", "证券", "期货", "期权", "量化", "回测", "组合投资"]):
+            final_problem_type = "金融分析问题"
         else:
             final_problem_type = ptype_desc
 

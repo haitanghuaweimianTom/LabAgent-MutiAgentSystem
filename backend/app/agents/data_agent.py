@@ -72,8 +72,12 @@ class DataAgent(BaseAgent):
         try:
             if suffix == ".csv":
                 return self._analyze_csv(path)
+            elif suffix == ".tsv":
+                return self._analyze_csv(path, delimiter="\t")  # v8.4.6: tsv 复用 csv 分析
             elif suffix in [".xlsx", ".xls"]:
                 return self._analyze_excel(path)
+            elif suffix == ".parquet":
+                return self._analyze_parquet(path)  # v8.4.6: 新增 parquet 支持
             elif suffix == ".json":
                 return self._analyze_json(path)
             elif suffix == ".txt":
@@ -95,10 +99,32 @@ class DataAgent(BaseAgent):
 
         # 读取数据到DataFrame
         try:
+            # v8.4.6: 中文 CSV 用 GBK/GB18030 时 utf-8-sig 会崩 → 改用编码 fallback 链；
+            #         同时补齐 tsv / parquet 支持（原仅 csv/xlsx/json）。
             if suffix == ".csv":
-                load_code = f"df = pd.read_csv(r'{file_path}', encoding='utf-8-sig')\n"
+                load_code = (
+                    f"_encs = ('utf-8-sig','utf-8','gbk','gb18030','latin-1')\n"
+                    f"for _enc in _encs:\n"
+                    f"    try:\n"
+                    f"        df = pd.read_csv(r'{file_path}', encoding=_enc)\n"
+                    f"        break\n"
+                    f"    except UnicodeDecodeError:\n"
+                    f"        continue\n"
+                )
+            elif suffix == ".tsv":
+                load_code = (
+                    f"_encs = ('utf-8-sig','utf-8','gbk','gb18030','latin-1')\n"
+                    f"for _enc in _encs:\n"
+                    f"    try:\n"
+                    f"        df = pd.read_csv(r'{file_path}', encoding=_enc, sep='\t')\n"
+                    f"        break\n"
+                    f"    except UnicodeDecodeError:\n"
+                    f"        continue\n"
+                )
             elif suffix in [".xlsx", ".xls"]:
                 load_code = f"df = pd.read_excel(r'{file_path}')\n"
+            elif suffix == ".parquet":
+                load_code = f"df = pd.read_parquet(r'{file_path}')\n"
             elif suffix == ".json":
                 load_code = f"df = pd.read_json(r'{file_path}', encoding='utf-8-sig')\n"
             else:
@@ -173,19 +199,57 @@ class DataAgent(BaseAgent):
             result_path.unlink(missing_ok=True)
 
     def build_analysis_code(self, file_path: str, analysis_type: str = "full") -> str:
-        """构建Python分析代码模板"""
+        """构建Python分析代码模板
+
+        v8.4.6: 修复始终生成 CSV 读取代码的 bug。原实现无视 suffix 硬编码
+        ``pd.read_csv(..., encoding='utf-8-sig')``，对 xlsx/json/parquet 文件生成的
+        代码是错的，被 solver 照抄后执行必失败。改为按 suffix 分支生成读取代码，
+        并对 CSV 使用编码 fallback 链（兼容 GBK/GB18030）。
+        """
         import os
         # 安全转义路径，防止代码注入
         file_path = str(resolve_data_path(file_path))  # 按项目根解析，cwd=backend 会错位
         safe_path = os.path.realpath(file_path).replace("\\", "\\\\").replace("'", "\\'")
         path = Path(file_path)
         suffix = path.suffix.lower()
+
+        # 按 suffix 生成读取代码（与 execute_python_analysis 的 load_code 逻辑一致）
+        if suffix == ".csv":
+            read_code = (
+                f"_encs = ('utf-8-sig','utf-8','gbk','gb18030','latin-1')\n"
+                f"for _enc in _encs:\n"
+                f"    try:\n"
+                f"        df = pd.read_csv(r'{safe_path}', encoding=_enc)\n"
+                f"        break\n"
+                f"    except UnicodeDecodeError:\n"
+                f"        continue\n"
+            )
+        elif suffix == ".tsv":
+            read_code = (
+                f"_encs = ('utf-8-sig','utf-8','gbk','gb18030','latin-1')\n"
+                f"for _enc in _encs:\n"
+                f"    try:\n"
+                f"        df = pd.read_csv(r'{safe_path}', encoding=_enc, sep='\t')\n"
+                f"        break\n"
+                f"    except UnicodeDecodeError:\n"
+                f"        continue\n"
+            )
+        elif suffix in [".xlsx", ".xls"]:
+            read_code = f"df = pd.read_excel(r'{safe_path}')\n"
+        elif suffix == ".parquet":
+            read_code = f"df = pd.read_parquet(r'{safe_path}')\n"
+        elif suffix == ".json":
+            read_code = f"df = pd.read_json(r'{safe_path}', encoding='utf-8-sig')\n"
+        else:
+            # 兜底用 CSV（会报错让上层感知，优于静默生成错代码）
+            read_code = f"df = pd.read_csv(r'{safe_path}', encoding='utf-8-sig')\n"
+
         return f"""
 import pandas as pd
 import numpy as np
 
 # 读取数据
-df = pd.read_csv(r'{safe_path}', encoding='utf-8-sig')
+{read_code}
 
 # 基本信息
 print('=== 数据基本信息 ===')
@@ -220,17 +284,32 @@ for col in cat_cols[:3]:
 print('\\n分析完成')
 """
 
-    def _analyze_csv(self, path: Path) -> Dict[str, Any]:
+    def _analyze_csv(self, path: Path, delimiter: str = ",") -> Dict[str, Any]:
         import csv
-        with open(path, "r", encoding="utf-8-sig") as f:
-            reader = csv.DictReader(f)
-            rows = list(reader)
-            if not rows:
-                return {"error": "CSV文件为空"}
-            columns = reader.fieldnames or []
-            numerical = [c for c in columns if rows and self._is_numerical(rows[0].get(c, ""))]
-            categorical = [c for c in columns if c not in numerical]
-            return {
+        # v8.4.6: 中文 CSV 常用 GBK/GB18030，按编码候选链 fallback
+        from ..core.data_assets import _CSV_ENCODINGS_TRY
+        _lines = None
+        _last_err = None
+        for _enc in _CSV_ENCODINGS_TRY:
+            try:
+                with open(path, "r", encoding=_enc) as _fh:
+                    _lines = _fh.read()
+                break
+            except UnicodeDecodeError as _e:
+                _last_err = _e
+                continue
+        if _lines is None:
+            raise _last_err
+        import io
+        f = io.StringIO(_lines)
+        reader = csv.DictReader(f, delimiter=delimiter)
+        rows = list(reader)
+        if not rows:
+            return {"error": "CSV文件为空"}
+        columns = reader.fieldnames or []
+        numerical = [c for c in columns if rows and self._is_numerical(rows[0].get(c, ""))]
+        categorical = [c for c in columns if c not in numerical]
+        return {
                 "shape": [len(rows), len(columns)],
                 "basic_info": {"numerical_columns": numerical, "categorical_columns": categorical},
                 "data_quality": {"missing_rate": 0.0, "duplicates": 0},
@@ -265,6 +344,31 @@ print('\\n分析完成')
             }
         except ImportError:
             return {"error": "需要安装 pandas 和 openpyxl: pip install pandas openpyxl"}
+
+    def _analyze_parquet(self, path: Path) -> Dict[str, Any]:
+        """v8.4.6: 分析 parquet 文件（pandas 原生支持，无需额外编码处理）。"""
+        try:
+            import pandas as pd
+            df = pd.read_parquet(path)
+            return {
+                "shape": list(df.shape),
+                "basic_info": {
+                    "numerical_columns": [c for c in df.select_dtypes(include="number").columns],
+                    "categorical_columns": [c for c in df.select_dtypes(include="object").columns],
+                },
+                "data_quality": {
+                    "missing_rate": float(df.isnull().sum().sum() / (df.shape[0] * df.shape[1]) * 100) if df.size else 0.0,
+                    "duplicates": int(df.duplicated().sum()),
+                },
+                "insights": [
+                    f"数据集包含{df.shape[0]}行{df.shape[1]}列",
+                ],
+                "modeling_suggestions": ["根据数据类型选择合适的模型"],
+                "file_name": path.name,
+                "file_size": path.stat().st_size,
+            }
+        except Exception as e:
+            return {"error": f"parquet 读取失败: {e}"}
 
     def _analyze_json(self, path: Path) -> Dict[str, Any]:
         with open(path, "r", encoding="utf-8") as f:

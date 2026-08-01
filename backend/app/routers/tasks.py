@@ -153,22 +153,42 @@ def get_uploaded_files(selected_names: Optional[List[str]] = None, project_name:
     Args:
         selected_names: 如果提供，只返回文件名在该列表中的文件
         project_name: 项目名，指定时优先从项目 data 目录读取
-    """
-    files = []
-    target_dir = get_project_data_dir(project_name)
 
-    # 1. 从目标数据目录获取（项目目录或全局 uploads）
-    if target_dir.exists():
-        for f in target_dir.iterdir():
+    v8.4.6: 修复 subdir 不可见 bug。原实现用 ``target_dir.iterdir()`` 只遍历 data 根
+    目录，但 v5.3.0 后 migrate_legacy_data_dir() 会把文件移到 ``user_uploads/`` 子目录，
+    新上传也落到 ``user_upload/``（data.py /upload）。iterdir 只看到子目录（is_file=False）
+    → 用户上传的文件永远进不了 data_files → preflight 判无数据 → data_agent 跳过分析。
+    改为遍历 data 根 + user_upload + self_collected 子目录，与 list_project_files /
+    discover_data_assets（rglob）一致。
+    """
+    from ..core.paths import get_project_data_subdir
+
+    files = []
+
+    def _collect_from(dir_path: Path) -> None:
+        """遍历单个目录的文件（不递归），跳过隐藏文件与 _index.json 元数据。"""
+        if not dir_path.exists():
+            return
+        for f in dir_path.iterdir():
             # 跳过隐藏文件（.开头）：.migrated_v530 等是系统内部迁移/标记文件，
             # 非用户数据。曾被误当数据文件 → 数据质量门禁判 0 字节 → 任务标 failed
             # （尽管论文已正常产出）。见 paths.py _MIGRATION_MARKER。
-            if f.is_file() and not f.name.startswith("."):
+            if f.is_file() and not f.name.startswith(".") and f.name != "_index.json":
                 if selected_names is not None:
                     if f.name in selected_names:
                         files.append(str(f))
                 else:
                     files.append(str(f))
+
+    # 1. 从项目数据目录获取：遍历 data 根 + user_upload + self_collected 子目录
+    #    （data 根遍历保留向后兼容：旧版未迁移的文件仍在根下）
+    target_dir = get_project_data_dir(project_name)
+    _collect_from(target_dir)
+    for src in ("user_upload", "self_collected"):
+        try:
+            _collect_from(get_project_data_subdir(project_name, source=src))
+        except ValueError:
+            pass  # 防御：非法 source 不应发生
 
     # 2. 从项目根目录获取（附件1-4.xlsx 等数据文件）——仅无项目时保留旧行为
     if not project_name and PROJECT_ROOT.exists():
@@ -295,8 +315,17 @@ async def submit_task(req: TaskCreateRequest):
     # 因 preflight 已把 standard 等工作流的 missing 降级为 sufficient（门禁放行），
     # 此处若仍依赖 MISSING 会导致 self_collect 分支永不触发，金融选题的 akshare
     # 采集无法执行。改为：用户选了 self_collect 且没上传数据，就尝试采集。
+    # v8.4.6: 进一步放宽——金融选题即使已上传数据，也尝试 akshare 补充采集真实
+    # 行情（用户上传的可能是无关数据或静态样本，akshare 行情是动态权威源）。
+    # 补充采集的文件追加到 data_files。
     allow_self_collect = req.data_source in ("self_collect", "upload_and_collect")
-    if allow_self_collect and not data_files:
+    _FINANCE_KEYWORDS = ("金融", "股票", "股市", "指数", "沪深", "上证", "深证",
+                         "创业板", "科创板", "恒生", "道琼斯", "纳斯达克", "标普",
+                         "基金", "期货", "债券", "外汇", "加密货币", "比特币",
+                         "投资组合", "回测", "量化", "portfolio", "stock", "backtest")
+    _is_finance_topic = any(kw in req.problem_text for kw in _FINANCE_KEYWORDS)
+    _should_supplement_finance = _is_finance_topic and bool(data_files)
+    if allow_self_collect and (not data_files or _should_supplement_finance):
         save_task_metadata(
             task_id=task_id,
             problem_text=req.problem_text,

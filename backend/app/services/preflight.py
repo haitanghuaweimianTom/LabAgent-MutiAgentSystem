@@ -28,6 +28,114 @@ from ..services.data_schema import get_schema_extractor
 logger = logging.getLogger(__name__)
 
 
+# ============================================================================
+# v8.4.6: 用户意图识别的规范化常量 —— 全仓单一可信源
+# - PROBLEM_TYPES: 问题类型允许值（preflight / analyzer / orchestrator 共用）
+# - KEYWORD_TEMPLATE_MAP: 关键词 → 模板 ID 强先验，LLM 输出非法/缺模板时兜底
+# - WORKFLOW_TEMPLATE_COMPAT: 模板 ↔ 工作流一致性校验表
+# 之前 PROBLEM_TYPES 在 preflight.py / analyzer_agent.py / langgraph_orchestrator.py
+# 三处各自定义且不一致（v8.4.5 审计 #4），现统一从本模块导入。
+# ============================================================================
+
+# 问题类型允许值（规范化列表，三处共用）
+PROBLEM_TYPES: List[str] = [
+    "优化", "预测", "评价", "分类", "仿真", "网络", "物理", "测量", "综合", "未知",
+]
+
+# 竞赛关键词 —— 最高优先级，命中即 → math_modeling（竞赛格式不可覆盖）
+# v8.4.6: 单独提取以避免和 math_modeling 的通用方法关键词混在一起被 neurips 抢匹配
+_COMPETITION_KEYWORDS: List[str] = [
+    "建模竞赛", "CUMCM", "数学建模", "全国大学生数学建模", "美赛", "MCM", "ICM",
+]
+
+# 关键词 → 模板 ID 映射（中英文混合，按命中优先级排序；首匹配生效）
+# 用途：(a) 作为强先验注入 LLM prompt；(b) LLM 输出非 JSON / 缺 template 时的兜底
+# v8.4.6: 优先级排序 —— 越具体的意图越靠前（survey/financial/coursework 优先于
+# 通用 math_modeling/neurips），避免"深度学习综述"被 neurips 抢匹配。
+# 竞赛关键词（→ math_modeling）在 _match_template_by_keywords 中先行扫描，优先级最高。
+KEYWORD_TEMPLATE_MAP: "Dict[str, List[str]]" = {
+    "research_survey": [
+        # 综述/调研类（无需数据采集）—— survey 意图覆盖一切
+        "综述", "调研", "现状", "文献综述", "review", "survey", "进展", "前沿",
+    ],
+    "financial_analysis": [
+        # 金融分析 —— 域特定，优先于通用建模
+        "金融", "股票", "投资", "风险评估", "收益", "证券", "期货", "期权",
+        "量化", "回测", "组合投资",
+    ],
+    "coursework": [
+        "课程作业", "期末项目", "实验报告", "coursework", "assignment",
+    ],
+    "neurips_2024": [
+        # 深度学习/机器学习理论研究 —— 优先于 math_modeling 的通用方法关键词
+        "神经网络", "LSTM", "深度学习", "机器学习", "transformer", "attention",
+        "CNN", "RNN", "GAN", "强化学习", "对比学习", "自监督", "diffusion",
+        "表征学习", "预训练",
+    ],
+    "math_modeling": [
+        # 通用建模方法关键词（预测/回归/分类/优化/微分方程/统计/仿真/评价）
+        # 竞赛关键词见 _COMPETITION_KEYWORDS（最高优先级，先行扫描）
+        "预测模型", "回归", "分类", "优化", "线性规划", "整数规划", "非线性规划",
+        "排队论", "微分方程", "统计分析", "时间序列", "ARIMA", "灰色预测",
+        "层次分析", "AHP", "TOPSIS", "熵权法", "蒙特卡罗", "仿真", "评价",
+        "调度", "路径规划", "TSP",
+    ],
+    "acm_sigconf": [
+        # ACM 偏系统/工程/软件/数据库
+        "软件工程", "多智能体", "系统设计", "数据库", "人机交互",
+    ],
+    "ieee_conference": [
+        # IEEE 偏通信/信号/控制/机器人
+        "通信", "信号处理", "控制工程", "机器人", "物联网",
+    ],
+    "springer_lncs": [
+        # LNCS 偏 CV/模式识别
+        "计算机视觉", "模式识别",
+    ],
+}
+
+# 模板 ↔ 工作流一致性校验表
+# - "allowed": 模板允许的工作流集合（None 表示全部允许）
+# - "blocked": 模板禁止路由到的工作流集合
+# 用于 _validate_template_workflow_consistency，纠正 LLM 给出的语义冲突组合
+WORKFLOW_TEMPLATE_COMPAT: "Dict[str, Dict[str, Any]]" = {
+    "research_survey": {
+        # 综述类：走 deep_research（文献检索），禁止 iterative_solver（无需建模/求解）
+        "allowed": ["deep_research", "research_paper"],
+        "blocked": [],
+    },
+    "financial_analysis": {
+        # 金融分析：standard 工作流 + financial_analyst_agent（由 _select_modeling_agent 路由）
+        "allowed": ["standard"],
+        "blocked": ["quick", "code_focused"],
+    },
+    "math_modeling": {
+        "allowed": ["standard", "deep_research", "research_paper"],
+        "blocked": [],
+    },
+    "coursework": {
+        "allowed": ["quick", "standard"],
+        "blocked": [],
+    },
+    "neurips_2024": {
+        "allowed": ["research_paper", "deep_research"],
+        "blocked": ["quick"],
+    },
+    "ieee_conference": {
+        "allowed": ["research_paper", "deep_research"],
+        "blocked": ["quick"],
+    },
+    "acm_sigconf": {
+        "allowed": ["research_paper", "deep_research"],
+        "blocked": ["quick"],
+    },
+    "springer_lncs": {
+        "allowed": ["research_paper", "deep_research"],
+        "blocked": ["quick"],
+    },
+}
+
+
 class DataAdequacy(str, Enum):
     SUFFICIENT = "sufficient"
     INSUFFICIENT = "insufficient"
@@ -126,10 +234,8 @@ class _PreflightLLMClient(BaseAgent):
 class PreflightDecisionService:
     """Preflight 决策器"""
 
-    # 允许的问题类型
-    PROBLEM_TYPES = [
-        "优化", "预测", "评价", "分类", "仿真", "网络", "物理", "测量", "综合", "未知"
-    ]
+    # v8.4.6: PROBLEM_TYPES 改为引用模块级常量（单一可信源），analyzer/orchestrator 也从此导入
+    PROBLEM_TYPES = PROBLEM_TYPES
 
     # 允许的工作流
     WORKFLOWS = ["standard", "quick", "deep_research", "code_focused", "research_paper"]
@@ -208,7 +314,7 @@ class PreflightDecisionService:
             user_mode=mode,
         )
 
-        report = self._build_report(raw_decision, schemas, template, workflow_type, mode)
+        report = self._build_report(raw_decision, schemas, template, workflow_type, mode, problem_text)
 
         # 如果用户明确指定了 template/workflow/mode，优先尊重用户选择
         if template:
@@ -217,6 +323,18 @@ class PreflightDecisionService:
             report.recommended_workflow = workflow_type
         if mode:
             report.recommended_mode = mode
+
+        # v8.4.6: research_survey 是文献综述类，语义上不需要数据采集。
+        # 跳过 data-collection preflight，直接标记 sufficient + 不触发 self_collect，
+        # 避免 LLM 被 prompt 误导成 missing+should_collect 再被 v8.4.5 降级（审计 #2/#3）。
+        effective_template = template or report.recommended_template
+        if effective_template == "research_survey":
+            report.data_adequacy = DataAdequacy.SUFFICIENT
+            report.has_data_confidence = max(report.has_data_confidence, 0.6)
+            report.llm_should_collect = False
+            if not report.collection_plan:
+                report.collection_plan = ""
+            return report
 
         # 数据为空 → 根据工作流决定是否强制 missing
         # deep_research: 自主搜索，不拦截
@@ -301,7 +419,19 @@ class PreflightDecisionService:
         user_workflow: Optional[str],
         user_mode: Optional[str],
     ) -> str:
-        """构造 ReAct-style 决策 prompt"""
+        """构造 ReAct-style 决策 prompt。
+
+        v8.4.6: 把 KEYWORD_TEMPLATE_MAP 作为强先验注入 prompt，让 LLM 优先按
+        关键词命中推荐模板；同时澄清 research_survey 无需数据采集（审计 #2/#3）。
+        """
+        # 把关键词表压成 prompt 友好的文本（仅展示候选模板的关键词）
+        keyword_hints = []
+        for tpl_id, keywords in KEYWORD_TEMPLATE_MAP.items():
+            if tpl_id not in template_list:
+                continue
+            keyword_hints.append(f"  - {tpl_id}: {', '.join(keywords[:8])}")
+        keyword_text = "\n".join(keyword_hints) if keyword_hints else "  (无)"
+
         return f"""请对以下科研任务进行预检决策。
 
 ## 题目描述
@@ -312,6 +442,9 @@ class PreflightDecisionService:
 
 ## 可选模板
 {json.dumps(template_list, ensure_ascii=False, indent=2)}
+
+## 关键词 → 模板 强先验映射（请优先按此映射选模板）
+{keyword_text}
 
 ## 用户显式选择（可能为空）
 - 模板: {user_template or "未指定"}
@@ -336,13 +469,16 @@ class PreflightDecisionService:
 - 模板与工作流已由系统绑定，请按以下映射推荐工作流：
   - math_modeling / financial_analysis → standard
   - coursework → quick
-  - research_survey → deep_research
+  - research_survey → deep_research（仅文献检索，无需数据采集）
   - ieee_conference / neurips_2024 / acm_sigconf / springer_lncs → research_paper
+- 请优先按上方「关键词 → 模板 强先验映射」选择模板；题目命中某模板关键词时直接推荐该模板。
 - 如果题目偏向机器学习/深度学习理论研究，优先推荐 neurips_2024 或 ieee_conference。
 - 如果题目偏向系统/多智能体/软件工程，优先推荐 acm_sigconf。
 - 如果题目是中文数学建模赛题或明确要求建立数学模型，优先推荐 math_modeling。
-- 如果题目只需要综述而无实验数据，可推荐 research_survey。
+- 如果题目只需文献综述/调研而无实验数据，推荐 research_survey。
 - has_data_confidence 要诚实反映数据是否足够支撑题目。
+- research_survey 是文献综述类，语义上不需要数据采集：当推荐模板为 research_survey 时，
+  data_adequacy 设为 sufficient、llm_should_collect 设为 false、collection_plan 留空。
 - 工作流为 deep_research 时，系统会自主搜集数据，不要强制标记 data_adequacy 为 MISSING。
 """
 
@@ -357,28 +493,111 @@ class PreflightDecisionService:
 
     @staticmethod
     def _parse_json(content: str) -> Dict[str, Any]:
-        """从 LLM 输出中解析 JSON，兼容 markdown 围栏"""
-        content = content.strip()
-        # 去掉 markdown 围栏
-        if content.startswith("```"):
-            lines = content.splitlines()
-            if lines[0].startswith("```"):
+        """从 LLM 输出中解析 JSON，兼容 markdown 围栏与杂散文案。
+
+        v8.4.6: 修复原 ``\\{{.*?\\}}`` 正则只匹配双花括号的 bug，改用与
+        ``langgraph_orchestrator._extract_json_obj`` 一致的花括号深度匹配，
+        能从 `````json ... ```` 围栏 + 前后解释文字中稳健提取首个 JSON 对象。
+        """
+        if not content:
+            return {}
+        s = content.strip()
+        # 去掉 markdown 围栏（``` / ```json）
+        if s.startswith("```"):
+            lines = s.splitlines()
+            if lines and lines[0].startswith("```"):
                 lines = lines[1:]
             if lines and lines[-1].strip() == "```":
                 lines = lines[:-1]
-            content = "\n".join(lines).strip()
+            s = "\n".join(lines).strip()
+        # 直接尝试整段解析
         try:
-            return json.loads(content)
+            return json.loads(s)
         except json.JSONDecodeError:
-            # 尝试从文本中提取第一个 JSON 对象
-            match = re.search(r"\{{.*?\}}", content, re.DOTALL)
-            if match:
-                try:
-                    return json.loads(match.group(0))
-                except json.JSONDecodeError:
-                    pass
-            logger.warning(f"LLM 输出不是合法 JSON: {content[:200]}")
-            return {}
+            pass
+        # 兜底：花括号深度匹配，提取首个完整 {...} 对象
+        start = s.find("{")
+        if start >= 0:
+            depth = 0
+            in_str = False
+            esc = False
+            for i in range(start, len(s)):
+                c = s[i]
+                if in_str:
+                    if esc:
+                        esc = False
+                    elif c == "\\":
+                        esc = True
+                    elif c == '"':
+                        in_str = False
+                    continue
+                if c == '"':
+                    in_str = True
+                elif c == "{":
+                    depth += 1
+                elif c == "}":
+                    depth -= 1
+                    if depth == 0:
+                        try:
+                            return json.loads(s[start:i + 1])
+                        except json.JSONDecodeError:
+                            pass
+        logger.warning(f"LLM 输出不是合法 JSON: {content[:200]}")
+        return {}
+
+    @staticmethod
+    def _match_template_by_keywords(problem_text: str, allowed_templates: Optional[List[str]] = None) -> Optional[str]:
+        """v8.4.6: 关键词 → 模板 ID 兜底匹配。
+
+        当 LLM 输出非 JSON 或 recommended_template 缺失/非法时调用。
+        优先级：_COMPETITION_KEYWORDS（→ math_modeling）> KEYWORD_TEMPLATE_MAP 首匹配。
+        ``allowed_templates`` 限定候选范围（如已加载的模板 ID 列表），None 表示不限。
+        """
+        if not problem_text:
+            return None
+        text_lower = problem_text.lower()
+        # 优先级 0：竞赛关键词 → math_modeling（竞赛格式不可覆盖）
+        if "math_modeling" in (allowed_templates or ["math_modeling"]):
+            for kw in _COMPETITION_KEYWORDS:
+                if kw.lower() in text_lower:
+                    return "math_modeling"
+        # 优先级 1+：按 KEYWORD_TEMPLATE_MAP 顺序首匹配
+        for tpl_id, keywords in KEYWORD_TEMPLATE_MAP.items():
+            if allowed_templates and tpl_id not in allowed_templates:
+                continue
+            for kw in keywords:
+                if kw.lower() in text_lower:
+                    return tpl_id
+        return None
+
+    @staticmethod
+    def _validate_template_workflow_consistency(
+        template: str, workflow: str
+    ) -> Tuple[str, Optional[str]]:
+        """v8.4.6: 校验模板 ↔ 工作流一致性，自动纠正语义冲突组合。
+
+        Returns:
+            (corrected_workflow, warning) —— corrected_workflow 是纠正后的工作流；
+            warning 非 None 时说明发生了自动纠正（调用方可记日志/告警）。
+        """
+        compat = WORKFLOW_TEMPLATE_COMPAT.get(template)
+        if not compat:
+            return workflow, None
+        allowed = compat.get("allowed")
+        blocked = compat.get("blocked", [])
+        if workflow in blocked:
+            # 命中显式禁止项 → 取 allowed 首项兜底
+            corrected = allowed[0] if allowed else "standard"
+            return corrected, (
+                f"模板 {template} 不允许工作流 {workflow}，已纠正为 {corrected}"
+            )
+        if allowed and workflow not in allowed:
+            # 不在 allowed 列表 → 取 allowed 首项兜底
+            corrected = allowed[0]
+            return corrected, (
+                f"模板 {template} 建议工作流 {corrected}（LLM 给的 {workflow} 不在允许列表），已纠正"
+            )
+        return workflow, None
 
     def _build_report(
         self,
@@ -387,22 +606,43 @@ class PreflightDecisionService:
         user_template: Optional[str],
         user_workflow: Optional[str],
         user_mode: Optional[str],
+        problem_text: str = "",
     ) -> PreflightReport:
-        """把 LLM 输出标准化为 PreflightReport"""
-        template_list = self._list_template_ids()
-        recommended_template = raw.get("recommended_template", "math_modeling")
-        if recommended_template not in template_list:
-            recommended_template = user_template or "math_modeling"
+        """把 LLM 输出标准化为 PreflightReport。
 
-        recommended_workflow = raw.get("recommended_workflow", "standard")
+        v8.4.6: 三处加固
+        - LLM 输出非 JSON / 缺 template / template 非法时，用 KEYWORD_TEMPLATE_MAP 兜底
+        - 模板 ↔ 工作流一致性校验（_validate_template_workflow_consistency）
+        - problem_type 用规范化 PROBLEM_TYPES 校验
+        """
+        template_list = self._list_template_ids()
+        recommended_template = raw.get("recommended_template", "") or ""
+        if recommended_template not in template_list:
+            # v8.4.6: LLM 给的模板非法或缺省 → 关键词兜底 → 用户指定 → 默认 math_modeling
+            kb_fallback = self._match_template_by_keywords(problem_text, template_list)
+            recommended_template = (
+                kb_fallback or user_template or "math_modeling"
+            )
+            if kb_fallback:
+                logger.info(f"Preflight: LLM 模板非法/缺失，关键词兜底为 {kb_fallback}")
+
+        recommended_workflow = raw.get("recommended_workflow", "standard") or "standard"
         if recommended_workflow not in self.WORKFLOWS:
             recommended_workflow = user_workflow or "standard"
 
-        recommended_mode = raw.get("recommended_mode", "batch")
+        recommended_mode = raw.get("recommended_mode", "batch") or "batch"
         if recommended_mode not in self.MODES:
             recommended_mode = user_mode or "batch"
 
-        problem_type = raw.get("problem_type", "综合")
+        # v8.4.6: 模板 ↔ 工作流一致性校验（纠正 LLM 给出的语义冲突组合）
+        corrected_workflow, warn = self._validate_template_workflow_consistency(
+            recommended_template, recommended_workflow
+        )
+        if warn:
+            logger.info(f"Preflight: {warn}")
+            recommended_workflow = corrected_workflow
+
+        problem_type = raw.get("problem_type", "综合") or "综合"
         if problem_type not in self.PROBLEM_TYPES:
             problem_type = "综合"
 
@@ -536,11 +776,15 @@ class PreflightDecisionService:
                             logger.info(
                                 f"Task {task_id}: 下载成功 {dr.url} → {dr.filename} ({dr.size}B)"
                             )
-                            # 返回相对路径
-                            from ..core.paths import _PROJECT_ROOT
+                            # 返回相对路径（v8.4.6: 从实际落盘路径计算，修复无项目时路径错位）
+                            # 原实现硬编码 outputs/_global/data/self_collected/，但无项目时
+                            # get_project_data_subdir(None) 返回 backend/data/uploads/self_collected/，
+                            # 路径不匹配 → resolve_data_path 找不到 → data_quality_check 报 file_missing。
+                            from ..core.paths import _PROJECT_ROOT, get_project_data_subdir
                             try:
-                                rel = (Path("outputs") / (project_name or "_global") / "data" / "self_collected" / dr.filename)
-                                collected_files.append(str(rel))
+                                actual = get_project_data_subdir(project_name, "self_collected") / dr.filename
+                                rel = str(actual.relative_to(_PROJECT_ROOT))
+                                collected_files.append(rel)
                             except Exception:
                                 collected_files.append(dr.filename)
                         else:

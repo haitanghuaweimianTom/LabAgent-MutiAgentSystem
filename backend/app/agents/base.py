@@ -858,7 +858,7 @@ class BaseAgent(ABC):
             eff_project = project_name or self._task_project_name
             if eff_project:
                 results = await asyncio.to_thread(
-                    self._search_knowledge_bases, km, None, query_text, top_k, project_name)
+                    self._search_knowledge_bases, km, None, query_text, top_k, eff_project)
                 if results:
                     return self._format_knowledge_context(results, f"project={eff_project}")
 

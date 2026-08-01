@@ -37,6 +37,9 @@ env/
 # MiMoCode
 .mimocode/
 
+# Agent 计划/状态目录
+.omo/
+
 # Environment
 .env
 .env.local

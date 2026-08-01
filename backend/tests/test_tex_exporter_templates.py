@@ -1,4 +1,4 @@
-"""src.paper.tex_exporter 整改后的回归测试（Phase 1E）。
+r"""src.paper.tex_exporter 整改后的回归测试（Phase 1E）。
 
 覆盖：
 1. ``__init__`` 接受 ``template_id`` 参数并解析出 documentclass/cls_file。
@@ -23,7 +23,9 @@ from src.paper.tex_exporter import MarkdownToTexConverter  # noqa: E402
 # ---------- 1. 模板解析 ----------
 
 @pytest.mark.parametrize("template_id,expected_dc,expected_cls_fragment", [
-    ("math_modeling", "cumcmthesis", "mcmthesis.cls"),
+    # v4b94d258: math_modeling 已从 mcmthesis 切换到 ctexart（有意变更），
+    # 注册表 documentclass=ctexart、无 cls_file。
+    ("math_modeling", "ctexart", ""),
     ("coursework", "article", ""),
     ("financial_analysis", "article", ""),
     ("research_survey", "article", ""),
@@ -31,7 +33,7 @@ from src.paper.tex_exporter import MarkdownToTexConverter  # noqa: E402
     ("neurips_2024", "neurips_2024", ""),  # neurips 用 sty_files，无 cls_file
     ("acm_sigconf", "acmart", "acmart.cls"),
     ("springer_lncs", "llncs", "llncs.cls"),
-    ("nonexistent-xxx", "cumcmthesis", "mcmthesis.cls"),  # 未知 → fallback
+    ("nonexistent-xxx", "ctexart", ""),  # 未知 → fallback 到 math_modeling
 ])
 def test_resolve_template(template_id, expected_dc, expected_cls_fragment, tmp_path):
     conv = MarkdownToTexConverter(
@@ -50,19 +52,20 @@ def test_none_template_id_falls_back_to_math_modeling(tmp_path):
     conv = MarkdownToTexConverter(
         template_dir=tmp_path, output_dir=tmp_path / "out", template_id=None,
     )
-    assert conv.documentclass == "cumcmthesis"
+    assert conv.documentclass == "ctexart"
 
 
 # ---------- 2. CUMCM 完整结构 ----------
 
-def test_cumcm_doc_has_mcmsetup(tmp_path):
+def test_cumcm_doc_has_ctexart_generic_preamble(tmp_path):
+    """math_modeling 走 ctexart 通用 preamble（不再有 \\mcmsetup）。"""
     conv = MarkdownToTexConverter(
         template_dir=tmp_path, output_dir=tmp_path / "out", template_id="math_modeling",
     )
     doc = conv._build_document("body", "T")
-    assert "\\mcmsetup" in doc
-    assert "palatino" in doc
-    assert "CTeX = true" in doc
+    assert "\\documentclass{ctexart}" in doc
+    assert "\\mcmsetup" not in doc
+    assert "geometry" in doc  # 通用分支带 geometry
     assert "\\maketitle" in doc
 
 
@@ -111,9 +114,9 @@ def test_export_does_not_raise_on_missing_cls(tmp_path):
 # ---------- 5. 隔离性：不影响 mcmthesis 路径 ----------
 
 def test_legacy_mcmthesis_path_unchanged(tmp_path):
-    """旧调用方式（不传 template_id）行为与原 mcmthesis 一致。"""
+    """旧调用方式（不传 template_id）走 math_modeling（ctexart）通用路径。"""
     conv = MarkdownToTexConverter(template_dir=tmp_path, output_dir=tmp_path / "out")
-    assert conv.documentclass == "cumcmthesis"
+    assert conv.documentclass == "ctexart"
     doc = conv._build_document("body", "T")
-    assert "\\mcmsetup" in doc
-    assert "CTeX = true" in doc
+    assert "\\mcmsetup" not in doc
+    assert "\\documentclass{ctexart}" in doc

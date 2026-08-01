@@ -199,10 +199,19 @@ def load_dataset(name: Optional[str] = None):
         )
     path = _DATASETS[name]
     ext = os.path.splitext(path)[1].lower()
-    if ext == ".csv":
-        return pd.read_csv(path)
-    if ext == ".tsv":
-        return pd.read_csv(path, sep="\\t")
+    if ext in (".csv", ".tsv"):
+        _sep = "\\t" if ext == ".tsv" else ","
+        # v8.4.6: 中文 CSV 常用 GBK/GB18030，单一 utf-8 会 UnicodeDecodeError。
+        # 按编码候选链依次尝试，首个成功即返回。
+        _encs = ("utf-8-sig", "utf-8", "gbk", "gb18030", "latin-1")
+        _last = None
+        for _enc in _encs:
+            try:
+                return pd.read_csv(path, encoding=_enc, sep=_sep)
+            except UnicodeDecodeError as _e:
+                _last = _e
+                continue
+        raise _last
     if ext in (".xlsx", ".xls"):
         return pd.read_excel(path)
     if ext == ".parquet":
@@ -249,3 +258,52 @@ def build_prompt_block(assets: DataAssets) -> str:
         f"单文件直接读取示例（如不使用加载器）：`{read_snippet_for(assets.primary())}`",
     ]
     return "\n".join(lines)
+
+
+# 支持读取的 CSV 编码候选（按顺序尝试）。中国数学建模赛题 CSV 常用 GBK/GB18030，
+# 而 utf-8 解码会 UnicodeDecodeError → 数据分析静默失败、solver load_dataset 崩溃。
+# 本函数按 utf-8-sig → gbk → gb18030 → latin-1 依次 fallback，首个成功即返回。
+_CSV_ENCODINGS_TRY = ("utf-8-sig", "utf-8", "gbk", "gb18030", "latin-1")
+
+
+def read_csv_safe(path, **kwargs):
+    """读取 CSV，自动尝试多种编码（utf-8/gbk/gb18030/latin-1）。
+
+    供 sandbox 注入的 utils.py 与 data_schema / data_agent 共用，避免中文 CSV
+    在单一 utf-8 编码下崩溃。**kwargs 透传给 pd.read_csv（如 nrows、sep）。
+    """
+    import pandas as pd
+    last_err = None
+    for enc in _CSV_ENCODINGS_TRY:
+        try:
+            return pd.read_csv(path, encoding=enc, **kwargs)
+        except UnicodeDecodeError as e:
+            last_err = e
+            continue
+        except Exception:
+            # 非编码错误（如列数不匹配）直接用默认 utf-8 重抛
+            raise
+    # 全部编码失败 → 抛最后一个 UnicodeDecodeError
+    raise last_err
+
+
+def read_csv_safe_code(path_var: str) -> str:
+    """生成在 utils.py 内联使用的 CSV 读取代码（含编码 fallback 链）。
+
+    Args:
+        path_var: Python 表达式字符串，求值为文件路径（如 ``path`` 或 ``r"/x/y.csv"``）。
+
+    Returns:
+        可直接嵌入 utils.py 的 Python 源码片段，逻辑等价于 read_csv_safe。
+    """
+    return (
+        "    _encs = ('utf-8-sig', 'utf-8', 'gbk', 'gb18030', 'latin-1')\n"
+        "    _last = None\n"
+        f"    for _enc in _encs:\n"
+        "        try:\n"
+        f"            return pd.read_csv({path_var}, encoding=_enc)\n"
+        "        except UnicodeDecodeError as _e:\n"
+        "            _last = _e\n"
+        "            continue\n"
+        "    raise _last\n"
+    )
