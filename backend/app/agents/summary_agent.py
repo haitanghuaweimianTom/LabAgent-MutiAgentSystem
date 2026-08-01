@@ -103,14 +103,64 @@ class SummaryAgent(BaseAgent):
         return summary_report
 
     def _collect_agent_results(self, results: Dict[str, Any]) -> Dict[str, Any]:
-        """从各 Agent 的结果中提取关键信息"""
+        """从各 Agent 的结果中提取关键信息。
+
+        旧实现仅提取 ``success/summary/key_findings/errors`` 四个字段，但没有任何
+        agent 会填充这些字段，导致 LLM 看到全空输入并幻觉出"任务完全未执行"。
+        此处按 agent 类型提取其实际产出的内容信号。
+        """
         summaries = {}
         for agent_name, agent_result in results.items():
             if not isinstance(agent_result, dict):
                 continue
+
+            has_output = False
+            summary_text = ""
+
+            if agent_name == "writer_agent":
+                latex_code = agent_result.get("latex_code", "") or ""
+                title = agent_result.get("title", "") or ""
+                abstract = agent_result.get("abstract", "") or ""
+                chapters = agent_result.get("chapters", []) or []
+                has_output = bool(latex_code or abstract or chapters)
+                summary_text = (
+                    f"论文标题: {title}; 摘要长度: {len(abstract)} 字符; "
+                    f"LaTeX 长度: {len(latex_code)} 字符; 章节数: {len(chapters)}"
+                )
+            elif agent_name == "solver_agent":
+                sols = agent_result.get("sub_problem_solutions", []) or []
+                has_output = len(sols) > 0
+                summary_text = f"求解子问题数: {len(sols)}"
+            elif agent_name == "modeler_agent":
+                models = agent_result.get("sub_problem_models", []) or []
+                has_output = len(models) > 0
+                summary_text = f"模型数: {len(models)}"
+            elif agent_name == "analyzer_agent":
+                sps = agent_result.get("sub_problems", []) or []
+                has_output = len(sps) > 0
+                summary_text = f"分解子问题数: {len(sps)}"
+            elif agent_name == "peer_review_agent":
+                rec = agent_result.get("recommendation", "")
+                score = agent_result.get("overall_score", 0)
+                has_output = bool(rec)
+                summary_text = f"评议建议: {rec}; 评分: {score}/5"
+            elif agent_name == "research_agent":
+                papers = agent_result.get("papers", []) or []
+                has_output = len(papers) > 0
+                summary_text = f"检索文献数: {len(papers)}"
+            elif agent_name == "figure_agent":
+                total = agent_result.get("total", 0)
+                gen = agent_result.get("generated", 0)
+                has_output = gen > 0
+                summary_text = f"规划图表 {total} 张，成功生成 {gen} 张"
+            else:
+                # 回退方案：使用原始字段
+                summary_text = agent_result.get("summary", agent_result.get("interpretation", ""))
+                has_output = bool(summary_text or agent_result.get("key_findings"))
+
             summaries[agent_name] = {
-                "success": agent_result.get("success", True),
-                "summary": agent_result.get("summary", agent_result.get("interpretation", "")),
+                "success": has_output,
+                "summary": summary_text,
                 "key_findings": agent_result.get("key_findings", []),
                 "errors": agent_result.get("errors", []),
             }

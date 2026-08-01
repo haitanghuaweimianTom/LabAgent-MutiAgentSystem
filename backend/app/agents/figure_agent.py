@@ -578,11 +578,18 @@ class FigureAgent(BaseAgent):
             if result.get("success"):
                 generated.append(result)
 
+        generated_ids = {g.get("figure_id") for g in generated if isinstance(g, dict)}
         return {
             "action": "generate_all",
             "total": len(figures),
             "generated": len(generated),
             "figures": generated,
+            "plan_figures": figures,
+            "planned_count": len(figures),
+            "failed_specs": [
+                s for s in figures
+                if isinstance(s, dict) and s.get("id") not in generated_ids
+            ],
         }
 
     # ── Action: edit ──

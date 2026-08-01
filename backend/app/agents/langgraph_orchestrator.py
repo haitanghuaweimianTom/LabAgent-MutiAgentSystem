@@ -5404,6 +5404,28 @@ class LangGraphOrchestrator:
                 if b:
                     agent_map[b] = fig
 
+            # === 数量门禁：planned vs generated ===
+            planned_count = figure_output.get("planned_count") or len(plan_figs)
+            generated_count = len(agent_map)
+            if planned_count and generated_count < planned_count:
+                missing_ids = [
+                    pf.get("id") or pf.get("figure_id")
+                    for pf in plan_figs
+                    if isinstance(pf, dict)
+                    and (pf.get("id") or pf.get("figure_id")
+                         or _stem(pf.get("figure_path", ""))) not in agent_map
+                ]
+                issues.append({
+                    "severity": "error",
+                    "category": "figure_count_mismatch",
+                    "figure_id": ",".join(filter(None, missing_ids)),
+                    "message": (
+                        f"图表数量门禁失败：figure_agent 规划 {planned_count} 张，"
+                        f"实际产出 {generated_count} 张，缺失 {len(missing_ids)} 张：{missing_ids}"
+                    ),
+                    "suggestion": "检查 solver 数据是否齐全，或降低图表规划数量；PDF 将缺图",
+                })
+
             # (a) 正文引用了某 includegraphics 但 figure_agent 未生成
             for c in captions:
                 b = c["figure_file_basename"]
@@ -9120,6 +9142,55 @@ print(json.dumps({{"accuracy": round(acc, 4)}}))
             context=self._agent_context(state),
         )
 
+        # === 图表数量门禁：planned vs actual ===
+        planned = list(figures_plan)
+        generated_list = gen_output.get("figures", []) or []
+        generated_ids = {
+            f.get("figure_id") for f in generated_list if isinstance(f, dict)
+        }
+        missing_specs = [
+            s for s in planned
+            if isinstance(s, dict) and s.get("id") not in generated_ids
+        ]
+        if missing_specs:
+            logger.warning(
+                f"[LangGraph:{task_id}] figure gate: {len(missing_specs)}/{len(planned)} "
+                f"figures missing, re-prompting (ids={[s.get('id') for s in missing_specs]})"
+            )
+            for retry_round in range(2):
+                if not missing_specs:
+                    break
+                retry_output = await agent.execute(
+                    task_input={
+                        "action": "generate_all",
+                        "figure_plan": {"figures": missing_specs},
+                        "data": solver_result,
+                        "project_name": state.get("project_name"),
+                        "figure_language": state.get("figure_language"),
+                    },
+                    context=self._agent_context(state),
+                )
+                retry_figs = retry_output.get("figures", []) or []
+                generated_list.extend(retry_figs)
+                generated_ids = {
+                    f.get("figure_id") for f in generated_list if isinstance(f, dict)
+                }
+                missing_specs = [
+                    s for s in planned
+                    if isinstance(s, dict) and s.get("id") not in generated_ids
+                ]
+            gen_output["figures"] = generated_list
+            gen_output["generated"] = len(generated_list)
+            gen_output["planned_count"] = len(planned)
+            if missing_specs:
+                gen_output["missing_figure_specs"] = missing_specs
+                self._post_chat(
+                    task_id, "figure_agent",
+                    f"⚠️ 图表门禁：规划 {len(planned)} 张，重试后仍缺失 "
+                    f"{len(missing_specs)} 张："
+                    f"{[s.get('id') for s in missing_specs if isinstance(s, dict)]}",
+                )
+
         generated = gen_output.get("generated", 0)
         self._post_chat(
             task_id,
@@ -9984,17 +10055,15 @@ print(json.dumps({{"accuracy": round(acc, 4)}}))
             state.get("workflow_type") == "standard"
             and (not writer_ok or not solver_ok)
         )
-        # 修正：pre 阶段数据质量门禁（data_quality_check）只发"建议补充数据"警告，
-        # 不应让已成功产出论文+求解+交付的任务被标 failed。只要 writer/solver 都在，
-        # pre 阶段的 cannot_solve_report（reason="数据质量门禁未通过"）降级为质量警告，
-        # 任务仍标 completed，并在 error 字段备注数据质量问题（供前端展示）。
-        data_quality_warn = (
-            cannot_solve
-            and isinstance(cannot_solve, dict)
-            and cannot_solve.get("reason") == "数据质量门禁未通过"
-        )
-        if data_quality_warn and writer_ok and solver_ok:
-            # pre 阶段数据质量警告，但完整流水线已产出 → 不算失败
+        # 当 writer+solver 都成功且交付物已产出时，任何 cannot_solve 原因
+        # （peer_review 拒绝/中止、数据质量门禁、solver 中止等）均降级为质量警告，
+        # 不再标记任务为 failed —— 交付物已保存到磁盘。
+        degraded_reason = None
+        if cannot_solve and writer_ok and solver_ok:
+            degraded_reason = (
+                cannot_solve.get("reason", "无法求解")
+                if isinstance(cannot_solve, dict) else str(cannot_solve)
+            )
             cannot_solve = None
             critical_missing = False
         error_msg = ""
@@ -10007,11 +10076,8 @@ print(json.dumps({{"accuracy": round(acc, 4)}}))
             if not solver_ok:
                 missing.append("solver_agent")
             error_msg = f"关键 Agent 缺失: {', '.join(missing)}"
-        elif data_quality_warn:
-            # 数据质量警告但任务完成 → 备注到 error 字段（非失败）
-            error_msg = "数据质量警告（任务已完成）: " + str(
-                cannot_solve.get("issues", ["数据质量门禁未通过"]) if isinstance(cannot_solve, dict) else "数据质量门禁未通过"
-            )
+        elif degraded_reason:
+            error_msg = f"质量警告（任务已完成）: {degraded_reason}"
 
         # v7.2: 检查是否需要暂停（should_pause 标志）
         should_pause = state.get("should_pause", False)
