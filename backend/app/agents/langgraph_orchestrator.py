@@ -8681,9 +8681,25 @@ class LangGraphOrchestrator:
         bus.emit_agent_start(task_id, "peer_review_agent", "peer_review")
         self._update_progress(task_id, state["problem_text"], 80, "同行评议中")
 
+        # 从 writer_agent 的结果中提取论文内容，传给 peer_review
+        # 否则 peer_review 收不到论文 → 必然 reject → abort（假阳性失败）
+        results = self._resolve_results(state)
+        writer_output = results.get("writer_agent", {})
+        latex_code = writer_output.get("latex_code", "")
+        chapters = writer_output.get("chapters", [])
+        chapter_summaries = [
+            {"title": ch.get("title", ch.get("id", "")), "summary": str(ch.get("content", ""))[:1000]}
+            for ch in chapters
+        ] if chapters else writer_output.get("sections", {})
+
         try:
             output = await agent.execute(
-                task_input={"action": "review", "problem_text": state["problem_text"]},
+                task_input={
+                    "action": "review",
+                    "problem_text": state["problem_text"],
+                    "latex_code": latex_code,
+                    "chapter_summaries": chapter_summaries,
+                },
                 context=self._agent_context(state),
             )
         except Exception as pr_exc:
@@ -9862,12 +9878,28 @@ print(json.dumps({{"accuracy": round(acc, 4)}}))
         except Exception as exc:
             logger.error(f"[LangGraph:{task_id}] 保存输出文件失败: {exc}")
 
-        # ===== 组装交付文件夹（项目名_日期）=====
+        # ===== Camera-Ready 打包（先编译 PDF，再组装交付物）=====
+        if writer_ok:
+            try:
+                from ..services.camera_ready import collect_artifacts, build
+                task_output_dir = get_project_output_dir(project_name)
+                template = state.get("paper_template", "math_modeling")
+                artifact = collect_artifacts(task_id, task_output_dir, template_id=template)
+                cr_result = build(task_id, artifact, task_output_dir, make_zip=True, max_zip_mb=50)
+                self._post_chat(
+                    task_id, "coordinator",
+                    f"📦 Camera-ready 打包完成：{cr_result.zip_path or 'N/A'}，"
+                    f"编译验证={'通过' if cr_result.verification.get('success') else '未通过'}",
+                )
+                logger.info(f"[LangGraph:{task_id}] camera-ready done: {cr_result.zip_path}")
+            except Exception as cr_exc:
+                logger.exception(f"[LangGraph:{task_id}] camera-ready failed: {cr_exc}")
+
+        # ===== 组装交付文件夹（在 camera_ready 之后，确保 PDF 已编译）=====
         if writer_ok:
             try:
                 from ..services.deliverable import assemble_deliverable
                 task_output_dir = get_project_output_dir(project_name)
-                # 收集聊天室事件作为时间线
                 chat_events = []
                 try:
                     room = get_chat_room(task_id)
@@ -9893,25 +9925,27 @@ print(json.dumps({{"accuracy": round(acc, 4)}}))
                         f"📁 交付文件夹已生成: {deliverable_path.name}/（含论文、参考文献、数据、实验日志、参数等）",
                     )
                     logger.info(f"[LangGraph:{task_id}] deliverable folder: {deliverable_path}")
+                    # ===== 清理冗余中间产物（用户要求：只保留一个交付文件夹）=====
+                    # 交付文件夹已吸收 output/ 与 camera_ready/ 的全部有用内容，
+                    # 删除 output/ 中间目录、camera_ready 包目录、zip 压缩包。
+                    # 下载端点会自动从交付文件夹提供 main.pdf/main.tex 等产物。
+                    try:
+                        from ..services.deliverable import cleanup_intermediates
+                        cleanup_stats = cleanup_intermediates(
+                            task_id=task_id,
+                            output_dir=task_output_dir,
+                            deliverable_dir=deliverable_path,
+                            keep_camera_ready_pkg=False,
+                        )
+                        if cleanup_stats.get("removed_output_dir") or cleanup_stats.get("removed_zip"):
+                            self._post_chat(
+                                task_id, "coordinator",
+                                f"🧹 已清理中间产物（output/ + zip），最终交付见: {deliverable_path.name}/",
+                            )
+                    except Exception as clean_exc:
+                        logger.warning(f"[LangGraph:{task_id}] 中间产物清理失败（不影响交付）: {clean_exc}")
             except Exception as dl_exc:
                 logger.exception(f"[LangGraph:{task_id}] deliverable assembly failed: {dl_exc}")
-
-        # ===== Camera-Ready 打包（可选，兼容旧流程）=====
-        if writer_ok:
-            try:
-                from ..services.camera_ready import collect_artifacts, build
-                task_output_dir = get_project_output_dir(project_name)
-                template = state.get("paper_template", "math_modeling")
-                artifact = collect_artifacts(task_id, task_output_dir, template_id=template)
-                cr_result = build(task_id, artifact, task_output_dir, make_zip=True, max_zip_mb=50)
-                self._post_chat(
-                    task_id, "coordinator",
-                    f"📦 Camera-ready 打包完成：{cr_result.zip_path or 'N/A'}，"
-                    f"编译验证={'通过' if cr_result.verification.get('success') else '未通过'}",
-                )
-                logger.info(f"[LangGraph:{task_id}] camera-ready done: {cr_result.zip_path}")
-            except Exception as cr_exc:
-                logger.exception(f"[LangGraph:{task_id}] camera-ready failed: {cr_exc}")
 
         # 保存聊天记录到磁盘
         try:

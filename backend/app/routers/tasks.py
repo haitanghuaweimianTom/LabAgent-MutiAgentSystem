@@ -1304,9 +1304,15 @@ async def build_camera_ready(task_id: str, req: Optional[dict] = None):
 
 @router.get("/{task_id}/camera-ready")
 async def get_camera_ready_status(task_id: str):
-    """查询 camera-ready 产物状态（不重新打包）。"""
+    """查询 camera-ready 产物状态（不重新打包）。
+
+    v8.5+: 交付文件夹成为唯一交付物后，output/ 中间目录与 zip 已被清理。
+    本端点优先从 output/camera_ready_<task>/ 取产物（旧任务残留），
+    回退到交付文件夹（01_论文/main.pdf|main.tex、02_参考文献/references.bib）。
+    """
     from ..core.task_persistence import load_task_metadata
     from ..core.paths import get_project_output_dir
+    from ..services.deliverable import find_deliverable_dir
 
     meta = load_task_metadata(task_id)
     if not meta:
@@ -1320,15 +1326,34 @@ async def get_camera_ready_status(task_id: str):
     pkg = task_output_dir / f"camera_ready_{task_id}"
     zip_path = task_output_dir / f"camera_ready_{task_id}.zip"
 
+    # 交付文件夹回退（output/ 被清理后的主路径）
+    deliverable_dir = find_deliverable_dir(project_name)
+    paper_dir = deliverable_dir / "01_论文" if deliverable_dir else None
+    ref_dir = deliverable_dir / "02_参考文献" if deliverable_dir else None
+
     # 独立交付物（直接给用户的：tex / pdf / bib / 参考文献来源）
-    tex_path = pkg / "main.tex" if (pkg / "main.tex").exists() else None
-    pdf_in_pkg = pkg / "main.pdf"
-    pdf_in_pkg_rel = str(pdf_in_pkg.relative_to(PROJECT_ROOT)) if pdf_in_pkg.exists() else None
-    # 编译后复制到 output_dir 根的 paper_{task_id}.pdf
-    pdf_root = task_output_dir / f"paper_{task_id}.pdf"
-    pdf_root_rel = str(pdf_root.relative_to(PROJECT_ROOT)) if pdf_root.exists() else None
-    bib_path = pkg / "main.bib" if (pkg / "main.bib").exists() else None
-    refs_sources_path = pkg / "references_sources.txt" if (pkg / "references_sources.txt").exists() else None
+    # 优先 camera_ready 包，回退交付文件夹
+    def _resolve(*candidates: Path) -> Optional[Path]:
+        for c in candidates:
+            if c and c.exists():
+                return c
+        return None
+
+    tex_path = _resolve(pkg / "main.tex", paper_dir / "main.tex" if paper_dir else None)
+    pdf_path = _resolve(
+        task_output_dir / f"paper_{task_id}.pdf",  # 编译后复制到 output_dir 根
+        pkg / "main.pdf",
+        paper_dir / "main.pdf" if paper_dir else None,
+        deliverable_dir / "main.pdf" if deliverable_dir else None,  # 顶层副本
+    )
+    bib_path = _resolve(
+        pkg / "main.bib",
+        ref_dir / "references.bib" if ref_dir else None,
+    )
+    refs_sources_path = _resolve(
+        pkg / "references_sources.txt",
+        ref_dir / "references.md" if ref_dir else None,  # 交付文件夹用 references.md
+    )
 
     def _rel(p: Optional[Path]) -> Optional[str]:
         if not p:
@@ -1340,20 +1365,19 @@ async def get_camera_ready_status(task_id: str):
 
     pkg_rel = _rel(pkg) if pkg.exists() else None
     zip_rel = _rel(zip_path) if zip_path.exists() else None
-    tex_rel = _rel(tex_path)
-    bib_rel = _rel(bib_path)
-    refs_rel = _rel(refs_sources_path)
+    deliverable_rel = _rel(deliverable_dir) if deliverable_dir else None
 
     return {
         "task_id": task_id,
         "package_dir": pkg_rel,
         "zip_path": zip_rel,
+        "deliverable_dir": deliverable_rel,  # v8.5+: 唯一交付文件夹
         # 直接可下载的独立交付物
-        "tex_path": tex_rel,
-        "pdf_path": pdf_root_rel or pdf_in_pkg_rel,
-        "bib_path": bib_rel,
-        "refs_sources_path": refs_rel,
-        "exists": pkg.exists() or zip_path.exists(),
+        "tex_path": _rel(tex_path),
+        "pdf_path": _rel(pdf_path),
+        "bib_path": _rel(bib_path),
+        "refs_sources_path": _rel(refs_sources_path),
+        "exists": bool(tex_path or pdf_path or pkg.exists() or zip_path.exists()),
     }
 
 
@@ -1371,6 +1395,7 @@ async def download_camera_ready(task_id: str, path: str):
     """
     from fastapi.responses import FileResponse
     from ..core.task_persistence import load_task_metadata
+    from ..services.deliverable import find_deliverable_dir
 
     meta = load_task_metadata(task_id)
     if not meta:
@@ -1396,12 +1421,30 @@ async def download_camera_ready(task_id: str, path: str):
     except Exception:
         task_output_dir = Path("./output") / f"work_{project_name}"
 
-    # 候选位置（pkg 内 + output_dir 根目录）
+    # 交付文件夹（output/ 被清理后的主路径）
+    deliverable_dir = find_deliverable_dir(project_name)
+    paper_dir = (deliverable_dir / "01_论文") if deliverable_dir else None
+    ref_dir = (deliverable_dir / "02_参考文献") if deliverable_dir else None
+
+    # 候选位置：camera_ready 包 + output_dir 根 + 交付文件夹回退
     pkg_dir = task_output_dir / f"camera_ready_{task_id}"
-    candidates = [
-        pkg_dir / file_path.name,
-        task_output_dir / file_path.name,
+    fname = file_path.name
+    candidates: List[Path] = [
+        pkg_dir / fname,
+        task_output_dir / fname,
     ]
+    # 交付文件夹映射：main.tex/pdf → 01_论文/，main.bib → 02_参考文献/references.bib
+    if fname in ("main.tex", "main.pdf") and paper_dir:
+        candidates.append(paper_dir / fname)
+    if fname == "main.pdf" and deliverable_dir:
+        candidates.append(deliverable_dir / fname)  # 顶层副本
+    if fname == "main.bib" and ref_dir:
+        candidates.append(ref_dir / "references.bib")
+    if fname == "references_sources.txt" and ref_dir:
+        candidates.append(ref_dir / "references.md")
+    if fname == f"paper_{task_id}.pdf" and paper_dir:
+        candidates.append(paper_dir / "main.pdf")
+
     full_path = None
     for cand in candidates:
         if cand.exists():

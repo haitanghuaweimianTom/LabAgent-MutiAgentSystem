@@ -698,17 +698,42 @@ function CameraReadyDownload({ taskId, templateId }: { taskId: string; templateI
 
   return (
     <div className="bg-card border border-border rounded-lg px-6 py-4">
-      <div className="text-sm text-primary font-bold mb-2">📦 Camera-Ready 下载</div>
+      <div className="text-sm text-primary font-bold mb-2">📦 交付物下载</div>
       {status === 'idle' && (
-        <button className="py-1.5 px-5 bg-success/10 border border-success/20 rounded-md text-success text-sm cursor-pointer transition-all duration-200 hover:bg-success/10" onClick={build}>生成并下载 zip</button>
+        <button className="py-1.5 px-5 bg-success/10 border border-success/20 rounded-md text-success text-sm cursor-pointer transition-all duration-200 hover:bg-success/10" onClick={build}>生成交付物</button>
       )}
       {status === 'building' && <div>打包中...</div>}
       {status === 'error' && <div>打包失败，请稍后重试。</div>}
-      {status === 'ready' && pkg?.zip_path && (
+      {status === 'ready' && pkg && (
         <div>
-          <a href={apiBase() + '/tasks/' + taskId + '/camera-ready/download?path=' + encodeURIComponent(pkg.zip_path)} download>
-            ⬇️ 下载 camera-ready.zip
-          </a>
+          {/* v8.5+: 交付文件夹成为唯一交付物。优先展示 zip（旧任务残留），
+              否则展示交付文件夹内的独立产物（PDF / LaTeX / BibTeX）。 */}
+          {pkg.zip_path ? (
+            <a className="text-success underline" href={apiBase() + '/tasks/' + taskId + '/camera-ready/download?path=' + encodeURIComponent(pkg.zip_path)} download>
+              ⬇️ 下载 camera-ready.zip
+            </a>
+          ) : (
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+              {pkg.pdf_path && (
+                <a className="text-success underline" href={apiBase() + '/tasks/' + taskId + '/camera-ready/download?path=' + encodeURIComponent(pkg.pdf_path)} download>
+                  📄 下载 PDF
+                </a>
+              )}
+              {pkg.tex_path && (
+                <a className="text-success underline" href={apiBase() + '/tasks/' + taskId + '/camera-ready/download?path=' + encodeURIComponent(pkg.tex_path)} download>
+                  📝 下载 LaTeX 源文件
+                </a>
+              )}
+              {pkg.bib_path && (
+                <a className="text-success underline" href={apiBase() + '/tasks/' + taskId + '/camera-ready/download?path=' + encodeURIComponent(pkg.bib_path)} download>
+                  📚 下载 BibTeX
+                </a>
+              )}
+              {pkg.deliverable_dir && (
+                <span className="text-muted">📁 交付文件夹: {pkg.deliverable_dir.split('/').pop()}</span>
+              )}
+            </div>
+          )}
           {pkg.verification?.success === false && (
             <div className="text-warning mt-1">⚠️ 编译验证未通过，请检查 LaTeX 源文件。</div>
           )}

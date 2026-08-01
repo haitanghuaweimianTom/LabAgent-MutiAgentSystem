@@ -107,9 +107,123 @@ def assemble_deliverable(
         return None
 
 
-# ================================================================
-# 各节构建函数
-# ================================================================
+def cleanup_intermediates(
+    task_id: str,
+    output_dir: Path,
+    deliverable_dir: Path,
+    keep_camera_ready_pkg: bool = False,
+) -> Dict[str, Any]:
+    """交付文件夹组装成功后，清理冗余中间产物。
+
+    用户要求：最终交付只需一个分门别类的文件夹，不要 output/ 中间目录、
+    不要 camera_ready 解压副本、不要 zip 压缩包。本函数把已被交付文件夹
+    吸收的中间产物删除，使 outputs/<project>/ 下只剩交付文件夹。
+
+    删除范围（均在 output_dir = outputs/<project>/output/ 内）：
+    - camera_ready_<task_id>.zip         （用户明确不要压缩包）
+    - camera_ready_<task_id>/            （解压副本，内容已在 01_论文 + 08_图表）
+    - final/  code/  figures/  papers/  charts/  figs/  stage_*/
+      以及散落的 *.json / *.png / *.tex 等运行期文件
+    - 整个 output/ 目录本身（删空后重建空目录，保持 get_project_output_dir 契约）
+
+    保留：
+    - deliverable_dir（交付文件夹，output_dir.parent 下的 <name>_<date>/）
+    - 可选保留 camera_ready_<task_id>/（keep_camera_ready_pkg=True，
+      供旧版下载端点 fallback）
+
+    Args:
+        task_id: 任务 ID。
+        output_dir: 项目输出目录 outputs/<project>/output/。
+        deliverable_dir: 交付文件夹路径（不删）。
+        keep_camera_ready_pkg: 是否保留 camera_ready_<task_id>/ 包目录。
+
+    Returns:
+        清理统计字典。
+    """
+    stats = {"removed_zip": False, "removed_camera_ready_pkg": False,
+             "removed_output_dir": False, "freed_bytes": 0, "skipped": []}
+    try:
+        # 安全检查：deliverable_dir 必须在 output_dir.parent 下，且不能是 output_dir 本身
+        if deliverable_dir.resolve() == output_dir.resolve():
+            stats["skipped"].append("deliverable_dir == output_dir, abort")
+            return stats
+        if output_dir.parent not in deliverable_dir.parents:
+            stats["skipped"].append("deliverable_dir not under output_dir.parent, abort")
+            return stats
+
+        def _size_of(p: Path) -> int:
+            if p.is_file():
+                return p.stat().st_size
+            if p.is_dir():
+                return sum(f.stat().st_size for f in p.rglob("*") if f.is_file())
+            return 0
+
+        # 1. zip
+        zip_path = output_dir / f"camera_ready_{task_id}.zip"
+        if zip_path.exists():
+            stats["freed_bytes"] += _size_of(zip_path)
+            zip_path.unlink()
+            stats["removed_zip"] = True
+            logger.info(f"[Deliverable:{task_id}] 清理 zip: {zip_path.name}")
+
+        # 2. camera_ready_<task_id>/ 包目录
+        cr_pkg = output_dir / f"camera_ready_{task_id}"
+        if cr_pkg.exists() and not keep_camera_ready_pkg:
+            stats["freed_bytes"] += _size_of(cr_pkg)
+            shutil.rmtree(cr_pkg, ignore_errors=True)
+            stats["removed_camera_ready_pkg"] = True
+            logger.info(f"[Deliverable:{task_id}] 清理 camera_ready 包目录: {cr_pkg.name}")
+
+        # 3. 整个 output/ 目录（中间产物已被交付文件夹吸收）
+        if output_dir.exists():
+            stats["freed_bytes"] += _size_of(output_dir)
+            shutil.rmtree(output_dir, ignore_errors=True)
+            stats["removed_output_dir"] = True
+            # 重建空目录：get_project_output_dir 契约要求该目录可访问
+            # （后续 rerun / 重新生成产物时会用到）
+            output_dir.mkdir(parents=True, exist_ok=True)
+            logger.info(f"[Deliverable:{task_id}] 清理 output 中间目录: {output_dir}")
+
+        logger.info(
+            f"[Deliverable:{task_id}] 中间产物清理完成，释放 "
+            f"{stats['freed_bytes'] / 1024:.0f} KB"
+        )
+    except Exception as exc:
+        logger.exception(f"[Deliverable:{task_id}] 中间产物清理失败: {exc}")
+        stats["skipped"].append(f"exception: {exc}")
+    return stats
+
+
+def find_deliverable_dir(project_name: Optional[str]) -> Optional[Path]:
+    """查找项目下最新的交付文件夹（outputs/<project>/<name>_<date>/）。
+
+    交付文件夹命名形如 ``<safe_name>_<YYYYMMDD>[_<n>]``。返回最新（按名排序最大）的一个。
+    供下载端点在 output/ 已被清理后，从交付文件夹提供 main.pdf/main.tex 等产物。
+    """
+    if not project_name:
+        return None
+    try:
+        from ..core.paths import get_project_base_dir
+        base = get_project_base_dir(project_name)
+    except Exception:
+        return None
+    if not base.exists():
+        return None
+    candidates: List[Path] = []
+    for d in base.iterdir():
+        if not d.is_dir():
+            continue
+        # 跳过系统目录与 output/data 子目录
+        if d.name in ("output", "data", "references", "_global"):
+            continue
+        # 交付文件夹须含 01_论文/ 子目录（特征匹配）
+        if (d / "01_论文").is_dir():
+            candidates.append(d)
+    if not candidates:
+        return None
+    # 按目录名倒序，取最新
+    candidates.sort(key=lambda p: p.name, reverse=True)
+    return candidates[0]
 
 
 def _build_paper(d: Path, results: Dict, output_dir: Path, task_id: str = "") -> None:
@@ -724,11 +838,19 @@ def _build_figures(d: Path, results: Dict, output_dir: Path) -> None:
                         pass
 
     # 扫描图表目录（figure_agent 保存到 output_dir/figures/ 和 _global/figures/）
+    # 同时扫描 camera_ready 包内的 figures/ —— Writer 生成的 main.tex 引用的
+    # 图片名（语义命名，如 correlation_heatmap.png）可能与 figure_agent 实际写出的
+    # 文件名（如 city_heatmap.png）不一致；camera_ready.build 会把语义命名图复制
+    # 进 camera_ready_<task>/figures/，纳入扫描才能保证交付文件夹自洽
+    # （TeX 引用的每张图都能在 08_图表/ 找到，可独立重编译）。
     scan_dirs = [
         output_dir / "figures",
         output_dir / "final" / "figures",
         output_dir.parent / "_global" / "figures",  # figure_agent 默认路径
     ]
+    # 追加所有 camera_ready_<task>/figures/ 目录
+    for cr_dir in output_dir.glob("camera_ready_*/figures"):
+        scan_dirs.append(cr_dir)
     for fig_dir in scan_dirs:
         if fig_dir.exists():
             # 递归搜索所有子目录，支持所有常见图片格式
@@ -925,7 +1047,7 @@ def _build_readme(
 
 ## 关键词
 
-{', '.join(writer.get('keywords', [])) if isinstance(writer, dict) else ''}
+{_format_keywords(writer.get('keywords', []) if isinstance(writer, dict) else [])}
 
 ## 子问题
 
@@ -950,6 +1072,24 @@ def _build_readme(
 # ================================================================
 # 工具函数
 # ================================================================
+
+def _format_keywords(keywords: Any) -> str:
+    """格式化关键词为可读字符串。
+
+    兼容两种存储形态：
+    - list: ['房价预测', '长周期分析']  → '房价预测；长周期分析'
+    - str:  '房价预测；长周期分析'      → 原样返回（修 historical bug:
+      旧版用 ', '.join(str) 会把字符串按字符拆成 '房, 价, 预, 测, ...'）
+    """
+    if not keywords:
+        return ""
+    if isinstance(keywords, str):
+        return keywords.strip()
+    if isinstance(keywords, (list, tuple)):
+        parts = [str(k).strip() for k in keywords if str(k).strip()]
+        return "；".join(parts)
+    return str(keywords)
+
 
 def _safe_filename(name: str) -> str:
     """将项目名转为文件系统安全名称。"""
