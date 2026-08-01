@@ -233,12 +233,15 @@ def apply_style(style_name: str = "nature"):
 
     plt.rcParams["font.family"] = style["font_family"]
     if style["font_family"] == "serif":
-        # 期刊拉丁衬线字体在前 + CJK 衬线兜底，中文不再渲染成方框
-        plt.rcParams["font.serif"] = list(style.get("font_serif", ["Times New Roman"])) + list(CJK_FONT_SERIF)
+        # matplotlib 3.11 不做逐字符回退，取 findfont 匹配的首个已安装字体。
+        # 必须把 CJK 字体【前置】，否则英文拉丁字体在前→中文没字形→方框。
+        plt.rcParams["font.serif"] = apply_cjk_font_to_style(
+            list(style.get("font_serif", ["Times New Roman"])), serif=True
+        )
     else:
-        # 期刊拉丁无衬线字体在前 + CJK 无衬线兜底：matplotlib 逐字符回退，
-        # 英文走期刊字体、中文走 CJK 字体，两类文字都不方框
-        plt.rcParams["font.sans-serif"] = list(style.get("font_sans", ["Arial"])) + list(CJK_FONT_SANS)
+        plt.rcParams["font.sans-serif"] = apply_cjk_font_to_style(
+            list(style.get("font_sans", ["Arial"]))
+        )
     plt.rcParams["svg.fonttype"] = "none"
     plt.rcParams["font.size"] = style["font_size"]
     plt.rcParams["axes.labelsize"] = style["axes_labelsize"]
@@ -362,7 +365,9 @@ class FigureAgent(BaseAgent):
         if project_name:
             from ..core.paths import get_project_output_dir
             return get_project_output_dir(project_name) / "figures"
-        return Path("outputs/figures")
+        # v8.4.5: 无项目名时写到 _global 而非 CWD 相对路径，确保 writer 能发现
+        from ..core.paths import OUTPUT_DIR
+        return OUTPUT_DIR / "figures"
 
     def _extract_data(self, task_input: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
         """提取可用数据。优先从 task_input 获取，其次从 context 的 solver/modeler 结果获取。"""
@@ -445,7 +450,7 @@ class FigureAgent(BaseAgent):
 
         try:
             response = await self.call_llm(messages=messages, temperature=0.3)
-            content = response.get("choices", [{}])[0].get("message", {}).get("content", "")
+            content = response.get("choices", [{}])[0].get("message", {}).get("content", "") if isinstance(response, dict) else str(response)
             plan = self._parse_json(content)
             return {
                 "action": "plan",

@@ -76,7 +76,7 @@ def assemble_deliverable(
 
         # 各节独立构建，任一环节失败不影响其余
         builders = [
-            ("01_论文", lambda: _build_paper(dirs["01_论文"], results, output_dir)),
+            ("01_论文", lambda: _build_paper(dirs["01_论文"], results, output_dir, task_id)),
             ("02_参考文献", lambda: _build_references(dirs["02_参考文献"], results, output_dir)),
             ("03_数据来源", lambda: _build_data_sources(dirs["03_数据来源"], results, state, output_dir)),
             ("04_实验方案", lambda: _build_experiment_plan(dirs["04_实验方案"], results, state)),
@@ -112,8 +112,8 @@ def assemble_deliverable(
 # ================================================================
 
 
-def _build_paper(d: Path, results: Dict, output_dir: Path) -> None:
-    """01_论文: LaTeX + Markdown。"""
+def _build_paper(d: Path, results: Dict, output_dir: Path, task_id: str = "") -> None:
+    """01_论文: LaTeX + Markdown + PDF 三态交付。"""
     writer = results.get("writer_agent", {})
     if not isinstance(writer, dict):
         return
@@ -122,14 +122,32 @@ def _build_paper(d: Path, results: Dict, output_dir: Path) -> None:
     if latex:
         (d / "main.tex").write_text(latex, encoding="utf-8")
 
+    # ---- Markdown 导出 ----
+    # Writer 只产出 latex_code，不产出 markdown_code。
+    # 策略：优先用 writer 的 sections 结构重建 MD；若缺失则从 latex 粗略转换。
     md = writer.get("markdown_code", "") or writer.get("content", "")
+    if not md or len(md) < 100:
+        md = _latex_to_markdown(writer)
     if md and len(md) > 100:
         (d / "paper.md").write_text(md, encoding="utf-8")
 
-    # 复制已编译 PDF（如果存在）
-    final_pdf = output_dir / "final" / "main.pdf"
-    if final_pdf.exists():
-        shutil.copy2(final_pdf, d / "main.pdf")
+    # ---- PDF 导出 ----
+    # 优先级：1) camera_ready 编译的 PDF  2) final/ 目录  3) _global 根目录
+    pdf_candidates = [
+        output_dir / "final" / "main.pdf",
+        output_dir / "main.pdf",
+    ]
+    if task_id:
+        global_dir = output_dir.parent / "_global"
+        pdf_candidates.extend([
+            global_dir / f"camera_ready_{task_id}" / "main.pdf",
+            global_dir / f"paper_{task_id}.pdf",
+            global_dir / "papers" / f"paper_{task_id}.pdf",
+        ])
+    for candidate in pdf_candidates:
+        if candidate.exists():
+            shutil.copy2(candidate, d / "main.pdf")
+            break
 
     # 元数据
     meta = {
@@ -705,13 +723,18 @@ def _build_figures(d: Path, results: Dict, output_dir: Path) -> None:
                     except Exception:
                         pass
 
-    # 扫描 output_dir 中的图表目录
-    for subdir in ["figures", "final/figures"]:
-        fig_dir = output_dir / subdir
+    # 扫描图表目录（figure_agent 保存到 output_dir/figures/ 和 _global/figures/）
+    scan_dirs = [
+        output_dir / "figures",
+        output_dir / "final" / "figures",
+        output_dir.parent / "_global" / "figures",  # figure_agent 默认路径
+    ]
+    for fig_dir in scan_dirs:
         if fig_dir.exists():
-            for f in fig_dir.iterdir():
-                if f.is_file() and f.suffix.lower() in (".png", ".jpg", ".svg", ".pdf", ".eps"):
-                    if f.name not in saved:
+            # 递归搜索所有子目录，支持所有常见图片格式
+            for ext in ("*.png", "*.jpg", "*.jpeg", "*.svg", "*.pdf", "*.eps"):
+                for f in fig_dir.rglob(ext):
+                    if f.is_file() and f.name not in saved:
                         try:
                             shutil.copy2(f, d / f.name)
                             saved.append(f.name)
@@ -937,3 +960,107 @@ def _safe_filename(name: str) -> str:
             safe += ch
     safe = safe.strip().replace(" ", "_")
     return safe or "project"
+
+
+def _latex_to_markdown(writer: Dict) -> str:
+    """将 writer 产出转换为 Markdown 论文。
+
+    Writer 只产出 latex_code，不产出 markdown_code。
+    构建策略：优先用 sections 章节结构重建；缺失则从 latex 粗略转换。
+    """
+    import re
+
+    sections = writer.get("sections", {})
+    chapters = writer.get("chapters", [])
+    latex = writer.get("latex_code", "")
+    title = writer.get("title", "") or "论文"
+    abstract = writer.get("abstract", "")
+    keywords = writer.get("keywords", [])
+
+    lines = [f"# {title}", ""]
+
+    if abstract:
+        lines.append("## 摘要")
+        lines.append("")
+        lines.append(abstract)
+        lines.append("")
+
+    if keywords:
+        kw_str = "；".join(keywords) if isinstance(keywords, list) else str(keywords)
+        lines.append(f"**关键词**: {kw_str}")
+        lines.append("")
+
+    # 策略 1: 从 sections dict 重建
+    if sections and isinstance(sections, dict):
+        for section_title, content in sections.items():
+            if section_title in ("执行摘要", "摘要", "abstract"):
+                continue
+            clean_title = section_title.lstrip("0123456789. ").strip()
+            lines.append(f"## {clean_title}")
+            lines.append("")
+            if isinstance(content, str):
+                lines.append(content)
+            elif isinstance(content, dict):
+                lines.append(content.get("content", str(content)))
+            else:
+                lines.append(str(content))
+            lines.append("")
+        return "\n".join(lines)
+
+    # 策略 2: 从 chapters list 重建
+    if chapters and isinstance(chapters, list):
+        for ch in chapters:
+            if isinstance(ch, dict):
+                ch_title = ch.get("title", ch.get("id", ""))
+                clean_title = ch_title.lstrip("0123456789. ").strip()
+                lines.append(f"## {clean_title}")
+                lines.append("")
+                ch_content = ch.get("content", "")
+                lines.append(ch_content)
+                lines.append("")
+        return "\n".join(lines)
+
+    # 策略 3: 从 latex 粗略转换
+    if latex:
+        # 去掉 documentclass/preamble，保留 body
+        body_match = re.search(r"\\begin\{document\}(.*?)\\end\{document\}", latex, re.DOTALL)
+        if body_match:
+            body = body_match.group(1)
+        else:
+            body = latex
+
+        # 基本转换: \section{...} → ## ..., \subsection{...} → ### ...
+        body = re.sub(r"\\section\*?\{([^}]*)\}", r"\n## \1\n", body)
+        body = re.sub(r"\\subsection\*?\{([^}]*)\}", r"\n### \1\n", body)
+        body = re.sub(r"\\subsubsection\*?\{([^}]*)\}", r"\n#### \1\n", body)
+
+        # 去掉 LaTeX 命令（保留内容）
+        body = re.sub(r"\\textbf\{([^}]*)\}", r"**\1**", body)
+        body = re.sub(r"\\textit\{([^}]*)\}", r"*\1*", body)
+        body = re.sub(r"\\emph\{([^}]*)\}", r"*\1*", body)
+        body = re.sub(r"\\texttt\{([^}]*)\}", r"`\1`", body)
+        body = re.sub(r"\\begin\{itemize\}(.*?)\\end\{itemize\}", r"\1", body, flags=re.DOTALL)
+        body = re.sub(r"\\begin\{enumerate\}(.*?)\\end\{enumerate\}", r"\1", body, flags=re.DOTALL)
+        body = re.sub(r"\\item\s+", "- ", body)
+        body = re.sub(r"\\cite\{(.*?)\}", r"[\1]", body)
+        body = re.sub(r"\\ref\{(.*?)\}", r"[\1]", body)
+        body = re.sub(r"\\maketitle", "", body)
+        body = re.sub(r"\\begin\{abstract\}", "\n## 摘要\n", body)
+        body = re.sub(r"\\end\{abstract\}", "\n", body)
+        body = re.sub(r"\\begin\{keywords\}", "\n**关键词**: ", body)
+        body = re.sub(r"\\end\{keywords\}", "\n", body)
+        body = re.sub(r"\\begin\{table\}.*?\\end\{table\}", "[表格]", body, flags=re.DOTALL)
+        body = re.sub(r"\\begin\{figure\}.*?\\end\{figure\}", "[图表]", body, flags=re.DOTALL)
+        body = re.sub(r"\\includegraphics.*?\}", "[图表]", body)
+        body = re.sub(r"\\label\{.*?\}", "", body)
+        body = re.sub(r"\\caption\{([^}]*)\}", r"\n*\1*\n", body)
+        body = re.sub(r"\\hline", "", body)
+        body = re.sub(r"\\begin\{tabular\}.*?\\end\{tabular\}", "", body, flags=re.DOTALL)
+        body = re.sub(r"\\centering", "", body)
+        # 清理多余空行
+        body = re.sub(r"\n{3,}", "\n\n", body)
+
+        lines.append(body.strip())
+        return "\n".join(lines)
+
+    return "\n".join(lines)

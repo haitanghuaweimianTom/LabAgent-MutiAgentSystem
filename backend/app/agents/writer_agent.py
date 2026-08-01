@@ -1227,37 +1227,37 @@ class WriterAgent(BaseAgent):
         以及全局 outputs/_global/figures（求解器实际写图位置，旧版漏扫导致
         全部 \includegraphics 复用同一张图）。按绝对路径去重，返回相对
         _PROJECT_ROOT 的路径便于 LaTeX \includegraphics 引用。
+
+        v8.4.5: project_name=None 时也不跳过（无项目名任务仍需要图表），
+        此时仅扫描 _global/figures。
         """
         figures: List[str] = []
-        if not project_name:
-            return figures
+        from ..core.paths import get_project_output_dir, get_project_base_dir, _PROJECT_ROOT, OUTPUT_DIR
 
-        from ..core.paths import get_project_output_dir, get_project_base_dir, _PROJECT_ROOT
-
-        output_dir = get_project_output_dir(project_name)
-        search_roots: List[Path] = [
-            output_dir,
-            output_dir / "code",
-            output_dir / "figures",
-            get_project_base_dir(project_name),
-            _PROJECT_ROOT / "outputs" / "_global" / "figures",
-        ]
+        search_roots: List[Path] = []
+        if project_name:
+            output_dir = get_project_output_dir(project_name)
+            search_roots.extend([
+                output_dir,
+                output_dir / "code",
+                output_dir / "figures",
+                get_project_base_dir(project_name),
+            ])
+        # 始终扫描 _global/figures（figure_agent 默认输出位置）
+        search_roots.append(OUTPUT_DIR / "figures")
 
         seen: set = set()
         for base_dir in search_roots:
             if not base_dir or not base_dir.exists():
                 continue
-            for ext in ("*.png", "*.jpg", "*.jpeg", "*.pdf", "*.eps"):
+            for ext in ("*.png", "*.jpg", "*.jpeg", "*.pdf", "*.eps", "*.svg"):
                 for path in base_dir.rglob(ext):
                     abs_p = str(path.resolve())
                     if abs_p in seen:
                         continue
                     seen.add(abs_p)
-                    try:
-                        rel = path.relative_to(_PROJECT_ROOT)
-                        figures.append(str(rel))
-                    except ValueError:
-                        figures.append(str(path))
+                    # 直接返回文件名，配合\includegraphics{figures/xxx.png}在编译时正确解析
+                    figures.append(f"figures/{path.name}")
 
         return sorted(figures)
 
@@ -2355,8 +2355,11 @@ class WriterAgent(BaseAgent):
     def _financial_preamble(self) -> str:
         return r"""\documentclass{article}
 \usepackage{ctex}
+\usepackage{float}
 \usepackage{amsmath,amssymb,graphicx,booktabs}
 \usepackage[margin=1in]{geometry}
+
+\newenvironment{keywords}{\par\noindent\textbf{关键词：}}{\par}
 
 \title{金融分析报告}
 \author{分析团队}
@@ -2554,13 +2557,17 @@ class WriterAgent(BaseAgent):
             "  不同主题（如净值走势、回撤、持仓占比、绩效对比、因子 IC）应分别用独立图，"
             "  不要把所有内容塞进一张大图。",
             "- 图标题(caption)必须与图片内容一致；从文件名推断图片主题，按章节叙事顺序选用。",
+            "- 【路径规则】引用时只写文件名（如 figures/ic_bar.png），不要写完整路径；"
+            "  LaTeX 编译时 figure 文件会放在主 tex 同目录下的 figures/ 子目录中。",
         ]
         for fig in relevant:
-            hint = Path(fig).stem.replace("_", " ").replace("-", " ")
-            lines.append(f"- {fig}  （主题参考：{hint}）")
+            # v8.4.5: 只保留文件名，编译时 figure 在 tex 同目录的 figures/ 下
+            fname = Path(fig).name
+            hint = fname.replace("_", " ").replace("-", " ").rsplit(".", 1)[0]
+            lines.append(f"- figures/{fname}  （主题参考：{hint}）")
         lines.append(
             "插入示例：\\begin{figure}[H]\\centering"
-            "\\includegraphics[width=0.8\\textwidth]{<上方某个真实路径>}"
+            "\\includegraphics[width=0.8\\textwidth]{figures/<文件名>}"
             "\\caption{与图片内容一致的标题}\\label{fig:xxx}\\end{figure}"
         )
         return "\n".join(lines)

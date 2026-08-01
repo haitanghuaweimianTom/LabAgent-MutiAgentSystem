@@ -188,16 +188,27 @@ def collect_artifacts(
         # final/ 都没有，但 latex_code 可能从 task_result.json 拿到了；继续收集其他产物
         skipped.append("final dir not found")
 
-    # 2. figures
+    # 2. figures — 搜 final/figures → stage_7_charts → 项目output/figures → _global/figures（figure_agent 默认写图位置）
+    fig_search_dirs = []
     if final_dir.exists():
-        fig_dir = final_dir / "figures"
+        fig_search_dirs.append(final_dir / "figures")
+        fig_search_dirs.append(task_output_dir / "stage_7_charts")
+    fig_search_dirs.append(task_output_dir / "figures")  # 项目专属figures目录
+    # v8.4.5: figure_agent 无项目名时写到 _global/figures
+    from ..core.paths import OUTPUT_DIR
+    fig_search_dirs.append(OUTPUT_DIR / "figures")
+
+    seen_figs: set = set()
+    for fig_dir in fig_search_dirs:
         if not fig_dir.exists():
-            fig_dir = task_output_dir / "stage_7_charts"
-        if fig_dir.exists():
-            for p in sorted(fig_dir.glob("*.png")):
-                artifact.figures.append(p)
-            for p in sorted(fig_dir.glob("*.pdf")):
-                artifact.figures.append(p)
+            continue
+        # 支持所有常见图片格式，递归搜索子目录
+        for ext in ("*.png", "*.jpg", "*.jpeg", "*.pdf", "*.eps", "*.svg"):
+            for p in sorted(fig_dir.rglob(ext)):
+                abs_p = str(p.resolve())
+                if abs_p not in seen_figs:
+                    seen_figs.add(abs_p)
+                    artifact.figures.append(p)
 
     # 3. code files（多文件）
     code_dir = task_output_dir / "code"
@@ -573,6 +584,61 @@ def _build_metadata_json(
     }
 
 
+def _ensure_figures_exist(pkg_dir: Path) -> None:
+    """扫描 main.tex 中的 \\includegraphics 引用，为缺失的图片生成占位PDF。
+
+    LaTeX 无法跳过缺失的图片 — 即使 -interaction=nonstopmode 也会因
+    `! Unable to load picture or PDF file` 而崩溃，留下截断 PDF。
+    """
+    import re
+    main_tex = pkg_dir / "main.tex"
+    if not main_tex.exists():
+        return
+    tex_content = main_tex.read_text(encoding="utf-8", errors="replace")
+    # 匹配 \includegraphics[...]{figures/xxx.pdf} 或 {...}{figures/xxx.png}
+    refs = set(re.findall(r'\\includegraphics(?:\[[^\]]*\])?\{([^}]+)\}', tex_content))
+    for ref in refs:
+        fig_path = pkg_dir / ref
+        if fig_path.exists():
+            continue
+        fig_dir = fig_path.parent
+        fig_dir.mkdir(parents=True, exist_ok=True)
+        # 生成最小的合法 PDF 占位符
+        _write_placeholder_pdf(fig_path)
+
+
+def _write_placeholder_pdf(path: Path) -> None:
+    """写入一个合法 PDF 占位符（含可渲染文字 + 正确尺寸）。"""
+    import zlib
+    # Page content: "Figure placeholder"
+    content = b"BT /F1 12 Tf 100 700 Td (Figure placeholder) Tj ET"
+    stream = zlib.compress(content)
+    obj4 = (
+        b"4 0 obj<</Length " + str(len(stream)).encode() + b"/Filter/FlateDecode>>stream\n"
+        + stream + b"\nendstream\nendobj\n"
+    )
+    obj3 = b"3 0 obj<</Type/Page/MediaBox[0 0 612 792]/Parent 2 0 R/Resources<</Font<</F1 5 0 R>>>>/Contents 4 0 R>>endobj\n"
+    obj5 = b"5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj\n"
+    obj2 = b"2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n"
+    obj1 = b"1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+    objects = obj1 + obj2 + obj3 + obj4 + obj5
+    offsets = []
+    pos = 9
+    search = objects
+    for i in range(1, 6):
+        marker = f"{i} 0 obj".encode()
+        idx = search.index(marker)
+        offsets.append(pos + idx)
+    header = b"%PDF-1.4\n"
+    body = header + objects
+    xref_offset = len(body)
+    xref = b"xref\n0 6\n0000000000 65535 f \n"
+    for i in range(1, 6):
+        xref += f"{offsets[i-1]:010d} 00000 n \n".encode()
+    trailer = f"trailer<</Size 6/Root 1 0 R>>\nstartxref\n{xref_offset}\n%%EOF".encode()
+    path.write_bytes(body + xref + trailer)
+
+
 def _verify_compilation(pkg_dir: Path, template_id: str) -> Dict[str, Any]:
     """尝试编译 main.tex，返回验证结果（不阻断打包）。"""
     from ..core.paper_templates import load_template
@@ -580,6 +646,21 @@ def _verify_compilation(pkg_dir: Path, template_id: str) -> Dict[str, Any]:
     main_tex = pkg_dir / "main.tex"
     if not main_tex.exists():
         return {"success": False, "message": "main.tex not found", "pdf_path": None}
+
+    # v8.4.5: 清理上次失败留下的 .aux 等辅助文件。
+    # 若 .aux 损坏（如 \@writefile 未闭合），xelatex 即使 -interaction=nonstopmode
+    # 也会崩溃 → 留下截断的 PDF（缺 %%EOF），后续 deliverable 复制时照搬坏 PDF。
+    for aux_ext in (".aux", ".out", ".toc", ".log"):
+        aux_path = pkg_dir / f"main{aux_ext}"
+        if aux_path.exists():
+            try:
+                aux_path.unlink()
+            except OSError:
+                pass
+
+    # v8.4.5: 为缺失的图片生成占位符，防止 includegraphics 崩溃
+    # Writer 可能引用不存在的图片（solver 未生成），导致 xelatex 编译失败
+    _ensure_figures_exist(pkg_dir)
 
     engine = "xelatex"
     try:
@@ -657,9 +738,34 @@ def build(
     pkg_dir = output_dir / f"camera_ready_{task_id}"
     pkg_dir.mkdir(parents=True, exist_ok=True)
 
-    # 1. main.tex
+    # 1. main.tex — 修正所有\includegraphics路径，确保编译时能找到figures/目录下的文件
     if artifact.latex_code:
-        (pkg_dir / "main.tex").write_text(artifact.latex_code, encoding="utf-8")
+        import re
+        latex_code = artifact.latex_code
+        # 把所有\includegraphics路径统一替换为figures/<文件名>格式，兼容各种路径写法：
+        # - outputs/_global/figures/xxx.png → figures/xxx.png
+        # - outputs/project/output/figures/xxx.png → figures/xxx.png
+        # - /abs/path/to/xxx.png → figures/xxx.png
+        # - xxx.png → figures/xxx.png
+        def _fix_includegraphics_path(match):
+            options = match.group(1) or ""
+            path = match.group(2).strip()
+            # 提取纯文件名，去掉所有路径前缀
+            filename = Path(path).name
+            return f"\\includegraphics{options}{{figures/{filename}}}"
+
+        latex_code = re.sub(
+            r"\\includegraphics(\[[^\]]*\])?\{([^}]+)\}",
+            _fix_includegraphics_path,
+            latex_code
+        )
+        # 兼容不带空格的写法\includegraphics[...]{...}（部分LLM生成时会漏空格）
+        latex_code = re.sub(
+            r"\\includegraphics(\[[^\]]*\])?\{([^}]+)\}",
+            _fix_includegraphics_path,
+            latex_code
+        )
+        (pkg_dir / "main.tex").write_text(latex_code, encoding="utf-8")
     else:
         skipped.append("missing main.tex")
 
