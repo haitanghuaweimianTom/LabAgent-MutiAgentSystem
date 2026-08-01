@@ -661,19 +661,18 @@ def financial_analysis(
     回测结果不代表未来表现，实际交易需考虑滑点、手续费、流动性等。
     """
     # ---------- 1. 数据读取 ----------
-    # 支持三种输入：CSV 文件 / 价格序列 / 生成示例数据
-    is_synthetic = False
+    # 支持两种输入：CSV 文件 / 价格序列
+    # 注意：禁止合成数据。若数据不存在，必须从真实文件读取，否则抛出异常。
     if prices is not None:
         df = pd.DataFrame({"close": prices})
     elif data_path:
         df = pd.read_csv(data_path)
     else:
-        # 生成随机 walk 作为示例数据（无真实输入时）
-        is_synthetic = True
-        np.random.seed(42)
-        returns = np.random.normal(0.001, 0.02, 252)
-        prices = 100 * np.exp(np.cumsum(returns))
-        df = pd.DataFrame({"close": prices})
+        raise ValueError(
+            "未提供真实数据。请使用 `from utils import load_dataset` 加载项目采集的"
+            "真实市场数据，或通过 data_path 参数传入 CSV 文件路径。"
+            "禁止用 np.random 或随机游走等合成数据替代。"
+        )
 
     # ---------- 2. 指标计算 ----------
     returns = df["close"].pct_change().dropna()
