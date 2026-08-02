@@ -5715,6 +5715,49 @@ class LangGraphOrchestrator:
                 except Exception as disk_exc:
                     logger.warning(f"[LangGraph:{task_id}] caption auto-patch disk write failed: {disk_exc}")
 
+            # 6.5 插图审计：去重 + 代码-caption 核对 + 引用完整性
+            try:
+                from ..core.figure_audit import audit_figures
+                audit_output_dir = get_project_output_dir(state.get("project_name"))
+                audit_issues, audit_patched = audit_figures(
+                    new_latex, figures, audit_output_dir,
+                )
+                if audit_issues:
+                    issues.extend(audit_issues)
+                    dedup_count = sum(1 for i in audit_issues if i.get("category") == "duplicate_figure")
+                    logger.info(
+                        f"[LangGraph:{task_id}] figure_audit: {len(audit_issues)} issues "
+                        f"({dedup_count} duplicates auto-removed)"
+                    )
+                if audit_patched != new_latex:
+                    new_latex = audit_patched
+                    writer_output["latex_code"] = new_latex
+                    writer_ref = self._set_result(state, "writer_agent", writer_output)
+                    final_tex = audit_output_dir / "final" / "main.tex"
+                    if final_tex.parent.exists():
+                        final_tex.write_text(new_latex, encoding="utf-8")
+                    papers_tex = audit_output_dir / "papers" / f"paper_{task_id}.tex"
+                    if papers_tex.exists():
+                        papers_tex.write_text(new_latex, encoding="utf-8")
+            except Exception as audit_exc:
+                logger.warning(f"[LangGraph:{task_id}] figure_audit failed: {audit_exc}")
+
+            # 6.6 VLM 视觉校准（有视觉模型时发图+caption 给 LLM 检查内容一致性）
+            try:
+                from ..core.figure_audit import vlm_review_figures
+                vlm_agent = self.agents.get("writer_agent") or self.agents.get("analyzer_agent")
+                if vlm_agent and hasattr(vlm_agent, "call_llm"):
+                    async def _vlm_call(messages):
+                        return await vlm_agent.call_llm(messages=messages, temperature=0.1)
+                    vlm_issues = await vlm_review_figures(
+                        new_latex, figures, audit_output_dir, _vlm_call,
+                    )
+                    if vlm_issues:
+                        issues.extend(vlm_issues)
+                        logger.info(f"[LangGraph:{task_id}] figure_audit VLM: {len(vlm_issues)} issues")
+            except Exception as vlm_exc:
+                logger.debug(f"[LangGraph:{task_id}] VLM review skipped: {vlm_exc}")
+
             # 7. 产出 report
             error_count = sum(1 for i in issues if i.get("severity") == "error")
             passed = error_count == 0

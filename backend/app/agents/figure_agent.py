@@ -514,6 +514,7 @@ class FigureAgent(BaseAgent):
                 "figure_id": figure_spec.get("id", "fig_01"),
                 "figure_path": str(figure_path) if figure_path else None,
                 "style": style_name,
+                "code": code,
                 "success": figure_path is not None,
             }
         except Exception as e:
@@ -790,6 +791,12 @@ class FigureAgent(BaseAgent):
         """在隔离进程中执行图表代码。"""
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
+
+        # 保存绘图源代码，供 figure_audit 做代码-caption 核对
+        try:
+            (output_dir / f"{figure_id}_code.py").write_text(code, encoding="utf-8")
+        except Exception:
+            pass
 
         # 构建包装代码
         project_root = str(Path(__file__).parent.parent.parent.parent)
