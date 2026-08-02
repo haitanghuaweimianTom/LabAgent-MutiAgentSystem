@@ -140,6 +140,26 @@ BACKEND_PID=$!
 echo "  Backend PID: $BACKEND_PID"
 cd "$PROJECT_ROOT"
 
+# ===== 4.1 确保 Bug Finder 本地推理服务在运行（可选，solver 错误诊断依赖） =====
+BUG_FINDER_PORT=8100
+if [ -d "$PROJECT_ROOT/ml/models/qwen2.5-coder-1.5b-instruct" ] && [ -d "$PROJECT_ROOT/ml/checkpoints/bug_finder_v2_clean" ]; then
+    if ! curl -sS --max-time 1 "http://localhost:${BUG_FINDER_PORT}/health" >/dev/null 2>&1; then
+        print_info "启动 Bug Finder（端口 $BUG_FINDER_PORT）..."
+        cd "$PROJECT_ROOT/ml"
+        nohup python serve_bug_finder.py > /tmp/bug_finder.log 2>&1 &
+        cd "$PROJECT_ROOT"
+        for i in $(seq 1 40); do
+            sleep 0.5
+            curl -sS --max-time 1 "http://localhost:${BUG_FINDER_PORT}/health" >/dev/null 2>&1 && break
+        done
+        print_ok "Bug Finder 已启动"
+    else
+        print_ok "Bug Finder 已在运行"
+    fi
+else
+    print_warn "Bug Finder 模型未找到，跳过（不影响后端）"
+fi
+
 # ===== 5. 等待并验证 =====
 print_info "等待后端就绪（最多 15s）..."
 for i in $(seq 1 30); do

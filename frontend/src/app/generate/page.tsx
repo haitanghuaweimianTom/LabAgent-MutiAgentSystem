@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import ProblemInput from '@/app/components/ProblemInput'
+import ProblemInput, { DRAFT_KEY } from '@/app/components/ProblemInput'
 import { useAppStore } from '@/app/store/useAppStore'
 import { apiBase } from '@/lib/api'
 
@@ -55,6 +55,8 @@ export default function GeneratePage() {
       }
       const newTaskId = data.task_id
       if (activeProjectId && newTaskId) addTaskToProject(activeProjectId, newTaskId)
+      // 提交成功后才清除草稿，避免失败时丢失用户输入
+      try { localStorage.removeItem(DRAFT_KEY) } catch {}
       router.push(`/task/${newTaskId}`)
     } catch (err) {
       console.error(err)

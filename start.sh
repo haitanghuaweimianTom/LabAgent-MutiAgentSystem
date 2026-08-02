@@ -212,6 +212,7 @@ print('  所有关键依赖已就绪')
 print_step "[5/8] 检查端口 & 停止旧服务..."
 BACKEND_PORT=8001
 FRONTEND_PORT=3001
+BUG_FINDER_PORT=8100
 
 # 检测并停止后端
 PIDS=$(pgrep -f "uvicorn app.main:app" || true)
@@ -239,6 +240,20 @@ if [ -n "$NEXT_PIDS" ]; then
     REMAINING=$(ss -ltnp 2>/dev/null | grep -F ":${FRONTEND_PORT} " | grep -oP 'pid=\K[0-9]+' | sort -u || true)
     [ -n "$REMAINING" ] && kill -KILL $REMAINING 2>/dev/null || true
     print_ok "旧前端已停止"
+fi
+
+# 检测并停止 Bug Finder（本地推理服务，GPU 占用，重启前必须释放）
+BF_PIDS=$(pgrep -f "serve_bug_finder.py" || true)
+if [ -n "$BF_PIDS" ]; then
+    print_info "停止旧 Bug Finder: $BF_PIDS"
+    kill -TERM $BF_PIDS 2>/dev/null || true
+    sleep 2
+    REMAINING_BF=$(pgrep -f "serve_bug_finder.py" || true)
+    [ -n "$REMAINING_BF" ] && kill -KILL $REMAINING_BF 2>/dev/null || true
+    if command -v fuser >/dev/null 2>&1; then
+        fuser -k ${BUG_FINDER_PORT}/tcp 2>/dev/null || true
+    fi
+    print_ok "旧 Bug Finder 已停止"
 fi
 
 # ===== 6. 安装前端依赖 & Build =====
@@ -332,7 +347,7 @@ cleanup() {
     print_info "正在停止服务..."
     # 用进程组负 PID 杀整个子进程树（uvicorn/next 可能 spawn worker 子进程），
     # 避免 kill 主进程后子进程成孤儿继续占用端口。
-    for pid in "${BACKEND_PID:-}" "${FRONTEND_PID:-}"; do
+    for pid in "${BACKEND_PID:-}" "${FRONTEND_PID:-}" "${BUG_FINDER_PID:-}"; do
         [ -n "$pid" ] && kill -- "-$pid" 2>/dev/null
         [ -n "$pid" ] && kill "$pid" 2>/dev/null
         wait "$pid" 2>/dev/null
@@ -381,6 +396,28 @@ for i in $(seq 1 30); do
     [ "$i" -eq 30 ] && print_warn "前端可能仍在启动中..."
 done
 
+# 启动 Bug Finder（本地代码错误诊断模型，可选；模型缺失时静默跳过）
+BUG_FINDER_PID=""
+if [ -d "ml/models/qwen2.5-coder-1.5b-instruct" ] && [ -d "ml/checkpoints/bug_finder_v2_clean" ]; then
+    print_info "启动 Bug Finder 本地推理服务（端口 $BUG_FINDER_PORT）..."
+    cd ml
+    nohup python serve_bug_finder.py > /tmp/bug_finder.log 2>&1 &
+    BUG_FINDER_PID=$!
+    cd "$PROJECT_ROOT"
+
+    print_info "等待 Bug Finder 就绪（模型加载需数秒，最多 120s）..."
+    for i in $(seq 1 240); do
+        sleep 0.5
+        if curl -sS --max-time 1 "http://localhost:${BUG_FINDER_PORT}/health" >/dev/null 2>&1; then
+            print_ok "Bug Finder 启动成功 (PID=$BUG_FINDER_PID)"
+            break
+        fi
+        [ "$i" -eq 240 ] && print_warn "Bug Finder 启动超时，查看 /tmp/bug_finder.log"
+    done
+else
+    print_warn "Bug Finder 模型未找到，跳过（仅影响本地错误诊断加速，不影响主流程）"
+fi
+
 # 完成提示
 echo
 echo -e "${GREEN}╔══════════════════════════════════════════════════════════════════╗${NC}"
@@ -389,10 +426,17 @@ echo -e "${GREEN}╠════════════════════
 echo -e "${GREEN}║  🌐 前端界面: http://localhost:$FRONTEND_PORT                      ${NC}"
 echo -e "${GREEN}║  🔌 后端 API:  http://localhost:$BACKEND_PORT/api/v1               ${NC}"
 echo -e "${GREEN}║  📚 API 文档:  http://localhost:$BACKEND_PORT/docs                 ${NC}"
+if [ -n "$BUG_FINDER_PID" ]; then
+    echo -e "${GREEN}║  🐞 Bug Finder: http://localhost:$BUG_FINDER_PORT/health          ${NC}"
+fi
 [ "$USE_CONDA" = true ] && echo -e "${GREEN}║  🐍 Conda 环境: $CONDA_ENV_NAME                                     ${NC}"
 echo -e "${GREEN}╚══════════════════════════════════════════════════════════════════╝${NC}"
 echo
 echo -e "${YELLOW}按 Ctrl+C 停止所有服务${NC}"
 echo
 
-wait $BACKEND_PID $FRONTEND_PID
+if [ -n "$BUG_FINDER_PID" ]; then
+    wait $BACKEND_PID $FRONTEND_PID $BUG_FINDER_PID
+else
+    wait $BACKEND_PID $FRONTEND_PID
+fi

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useTaskState } from '@/app/hooks/useTaskState'
 import { useAppStore } from '@/app/store/useAppStore'
@@ -51,52 +51,90 @@ export default function TaskDetailPage() {
     if (paused && taskId) loadPauseData()
   }, [paused])
 
+  const esRef = useRef<EventSource | null>(null)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const retryCountRef = useRef(0)
+  const intentionallyClosedRef = useRef(false)
+
+  const closeSSE = useCallback(() => {
+    intentionallyClosedRef.current = true
+    if (reconnectTimerRef.current) { clearTimeout(reconnectTimerRef.current); reconnectTimerRef.current = null }
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
+    if (esRef.current) { esRef.current.close(); esRef.current = null }
+    setEventSource(null)
+  }, [])
+
   const startSSE = useCallback((id: string) => {
-    if (eventSource) eventSource.close()
+    if (esRef.current) { esRef.current.close(); esRef.current = null }
+    if (reconnectTimerRef.current) { clearTimeout(reconnectTimerRef.current); reconnectTimerRef.current = null }
+    retryCountRef.current = 0
+    intentionallyClosedRef.current = false
+
     const es = new EventSource(apiBase() + '/tasks/' + id + '/stream')
+    esRef.current = es
     setEventSource(es)
-    const msgPoll = setInterval(async () => {
-      try {
-        const res = await fetch(apiBase() + '/tasks/' + id + '/messages')
-        if (res.ok) {
-          const msgs = await res.json()
-          const newMsgs = msgs.map((m: any) => ({
-            id: m.id, sender: m.sender,
-            sender_label: m.sender_label || TEAM_LABELS[m.sender] || m.sender,
-            content: m.content, type: m.type || 'text', timestamp: m.timestamp,
-          }))
-          setMessages(prev => {
-            if (prev.length !== newMsgs.length) return newMsgs
-            if (prev.length > 0 && newMsgs.length > 0 && prev[prev.length - 1].id !== newMsgs[newMsgs.length - 1].id) return newMsgs
-            return prev
-          })
-        }
-      } catch {}
-    }, 1000)
+
+    if (!pollRef.current) {
+      pollRef.current = setInterval(async () => {
+        try {
+          const res = await fetch(apiBase() + '/tasks/' + id + '/messages')
+          if (res.ok) {
+            const msgs = await res.json()
+            const newMsgs = msgs.map((m: any) => ({
+              id: m.id, sender: m.sender,
+              sender_label: m.sender_label || TEAM_LABELS[m.sender] || m.sender,
+              content: m.content, type: m.type || 'text', timestamp: m.timestamp,
+            }))
+            setMessages(prev => {
+              if (prev.length !== newMsgs.length) return newMsgs
+              if (prev.length > 0 && newMsgs.length > 0 && prev[prev.length - 1].id !== newMsgs[newMsgs.length - 1].id) return newMsgs
+              return prev
+            })
+          }
+        } catch {}
+      }, 1000)
+    }
+
     es.onmessage = (e) => {
       try {
         const d = JSON.parse(e.data)
+        // 收到事件说明连接健康，重置重连退避计数
+        retryCountRef.current = 0
         setTaskStatus(d.status)
         setProgress(d.progress || 0)
         setCurrentStep(d.current_step || '')
         if (d.active_agent) setActiveAgent(d.active_agent)
-        if (d.status === 'paused') { setPaused(true); es.close(); clearInterval(msgPoll); setActiveAgent(undefined) }
+        if (d.status === 'paused') { setPaused(true); closeSSE(); setActiveAgent(undefined) }
         if (d.status === 'phase1_completed') {
           const wf = d.workflow_type || ''
           if (wf === 'deep_research' || wf === 'research_survey') { autoConfirmSubProblems(id) }
           else { setPhase('phase2_confirm'); loadSubProblems(id) }
-          es.close(); clearInterval(msgPoll)
+          closeSSE()
         }
-        if (['completed', 'failed', 'cancelled'].includes(d.status)) { es.close(); clearInterval(msgPoll); setActiveAgent(undefined) }
+        if (['completed', 'failed', 'cancelled'].includes(d.status)) { closeSSE(); setActiveAgent(undefined) }
       } catch {}
     }
-    es.onerror = () => { es.close(); clearInterval(msgPoll) }
-  }, [eventSource])
+    es.onerror = () => {
+      if (intentionallyClosedRef.current) return
+      es.close()
+      esRef.current = null
+      // 指数退避重连（1s→2s→4s→…→封顶 30s），避免断网/后端重启后页面变僵尸
+      const delay = Math.min(30000, 1000 * 2 ** retryCountRef.current)
+      retryCountRef.current += 1
+      reconnectTimerRef.current = setTimeout(() => { if (!intentionallyClosedRef.current) startSSE(id) }, delay)
+    }
+  }, [closeSSE])
 
   useEffect(() => {
     if (taskId) startSSE(taskId)
-    return () => { if (eventSource) eventSource.close() }
-  }, [taskId])
+    return () => {
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current)
+      if (pollRef.current) clearInterval(pollRef.current)
+      if (esRef.current) esRef.current.close()
+      setEventSource(null)
+    }
+  }, [taskId, startSSE])
 
   const loadSubProblems = async (id: string) => {
     try {

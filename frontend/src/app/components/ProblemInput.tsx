@@ -16,6 +16,9 @@ const WORKFLOWS = [
 
 const TEMPLATES = TEMPLATE_OPTIONS;
 
+// localStorage 草稿键：页面刷新/误关后恢复未提交的表单输入
+export const DRAFT_KEY = 'labagent:generate:draft:v1';
+
 interface ProblemInputProps {
   onSubmit: (params: {
     problemText: string;
@@ -74,6 +77,38 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
     loadProjects();
     loadKnowledgeBases();
   }, [loadProjects]);
+
+  // 挂载时恢复草稿（仅恢复有内容的字段）
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      const d = JSON.parse(raw);
+      if (d.problemText) setProblemText(d.problemText);
+      if (d.workflow) setWorkflow(d.workflow);
+      if (d.template) setTemplate(d.template);
+      if (d.dataSource) setDataSource(d.dataSource);
+      if (d.problemType) setProblemType(d.problemType);
+      if (typeof d.useCritique === 'boolean') setUseCritique(d.useCritique);
+    } catch {
+      // 草稿损坏则忽略
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 防抖 800ms 自动保存草稿（刷新/切页不丢输入）
+  useEffect(() => {
+    const t = setTimeout(() => {
+      try {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({
+          problemText, workflow, template, dataSource, problemType, useCritique,
+        }));
+      } catch {
+        // 存储不可用则忽略
+      }
+    }, 800);
+    return () => clearTimeout(t);
+  }, [problemText, workflow, template, dataSource, problemType, useCritique]);
 
   const loadKnowledgeBases = useCallback(async () => {
     try {
@@ -352,7 +387,7 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
             </div>
             {filesLoading && <div className="text-xs text-muted-foreground py-2">加载数据文件中...</div>}
             {!filesLoading && availableFiles.length === 0 && (
-              <div className="text-xs text-muted-foreground py-2">暂无数据文件，请先到「文件管理」上传，或选择"系统自己搜集数据"。</div>
+              <div className="text-xs text-muted-foreground py-2">暂无数据文件，请先到「文件管理」上传，或选择「系统自己搜集数据」。</div>
             )}
             <div className="flex flex-col gap-2 max-h-[360px] overflow-y-auto pr-1">
               {availableFiles.map(f => {
