@@ -156,7 +156,10 @@ export default function ProblemInput({ onSubmit, submitting, taskStatus, progres
 
   const handleSubmit = () => {
     if (!problemText.trim()) { alert('请输入问题描述'); return; }
-    const finalProjectName = projectName.trim() || activeProject?.name || '未命名项目';
+    // 项目名留空时从问题文本截前20字生成，避免堆积大量"未命名项目"
+    const finalProjectName = projectName.trim()
+      || activeProject?.name
+      || problemText.trim().replace(/\s+/g, ' ').slice(0, 20).replace(/[\\/:*?"<>|]/g, '_');
     const dataFiles = selectedFiles.size > 0 ? Array.from(selectedFiles) : [];
     const kbIds = selectedKBIds instanceof Set ? Array.from(selectedKBIds) : [];
     onSubmit({

@@ -52,11 +52,16 @@ def assemble_deliverable(
         date_str = datetime.now().strftime("%Y%m%d")
         safe_name = _safe_filename(project_name or "未命名项目")
         folder_name = f"{safe_name}_{date_str}"
-        deliverable_dir = output_dir.parent / folder_name  # outputs/<project>/<folder>/
+        # project_name 为空时 output_dir=outputs/_global，其 parent=outputs/ 会把
+        # 交付文件夹堆到顶层。改为始终用 outputs/<safe_name>/ 作为父目录，避免顶层污染。
+        from ..core.paths import _PROJECT_ROOT
+        project_root_dir = _PROJECT_ROOT / "outputs" / safe_name
+        project_root_dir.mkdir(parents=True, exist_ok=True)
+        deliverable_dir = project_root_dir / folder_name
         if deliverable_dir.exists():
             # 避免覆盖：追加序号
             for i in range(2, 99):
-                candidate = output_dir.parent / f"{folder_name}_{i}"
+                candidate = project_root_dir / f"{folder_name}_{i}"
                 if not candidate.exists():
                     deliverable_dir = candidate
                     break
