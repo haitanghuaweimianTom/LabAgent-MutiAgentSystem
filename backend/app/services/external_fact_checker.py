@@ -34,6 +34,7 @@ class CheckFinding:
     status: str          # VERIFIED | CONFLICT | UNVERIFIED
     metric: Optional[str]
     detail: str = ""
+    best_rel: Optional[float] = None  # 命中候选中最小的相对差（无候选时为 None）
 
 
 class ExternalFactChecker:
@@ -99,13 +100,14 @@ class ExternalFactChecker:
             if best_rel <= self.tolerance:
                 findings.append(CheckFinding(
                     raw, reported, auth_val, "VERIFIED",
-                    best.metric, f"来源：{best.source}（{best.year}）"))
+                    best.metric, f"来源：{best.source}（{best.year}）", best_rel))
             elif best_rel <= self.conflict_threshold:
                 findings.append(CheckFinding(
                     raw, reported, auth_val, "CONFLICT",
                     best.metric,
-                    f"权威值 {auth_val:g}（{best.source}）与论文 {reported:g} 冲突"))
+                    f"权威值 {auth_val:g}（{best.source}）与论文 {reported:g} 冲突",
+                    best_rel))
             else:
                 findings.append(CheckFinding(
-                    raw, reported, None, "UNVERIFIED", None, "无匹配来源"))
+                    raw, reported, None, "UNVERIFIED", None, "无匹配来源", best_rel))
         return findings

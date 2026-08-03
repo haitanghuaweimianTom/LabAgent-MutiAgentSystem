@@ -9350,27 +9350,32 @@ print(json.dumps({{"accuracy": round(acc, 4)}}))
                 latex_plain = latex_code if isinstance(latex_code, str) else ""
                 if latex_plain:
                     import re as _re
-                    # 抽取正文中每个"数字+单位"断言做外部核验（跳过 LaTeX 公式/宏）
-                    for block in _re.findall(r"[^\$\{\}\\]{4,120}", latex_plain):
-                        block = block.strip()
-                        if len(block) >= 4:
-                            external_findings.extend(checker.check_text(block))
+                    # 剔除 LaTeX 公式/命令后，对整段文本抽取"数字+单位"断言做外部核验，
+                    # 避免按块切割时切断"数字"与"单位"（如 "4." 与 "15万亿元" 被分到两块）
+                    plain = _re.sub(r"\$[^$]*\$", " ", latex_plain)          # $...$
+                    plain = _re.sub(r"\\[a-zA-Z]+(?:\{[^{}]*\})?", " ", plain)  # \cmd / \cmd{...}
+                    plain = _re.sub(r"[{}]", " ", plain)                     # 花括号
+                    external_findings.extend(checker.check_text(plain))
             except Exception as ext_exc:
                 logger.warning(f"[LangGraph:{task_id}] external fact check failed: {ext_exc}")
 
         conflicts = [f for f in external_findings if f.status == "CONFLICT"]
         unverified = [f for f in external_findings if f.status == "UNVERIFIED"]
+        # 只把"与某个权威值相近（rel≤3）但仍判定为无来源"的断言计为风险；
+        # 量级完全无关的数字（如 GDP 对土地出让收入，rel 巨大）不拉低 passed。
+        near_miss = [f for f in unverified if f.best_rel is not None and f.best_rel <= 3.0]
         report["external_check"] = {
             "enabled": bool(getattr(self.cfg, "enable_external_fact_check", True)),
             "findings_count": len(external_findings),
             "conflict_count": len(conflicts),
             "unverified_count": len(unverified),
+            "unverified_near_miss": len(near_miss),
             "conflicts": [c.__dict__ for c in conflicts][:20],
         }
         report["passed"] = bool(
             report["passed"]
             and not conflicts
-            and (len(unverified) <= 5)  # 允许少量无来源指标，超限视为风险
+            and (len(near_miss) <= 5)  # 允许少量相近但无来源的指标，超限视为风险
         )
 
         # 数值一致性检查
