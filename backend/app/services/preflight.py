@@ -117,6 +117,11 @@ WORKFLOW_TEMPLATE_COMPAT: "Dict[str, Dict[str, Any]]" = {
         "allowed": ["quick", "standard"],
         "blocked": [],
     },
+    "presentation": {
+        # PPT 演示文稿：办公类，默认 quick 短链；允许 standard 长链（用户自定义）
+        "allowed": ["quick", "standard"],
+        "blocked": [],
+    },
     "neurips_2024": {
         "allowed": ["research_paper", "deep_research"],
         "blocked": ["quick"],

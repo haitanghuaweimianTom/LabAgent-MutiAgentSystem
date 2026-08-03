@@ -1,0 +1,89 @@
+{
+  "id": "presentation",
+  "name": "演示文稿(Beamer)",
+  "domain": "presentation",
+  "description": "10 页 Beamer 演示文稿模板：封面→摘要→背景→方法→结果→风险→结论→备份。",
+  "documentclass": "beamer",
+  "cls_file": "",
+  "bib_style": "plain",
+  "language": "zh",
+  "acceptance_threshold": 70,
+  "min_pages": 8,
+  "max_pages": 20,
+  "citation_style": "numeric",
+  "chapter_plan": [
+    {
+      "id": "title_frame",
+      "title": "封面",
+      "section_level": 0,
+      "prompt_role": "生成 Beamer 封面 frame。",
+      "requirements": ["标题", "副标题", "作者", "日期", "\\maketitle 由 beamer 自动生成，此处只写 frame 内容"]
+    },
+    {
+      "id": "abstract_frame",
+      "title": "执行摘要",
+      "section_level": 0,
+      "prompt_role": "生成执行摘要 frame。",
+      "requirements": ["150-300字", "概括研究目的→数据来源→方法→关键发现→建议", "含关键数值"]
+    },
+    {
+      "id": "background_frame",
+      "title": "1 背景与动机",
+      "section_level": 1,
+      "prompt_role": "生成背景页。",
+      "requirements": ["1页2-3条要点", "用 \\begin{itemize} 罗列", "每页不超过150字"]
+    },
+    {
+      "id": "data_frame",
+      "title": "2 数据与图表",
+      "section_level": 1,
+      "prompt_role": "生成数据展示页。",
+      "requirements": ["每页1张图", "用 \\begin{figure} 插入 figures/ 下的图", "标注来源"]
+    },
+    {
+      "id": "method_frame",
+      "title": "3 方法框架",
+      "section_level": 1,
+      "prompt_role": "生成方法页。",
+      "requirements": ["用公式块 \\begin{align} 或 itemize 展示核心方法", "注明假设"]
+    },
+    {
+      "id": "result_frame",
+      "title": "4 核心结果",
+      "section_level": 1,
+      "prompt_role": "生成结果页。",
+      "requirements": ["用表格 \\begin{tabular} 或图展示关键数字", "每页突出1个结论"]
+    },
+    {
+      "id": "risk_frame",
+      "title": "5 风险与局限",
+      "section_level": 1,
+      "prompt_role": "生成风险页。",
+      "requirements": ["3-5条风险要点", "含定量风险指标"]
+    },
+    {
+      "id": "conclusion_frame",
+      "title": "6 结论与建议",
+      "section_level": 1,
+      "prompt_role": "生成结论页。",
+      "requirements": ["2-3条核心结论", "明确可操作的建议"]
+    },
+    {
+      "id": "backup_frame",
+      "title": "备份页",
+      "section_level": 0,
+      "prompt_role": "生成备份材料页。",
+      "requirements": ["详细数据表", "补充图表", "附录引用"]
+    }
+  ],
+  "system_prompt": "你是一个专业的演示文稿(Beamer)写作专家。\n\n【输出要求】\n生成标准 Beamer LaTeX（\\documentclass{beamer}），中文用 ctexbeamer 或 zhfonts 主题。\n- 每页一个 \\begin{frame}...\\end{frame}\n- 幻灯片风格：要点化，避免大段文字\n- 文字用中文，数学用 $...$ 或 \\begin{align}\n- 图表引用 figures/ 目录下已生成的 PNG\n- 每页标题用 \\frametitle{}\n- 页脚用 \\insertframenumber\n\n【引号规范】\n中文正文一律使用中文双引号 \"\" 与中文单引号 ''，禁止在中文中使用 LaTeX 英文引号 `` 与 ''。\n\n【数据真实性】\n所有数字必须来自数据来源（真实采集或模型输出），禁止编造；预测性数字需标注\"模型预测\"。\n\n请严格按以下JSON格式返回：\n{\n    \"title\": \"演示标题\",\n    \"abstract\": \"执行摘要（150-300字）\",\n    \"keywords\": [\"关键词1\", ...],\n    \"latex_code\": \"完整Beamer LaTeX源代码\",\n    \"sections\": {\"背景与动机\": \"要点\", \"数据与图表\": \"要点\", ...}\n}",
+  "preamble": "\\documentclass[aspectratio=169]{beamer}\n\\usepackage[UTF8]{ctex}\n\\usepackage{amsmath,amssymb,graphicx,booktabs}\n\\usetheme{Madrid}\n\\useoutertheme{miniframes}\n\n\\title{演示文稿标题}\n\\author{分析团队}\n\\date{\\today}\n\n\\begin{document}\n\n\\begin{frame}\n\\titlepage\n\\end{frame}\n",
+  "metadata_defaults": {
+    "author": "分析团队",
+    "date": "\\today"
+  },
+  "compile_options": {
+    "engine": "xelatex",
+    "extra_packages": ["ctex", "amsmath", "amssymb", "graphicx", "booktabs"]
+  }
+}
