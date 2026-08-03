@@ -165,6 +165,7 @@ class LangGraphConfig:
     enable_peer_review: bool = True
     enable_experiment_design: bool = True
     enable_fact_check: bool = True
+    enable_external_fact_check: bool = True   # 外部权威来源核验（VERIFIED/CONFLICT/UNVERIFIED）
 
 
 class LangGraphOrchestrator:
@@ -9281,6 +9282,7 @@ print(json.dumps({{"accuracy": round(acc, 4)}}))
             output_dir = None
 
         report: Dict[str, Any] = {"enabled": True, "passed": True}
+        latex_code = ""
         results = self._resolve_results(state)
 
         if output_dir:
@@ -9337,6 +9339,39 @@ print(json.dumps({{"accuracy": round(acc, 4)}}))
                 f"检测到 {len(fabrication_issues)} 个潜在编造内容，建议人工审核后方可提交。"
             )
             logger.warning(f"Task {task_id}: fabrication issues detected: {fabrication_issues}")
+
+        # ===== 外部权威来源核验（v2）：防止"两个造假者互相对口供" =====
+        external_findings = []
+        if getattr(self.cfg, "enable_external_fact_check", True):
+            try:
+                from ..services.external_fact_checker import ExternalFactChecker
+                from ..services.fact_sources import get_source_registry
+                checker = ExternalFactChecker(get_source_registry())
+                latex_plain = latex_code if isinstance(latex_code, str) else ""
+                if latex_plain:
+                    import re as _re
+                    # 抽取正文中每个"数字+单位"断言做外部核验（跳过 LaTeX 公式/宏）
+                    for block in _re.findall(r"[^\$\{\}\\]{4,120}", latex_plain):
+                        block = block.strip()
+                        if len(block) >= 4:
+                            external_findings.extend(checker.check_text(block))
+            except Exception as ext_exc:
+                logger.warning(f"[LangGraph:{task_id}] external fact check failed: {ext_exc}")
+
+        conflicts = [f for f in external_findings if f.status == "CONFLICT"]
+        unverified = [f for f in external_findings if f.status == "UNVERIFIED"]
+        report["external_check"] = {
+            "enabled": bool(getattr(self.cfg, "enable_external_fact_check", True)),
+            "findings_count": len(external_findings),
+            "conflict_count": len(conflicts),
+            "unverified_count": len(unverified),
+            "conflicts": [c.__dict__ for c in conflicts][:20],
+        }
+        report["passed"] = bool(
+            report["passed"]
+            and not conflicts
+            and (len(unverified) <= 5)  # 允许少量无来源指标，超限视为风险
+        )
 
         # 数值一致性检查
         if not report.get("passed"):
