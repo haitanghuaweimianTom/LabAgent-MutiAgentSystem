@@ -79,10 +79,6 @@ class ExternalFactChecker:
             candidates = list(self.registry.list_sources())
 
         for raw, reported in self._extract_assertions(text):
-            if reported is None:
-                findings.append(CheckFinding(raw, None, None, "UNVERIFIED", None,
-                                             "无法解析数字"))
-                continue
             best: Optional[FactSource] = None
             best_rel: Optional[float] = None
             for src in candidates:

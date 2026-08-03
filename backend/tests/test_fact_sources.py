@@ -34,6 +34,12 @@ def test_normalized_value_scales_float_by_unit():
     assert fs.normalized_value() == pytest.approx(41500.0, abs=50.0)
 
 
+def test_normalized_value_wan_pingfang_meter():
+    # 97400 万平方米 → 9.74 亿平方米（万平方米 = 0.0001 亿平方米）
+    fs = FactSource(metric="x", value=97400, unit="万平方米", source="统计局", year=2024)
+    assert fs.normalized_value() == pytest.approx(9.74, abs=0.01)
+
+
 @pytest.mark.parametrize("metric,expected", [
     ("土地出让收入2025", 41500.0),
     ("土地出让收入2021", 87051.0),
