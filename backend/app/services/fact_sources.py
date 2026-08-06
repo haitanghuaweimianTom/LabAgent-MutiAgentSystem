@@ -11,15 +11,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import List, Optional
-
-
-# 单位到"倍率"的映射（把单位值统一换算到"亿元"基准口径）
-UNIT_MULT: dict = {
-    "亿元": 1.0, "万亿元": 10000.0, "万元": 0.0001, "万平方米": 0.0001,
-    "%": 1.0, "pp": 1.0, "万套": 1.0, "亿平方米": 1.0,
-    "万亿": 10000.0, "亿": 1.0,
-}
+from typing import ClassVar, List, Optional
 
 
 @dataclass
@@ -34,27 +26,34 @@ class FactSource:
     - aliases: 别名列表（同义表述，如 ["2025年土地出让", "土地出让2025"]）
     """
     metric: str
-    value: float | str
+    value: float
     unit: str
     source: str
     year: int
     aliases: List[str] = field(default_factory=list)
 
-    def normalized_value(self) -> float:
-        """返回以"亿元"为基准口径的数值（供外部事实核查比对）。
+    # 单位到"倍率"的映射（把字符串单位值转成与 value 同口径的数值）
+    _UNIT_MULT: ClassVar[dict] = {
+        "亿元": 1.0, "万亿元": 10000.0, "万元": 0.0001,
+        "%": 1.0, "pp": 1.0, "万套": 1.0, "亿平方米": 1.0,
+        "万亿": 10000.0, "亿": 1.0,
+    }
 
-        数值为 float 时按 self.unit 倍率换算，如 4.15 万亿元 → 41500.0；
-        数值为字符串时解析尾部单位，如 "87051亿" → 87051.0、"4.15万亿" → 41500.0。
+    def normalized_value(self) -> float:
+        """返回与 value 同单位口径的数值。
+
+        若 value 是字符串（如 "87051亿"），按尾部单位倍率换算：
+        "87051亿" → 87051.0（亿=1倍），或 "4.15万亿" → 41500.0（万亿=10000倍）。
         """
         if isinstance(self.value, (int, float)):
-            return float(self.value) * UNIT_MULT.get(self.unit, 1.0)
+            return float(self.value)
         s = str(self.value).strip()
-        m = re.match(r"^([-+]?\d+(?:\.\d+)?)\s*(万亿元|亿元|亿平方米|万平方米|万套|万亿|亿|万元|pp|%)?$", s)
+        m = re.match(r"^([-+]?\d+(?:\.\d+)?)\s*(万亿|亿|亿元|万亿元|%)?$", s)
         if not m:
             return float("nan")
         num = float(m.group(1))
         unit = m.group(2) or ""
-        mult = UNIT_MULT.get(unit, 1.0)
+        mult = self._UNIT_MULT.get(unit, 1.0)
         return num * mult
 
 
@@ -104,10 +103,8 @@ class FactSourceRegistry:
             self._sources[alias] = src
 
     def register(self, src: FactSource) -> None:
-        """运行时追加来源（不覆盖已有条目：指标名或别名冲突时跳过）。"""
+        """运行时追加来源（不覆盖内置：同名跳过）。"""
         if src.metric in self._sources:
-            return
-        if any(alias in self._sources for alias in src.aliases):
             return
         self._add(src)
 
@@ -116,11 +113,7 @@ class FactSourceRegistry:
         return self._sources.get(key)
 
     def list_sources(self) -> List[FactSource]:
-        """返回去重后的唯一来源列表（按指标名去重，保留插入顺序）。"""
-        seen: dict = {}
-        for src in self._sources.values():
-            seen[src.metric] = src
-        return list(seen.values())
+        return list(self._sources.values())
 
 
 _registry: Optional[FactSourceRegistry] = None
