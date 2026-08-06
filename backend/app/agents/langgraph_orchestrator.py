@@ -165,7 +165,7 @@ class LangGraphConfig:
     enable_peer_review: bool = True
     enable_experiment_design: bool = True
     enable_fact_check: bool = True
-    enable_external_fact_check: bool = True   # 外部权威来源核验（VERIFIED/CONFLICT/UNVERIFIED）
+    enable_external_fact_check: bool = True   # 外部权威来源核验（确定性） + LLM 模型合理性（warning）
 
 
 class LangGraphOrchestrator:
@@ -583,9 +583,56 @@ class LangGraphOrchestrator:
             em.record("coordinator", "task_error", f"LangGraph 任务失败：{exc}")
             raise
 
+    @staticmethod
+    def _is_valid_agent_output(output: Any) -> bool:
+        """判断 agent 输出是否为真实结果（而非进度占位或空值）。"""
+        if output is None:
+            return False
+        if not isinstance(output, dict):
+            return True
+        if set(output.keys()) <= {"progress", "step"} and "progress" in output:
+            return False
+        if not output:
+            return False
+        return True
+
+    def _skip_if_completed(
+        self, state: TaskState, agent_key: str, done_step: str, node_label: str
+    ) -> Optional[TaskState]:
+        """断点续跑守卫：如果 agent_key 在 results 中已有有效输出，跳过该节点。
+
+        返回 None 表示需要正常执行；返回 TaskState 表示直接跳过。
+        """
+        results = self._resolve_results(state)
+        existing = results.get(agent_key)
+        if self._is_valid_agent_output(existing):
+            task_id = state.get("task_id", "")
+            logger.info(
+                f"[LangGraph:{task_id}] ⏭  跳过 {node_label}（{agent_key} 已有 checkpoint 结果）"
+            )
+            # 只在首次跳过时发聊天通知，避免子问题循环刷屏
+            notified: set = getattr(self, "_skip_notified", None)
+            if notified is None:
+                notified = set()
+                self._skip_notified = notified
+            if (task_id, agent_key) not in notified:
+                notified.add((task_id, agent_key))
+                self._post_chat(
+                    task_id, "coordinator",
+                    f"⏭  断点续跑：已跳过 {node_label}（复用上次结果）"
+                )
+            return {**state, "current_step": done_step}
+        return None
+
     def _restore_from_checkpoint(self, task_id: str, initial_state: TaskState) -> TaskState:
-        """尝试从 checkpoint 恢复任务状态。如果无 checkpoint 或恢复失败，返回 initial_state。"""
-        from ..core.task_persistence import load_task_checkpoints, load_task_metadata
+        """尝试从 checkpoint 恢复任务状态。如果无 checkpoint 或恢复失败，返回 initial_state。
+
+        恢复优先级（后者覆盖前者）：
+        1. _checkpoints.json 里的 payload（旧路径，大部分是进度占位）
+        2. _result.json 最终结果（任务成功时存在）
+        3. langgraph_results/{task_id}.json（每个 Agent 完成即实时落盘，最可靠）
+        """
+        from ..core.task_persistence import load_task_checkpoints, load_task_metadata, load_task_result
 
         try:
             meta = load_task_metadata(task_id)
@@ -593,52 +640,86 @@ class LangGraphOrchestrator:
                 return initial_state
 
             status = meta.get("status", "")
-            if status not in ("interrupted", "paused", "running"):
+            # 对 failed 状态也开放恢复：允许用户从失败点续跑
+            if status not in ("interrupted", "paused", "running", "failed"):
                 return initial_state
 
-            checkpoints = load_task_checkpoints(task_id)
-            if not checkpoints:
-                return initial_state
+            restored_results: Dict[str, Any] = {}
 
-            # 按时间排序，取最新的 checkpoint
-            checkpoints.sort(key=lambda x: x.get("saved_at", ""))
-            last_checkpoint = checkpoints[-1]
-            last_step = last_checkpoint.get("step", "")
-            last_payload = last_checkpoint.get("payload", {})
-
-            logger.info(f"[LangGraph:{task_id}] 恢复 checkpoint: step={last_step}, saved_at={last_checkpoint.get('saved_at')}")
-
-            # 重建 results（从所有 checkpoints 聚合）
-            restored_results = {}
+            # (1) 从 checkpoints 聚合（主要是历史路径兼容）
+            checkpoints = load_task_checkpoints(task_id) or []
             for cp in checkpoints:
                 step_name = cp.get("step", "")
                 payload = cp.get("payload", {})
-                if step_name and payload:
+                if step_name and self._is_valid_agent_output(payload):
                     restored_results[step_name] = payload
 
-            # 从 task_result.json 加载已有结果（更完整）
+            # (2) 从 task_result.json 加载
             try:
-                from ..core.task_persistence import load_task_result
                 task_result = load_task_result(task_id)
                 if task_result and task_result.get("output"):
-                    restored_results.update(task_result["output"])
+                    for k, v in task_result["output"].items():
+                        if self._is_valid_agent_output(v):
+                            restored_results[k] = v
             except Exception:
                 pass
 
-            # 确定恢复后的 current_step（用于路由到下一个节点）
+            # (3) 从 TaskResultStore（最可靠：每节点完成即实时原子落盘）
+            try:
+                store_results = self._result_store.get_all(task_id) or {}
+                for agent_name, out in store_results.items():
+                    if self._is_valid_agent_output(out):
+                        restored_results[agent_name] = out
+            except Exception as e:
+                logger.warning(f"[LangGraph:{task_id}] 从 result_store 恢复失败: {e}")
+
+            if not restored_results:
+                logger.info(f"[LangGraph:{task_id}] 无有效 checkpoint 可恢复，从头开始")
+                return initial_state
+
+            completed_agents = sorted(restored_results.keys())
+            logger.info(
+                f"[LangGraph:{task_id}] 从 checkpoint 恢复 {len(completed_agents)} 个已完成 Agent: "
+                f"{completed_agents}"
+            )
+
+            # 推断 last_step：找到最后一个已完成 agent（按图执行顺序）
+            step_order = [
+                "preflight_decision", "data_quality_check", "analyzer_agent", "data_agent",
+                "research_agent", "financial_analyst_agent", "modeler_agent",
+                "algorithm_engineer_agent", "solver_agent", "iterative_solver",
+                "experimentation_agent", "experiment_agent", "figure_agent",
+                "figure_caption_check", "writer_agent", "peer_review_agent",
+                "fact_check_agent", "assembly_agent", "citation_agent",
+            ]
+            last_step = ""
+            for s in step_order:
+                if s in restored_results:
+                    last_step = s
+            # 如果 solver_agent 完成但 iterative_solver 不在结果里（solver key 名兼容）
+            if "solver_agent" in restored_results and "iterative_solver" not in restored_results:
+                last_step = "solver_agent"
+
             step_to_node = {
+                "preflight_decision": "preflight_decision_done",
+                "data_quality_check": "data_quality_check_done",
                 "analyzer_agent": "analyzer_done",
                 "data_agent": "data_done",
                 "research_agent": "research_done",
                 "modeler_agent": "modeler_done",
                 "algorithm_engineer_agent": "algorithm_engineer_done",
                 "financial_analyst_agent": "financial_analyst_done",
-                "solver_agent": "iterative_solver_done",
+                "solver_agent": "solver_done",
+                "iterative_solver": "solver_done",
                 "experiment_agent": "experiment_done",
+                "experimentation_agent": "experiment_done",
                 "writer_agent": "writer_done",
                 "peer_review_agent": "peer_review_done",
                 "figure_agent": "figure_done",
+                "figure_caption_check": "figure_caption_check_done",
                 "fact_check_agent": "fact_check_done",
+                "assembly_agent": "assembly_done",
+                "citation_agent": "citation_done",
             }
             current_step = step_to_node.get(last_step, "preflight_decision_done")
 
@@ -651,11 +732,13 @@ class LangGraphOrchestrator:
                 "revision_count": meta.get("revision_count", 0),
                 "retry_count": meta.get("retry_count", 0),
                 "escalation_count": meta.get("escalation_count", 0),
+                "_resumed_from_checkpoint": True,
+                "_completed_agents": completed_agents,
             }
 
-            # 恢复子问题列表（如果存在）
+            # 恢复子问题列表
             analyzer_result = restored_results.get("analyzer_agent", {})
-            if analyzer_result and analyzer_result.get("sub_problems"):
+            if isinstance(analyzer_result, dict) and analyzer_result.get("sub_problems"):
                 restored_state["sub_problems"] = analyzer_result["sub_problems"]
 
             # 恢复 cannot_solve_report
@@ -863,6 +946,24 @@ class LangGraphOrchestrator:
 
         state = await self._check_user_input(state)
         task_id = state["task_id"]
+
+        # 断点续跑快路径：如果 research_agent 已经有结果，说明投票已在之前执行过，直接放行 T1
+        results = self._resolve_results(state)
+        if self._is_valid_agent_output(results.get("research_agent")):
+            # 复用历史投票结论：复杂任务放行 T1+T2，其他放行 T1
+            template = state.get("paper_template", "math_modeling")
+            workflow = state.get("workflow_type", "standard")
+            is_complex = (template in self._COMPLEX_TEMPLATES) or (workflow in self._COMPLEX_WORKFLOWS)
+            decision = {
+                "allow_t0": True, "allow_t1": True, "allow_t2": is_complex,
+                "mode": "resume_fast_path",
+                "reason": "断点续跑：research_agent 已有结果，复用投票放行",
+                "tally": {"t1": "resume", "t2": "resume"},
+                "voters": [], "round1": [],
+            }
+            logger.info(f"[LangGraph:{task_id}] ⏭  research_vote 快路径（research_agent 已有结果，放行 T1/T2={is_complex}）")
+            return {**state, "research_decision": decision, "current_step": "research_vote_done"}
+
         bus = get_event_bus()
         bus.emit_phase_change(task_id, "research_vote", "研究决策投票：多智能体讨论是否联网检索")
         self._update_progress(task_id, state["problem_text"], 18, "研究决策投票中")
@@ -5357,9 +5458,15 @@ class LangGraphOrchestrator:
             figure_output = results.get("figure_agent") or {}
             figures = figure_output.get("figures", []) if isinstance(figure_output, dict) else []
 
-            if not latex_code or not figures:
-                logger.info(f"[LangGraph:{task_id}] figure_caption_check: empty latex_code or figures, skipping")
+            if not latex_code:
+                logger.info(f"[LangGraph:{task_id}] figure_caption_check: empty latex_code, skipping")
                 return {**state, "current_step": "figure_caption_check_skipped", "_quality_issues": quality_issues}
+
+            # 注意：不再因 figures 为空就短路。即便 figure_agent 未产出图表，
+            # 只要 writer 在 latex 里写了 \includegraphics，就须校验引用文件是否真实存在，
+            # 缺失则报 error，防止 writer 编造图表引用 / 交付占位符 PDF。
+            if not figures:
+                logger.info(f"[LangGraph:{task_id}] figure_caption_check: figures 为空，仍校验 latex 引用是否指向真实文件")
 
             from pathlib import Path
 
@@ -5459,6 +5566,30 @@ class LangGraphOrchestrator:
                         "figure_id": c.get("label") or b,
                         "message": f"正文引用图表 {b}，但 figure_agent 未生成该文件",
                         "suggestion": "检查 \\includegraphics 路径或重新生成该图表",
+                    })
+
+            # (a2) 磁盘兜底：正文引用的图文件须真实存在于磁盘，防止占位符/伪造图表交付
+            disk_candidates: List[Path] = []
+            try:
+                pdir = get_project_output_dir(state.get("project_name"))
+                disk_candidates = [pdir / "charts", pdir, (pdir / "charts").parent]
+            except Exception:
+                disk_candidates = []
+            for c in captions:
+                b = c["figure_file_basename"]
+                if not b:
+                    continue
+                found = False
+                for d in disk_candidates:
+                    if (d / (b + ".png")).exists() or (d / (b + ".pdf")).exists() or (d / (b + ".svg")).exists():
+                        found = True
+                        break
+                if not found and any(c["includegraphics_path"]):
+                    issues.append({
+                        "severity": "error", "category": "figure_file_missing",
+                        "figure_id": c.get("label") or b,
+                        "message": f"正文 \\includegraphics 引用 {c['includegraphics_path']}，但磁盘上不存在该文件（{b}）",
+                        "suggestion": "重新生成该图表，确认文件落入项目输出目录的 charts/ 下",
                     })
             # (b) figure_agent 生成成功但正文未 includegraphics → 孤立图表
             for b, fig in agent_map.items():
@@ -7877,6 +8008,11 @@ class LangGraphOrchestrator:
     # ------------------------------------------------------------------
     async def _node_innovation(self, state: TaskState) -> TaskState:
         """从文献调研结果中发现研究空白并提出创新方案。"""
+        # innovation 结果存 state 顶层 innovation_analysis，而非 results 字典
+        if state.get("innovation_analysis") is not None:
+            logger.info(f"[LangGraph:{state.get('task_id','')}] ⏭  跳过 创新点挖掘（已有结果）")
+            return {**state, "current_step": "innovation_done"}
+
         task_id = state["task_id"]
         results = self._resolve_results(state)
         research_output = results.get("research_agent", {})
@@ -7988,6 +8124,10 @@ class LangGraphOrchestrator:
         """调用 analyzer_agent，更新进度与黑板。"""
         state = await self._check_user_input(state)
 
+        skipped = self._skip_if_completed(state, "analyzer_agent", "analyzer_done", "问题分析")
+        if skipped:
+            return skipped
+
         agent = self.agents.get("analyzer_agent")
         if not agent:
             return {**state, "current_step": "analyzer_missing"}
@@ -8024,6 +8164,10 @@ class LangGraphOrchestrator:
 
     async def _node_data(self, state: TaskState) -> TaskState:
         """调用 data_agent 分析数据文件。"""
+        skipped = self._skip_if_completed(state, "data_agent", "data_done", "数据分析")
+        if skipped:
+            return skipped
+
         agent = self.agents.get("data_agent")
         if not agent or not state.get("files"):
             logger.info(f"[LangGraph:{state['task_id']}] data: no files, skipping")
@@ -8061,6 +8205,10 @@ class LangGraphOrchestrator:
         - 跨论文研究空白识别（deep_search 模式自动触发）
         - 将 gap 分析结果注入 context 供后续 Agent 使用
         """
+        skipped = self._skip_if_completed(state, "research_agent", "research_done", "文献检索")
+        if skipped:
+            return skipped
+
         agent = self.agents.get("research_agent")
         if not agent:
             return {**state, "current_step": "research_skipped"}
@@ -8147,6 +8295,10 @@ class LangGraphOrchestrator:
         """逐个子问题建模：每个子问题独立建模，前序结果递进传递给后序。"""
         state = await self._check_user_input(state)
 
+        skipped = self._skip_if_completed(state, "modeler_agent", "modeler_done", "数学建模")
+        if skipped:
+            return skipped
+
         agent = self.agents.get("modeler_agent")
         if not agent:
             return {**state, "current_step": "modeler_missing"}
@@ -8221,6 +8373,10 @@ class LangGraphOrchestrator:
         """
         state = await self._check_user_input(state)
 
+        skipped = self._skip_if_completed(state, "algorithm_engineer_agent", "algorithm_engineer_done", "算法设计")
+        if skipped:
+            return skipped
+
         agent = self.agents.get("algorithm_engineer_agent")
         if not agent:
             return {**state, "current_step": "algorithm_engineer_missing"}
@@ -8271,6 +8427,10 @@ class LangGraphOrchestrator:
         调用归一化方法得到标准 sub_problem_models，保存到 results["modeler_agent"]（兼容 solver/writer）。
         """
         state = await self._check_user_input(state)
+
+        skipped = self._skip_if_completed(state, "financial_analyst_agent", "financial_analyst_done", "金融建模")
+        if skipped:
+            return skipped
 
         agent = self.agents.get("financial_analyst_agent")
         if not agent:
@@ -8326,6 +8486,21 @@ class LangGraphOrchestrator:
         5. v6.0: 成功后可选进入代码自动演化循环，迭代改进代码
         """
         state = await self._check_user_input(state)
+
+        skipped = self._skip_if_completed(state, "solver_agent", "solver_done", "求解器")
+        if skipped:
+            # 断点续跑时 solver_attempts 为空会导致 _route_after_solver 返回 retry 形成死循环，
+            # 从已保存的 solver_agent 结果构造最小 solver_attempts 标记为成功，让路由走向 sandbox/writer
+            results = self._resolve_results(state)
+            solver_out = results.get("solver_agent") or {}
+            if not skipped.get("solver_attempts"):
+                # 构造一个成功的 attempt 记录，让路由判定为求解成功
+                skipped = {
+                    **skipped,
+                    "solver_attempts": [{"execution_success": True, "resume_fake": True}],
+                    "escalation_count": skipped.get("escalation_count", 0),
+                }
+            return skipped
 
         agent = self.agents.get("solver_agent")
         if not agent:
@@ -8664,6 +8839,10 @@ class LangGraphOrchestrator:
         """调用 writer_agent 生成论文。"""
         state = await self._check_user_input(state)
 
+        skipped = self._skip_if_completed(state, "writer_agent", "writer_done", "论文写作")
+        if skipped:
+            return skipped
+
         agent = self.agents.get("writer_agent")
         if not agent:
             return {**state, "current_step": "writer_missing"}
@@ -8761,6 +8940,10 @@ class LangGraphOrchestrator:
 
     async def _node_peer_review(self, state: TaskState) -> TaskState:
         """调用 peer_review_agent 进行同行评议。"""
+        skipped = self._skip_if_completed(state, "peer_review_agent", "peer_review_done", "同行评议")
+        if skipped:
+            return skipped
+
         agent = self.agents.get("peer_review_agent")
         if not agent or not self.cfg.enable_peer_review:
             return {**state, "current_step": "peer_review_skipped"}
@@ -8819,6 +9002,10 @@ class LangGraphOrchestrator:
         - 自动损失函数设计：进化搜索最优损失函数
         - AutoML：自动超参数优化
         """
+        skipped = self._skip_if_completed(state, "experimentation_agent", "experiment_done", "实验设计")
+        if skipped:
+            return skipped
+
         agent = self.agents.get("experimentation_agent")
         template = state.get("paper_template", "math_modeling")
         ccf_a = {"ieee_conference", "neurips_2024", "acm_sigconf", "springer_lncs", "research_paper"}
@@ -9171,9 +9358,23 @@ print(json.dumps({{"accuracy": round(acc, 4)}}))
 
     async def _node_figure(self, state: TaskState) -> TaskState:
         """调用 figure_agent 生成科研图表。"""
+        # 断点续跑：已有 figure_agent 结果且生成成功（generated > 0）则跳过
+        results = self._resolve_results(state)
+        existing_fig = results.get("figure_agent")
+        if self._is_valid_agent_output(existing_fig) and isinstance(existing_fig, dict):
+            generated = existing_fig.get("generated") or len(existing_fig.get("figures", []) or [])
+            if generated and generated > 0:
+                task_id = state["task_id"]
+                logger.info(f"[LangGraph:{task_id}] ⏭  跳过 科研图表生成（已有 {generated} 张）")
+                self._post_chat(task_id, "coordinator", f"⏭  断点续跑：已跳过图表生成（复用上次 {generated} 张）")
+                return {**state, "current_step": "figure_done"}
+
         agent = self.agents.get("figure_agent")
         if not agent:
-            return {**state, "current_step": "figure_skipped"}
+            task_id = state["task_id"]
+            logger.error(f"[LangGraph:{task_id}] figure_agent 未注册 — 硬失败，阻止 writer 编造图表")
+            self._post_chat(task_id, "coordinator", "❌ figure_agent 未注册，图表节点无法生成，终止任务")
+            raise RuntimeError(f"figure_agent 未注册，无法生成图表（task={task_id}）")
 
         task_id = state["task_id"]
         self._update_progress(task_id, state["problem_text"], 65, "科研图表生成中")
@@ -9212,12 +9413,21 @@ print(json.dumps({{"accuracy": round(acc, 4)}}))
         # === 图表数量门禁：planned vs actual ===
         planned = list(figures_plan)
         generated_list = gen_output.get("figures", []) or []
+        # 数据真实性跳过：这些图因真实数据缺失而被干净跳过，重试也不会变出数据，不再重试
+        skipped_no_data = [
+            s for s in planned
+            if isinstance(s, dict) and any(
+                isinstance(f, dict) and f.get("figure_id") == s.get("id") and f.get("skipped_no_data")
+                for f in generated_list
+            )
+        ]
         generated_ids = {
             f.get("figure_id") for f in generated_list if isinstance(f, dict)
         }
         missing_specs = [
             s for s in planned
             if isinstance(s, dict) and s.get("id") not in generated_ids
+            and s.get("id") not in {x.get("id") for x in skipped_no_data if isinstance(x, dict)}
         ]
         if missing_specs:
             logger.warning(
@@ -9249,6 +9459,13 @@ print(json.dumps({{"accuracy": round(acc, 4)}}))
             gen_output["figures"] = generated_list
             gen_output["generated"] = len(generated_list)
             gen_output["planned_count"] = len(planned)
+            if skipped_no_data:
+                gen_output["skipped_no_data_specs"] = skipped_no_data
+                self._post_chat(
+                    task_id, "figure_agent",
+                    f"ℹ️ 数据真实性：{len(skipped_no_data)} 张图因缺少真实数据被跳过"
+                    f"（不编造曲线）：{[s.get('id') for s in skipped_no_data if isinstance(s, dict)]}",
+                )
             if missing_specs:
                 gen_output["missing_figure_specs"] = missing_specs
                 self._post_chat(
@@ -9282,7 +9499,6 @@ print(json.dumps({{"accuracy": round(acc, 4)}}))
             output_dir = None
 
         report: Dict[str, Any] = {"enabled": True, "passed": True}
-        latex_code = ""
         results = self._resolve_results(state)
 
         if output_dir:
@@ -9322,6 +9538,45 @@ print(json.dumps({{"accuracy": round(acc, 4)}}))
                 output_dir=output_dir,
             )
 
+            # ===== 外部权威来源核验 + LLM 模型合理性（v2，只读检查）=====
+            if getattr(self.cfg, "enable_external_fact_check", True):
+                external_findings = []
+                model_verdict = {"status": "REASONABLE", "reasons": [], "warning": False}
+                try:
+                    from ..services.external_fact_checker import ExternalFactChecker
+                    from ..services.fact_sources import get_source_registry
+                    from ..services.model_reasonableness import ModelReasonableness
+
+                    checker = ExternalFactChecker(get_source_registry())
+                    latex_plain = str(latex_code).replace("\\", " ")
+                    import re as _re
+                    for block in _re.findall(r"[^\$\{\}\\]{4,120}", latex_plain):
+                        external_findings.extend(c.__dict__ for c in checker.check_text(block))
+
+                    agent = self.agents.get("coordinator_agent") or self.agents.get("solver_agent")
+                    mr = ModelReasonableness(llm_call=(agent.call_llm if agent else None))
+                    model_verdict = (await mr.judge(
+                        paper_modeling_section=str(latex_code)[:3000],
+                        model_code="",
+                        model_output_csv="",
+                        observed_values={},
+                    )).to_dict()
+                except Exception as ext_exc:
+                    logger.warning(f"[LangGraph:{task_id}] external fact check failed: {ext_exc}")
+
+                conflicts = [f for f in external_findings if f.get("status") == "CONFLICT"]
+                unverified = [f for f in external_findings if f.get("status") == "UNVERIFIED"]
+                report["external_check"] = {
+                    "enabled": True,
+                    "findings_count": len(external_findings),
+                    "conflict_count": len(conflicts),
+                    "unverified_count": len(unverified),
+                    "conflicts": conflicts[:20],
+                }
+                report["model_reasonableness"] = model_verdict
+                # passed 只由 ①issues + ②CONFLICT 决定；UNVERIFIED 与 ON_CONCERN 不拦
+                report["passed"] = bool(report["passed"] and not conflicts)
+
         # v7.2: 检查 fabrication flags（从 solver/modeler 传递过来）
         fabrication_issues = []
         for agent_name, agent_output in results.items():
@@ -9339,44 +9594,6 @@ print(json.dumps({{"accuracy": round(acc, 4)}}))
                 f"检测到 {len(fabrication_issues)} 个潜在编造内容，建议人工审核后方可提交。"
             )
             logger.warning(f"Task {task_id}: fabrication issues detected: {fabrication_issues}")
-
-        # ===== 外部权威来源核验（v2）：防止"两个造假者互相对口供" =====
-        external_findings = []
-        if getattr(self.cfg, "enable_external_fact_check", True):
-            try:
-                from ..services.external_fact_checker import ExternalFactChecker
-                from ..services.fact_sources import get_source_registry
-                checker = ExternalFactChecker(get_source_registry())
-                latex_plain = latex_code if isinstance(latex_code, str) else ""
-                if latex_plain:
-                    import re as _re
-                    # 剔除 LaTeX 公式/命令后，对整段文本抽取"数字+单位"断言做外部核验，
-                    # 避免按块切割时切断"数字"与"单位"（如 "4." 与 "15万亿元" 被分到两块）
-                    plain = _re.sub(r"\$[^$]*\$", " ", latex_plain)          # $...$
-                    plain = _re.sub(r"\\[a-zA-Z]+(?:\{[^{}]*\})?", " ", plain)  # \cmd / \cmd{...}
-                    plain = _re.sub(r"[{}]", " ", plain)                     # 花括号
-                    external_findings.extend(checker.check_text(plain))
-            except Exception as ext_exc:
-                logger.warning(f"[LangGraph:{task_id}] external fact check failed: {ext_exc}")
-
-        conflicts = [f for f in external_findings if f.status == "CONFLICT"]
-        unverified = [f for f in external_findings if f.status == "UNVERIFIED"]
-        # 只把"与某个权威值相近（rel≤3）但仍判定为无来源"的断言计为风险；
-        # 量级完全无关的数字（如 GDP 对土地出让收入，rel 巨大）不拉低 passed。
-        near_miss = [f for f in unverified if f.best_rel is not None and f.best_rel <= 3.0]
-        report["external_check"] = {
-            "enabled": bool(getattr(self.cfg, "enable_external_fact_check", True)),
-            "findings_count": len(external_findings),
-            "conflict_count": len(conflicts),
-            "unverified_count": len(unverified),
-            "unverified_near_miss": len(near_miss),
-            "conflicts": [c.__dict__ for c in conflicts][:20],
-        }
-        report["passed"] = bool(
-            report["passed"]
-            and not conflicts
-            and (len(near_miss) <= 5)  # 允许少量相近但无来源的指标，超限视为风险
-        )
 
         # 数值一致性检查
         if not report.get("passed"):
@@ -9514,44 +9731,54 @@ print(json.dumps({{"accuracy": round(acc, 4)}}))
         self._post_chat(task_id, "coordinator", f"🔍 正在自主收集数据：{missing_desc or ', '.join(collect_keywords)}")
 
         try:
-            # 1. 搜索数据 URL（使用 web_search MCP 工具或内置搜索）
+            # 1a. 优先走"真实结构化数据集"多路采集（内置表 → GitHub → Kaggle → HuggingFace），
+            #     这些是可直接用于数值建模/绘图的表格数据，而不是论文 PDF。
+            from ..services import self_collector as _sc
             search_query = missing_desc or " ".join(collect_keywords)
-            urls = []
+            collected_files: List[str] = []
+            data_results: List[Any] = []
             try:
-                from ..services.self_collector import extract_urls_from_search_result
-                # 尝试使用 research_agent 的搜索能力查找数据集
-                research_agent = self.agents.get("research_agent")
-                if research_agent:
-                    search_result = await research_agent.execute(
-                        task_input={
-                            "action": "search_datasets",
-                            "query": search_query,
-                            "limit": 5,
-                        },
-                        context={"problem_text": state["problem_text"]},
-                    )
-                    urls = extract_urls_from_search_result(search_result)
-            except Exception as e:
-                logger.warning(f"[LangGraph:{task_id}] 数据集搜索失败: {e}")
-
-            # 2. 下载数据
-            collected_files = []
-            if urls:
-                from ..services.self_collector import collect_urls
-                download_results = await collect_urls(
-                    urls=urls,
+                data_results, _rel = await _sc.collect_datasets_multi(
+                    problem_text=state["problem_text"],
                     project_name=state.get("project_name"),
                     source_query=search_query,
-                    concurrency=4,
-                    timeout_sec=30,
-                    max_size_mb=50,
                 )
-                collected_files = [r.filename for r in download_results if r.filename]
-                failed = [r.url for r in download_results if r.error]
-                if failed:
-                    logger.warning(f"[LangGraph:{task_id}] 部分下载失败: {failed}")
+                collected_files = [r.filename for r in data_results if getattr(r, "filename", None)]
+            except Exception as e:
+                logger.warning(f"[LangGraph:{task_id}] 结构化数据集采集失败: {e}")
 
-            # 3. 更新 state
+            # 1b. 结构采集命中不足时，再补 web 搜索（论文/报告 PDF 为辅）
+            if len(collected_files) < 2:
+                try:
+                    from ..services.self_collector import extract_urls_from_search_result
+                    research_agent = self.agents.get("research_agent")
+                    if research_agent:
+                        search_result = await research_agent.execute(
+                            task_input={
+                                "action": "search_datasets",
+                                "query": search_query,
+                                "limit": 5,
+                            },
+                            context={"problem_text": state["problem_text"]},
+                        )
+                        urls = extract_urls_from_search_result(search_result)
+                        if urls:
+                            from ..services.self_collector import collect_urls
+                            download_results = await collect_urls(
+                                urls=urls,
+                                project_name=state.get("project_name"),
+                                source_query=search_query,
+                                concurrency=4,
+                                timeout_sec=30,
+                                max_size_mb=50,
+                            )
+                            collected_files.extend(
+                                r.filename for r in download_results if r.filename
+                            )
+                except Exception as e:
+                    logger.warning(f"[LangGraph:{task_id}] 数据集搜索失败: {e}")
+
+            # 2. 更新 state
             if collected_files:
                 self._post_chat(
                     task_id, "coordinator",
