@@ -54,6 +54,7 @@ FIGURE_SYSTEM_PLAN = """你是一个科研图表规划专家。请根据论文�
 
 【规则】
 - 只规划图表，不生成代码，不编造数据
+- 【数量建议】研究论文通常需要 3-6 张图覆盖核心发现：趋势/对比/敏感性/分布等。只要【已有数据描述】中有真实数据支撑，就应规划多张图，而非只画 1 张。
 - 【数据真实性强约束】每个规划条目必须能在【已有数据描述】中找到对应的真实数据字段/列。若某个科学问题没有真实数据支撑，【不要】规划该图，改为规划其他有真实数据的图。缺失数据时宁可少画，也不许为了凑篇幅而规划假图。
 - priority 字段同时作为数据可信度排序：只用真实数据源的图 priority 更高；凡依赖外部文献估算/示意/模拟参数的图一律 priority 置为最低（5）并尽量剔除。
 - 优先选择最能展示研究亮点的图表类型
@@ -84,7 +85,7 @@ FIGURE_SYSTEM_GENERATE = """你是一个科研绘图代码生成专家。请生�
 只输出 Python 代码（无 markdown 围栏，无解释文字）。
 
 【数据真实性强约束 —— 违反即视为失败】
-- 只能使用代码中 DATA 变量里【真实存在】的数据绘图。禁止手写/硬编码任何数值数组（如 np.linspace、[1.5]*31、人工列表）来伪造数据拟合真实趋势。
+- 只能使用代码中 DATA 变量里【真实存在】的数据绘图。禁止手写/硬编码任何数值数组（如 [1.5]*31、人工列表）来伪造数据拟合真实趋势；np.linspace 仅可用于对真实数据点做平滑插值或生成坐标轴，不得凭空生成伪造曲线。
 - 若 DATA 中没有任何可支持当前图表的真实数据，则【不要】凭空编造曲线；改为在代码中保存一张占位提示图并 print 一个明确行 `NO_REAL_DATA: <图表id>，真实数据缺失，已跳过该图`，由系统据此外理（跳过该图并选用有数据的图）。
 - 绝对禁止把"示意趋势/经验参数/模拟序列"当作真实统计结果显示给读者。
 """
@@ -488,9 +489,12 @@ class FigureAgent(BaseAgent):
                 first = val[0]
                 if isinstance(first, dict):
                     lines.append(f"{prefix}: list of {len(val)} dicts, keys: {list(first.keys())}")
-                    # 递归展开首元素的数值字段，让 LLM 看到真实数据
-                    for sub_k, sub_v in list(first.items())[:8]:
-                        _render(f"  - {sub_k}", sub_v, depth + 1)
+                    # 递归展开前几项的数值字段，让 LLM 看到每个子问题都有真实数据，
+                    # 从而规划多张图而非只画 1 张
+                    for item in val[:3]:
+                        if isinstance(item, dict):
+                            for sub_k, sub_v in list(item.items())[:8]:
+                                _render(f"  - {sub_k}", sub_v, depth + 1)
                 else:
                     sample = val[:5]
                     lines.append(f"{prefix}: list of {len(val)} {type(first).__name__} values, sample: {sample}")
@@ -651,7 +655,8 @@ class FigureAgent(BaseAgent):
 5. 数据在变量 DATA 中可用
 6. 输出目录在变量 charts_dir 中
 7. 标题、坐标轴标签、图例等所有文字必须使用「{figure_language}」语言
-8. 【数据真实性·强制】只能绘制 DATA 中真实存在的字段。绝对禁止 np.linspace / [c]*n / 手写列表等硬编码伪造数据来画趋势。若 DATA 缺乏支撑该图表的真实数据，则不得编造曲线，改为保存占位图并 print `NO_REAL_DATA: <figure_id>，真实数据缺失，已跳过该图`。
+8. 【数据真实性·强制】只能绘制 DATA 中真实存在的字段。绝对禁止 [c]*n / 手写列表等硬编码伪造数据来画趋势。np.linspace 只可用于对真实数据点做平滑插值或生成坐标轴。若 DATA 缺乏支撑该图表的真实数据，则不得编造曲线，改为保存占位图并 print `NO_REAL_DATA: <figure_id>，真实数据缺失，已跳过该图`。
+9. 【代码结构】直接在顶层写代码，不要包在函数里（避免作用域问题导致 FIGURE_ID/charts_dir/DATA 不可见）。save_figure 用字符串字面量传图名，如 `save_figure(fig, "fig_01", charts_dir)`。
 
 请生成完整可执行的 Python 代码。"""
 
@@ -901,13 +906,18 @@ class FigureAgent(BaseAgent):
 
     _DATA_FABRICATION_PATTERNS = [
         r"np\.linspace\s*\(",
-        r"np\.arange\s*\(",
         r"np\.zeros\s*\(",
         r"np\.ones\s*\(",
         r"np\.random",
         r"\bdata\s*=\s*\{[^}]*\*",  # 常量重复列表乘法 {…}
         r"\]\s*\*\s*[0-9]+",  # [2.5]*18 列表乘法伪造
         r"np\.array\s*\(\s*\[[^]]*\*",  # np.array([2.5]*18 + ...)
+    ]
+    # 放行的"坐标轴/索引"模式：np.arange/np.linspace 常用于生成年份、序号坐标或
+    # 对真实数据拟合曲线做平滑插值，非数据伪造
+    _DATA_FABRICATION_ALLOW = [
+        r"np\.arange\s*\(",
+        r"np\.linspace\s*\(",
     ]
 
     def _detect_data_fabrication(self, code: str, data: Dict[str, Any]) -> Optional[str]:
@@ -943,8 +953,12 @@ class FigureAgent(BaseAgent):
 
         if not code:
             return None
+        # 移除放行模式（如 np.arange 用于坐标轴），避免误判为伪造
+        screened_code = code
+        for allow_pat in self._DATA_FABRICATION_ALLOW:
+            screened_code = re.sub(allow_pat, "", screened_code)
         for pat in self._DATA_FABRICATION_PATTERNS:
-            if re.search(pat, code):
+            if re.search(pat, screened_code):
                 return (
                     f"检测到疑似伪造数据：代码中含 {pat}。"
                     f"只能使用 DATA 变量中的真实数据绘制，禁止硬编码数组/linsppace/随机数捏造曲线。"
@@ -1002,6 +1016,8 @@ FIGURE_ID = {repr(figure_id)}
 
 # 导入样式引擎
 from backend.app.agents.figure_agent import apply_style, save_figure, add_panel_label, NATURE_PALETTE, IEEE_PALETTE, ACM_PALETTE, get_color
+# 兼容 LLM 代码里 "from figure_agent import ..." 的裸模块导入
+sys.modules.setdefault('figure_agent', sys.modules['backend.app.agents.figure_agent'])
 
 import matplotlib
 matplotlib.use('Agg')
@@ -1014,7 +1030,24 @@ apply_style({repr(style_name)})
 
 {code}
 
-print("FIGURE_DONE")
+# 兜底：若 LLM 代码未显式调用 save_figure，用当前 figure 自动保存
+import matplotlib.pyplot as _fa_plt
+_fa_saved = False
+for _fa_ext in (".png", ".svg", ".pdf"):
+    if (charts_dir / (FIGURE_ID + _fa_ext)).is_file():
+        _fa_saved = True
+        break
+if not _fa_saved and _fa_plt.get_fignums():
+    try:
+        save_figure(_fa_plt.gcf(), FIGURE_ID, charts_dir)
+        _fa_saved = True
+    except Exception as _fa_exc:
+        print("SAVE_FALLBACK_FAILED: " + str(_fa_exc))
+
+if _fa_saved:
+    print("FIGURE_DONE")
+else:
+    print(f"SAVE_FAILED: {{FIGURE_ID}} 未在 charts_dir 找到输出图文件，请确认调用了 save_figure(fig, '{{FIGURE_ID}}', charts_dir)")
 print("__WRAPPER_END__")
 """
 

@@ -43,6 +43,23 @@ def test_describe_list_of_dicts_recurses_into_numerical_results():
     assert "4.15" in desc
 
 
+def test_describe_list_expands_multiple_items():
+    """list of dicts 应展开前几项（不只首项），让 LLM 看到每个子问题都有数据，
+    从而规划多张图而非只画 1 张。"""
+    agent = _make_agent()
+    data = {
+        "sub_problem_solutions": [
+            {"numerical_results": {"a1": 1.0}, "sub_problem_name": "子问题1"},
+            {"numerical_results": {"b2": 2.0}, "sub_problem_name": "子问题2"},
+            {"numerical_results": {"c3": 3.0}, "sub_problem_name": "子问题3"},
+        ]
+    }
+    desc = agent._describe_data(data)
+    assert "a1" in desc and "1.0" in desc
+    assert "b2" in desc and "2.0" in desc
+    assert "c3" in desc and "3.0" in desc
+
+
 def test_describe_nested_dict_recurses_one_level():
     agent = _make_agent()
     data = {"forecast": {"2025": 4.66, "2026": 4.5}}
