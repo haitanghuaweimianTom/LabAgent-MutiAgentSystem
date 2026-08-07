@@ -21,14 +21,14 @@ def test_verifies_matching_number(checker):
 
 
 def test_marks_conflict(checker):
-    # 论文写 5.0 万亿，但权威值为 4.15
+    # 论文写 5.0 万亿(=50000亿)，但权威值为 4.15万亿(=41500亿)
     findings = checker.check_text(
         "2025年土地出让收入高达5.0万亿元。",
         known_aliases=["土地出让收入2025"],
     )
     assert findings[0].status == "CONFLICT"
-    assert findings[0].reported == pytest.approx(5.0, abs=0.01)
-    assert findings[0].authoritative == pytest.approx(4.15, abs=0.01)
+    assert findings[0].reported == pytest.approx(50000.0, abs=1)
+    assert findings[0].authoritative == pytest.approx(41500.0, abs=1)
 
 
 def test_marks_unverified(checker):
@@ -40,14 +40,25 @@ def test_marks_unverified(checker):
     assert findings[0].status == "UNVERIFIED"
 
 
-def test_extracts_numbers_with_units(checker):
-    nums = checker._extract_assertions("2024年销售面积9.74亿平方米，不良率1.49%。")
-    assert ("9.74", "亿平方米") in nums or 9.74 in [n[0] for n in nums]
+def test_big_deviation_is_conflict_not_unverified(checker):
+    # 锚定到指标源但数值大偏差 → CONFLICT（不能轻易放过造假，R-「全部拦住」）
+    findings = checker.check_text(
+        "2025年土地出让收入为9.0万亿元。",
+        known_aliases=["土地出让收入2025"],
+    )
+    assert all(f.status == "CONFLICT" for f in findings)
 
 
-def test_unverified_does_not_fail(checker):
-    # UNVERIFIED 不应拉低 passed（预测值/未收录指标是合法的）
-    findings = checker.check_text("土地面积约为1000万亩。")
+def test_bare_number_skipped(checker):
+    # 无单位裸数字（年份/编号）不构成断言 → 不产生 finding，也不误报 CONFLICT
+    findings = checker.check_text("2025年发生重大变化。")
+    assert findings == []
+    assert not any(f.status == "CONFLICT" for f in findings)
+
+
+def test_unverified_does_not_conflict(checker):
+    # 无锚定源的预测值/未收录指标 → UNVERIFIED，不是 CONFLICT
+    findings = checker.check_text("某预测值为1.62亿元。")
     unv = [f for f in findings if f.status == "UNVERIFIED"]
-    assert unv  # 有 UNVERIFIED 条目
+    assert unv
     assert not any(f.status == "CONFLICT" for f in findings)
