@@ -125,3 +125,48 @@ def test_agent_code_field_used(tmp_path):
     issues, _ = audit_figures(latex, figures, tmp_path)
     mismatch = [i for i in issues if i["category"] == "caption_code_mismatch"]
     assert len(mismatch) == 1
+
+
+def test_duplicate_caption_detected(tmp_path):
+    charts = tmp_path / "charts"
+    _make_img(charts / "fig1.png", b"content_a")
+    _make_img(charts / "fig2.png", b"content_b")
+
+    latex = r"""
+\begin{figure}[H]
+\includegraphics{charts/fig1.png}
+\caption{土地出让收入与地方财政收入比演变}\label{fig:a}
+\end{figure}
+如图 \ref{fig:a} 所示。
+\begin{figure}[H]
+\includegraphics{charts/fig2.png}
+\caption{土地出让收入与地方财政收入比演变图}\label{fig:b}
+\end{figure}
+如图 \ref{fig:b} 所示。
+"""
+    issues, _ = audit_figures(latex, [], tmp_path)
+    dup_cap = [i for i in issues if i["category"] == "duplicate_caption"]
+    assert len(dup_cap) == 1
+    assert dup_cap[0]["severity"] == "error"
+
+
+def test_distinct_captions_no_duplicate(tmp_path):
+    charts = tmp_path / "charts"
+    _make_img(charts / "fig1.png", b"content_a")
+    _make_img(charts / "fig2.png", b"content_b")
+
+    latex = r"""
+\begin{figure}[H]
+\includegraphics{charts/fig1.png}
+\caption{土地出让收入与地方财政收入比演变}\label{fig:a}
+\end{figure}
+如图 \ref{fig:a} 所示。
+\begin{figure}[H]
+\includegraphics{charts/fig2.png}
+\caption{城投有息负债分省排名}\label{fig:b}
+\end{figure}
+如图 \ref{fig:b} 所示。
+"""
+    issues, _ = audit_figures(latex, [], tmp_path)
+    dup_cap = [i for i in issues if i["category"] == "duplicate_caption"]
+    assert len(dup_cap) == 0

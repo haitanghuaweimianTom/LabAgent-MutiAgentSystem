@@ -17,7 +17,7 @@ from ..schemas import (
 from ..agents import (
     Orchestrator, ResearchAgent, AnalyzerAgent, ModelerAgent,
     SolverAgent, WriterAgent, DataAgent, AlgorithmEngineerAgent,
-    FinancialAnalystAgent,
+    FinancialAnalystAgent, FigureAgent,
 )
 from ..agents.peer_review_agent import PeerReviewAgent  # v8.4.6: 注册同行评议 Agent（接入记忆池）
 from ..config import get_settings
@@ -140,6 +140,7 @@ def get_orchestrator() -> Orchestrator:
                 mcp_tools=get_agent_mcp_tools("financial_analyst_agent")),
             "solver_agent": make_agent(SolverAgent, "solver_agent",
                 mcp_tools=get_agent_mcp_tools("solver_agent")),
+            "figure_agent": make_agent(FigureAgent, "figure_agent"),
             "writer_agent": make_agent(WriterAgent, "writer_agent"),
             "peer_review_agent": make_agent(PeerReviewAgent, "peer_review_agent"),  # v8.4.6: 接入记忆池
         }

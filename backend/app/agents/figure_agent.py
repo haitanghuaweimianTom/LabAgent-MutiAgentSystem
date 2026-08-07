@@ -26,7 +26,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from .base import BaseAgent, AgentFactory
 from ..core.security import wrap_user_content
 from ..core.vlm_figure_reviewer import get_vlm_figure_reviewer
-from ..core.figure_fonts import CJK_FONT_SANS, CJK_FONT_SERIF
+from ..core.figure_fonts import CJK_FONT_SANS, CJK_FONT_SERIF, apply_cjk_font_to_style
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +54,8 @@ FIGURE_SYSTEM_PLAN = """你是一个科研图表规划专家。请根据论文�
 
 【规则】
 - 只规划图表，不生成代码，不编造数据
+- 【数据真实性强约束】每个规划条目必须能在【已有数据描述】中找到对应的真实数据字段/列。若某个科学问题没有真实数据支撑，【不要】规划该图，改为规划其他有真实数据的图。缺失数据时宁可少画，也不许为了凑篇幅而规划假图。
+- priority 字段同时作为数据可信度排序：只用真实数据源的图 priority 更高；凡依赖外部文献估算/示意/模拟参数的图一律 priority 置为最低（5）并尽量剔除。
 - 优先选择最能展示研究亮点的图表类型
 - 避免冗余：同一数据不要用多种图表重复展示
 - 考虑期刊规范：Nature 偏好简洁，IEEE 偏好详细
@@ -80,9 +82,14 @@ FIGURE_SYSTEM_GENERATE = """你是一个科研绘图代码生成专家。请生�
 
 【输出】
 只输出 Python 代码（无 markdown 围栏，无解释文字）。
+
+【数据真实性强约束 —— 违反即视为失败】
+- 只能使用代码中 DATA 变量里【真实存在】的数据绘图。禁止手写/硬编码任何数值数组（如 np.linspace、[1.5]*31、人工列表）来伪造数据拟合真实趋势。
+- 若 DATA 中没有任何可支持当前图表的真实数据，则【不要】凭空编造曲线；改为在代码中保存一张占位提示图并 print 一个明确行 `NO_REAL_DATA: <图表id>，真实数据缺失，已跳过该图`，由系统据此外理（跳过该图并选用有数据的图）。
+- 绝对禁止把"示意趋势/经验参数/模拟序列"当作真实统计结果显示给读者。
 """
 
-FIGURE_SYSTEM_EDIT = """你是一个科研图表编辑专家。请根据修改指令，修改已有的 matplotlib 代码。
+FIGURE_SYSTEM_EDIT = """你是一个科研图表编辑专家。请根据修改描述，修改已有的 matplotlib 代码。
 
 【输入】
 - original_code: 原始 matplotlib 代码
@@ -449,9 +456,12 @@ class FigureAgent(BaseAgent):
         ]
 
         try:
-            response = await self.call_llm(messages=messages, temperature=0.3)
+            # plan 是结构化 JSON 输出，不需要 ReAct 工具循环（传 tools=[] 禁用）
+            response = await self.call_llm(messages=messages, temperature=0.3, tools=[])
             content = response.get("choices", [{}])[0].get("message", {}).get("content", "") if isinstance(response, dict) else str(response)
             plan = self._parse_json(content)
+            if not plan.get("figures"):
+                logger.warning(f"[FigureAgent] plan returned 0 figures, raw content head: {content[:300]!r}")
             return {
                 "action": "plan",
                 "figures": plan.get("figures", []),
@@ -485,11 +495,13 @@ class FigureAgent(BaseAgent):
     async def _generate(
         self, task_input: Dict[str, Any], context: Dict[str, Any], output_dir: Path
     ) -> Dict[str, Any]:
-        """生成单个图表。"""
+        """生成单个图表（含错误反馈重试循环，每张图最多 max_attempts 次）。"""
         figure_spec = task_input.get("figure_spec", {})
         data = self._extract_data(task_input, context)
         style_name = self._get_style_name(task_input, context)
         figure_language = self._get_figure_language(task_input, context)
+        figure_id = figure_spec.get("id", "fig_01")
+        max_attempts = task_input.get("max_attempts", 3)
 
         # 构建代码生成提示
         prompt = self._build_generate_prompt(figure_spec, data, style_name, output_dir, figure_language)
@@ -499,27 +511,100 @@ class FigureAgent(BaseAgent):
             {"role": "user", "content": prompt},
         ]
 
-        try:
-            response = await self.call_llm(messages=messages, temperature=0.2)
-            content = response.get("choices", [{}])[0].get("message", {}).get("content", "")
-            code = self._sanitize_code(content)
+        last_error: Optional[str] = None
+        last_code: str = ""
+        for attempt in range(1, max_attempts + 1):
+            try:
+                # 代码生成禁用 ReAct 工具循环，避免 LLM 调用 file_write 混入解释文字
+                response = await self.call_llm(messages=messages, temperature=0.2, tools=[])
+                content = response.get("choices", [{}])[0].get("message", {}).get("content", "")
+                code = self._sanitize_code(content)
+                last_code = code
 
-            # 执行代码
-            figure_path = await self._execute_chart_code(
-                code, figure_spec.get("id", "fig_01"), output_dir, data, style_name
-            )
+                if not code.strip():
+                    last_error = "LLM 返回空代码"
+                    messages.append({"role": "assistant", "content": content})
+                    messages.append({"role": "user", "content": f"你返回的代码为空（第 {attempt} 次），请重新生成完整可执行的 Python matplotlib 代码。"})
+                    continue
 
-            return {
-                "action": "generate",
-                "figure_id": figure_spec.get("id", "fig_01"),
-                "figure_path": str(figure_path) if figure_path else None,
-                "style": style_name,
-                "code": code,
-                "success": figure_path is not None,
-            }
-        except Exception as e:
-            logger.warning(f"[FigureAgent] generate failed: {e}")
-            return {"action": "generate", "error": str(e), "success": False}
+                # 数据真实性门禁：检测硬编码伪造数据（仅当真实数据可用时）
+                fabrication_err = self._detect_data_fabrication(code, data)
+                if fabrication_err:
+                    last_error = fabrication_err
+                    logger.warning(f"[FigureAgent] {figure_id} attempt {attempt}/{max_attempts} blocked by data gate: {fabrication_err[:200]}")
+                    messages.append({"role": "assistant", "content": code})
+                    messages.append({
+                        "role": "user",
+                        "content": (
+                            f"你的代码被数据真实性门禁拦截（第 {attempt}/{max_attempts} 次）：\n"
+                            f"{fabrication_err}\n"
+                            f"请改用 DATA 变量中的真实数据重写整个代码；若 DATA 无法支撑该图，"
+                            f"则保存占位图并输出 NO_REAL_DATA 标记（不要编造曲线）。"
+                        ),
+                    })
+                    continue
+
+                figure_path, exec_err = await self._execute_chart_code(
+                    code, figure_id, output_dir, data, style_name
+                )
+
+                if figure_path is not None:
+                    return {
+                        "action": "generate",
+                        "figure_id": figure_id,
+                        "figure_path": str(figure_path),
+                        "style": style_name,
+                        "code": code,
+                        "attempts": attempt,
+                        "success": True,
+                    }
+
+                last_error = exec_err or "代码执行失败但未捕获到 stderr"
+
+                # 数据真实性：代码自愿声明无真实数据 → 干净跳过，不再重试（重试也无数据可画）
+                if last_error.startswith("NO_REAL_DATA|"):
+                    skip_reason = last_error[len("NO_REAL_DATA|"):]
+                    logger.info(f"[FigureAgent] {figure_id} skipped, no real data: {skip_reason}")
+                    return {
+                        "action": "generate",
+                        "figure_id": figure_id,
+                        "figure_path": None,
+                        "style": style_name,
+                        "code": code,
+                        "attempts": attempt,
+                        "success": False,
+                        "skipped_no_data": True,
+                        "skip_reason": skip_reason,
+                    }
+
+                logger.warning(f"[FigureAgent] {figure_id} attempt {attempt}/{max_attempts} failed: {last_error[:200]}")
+
+                # 把错误反馈给 LLM 让它修复
+                messages.append({"role": "assistant", "content": code})
+                messages.append({
+                    "role": "user",
+                    "content": (
+                        f"你上一次生成的代码执行失败（第 {attempt}/{max_attempts} 次），错误信息如下：\n"
+                        f"```\n{last_error[:1500]}\n```\n"
+                        f"请修复代码中的错误（注意括号闭合、缩进、导入、API 调用参数等），"
+                        f"输出修复后的完整 Python 代码（不要解释，不要 markdown 围栏）。"
+                    ),
+                })
+            except Exception as e:
+                last_error = f"{type(e).__name__}: {e}"
+                logger.warning(f"[FigureAgent] {figure_id} attempt {attempt}/{max_attempts} exception: {e}")
+                messages.append({"role": "user", "content": f"第 {attempt} 次尝试出现异常：{last_error[:500]}，请重新生成完整代码。"})
+
+        return {
+            "action": "generate",
+            "figure_id": figure_id,
+            "figure_path": None,
+            "style": style_name,
+            "code": last_code,
+            "error": last_error,
+            "attempts": max_attempts,
+            "success": False,
+        }
 
     def _build_generate_prompt(
         self, figure_spec: Dict[str, Any], data: Dict[str, Any], style_name: str,
@@ -555,6 +640,7 @@ class FigureAgent(BaseAgent):
 5. 数据在变量 DATA 中可用
 6. 输出目录在变量 charts_dir 中
 7. 标题、坐标轴标签、图例等所有文字必须使用「{figure_language}」语言
+8. 【数据真实性·强制】只能绘制 DATA 中真实存在的字段。绝对禁止 np.linspace / [c]*n / 手写列表等硬编码伪造数据来画趋势。若 DATA 缺乏支撑该图表的真实数据，则不得编造曲线，改为保存占位图并 print `NO_REAL_DATA: <figure_id>，真实数据缺失，已跳过该图`。
 
 请生成完整可执行的 Python 代码。"""
 
@@ -625,21 +711,38 @@ class FigureAgent(BaseAgent):
         ]
 
         try:
-            response = await self.call_llm(messages=messages, temperature=0.2)
+            # edit 也禁用 ReAct 工具循环，直接让 LLM 返回纯代码
+            response = await self.call_llm(messages=messages, temperature=0.2, tools=[])
             content = response.get("choices", [{}])[0].get("message", {}).get("content", "")
             new_code = self._sanitize_code(content)
 
-            # 执行修改后的代码
+            # 执行修改后的代码（最多重试 2 次）
             data = self._extract_data(task_input, context)
             style_name = self._get_style_name(task_input, context)
-            figure_path = await self._execute_chart_code(
-                new_code, figure_id, output_dir, data, style_name
-            )
+            fabrication_err = self._detect_data_fabrication(new_code, data)
+            if fabrication_err:
+                return {
+                    "action": "edit",
+                    "figure_id": figure_id,
+                    "figure_path": None,
+                    "error": f"数据真实性门禁：{fabrication_err}",
+                    "success": False,
+                }
+            figure_path: Optional[Path] = None
+            last_err: Optional[str] = None
+            for _ in range(2):
+                figure_path, last_err = await self._execute_chart_code(
+                    new_code, figure_id, output_dir, data, style_name
+                )
+                if figure_path is not None:
+                    break
+                # 简单重试时不再重写代码；若后续需带错反馈可加 LLM 修复，此处 edit 动作已由上层保证代码质量
 
             return {
                 "action": "edit",
                 "figure_id": figure_id,
                 "figure_path": str(figure_path) if figure_path else None,
+                "error": last_err if figure_path is None else None,
                 "success": figure_path is not None,
             }
         except Exception as e:
@@ -785,10 +888,67 @@ class FigureAgent(BaseAgent):
 
     # ── 代码执行 ──
 
+    _DATA_FABRICATION_PATTERNS = [
+        r"np\.linspace\s*\(",
+        r"np\.arange\s*\(",
+        r"np\.zeros\s*\(",
+        r"np\.ones\s*\(",
+        r"np\.random",
+        r"\bdata\s*=\s*\{[^}]*\*",  # 常量重复列表乘法 {…}
+        r"\]\s*\*\s*[0-9]+",  # [2.5]*18 列表乘法伪造
+        r"np\.array\s*\(\s*\[[^]]*\*",  # np.array([2.5]*18 + ...)
+    ]
+
+    def _detect_data_fabrication(self, code: str, data: Dict[str, Any]) -> Optional[str]:
+        """检测代码中是否硬编码伪造数据（在真实 DATA 可用时）。
+
+        若 DATA 中没有可用的数值序列，则视为"该图表没有真实数据支撑"，
+        应当跳过而非伪造。返回错误描述；无问题返回 None。
+        """
+        if not data:
+            return "没有可用的真实数据（DATA 为空），不得凭空编造数据绘制该图，应跳过该图。"
+        has_numeric = False
+        for val in data.values():
+            if isinstance(val, (list, tuple)):
+                if val and isinstance(val[0], (int, float)):
+                    has_numeric = True
+                    break
+                if val and isinstance(val[0], dict):
+                    for d in val:
+                        if isinstance(d, dict) and any(isinstance(v, (int, float)) for v in d.values()):
+                            has_numeric = True
+                            break
+                    if has_numeric:
+                        break
+            elif isinstance(val, dict) and val:
+                for d in val.values():
+                    if isinstance(d, (list, tuple)) and d and isinstance(d[0], (int, float)):
+                        has_numeric = True
+                        break
+                if has_numeric:
+                    break
+        if not has_numeric:
+            return "DATA 中没有任何数值序列，无法用真实数据绘制该图，应跳过该图（禁止编造数据）。"
+
+        if not code:
+            return None
+        for pat in self._DATA_FABRICATION_PATTERNS:
+            if re.search(pat, code):
+                return (
+                    f"检测到疑似伪造数据：代码中含 {pat}。"
+                    f"只能使用 DATA 变量中的真实数据绘制，禁止硬编码数组/linsppace/随机数捏造曲线。"
+                    f"请改写代码全部从 DATA 中取值；若 DATA 缺乏支撑，就保存占位图并输出 NO_REAL_DATA 标记。"
+                )
+        return None
+
     async def _execute_chart_code(
         self, code: str, figure_id: str, output_dir: Path, data: Dict[str, Any], style_name: str
-    ) -> Optional[Path]:
-        """在隔离进程中执行图表代码。"""
+    ) -> Tuple[Optional[Path], Optional[str]]:
+        """在隔离进程中执行图表代码。
+
+        Returns:
+            (figure_path, error_str)  —— 成功时 error_str 为 None；失败时 figure_path 为 None。
+        """
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -798,15 +958,35 @@ class FigureAgent(BaseAgent):
         except Exception:
             pass
 
+        # 把 DATA 写到临时 JSON 文件，避免把大 dict 内联到 wrapper 导致 token/截断问题
+        data_tmp = tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False, encoding="utf-8", prefix=f"{figure_id}_data_"
+        )
+        data_tmp_path = data_tmp.name
+        try:
+            json.dump(data, data_tmp, ensure_ascii=False, default=str)
+            data_tmp.flush()
+            data_tmp.close()
+        except Exception as e:
+            data_tmp.close()
+            return None, f"序列化 DATA 失败: {e}"
+
         # 构建包装代码
         project_root = str(Path(__file__).parent.parent.parent.parent)
+        backend_dir = str(Path(__file__).parent.parent.parent)  # backend/
         wrapper = f"""
-import json, sys
+import json, sys, warnings, os
 from pathlib import Path
+# 抑制 DeprecationWarning 污染 stderr
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+warnings.filterwarnings("ignore", category=PendingDeprecationWarning)
+os.environ["PYTHONWARNINGS"] = "ignore"
 sys.path.insert(0, {repr(project_root)})
+sys.path.insert(0, {repr(backend_dir)})
 
 charts_dir = Path({repr(str(output_dir))})
-DATA = {json.dumps(data, ensure_ascii=False)}
+with open({repr(data_tmp_path)}, 'r', encoding='utf-8') as _f:
+    DATA = json.load(_f)
 FIGURE_ID = {repr(figure_id)}
 
 # 导入样式引擎
@@ -824,34 +1004,79 @@ apply_style({repr(style_name)})
 {code}
 
 print("FIGURE_DONE")
+print("__WRAPPER_END__")
 """
 
+        tmp_py_path = None
         try:
             with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False, encoding="utf-8") as f:
                 f.write(wrapper)
                 f.flush()
+                tmp_py_path = f.name
+                # 忽略 DeprecationWarning，避免它们污染 stderr 干扰错误定位
+                env = os.environ.copy()
+                env["PYTHONWARNINGS"] = "ignore::DeprecationWarning,ignore::PendingDeprecationWarning"
                 result = subprocess.run(
                     [sys.executable, f.name],
-                    capture_output=True, text=True, timeout=120, cwd=project_root
+                    capture_output=True, text=True, timeout=120, cwd=project_root,
+                    env=env,
                 )
 
             if result.returncode == 0 and "FIGURE_DONE" in result.stdout:
-                # 查找生成的文件（含子目录递归，防止 LLM 把图存到子目录）
+                # 数据真实性门禁：代码自愿声明无真实数据支撑，跳过硬编码伪造
+                no_data_match = re.search(r"NO_REAL_DATA\s*[:：]?\s*([^\n]*)", result.stdout)
+                if no_data_match:
+                    reason = no_data_match.group(1).strip() or f"{figure_id} 真实数据缺失，已跳过该图"
+                    logger.info(f"[FigureAgent] {figure_id} skipped (no real data): {reason}")
+                    return None, f"NO_REAL_DATA|{reason}"
+                # 精确查找属于该 figure_id 的文件（不能贪匹配任意 ext 文件，否则会返回前一张图）
                 for ext in [".png", ".svg", ".pdf"]:
-                    for candidate in output_dir.rglob(f"*{ext}"):
-                        if candidate.is_file():
-                            return candidate
-                # 未找到任何图片文件 → 返回 None，让上层按失败处理
-                # （不能返回目录本身：调用方会把它当作有效 figure_path，
-                #   后续 copy 目录或 include 目录都会失败）
+                    candidate = output_dir / f"{figure_id}{ext}"
+                    if candidate.is_file():
+                        return candidate, None
+                # 回退：递归查找最近 60s 修改的、以 figure_id 开头的文件（容忍 LLM 加前缀/后缀）
+                import time
+                now = time.time()
+                for ext in [".png", ".svg", ".pdf"]:
+                    for candidate in output_dir.rglob(f"{figure_id}*{ext}"):
+                        if candidate.is_file() and (now - candidate.stat().st_mtime) < 120:
+                            return candidate, None
+                # 未找到任何图片文件
+                err = (
+                    f"代码执行成功但未找到输出图片文件（stdout={result.stdout[-300:]!r}）。"
+                    f"请使用 save_figure(fig, '{figure_id}', charts_dir) 保存图表。"
+                )
                 logger.warning(f"[FigureAgent] code ran but no image file found for {figure_id}")
-                return None
+                return None, err
             else:
-                logger.warning(f"[FigureAgent] code execution failed: {result.stderr[:300]}")
-                return None
+                stderr = (result.stderr or "").strip()
+                stdout_tail = (result.stdout or "").strip()[-500:]
+                # 过滤掉纯 warning 行，保留真正的错误
+                err_lines = [
+                    line for line in stderr.splitlines()
+                    if "DeprecationWarning" not in line and "PendingDeprecationWarning" not in line
+                    and "LangChainPendingDeprecationWarning" not in line
+                    and "from langgraph" not in line and "allowed_objects" not in line
+                    and line.strip()
+                ]
+                err_msg = "\n".join(err_lines) if err_lines else f"returncode={result.returncode}, stdout={stdout_tail}"
+                # 截断到合理长度
+                if len(err_msg) > 2000:
+                    err_msg = err_msg[:2000]
+                logger.warning(f"[FigureAgent] code execution failed for {figure_id}: {err_msg[:500]}")
+                return None, err_msg
+        except subprocess.TimeoutExpired:
+            return None, f"代码执行超时（120s），可能存在无限循环或大数据量计算"
         except Exception as e:
-            logger.warning(f"[FigureAgent] execution error: {e}")
-            return None
+            return None, f"{type(e).__name__}: {e}"
+        finally:
+            # 清理临时文件
+            for p in (tmp_py_path, data_tmp_path):
+                if p:
+                    try:
+                        os.unlink(p)
+                    except OSError:
+                        pass
 
     # ── 工具方法 ──
 

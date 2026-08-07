@@ -343,6 +343,38 @@ def audit_figures(
                 "suggestion": "在正文中添加 \\ref{{{label}}} 或 \\cref{{{label}}} 引用该图",
             })
 
+    # --- 5. caption 文字去重：两张图 caption 高度雷同视为错用/复用 ---
+    # 归一化 caption：去掉 Figure/图 N: 前缀和标点，仅比较实质内容
+    def _norm_caption(s: str) -> str:
+        s = re.sub(r"^(图|Figure|Fig\.?)\s*\d+\s*[:：\.\-—]?", "", s, flags=re.IGNORECASE)
+        return re.sub(r"[\s\W_]+", "", s.lower())
+
+    norm_caps: List[Tuple[int, str, str]] = []  # (block_index, normalized, original)
+    for b in blocks:
+        if b["index"] in duplicates or not b["caption"]:
+            continue
+        norm_caps.append((b["index"], _norm_caption(b["caption"]), b["caption"]))
+
+    for i in range(len(norm_caps)):
+        for j in range(i + 1, len(norm_caps)):
+            bi, ni, ci = norm_caps[i]
+            bj, nj, cj = norm_caps[j]
+            if not ni or not nj:
+                continue
+            # 完全相同或高度相似
+            sim = _text_similarity(ni, nj)
+            if ni == nj or sim > 0.8:
+                issues.append({
+                    "severity": "error",
+                    "category": "duplicate_caption",
+                    "figure_id": f"fig{bi + 1}/fig{bj + 1}",
+                    "message": (
+                        f"图表标题文字重复/错用：图{bi + 1} 与图{bj + 1} 的 caption 高度雷同"
+                        f"（相似度 {sim:.0%}）。「{ci[:50]}」vs「{cj[:50]}」"
+                    ),
+                    "suggestion": "为每张图表撰写独立的、准确反映其内容的 caption，禁止复用或错用",
+                })
+
     return issues, patched_latex
 
 
