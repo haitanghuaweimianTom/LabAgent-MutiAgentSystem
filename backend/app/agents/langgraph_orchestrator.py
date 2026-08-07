@@ -9574,8 +9574,68 @@ print(json.dumps({{"accuracy": round(acc, 4)}}))
                     "conflicts": conflicts[:20],
                 }
                 report["model_reasonableness"] = model_verdict
+
+                # ===== 自动纠偏闭环：CONFLICT 拦截后把论文改回权威值 =====
+                # (v3) 个别数字可确定性替换；连锁依赖/多出现交 LLM 重写；全部改完重跑核验。
+                corrections: List[Dict[str, Any]] = []
+                correction_failed: List[Dict[str, Any]] = []
+                if conflicts:
+                    try:
+                        from ..services.fact_correction import correct_latex
+
+                        agent = self.agents.get("coordinator_agent") or self.agents.get("solver_agent")
+                        results2 = self._resolve_results(state)
+                        writer_output = results2.get("writer_agent") or {}
+                        corr_result = await correct_latex(
+                            latex=str(latex_code) or "",
+                            findings=external_findings,
+                            llm_call=(agent.call_llm if agent else None),
+                        )
+                        corrections = corr_result.corrections
+                        correction_failed = corr_result.failed
+
+                        if corr_result.latex != str(latex_code) and corr_result.latex:
+                            # 回写：writer_agent 结果 + 磁盘 final/main.tex
+                            new_latex = corr_result.latex
+                            if isinstance(writer_output, dict):
+                                writer_output["latex_code"] = new_latex
+                                writer_output["_fact_corrected"] = True
+                                writer_output["_fact_corrections"] = corrections
+                                self._set_result(state, "writer_agent", writer_output)
+                            try:
+                                if output_dir:
+                                    final_tex = output_dir / "final" / "main.tex"
+                                    if final_tex.exists():
+                                        final_tex.write_text(new_latex, encoding="utf-8")
+                                    papers_tex = output_dir / "papers" / f"paper_{task_id}.tex"
+                                    if papers_tex.exists():
+                                        papers_tex.write_text(new_latex, encoding="utf-8")
+                            except Exception as disk_exc:
+                                logger.warning(f"[LangGraph:{task_id}] fact correction disk write failed: {disk_exc}")
+
+                            # 重跑外部核验：确认修正后不再冲突
+                            corrected_findings = []
+                            new_plain = new_latex.replace("\\", " ")
+                            for block in _re.findall(r"[^\$\{\}\\]{4,120}", new_plain):
+                                corrected_findings.extend(c.__dict__ for c in checker.check_text(block))
+                            conflicts = [f for f in corrected_findings if f.get("status") == "CONFLICT"]
+                            report["external_check"]["conflict_count"] = len(conflicts)
+                            report["external_check"]["conflict_count_after_correction"] = len(conflicts)
+                            report["external_check"]["corrections"] = corrections
+                            report["external_check"]["correction_failed"] = correction_failed
+                            logger.info(
+                                f"[LangGraph:{task_id}] fact correction: {len(corrections)} fixed, "
+                                f"{len(correction_failed)} failed, {len(conflicts)} conflict remaining"
+                            )
+                    except Exception as corr_exc:
+                        logger.warning(f"[LangGraph:{task_id}] fact correction failed: {corr_exc}")
+                        report["external_check"]["correction_error"] = str(corr_exc)
+
                 # passed 只由 ①issues + ②CONFLICT 决定；UNVERIFIED 与 ON_CONCERN 不拦
-                report["passed"] = bool(report["passed"] and not conflicts)
+                report["passed"] = bool(
+                    report["passed"] and not conflicts
+                    and not correction_failed
+                )
 
         # v7.2: 检查 fabrication flags（从 solver/modeler 传递过来）
         fabrication_issues = []
