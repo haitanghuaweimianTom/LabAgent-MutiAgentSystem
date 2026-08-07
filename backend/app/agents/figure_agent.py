@@ -473,21 +473,32 @@ class FigureAgent(BaseAgent):
             return {"action": "plan", "figures": [], "error": str(e)}
 
     def _describe_data(self, data: Dict[str, Any]) -> str:
-        """生成数据描述。"""
-        lines = []
-        for key, val in data.items():
+        """生成数据描述（递归展开嵌套结构，让 LLM 看到真实数值字段）。"""
+        lines: List[str] = []
+
+        def _render(prefix: str, val: Any, depth: int = 0) -> None:
+            if depth > 3:  # 防止无限递归
+                lines.append(f"{prefix}: ...")
+                return
             if isinstance(val, dict):
-                lines.append(f"- {key}: dict with keys {list(val.keys())}")
-                for sub_k, sub_v in list(val.items())[:3]:
-                    lines.append(f"  - {sub_k}: {str(sub_v)[:80]}")
+                lines.append(f"{prefix}: dict with keys {list(val.keys())}")
+                for sub_k, sub_v in list(val.items())[:8]:
+                    _render(f"  - {sub_k}", sub_v, depth + 1)
             elif isinstance(val, list) and val:
                 first = val[0]
                 if isinstance(first, dict):
-                    lines.append(f"- {key}: list of {len(val)} dicts, keys: {list(first.keys())}")
+                    lines.append(f"{prefix}: list of {len(val)} dicts, keys: {list(first.keys())}")
+                    # 递归展开首元素的数值字段，让 LLM 看到真实数据
+                    for sub_k, sub_v in list(first.items())[:8]:
+                        _render(f"  - {sub_k}", sub_v, depth + 1)
                 else:
-                    lines.append(f"- {key}: list of {len(val)} {type(first).__name__} values")
+                    sample = val[:5]
+                    lines.append(f"{prefix}: list of {len(val)} {type(first).__name__} values, sample: {sample}")
             else:
-                lines.append(f"- {key}: {type(val).__name__} = {str(val)[:60]}")
+                lines.append(f"{prefix}: {type(val).__name__} = {str(val)[:80]}")
+
+        for key, val in data.items():
+            _render(f"- {key}", val)
         return "\n".join(lines) if lines else "No structured data available."
 
     # ── Action: generate ──
