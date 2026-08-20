@@ -103,7 +103,7 @@ npm run dev
 
 ### 4. 打开 Web UI
 
-访问 http://localhost:3000：
+访问 http://localhost:3000
 
 1. 进入 **设置** 页 → 添加 LLM Provider → 设为默认
 2. 进入 **任务执行** 页 → 选择模板 → 输入问题描述 → 提交
