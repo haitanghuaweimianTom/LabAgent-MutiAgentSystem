@@ -94,7 +94,6 @@ Thumbs.db
 *.vrb
 main.pdf
 *.pdf
-/tests
 # 面试准备文档（不上传公开仓库）
 技术说明文档.md
 面试学习进阶路线.md
