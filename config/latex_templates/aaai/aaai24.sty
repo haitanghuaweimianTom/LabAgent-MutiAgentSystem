@@ -1,0 +1,29 @@
+% Minimal AAAI 2024 style file
+% Based on the official AAAI LaTeX style (simplified for distribution).
+% Provides letterpaper, 10pt, double-column layout.
+% Replace with the official aaai24.sty before submission.
+
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{aaai24}[2024/01/01 AAAI 2024 Style]
+
+\RequirePackage{geometry}
+\geometry{
+  letterpaper,
+  left=0.75in,
+  right=0.75in,
+  top=0.75in,
+  bottom=0.75in
+}
+
+\RequirePackage{fancyhdr}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+
+% 10pt base font
+\renewcommand{\normalsize}{\@setfontsize\normalsize{10}{12}}
+
+% Double column
+\RequirePackage{multicol}
+\AtBeginDocument{\begin{multicols}{2}}
+
+\endinput

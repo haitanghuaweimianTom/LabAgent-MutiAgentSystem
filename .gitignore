@@ -93,7 +93,8 @@ Thumbs.db
 *.snm
 *.vrb
 main.pdf
-
+*.pdf
+/tests
 # 面试准备文档（不上传公开仓库）
 技术说明文档.md
 面试学习进阶路线.md
@@ -116,7 +117,8 @@ docs/
 技术详解.md
 面试模拟.md
 笔试模拟.md
-
+2027ICLR-AuthorGuideline.md
+去AI味.md
 # ML model files (too large for git, use HuggingFace)
 ml/checkpoints/
 ml/models/
@@ -124,3 +126,4 @@ ml/models/
 *.bin
 *.gguf
 ml/results/
+rr_work

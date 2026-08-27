@@ -1,0 +1,160 @@
+{
+  "id": "icml_2024",
+  "name": "ICML 2024 (CCF-A ML, 8-page strong theory)",
+  "domain": "research_paper",
+  "description": "ICML 2024 风格：8 页硬限、双盲、理论深度要求最高（必须有定理/收敛性/复杂度证明 sketch）。",
+  "documentclass": "article",
+  "cls_file": "",
+  "sty_files": ["config/latex_templates/icml/icml_2024.sty"],
+  "bib_style": "plainnat",
+  "language": "en",
+  "acceptance_threshold": 85,
+  "min_pages": 8,
+  "max_pages": 8,
+  "citation_style": "authoryear",
+  "chapter_plan": [
+    {
+      "id": "abstract",
+      "title": "Abstract",
+      "section_level": 0,
+      "prompt_role": "撰写 ICML 风格摘要。",
+      "requirements": [
+        "Strict <= 250 words",
+        "一句话问题、缺口、方法、关键结果+不确定性、验证指标",
+        "匿名"
+      ]
+    },
+    {
+      "id": "introduction",
+      "title": "1 Introduction",
+      "section_level": 1,
+      "prompt_role": "撰写 Introduction（密集，8 页硬限）。",
+      "requirements": [
+        "Motivating example",
+        "Limitations of prior approaches",
+        "Our contributions: 3-4 个 bullet（>=1 涉及因果识别/回测/网络层）",
+        "Roadmap"
+      ]
+    },
+    {
+      "id": "related_work",
+      "title": "2 Related Work",
+      "section_level": 1,
+      "prompt_role": "撰写 Related Work。",
+      "requirements": [
+        "按主题聚类",
+        "MUST engage systemic-risk network models (SDECM + DebtRank/NEVA), diffusion-spectral contagion, ABM/dynamic-graph contagion, system-dynamics housing models, empirical identification around implicit guarantees / central supervision"
+      ]
+    },
+    {
+      "id": "preliminaries",
+      "title": "3 Preliminaries",
+      "section_level": 1,
+      "prompt_role": "撰写 Preliminaries。",
+      "requirements": [
+        "符号表",
+        "RIGOR: formalize all constructed quantities with reconciliation tables",
+        "Problem formulation"
+      ]
+    },
+    {
+      "id": "method",
+      "title": "4 Method",
+      "section_level": 1,
+      "prompt_role": "撰写 Method（ICML 理论深度最高）。",
+      "requirements": [
+        "Algorithm box + 完整推导",
+        "RIGOR (ICML 特色): >=1 theorem/proposition with proof sketch in main paper; full proof in appendix",
+        "RIGOR (ICML 特色): convergence / generalization / sample complexity analysis",
+        "RIGOR: causal identification or identified-vs-assumed split",
+        "RIGOR: hierarchical/panel heterogeneity",
+        "RIGOR: endogenous feedback loop (credit supply -> demand -> prices) with SVAR/structural justification",
+        "RIGOR: network loss-propagation layer (DebtRank / SDECM / diffusion-spectral PDE / TGNN) when systemic risk is central",
+        "RIGOR: document all parameter priors, distributions, correlations"
+      ]
+    },
+    {
+      "id": "experiments",
+      "title": "5 Experiments",
+      "section_level": 1,
+      "prompt_role": "撰写 Experiments。",
+      "requirements": [
+        "Setup: 数据集、baselines (>=5 incl. systemic-risk/network)、metric、硬件、种子数",
+        "RIGOR: out-of-sample backtest with RMSE/MAE/CRPS",
+        "RIGOR: ablation >=3 components; sensitivity tornado + elasticity to priors; heterogeneity decomposition",
+        "RIGOR: report std/CI over multiple seeds"
+      ]
+    },
+    {
+      "id": "discussion",
+      "title": "6 Discussion",
+      "section_level": 1,
+      "prompt_role": "撰写 Discussion。",
+      "requirements": [
+        "Limitations（含未建模渠道）",
+        "Broader impact",
+        "Reproducibility statement"
+      ]
+    },
+    {
+      "id": "conclusion",
+      "title": "7 Conclusion",
+      "section_level": 1,
+      "prompt_role": "撰写 Conclusion。",
+      "requirements": [
+        "总结核心 insight",
+        "未来工作"
+      ]
+    },
+    {
+      "id": "references",
+      "title": "References",
+      "section_level": 0,
+      "prompt_role": "参考文献。",
+      "requirements": [
+        "authoryear 风格",
+        "30+ 引用"
+      ]
+    },
+    {
+      "id": "appendix",
+      "title": "Appendix",
+      "section_level": 0,
+      "prompt_role": "附录：完整证明/代码/超参数（无页限）。",
+      "requirements": [
+        "无页数限制",
+        "RIGOR: full proofs for all theorems",
+        "RIGOR: full code listing or repository URL",
+        "RIGOR: complete parameter priors / covariance matrix, distribution families, correlations, random seeds",
+        "RIGOR: reconciliation tables for constructed quantities"
+      ]
+    }
+  ],
+  "system_prompt": "You are an expert ML researcher writing for ICML 2024 (CCF-A, double-blind).\n\n[FORMAT — STRICT]\n- Use icml_2024.sty (letterpaper, 10pt, single-column).\n- STRICT 8-page main limit (excluding references and appendix); be dense.\n- Double-blind.\n- Sections: Abstract -> 1 Introduction -> 2 Related Work -> 3 Preliminaries -> 4 Method -> 5 Experiments -> 6 Discussion -> 7 Conclusion -> References -> Appendix.\n\n[ICML EMPHASIS — reviewers prize theoretical contribution]\n- At least one theorem/proposition with a proof sketch in main paper; full proof in appendix.\n- Convergence / generalization / sample complexity analysis for any iterative method.\n- Novelty of the methodological contribution must be stated crisply.\n\n[RIGOR MANDATES — reject points]\n- Causal identification or explicit identified-vs-assumed split; no pure linear calibration.\n- Out-of-sample backtest with RMSE/MAE/CRPS.\n- >=5 baselines incl. systemic-risk/network models (DebtRank/SDECM, diffusion-spectral, ABM) where relevant.\n- Ablation >=3; sensitivity tornado; heterogeneity (hierarchical/panel).\n- Endogenous feedback loops with SVAR/structural justification.\n- Network loss-propagation layer when systemic risk is central.\n- Formalize all constructed quantities with reconciliation tables.\n- Release full code, parameter priors/covariances, distributions, correlations, seeds.\n\n[OUTPUT FORMAT]\nReturn a single JSON object with keys: title, abstract, keywords (list[str]), latex_code, sections (dict[str, str]).\n",
+  "preamble": "\\documentclass{article}\n\\usepackage{icml_2024}\n\n\\usepackage[utf8]{inputenc}\n\\usepackage[T1]{fontenc}\n\\usepackage{hyperref}\n\\usepackage{url}\n\\usepackage{booktabs}\n\\usepackage{amsfonts}\n\\usepackage{amsmath}\n\\usepackage{microtype}\n\\usepackage{xcolor}\n\\usepackage{algorithm}\n\\usepackage{algorithmic}\n\n\\title{__TITLE__}\n\n\\icmlauthor{%\n  Anonymous Authors\\\\\n  Anonymous Institution\\\\\n  \\texttt{anon@anonymous.edu}\n}\n\n\\begin{document}\n\n\\maketitle\n",
+  "metadata_defaults": {
+    "anonymous_authors": "Anonymous Authors",
+    "anonymous_institution": "Anonymous Institution",
+    "anonymous_email": "anon@anonymous.edu"
+  },
+  "compile_options": {
+    "engine": "pdflatex",
+    "extra_packages": ["icml_2024", "inputenc", "fontenc", "hyperref", "booktabs", "amsfonts", "amsmath", "algorithm", "algorithmic"]
+  },
+  "extra": {
+    "is_ccf_a": true,
+    "rigor_checklist": [
+      "必须提供因果识别或显式区分'已识别'与'假设'部分，处理内生性/反向因果",
+      "必须包含样本外回测/验证并报告 RMSE/MAE/CRPS",
+      "必须对比至少 5 个基线，含系统性风险/网络基线（DebtRank/SDECM、扩散谱、ABM）",
+      "必须做消融实验（>=3 个组件）与敏感性分析（tornado/结果对先验的弹性）",
+      "必须建模异质性（层级/面板结构），报告跨单元离散度，而非仅聚合",
+      "必须编码内生反馈环（如信贷供给->需求->价格），用 SVAR/结构块验证方向与量级",
+      "系统性风险为内核时必须加网络损失传染层（DebtRank/SDECM/扩散谱 PDE/TGNN）并与聚合块对比",
+      "必须形式化所有构造量（如'土地净收入'、政策乘数），给出原始输入到使用值的对账表",
+      "必须公开完整代码、参数先验/协方差、分布、相关性与随机种子",
+      "必须诚实陈述局限与 broader impact（正面+负面）"
+    ],
+    "rigor_critique_chapters": ["method", "experiments", "appendix", "discussion"]
+  }
+}
