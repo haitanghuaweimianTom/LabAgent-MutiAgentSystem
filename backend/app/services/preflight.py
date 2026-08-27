@@ -756,6 +756,28 @@ class PreflightDecisionService:
             except Exception as e:
                 logger.warning(f"Task {task_id}: 通用数据集采集异常: {e}")
 
+        # ── 第二点五路：GitHub 仓库/开源代码（baseline 实现、评测脚本）──
+        # 命中"开源代码/baseline/实现/评测框架"类意图时，抓整仓库源码（tarball），
+        # 供 agent 解压后读取 baseline 实现与评测脚本。与第二路互补（第二路抓数据文件）。
+        _repo_intent = problem_text or collection_plan
+        if problem_text and not collected_files and any(
+            kw in _repo_intent.lower()
+            for kw in ("baseline", "开源", "open-source", "implementation", "github",
+                       "评测框架", "benchmark framework", "agent code", "源码")
+        ):
+            try:
+                from .self_collector import collect_github_repos
+                _, repo_paths = await collect_github_repos(
+                    problem_text=problem_text,
+                    project_name=project_name,
+                    source_query=collection_plan[:80],
+                )
+                if repo_paths:
+                    collected_files.extend(repo_paths)
+                    logger.info(f"Task {task_id}: GitHub 仓库采集到 {len(repo_paths)} 个源码包")
+            except Exception as e:
+                logger.warning(f"Task {task_id}: GitHub 仓库采集异常: {e}")
+
         # ── 第三路：通用网页/论文搜索 → 抽 URL 下载（最终兜底）──
         if not collected_files:
             from .self_collector import collect_urls as _collect_urls, extract_urls_from_search_result as _extract

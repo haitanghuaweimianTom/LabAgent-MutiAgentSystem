@@ -300,3 +300,69 @@ def test_read_csv_safe_utf8_bom():
         assert len(df) == 2
     finally:
         os.unlink(path)
+
+
+# ── GitHub 仓库/开源代码抓取 ────────────────────────────────────────────
+
+def test_repo_from_url():
+    from app.services.self_collector import _repo_from_url
+    assert _repo_from_url("https://github.com/uservan/AgentCE_Bench/tree/main") == "uservan/AgentCE_Bench"
+    assert _repo_from_url("https://github.com/foo/bar") == "foo/bar"
+    assert _repo_from_url("owner/repo") is None
+    assert _repo_from_url("https://notgithub.com/x/y") is None
+
+
+@pytest.mark.asyncio
+async def test_collect_github_repos_with_hints(tmp_paths, tmp_project, monkeypatch):
+    """显式 repo_hints → 抓 tarball 落盘（mock smart_get 避免真实网络）。"""
+    from app.services import self_collector as sc
+    from app.core import proxy as proxy_mod
+
+    calls = []
+
+    class _FakeResp:
+        status_code = 200
+        content = b"\x1f\x8btargz-bytes"
+        text = ""
+
+    async def _fake_smart_get(url, *, timeout=20.0, headers=None, **kw):
+        calls.append(url)
+        return _FakeResp()
+
+    monkeypatch.setattr(proxy_mod, "smart_get", _fake_smart_get)
+
+    results, paths = await sc.collect_github_repos(
+        problem_text="",
+        project_name=tmp_project,
+        repo_hints=["owner/repo_one"],
+        max_repos=1,
+    )
+    # monkeypatch 对 sc.smart_get 的引用——函数内是 from ..core.proxy import smart_get
+    # 走 proxy 模块导入，故改 proxy_mod.smart_get 即可生效
+
+    assert any("/tar.gz/HEAD" in u for u in calls), f"应请求 codeload tarball: {calls}"
+    assert len(results) == 1 and results[0].filename, results
+    # tarball 应落盘到 outputs/<name>/data/self_collected/
+    assert (tmp_paths / "outputs" / tmp_project / "data" / "self_collected" / results[0].filename).exists()
+
+
+@pytest.mark.asyncio
+async def test_collect_github_repos_search(tmp_paths, monkeypatch):
+    """无 hints 时走 repo search；search 失败也不抛异常。"""
+    from app.services import self_collector as sc
+    from app.core import proxy as proxy_mod
+
+    class _EmptyResp:
+        status_code = 200
+        content = b""
+
+    async def _fake(url, **kw):
+        return _EmptyResp()
+
+    monkeypatch.setattr(proxy_mod, "smart_get", _fake)
+
+    results, paths = await sc.collect_github_repos(
+        problem_text="agent benchmark",
+        project_name="self_collector_test",
+    )
+    assert results == [] and paths == []

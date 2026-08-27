@@ -995,7 +995,7 @@ async def collect_datasets_multi(
         except Exception as e:
             logger.warning(f"[self_collector] Kaggle 采集异常: {e}")
 
-    # 第四路：HuggingFace（走 hf-mirror.com 镜像，免 key 可下公开数据集）
+    # 第四路：HuggingFace（走 hf-mirror.com 镜像，免 token 可下公开数据集）
     if not all_rel:
         try:
             r4, p4 = await collect_huggingface_datasets(problem_text, project_name, source_query)
@@ -1004,5 +1004,171 @@ async def collect_datasets_multi(
         except Exception as e:
             logger.warning(f"[self_collector] HuggingFace 采集异常: {e}")
 
+    # 第五路：GitHub 仓库/开源代码（repo tarball，免 token 可下公开仓库）
+    # 涉及 baseline 开源代码、评测脚本、工程实现的选题走此路。
+    if not all_rel:
+        try:
+            r5, p5 = await collect_github_repos(
+                problem_text=problem_text,
+                project_name=project_name,
+                source_query=source_query or "github_repos",
+            )
+            all_results.extend(r5)
+            all_rel.extend(p5)
+        except Exception as e:
+            logger.warning(f"[self_collector] GitHub 仓库采集异常: {e}")
+
     return (all_results, all_rel)
+
+
+# ──────────────────────────────────────────────────────────────────────
+# GitHub 仓库/开源代码抓取（搜索引擎 + codeload tarball）
+# 覆盖"baseline 开源实现 / 评测脚本 / 工程代码"的采集需求（EMNLP/CCF-A 常用）。
+# 与 collect_github_datasets 的区别：后者搜的是具体 *.csv **文件**，
+# 本能力抓的是整个 **仓库源码树**（tarball），供 agent 解压后读取 baseline/脚本。
+# ──────────────────────────────────────────────────────────────────────
+
+# GitHub 仓库搜索：扩展名/仓库名字段中找 matching repos。按 star 降序取 top。
+def _repo_from_url(url: str) -> Optional[str]:
+    """把 github URL 规整为 owner/repo 形式；非 github.com 域名返回 None。"""
+    if not url:
+        return None
+    # 去掉 query/fragment
+    base = url.split("?", 1)[0].split("#", 1)[0]
+    # 只接受 github.com 域名（含子路径）
+    import re as _re2
+    m = _re2.match(r"https?://(?:www\.)?github\.com/", base)
+    if not m:
+        return None
+    parts = base[m.end():].strip("/").split("/")
+    if len(parts) < 2:
+        return None
+    owner, repo = parts[0], parts[1]
+    # owner/repo 只允许字母数字和 -_（排除 /tree/ /blob/ 等路径误捕获）
+    if not owner or not repo or not _re2.fullmatch(r"[A-Za-z0-9_.-]+", repo):
+        return None
+    return f"{owner}/{repo}"
+
+
+async def collect_github_repos(
+    problem_text: str,
+    project_name: Optional[str],
+    source_query: str = "",
+    repo_hints: Optional[List[str]] = None,
+    max_repos: int = 3,
+) -> Tuple[List[DownloadResult], List[str]]:
+    """GitHub 仓库源码抓取：搜索/直接指定 repo → codeload tarball 下载。
+
+    与 collect_github_datasets（只搜 *.csv 文件）互补——本函数抓**整仓库源码**，
+    用于"获取 baseline 开源实现 / 评测脚本 / 基准代码"。匿名也可下公开 repos。
+
+    Args:
+        problem_text: 题目文本（提炼搜索关键词）
+        project_name: 项目名
+        source_query: 来源意图
+        repo_hints: 显式指定的 owner/repo 列表（优先），非空则不再搜索
+        max_repos: 抓取仓库数上限
+
+    Returns:
+        (results, rel_paths)：rel_paths 是 tarball 相对路径（agent 需解包）
+    """
+    from ..core.datasource_config import get_datasource_key
+    from ..core.proxy import smart_get
+    token = (get_datasource_key("github") or {}).get("token", "")
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    target_dir = get_project_data_subdir(project_name, "self_collected")
+    target_dir.mkdir(parents=True, exist_ok=True)
+    from datetime import datetime, timezone
+    from ..core.paths import _PROJECT_ROOT
+    results: List[DownloadResult] = []
+    rel_paths: List[str] = []
+
+    repos: List[str] = []
+    if repo_hints:
+        for r in repo_hints:
+            rr = r if "/" in r else None
+            # 也接受裸 URL/裸名字解析
+            if r.startswith("http"):
+                rr = _repo_from_url(r) or rr
+            if rr and rr not in repos:
+                repos.append(rr)
+    elif problem_text:
+        # 从题目提炼关键词 → GitHub repo search
+        kws = _extract_search_keywords(problem_text, max_kws=3)
+        query = " ".join(kws) if kws else problem_text[:60]
+        logger.info(f"[self_collector] GitHub repo search: {query[:60]}")
+        try:
+            def _norm(r: str) -> Optional[str]:
+                return _repo_from_url(r) if "http" in r else (r if "/" in r else None)
+            resp = await smart_get(
+                "https://api.github.com/search/repositories",
+                params={"q": query, "sort": "stars", "order": "desc", "per_page": max_repos * 3},
+                headers=headers,
+                timeout=15.0,
+            )
+            if resp.status_code == 200:
+                for it in resp.json().get("items", [])[:max_repos]:
+                    full = it.get("full_name")
+                    if full and full not in repos:
+                        repos.append(full)
+            else:
+                logger.warning(f"[self_collector] GitHub repo search HTTP {resp.status_code}")
+                # 匿名限流时 fallback：用内置的已知 benchmark 仓库？——不，避免硬编码，直接空
+        except Exception as e:
+            logger.warning(f"[self_collector] GitHub repo search 异常: {e}")
+
+    if not repos:
+        logger.info("[self_collector] GitHub 仓库：无候选 repo，跳过")
+        return ([], [])
+
+    for repo in repos[:max_repos]:
+        res = DownloadResult(
+            url=f"github://{repo}",
+            source_query=source_query or f"repo:{repo}",
+            downloaded_at=int(datetime.now(timezone.utc).timestamp() * 1000),
+        )
+        try:
+            # codeload tarball（免 token，稳定直链）
+            dl = await smart_get(
+                f"https://codeload.github.com/{repo}/tar.gz/HEAD",
+                headers=headers, timeout=60.0,
+            )
+            if dl.status_code != 200 or not dl.content:
+                res.error = f"http_{dl.status_code}"
+                results.append(res)
+                continue
+            safe_name = repo.replace("/", "__")
+            dst = target_dir / f"repo_{safe_name}.tar.gz"
+            if not dst.exists():
+                dst.write_bytes(dl.content)
+            res.filename = dst.name
+            res.size = dst.stat().st_size
+            res.content_type = "application/gzip"
+            res.http_status = 200
+            results.append(res)
+            try:
+                rel = str(dst.relative_to(_PROJECT_ROOT))
+            except ValueError:
+                rel = str(dst)
+            rel_paths.append(rel)
+            logger.info(f"[self_collector] 仓库抓取成功 {repo} → {dst.name} ({res.size}B)")
+        except Exception as e:
+            res.error = f"exception:{type(e).__name__}:{e}"
+            results.append(res)
+            logger.warning(f"[self_collector] 仓库抓取失败 {repo}: {e}")
+
+    if results:
+        index_entries = []
+        for r in results:
+            meta = SelfCollectedMeta(
+                url=r.url, filename=r.filename, size=r.size,
+                downloaded_at=r.downloaded_at, content_type=r.content_type,
+                source_query=r.source_query, http_status=r.http_status, error=r.error,
+            )
+            index_entries.append(meta.to_dict())
+        append_self_collected_index(project_name, index_entries)
+
+    ok = sum(1 for r in results if r.filename)
+    logger.info(f"[self_collector] GitHub 仓库采集完成: {ok}/{len(results)} 成功")
+    return (results, rel_paths)
 
