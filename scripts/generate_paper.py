@@ -36,6 +36,7 @@ from typing import Dict, List, Optional
 
 # 导入沙箱和门禁模块
 from sandbox_and_gates import CodeSandbox, QualityGate, MultiModelDebate, FigureGenerator, AntiPatternDetector, CodeAutoFixer
+from output_guarantee import OutputGuarantee, LaTeXFormatter, ReferenceVerifier, IdeaDeduplicator
 
 # 让脚本能找到 src/ 和 backend/
 ROOT = Path(__file__).resolve().parent.parent
@@ -828,6 +829,65 @@ async def run_pipeline(
             
             if revision_count > 0:
                 logger.info(f"  完成 {revision_count} 轮修订，最终评分: {review_data.get('overall_score', 'N/A')}")
+
+    # 输出保障检查
+    logger.info(f"[{project_name}] === Step 7: 输出保障检查 ===")
+    guarantee = OutputGuarantee()
+    
+    # 获取真实引用池
+    from src.knowledge.template_skills import get_real_references
+    real_pool = get_real_references(template_id)
+    
+    # 执行全面检查
+    guarantee_result = guarantee.guarantee_output(
+        tex_content=artifact.paper_tex if hasattr(artifact, 'paper_tex') else "",
+        paper_md=artifact.paper_md,
+        references=artifact.references,
+        real_pool=real_pool,
+        idea=problem,
+        project_name=project_name,
+    )
+    
+    # 记录检查结果
+    if not guarantee_result["overall_pass"]:
+        logger.warning(f"  输出保障检查未通过:")
+        if not guarantee_result["format_valid"]:
+            logger.warning(f"    排版格式错误: {guarantee_result['format_errors']}")
+        if not guarantee_result["reference_valid"]:
+            logger.warning(f"    参考文献问题: {guarantee_result['reference_result']['fake']} 个虚假引用")
+        if not guarantee_result["idea_unique"]:
+            logger.warning(f"    Idea 重复: 相似度 {guarantee_result['idea_check']['max_similarity']:.2%}")
+    
+    # 保存保障报告
+    guarantee_report = f"""# Output Guarantee Report — {project_name}
+
+**Generated**: {time.strftime('%Y-%m-%d %H:%M:%S')}
+
+## 1. 排版格式检查
+
+- **状态**: {'✅ 通过' if guarantee_result['format_valid'] else '❌ 未通过'}
+- **错误**: {guarantee_result['format_errors'] if guarantee_result['format_errors'] else '无'}
+- **警告**: {guarantee_result['format_warnings'] if guarantee_result['format_warnings'] else '无'}
+
+## 2. 参考文献检查
+
+- **状态**: {'✅ 通过' if guarantee_result['reference_valid'] else '❌ 未通过'}
+- **总数**: {guarantee_result['reference_result']['total']}
+- **已验证**: {guarantee_result['reference_result']['verified']}
+- **虚假引用**: {guarantee_result['reference_result']['fake']}
+- **未引用**: {guarantee_result['reference_result']['uncited']}
+
+## 3. Idea 去重检查
+
+- **状态**: {'✅ 唯一' if guarantee_result['idea_unique'] else '❌ 重复'}
+- **最大相似度**: {guarantee_result['idea_check']['max_similarity']:.2%}
+- **相似 Idea**: {len(guarantee_result['idea_check']['similar_ideas'])} 个
+
+## 总体结果
+
+{'✅ 全部通过' if guarantee_result['overall_pass'] else '❌ 存在问题'}
+"""
+    (artifact.folder / "guarantee_report.md").write_text(guarantee_report, encoding="utf-8")
 
     # README
     readme = f"""# {project_name}
