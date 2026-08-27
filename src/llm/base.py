@@ -28,6 +28,7 @@ class ProviderType(str, Enum):
     GEMINI = "gemini"
     OLLAMA = "ollama"
     CLAUDE_CLI = "claude_cli"
+    MINIMAX = "minimax"
 
 
 @dataclass
@@ -60,11 +61,17 @@ class ProviderConfig:
     timeout: int = 120
     extra_headers: Optional[Dict[str, str]] = None
     enabled: bool = True
+    # 上下文窗口长度（tokens）。None 时由 CompressorConfig/Provider 默认值兜底。
+    max_context_length: Optional[int] = None
+    # 自动压缩触发比例（0-1，默认 0.9 = 90%）
+    auto_compress_ratio: float = 0.9
 
     @classmethod
     def from_env(cls, provider_type: ProviderType, model: str = "") -> "ProviderConfig":
         """从环境变量创建配置"""
         env_prefix = provider_type.value.upper()
+        ctx_env = os.getenv(f"{env_prefix}_MAX_CONTEXT_LENGTH", "0")
+        ratio_env = os.getenv(f"{env_prefix}_AUTO_COMPRESS_RATIO", "0.9")
         return cls(
             provider_type=provider_type,
             name=provider_type.value,
@@ -74,6 +81,8 @@ class ProviderConfig:
             temperature=float(os.getenv(f"{env_prefix}_TEMPERATURE", "0.7")),
             max_tokens=int(os.getenv(f"{env_prefix}_MAX_TOKENS", "0")) or None,
             timeout=int(os.getenv(f"{env_prefix}_TIMEOUT", "120")),
+            max_context_length=int(ctx_env) or None,
+            auto_compress_ratio=float(ratio_env),
         )
 
 

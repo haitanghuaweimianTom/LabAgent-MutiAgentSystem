@@ -49,9 +49,9 @@ class MarkdownToTexConverter:
         self.output_dir = output_dir
         self.figures_dir = output_dir / "figures"
         self.figures_dir.mkdir(parents=True, exist_ok=True)
-        # 解析 template_id → (documentclass, cls_file)
+        # 解析 template_id → (documentclass, cls_file, sty_files)
         self.template_id = template_id or "math_modeling"
-        self.documentclass, self.cls_file = self._resolve_template(self.template_id)
+        self.documentclass, self.cls_file, self.sty_files = self._resolve_template(self.template_id)
 
     def convert(self, md_text: str, title: str = "数学建模论文") -> str:
         """Convert full Markdown paper to LaTeX source."""
@@ -280,20 +280,25 @@ class MarkdownToTexConverter:
         out.append(f"\\end{{{env}}}")
         return idx - 1
 
-    def _resolve_template(self, template_id: str) -> Tuple[str, str]:
-        """从 paper_templates 注册表取 ``(documentclass, cls_file)``。
+    def _resolve_template(self, template_id: str) -> Tuple[str, str, List[str]]:
+        """从 paper_templates 注册表取 ``(documentclass, cls_file, sty_files)``。
 
-        找不到时返回 ``("article", "")`` 兜底（保证 .tex 一定可编译）。
+        找不到时返回 ``("article", "", [])`` 兜底（保证 .tex 一定可编译）。
+        sty_files 用于 ICLR/ICML/AAAI/NeurIPS 等"以 .sty 为主"的 ML 模板。
         """
         if _load_template_from_registry is None:
-            return ("article", "")
+            return ("article", "", [])
         try:
             tpl = _load_template_from_registry(template_id)
             if tpl:
-                return (tpl.documentclass or "article", tpl.cls_file or "")
+                return (
+                    tpl.documentclass or "article",
+                    tpl.cls_file or "",
+                    list(getattr(tpl, "sty_files", []) or []),
+                )
         except Exception:  # noqa: BLE001
             pass
-        return ("article", "")
+        return ("article", "", [])
 
     def _build_document(self, body: str, title: str) -> str:
         r"""构造完整 LaTeX 文档。
@@ -361,27 +366,36 @@ class MarkdownToTexConverter:
 
         Phase 1E 改造：根据 ``self.cls_file``（从 paper_templates 注册表查得）
         复制对应 ``.cls`` 到 tex 同级目录，使 xelatex 编译能找到文档类。
+        CCF-A ML 模板扩展：同时复制 ``self.sty_files``（ICLR/ICML/AAAI/NeurIPS
+        以 .sty 为主），确保 ``\\usepackage{icml_2024}`` 等能被定位。
         """
         md_text = md_path.read_text(encoding="utf-8")
         tex_text = self.convert(md_text)
         tex_path.parent.mkdir(parents=True, exist_ok=True)
         tex_path.write_text(tex_text, encoding="utf-8")
 
+        project_root = Path(__file__).resolve().parents[2]
+
         # 优先用注册表声明的 cls_file，回退到 template_dir 下与 documentclass 同名
         cls_copied = False
         if self.cls_file:
             cls_path = Path(self.cls_file)
             if not cls_path.is_absolute():
-                # 相对路径：相对项目根解析
-                project_root = Path(__file__).resolve().parents[2]
                 cls_path = project_root / cls_path
             if cls_path.exists():
                 shutil.copy2(cls_path, tex_path.parent / cls_path.name)
                 cls_copied = True
         if not cls_copied:
-            # 兜底：尝试 self.template_dir 下的 ``<documentclass>.cls``
             cls_src = self.template_dir / f"{self.documentclass}.cls"
             if cls_src.exists():
                 shutil.copy2(cls_src, tex_path.parent / f"{self.documentclass}.cls")
+
+        # 复制 sty_files（ICLR/ICML/AAAI/NeurIPS 等 ML 模板必需）
+        for sty in self.sty_files:
+            sty_path = Path(sty)
+            if not sty_path.is_absolute():
+                sty_path = project_root / sty_path
+            if sty_path.exists():
+                shutil.copy2(sty_path, tex_path.parent / sty_path.name)
 
         return tex_path

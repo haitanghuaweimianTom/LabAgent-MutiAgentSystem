@@ -44,7 +44,12 @@ class PaperTemplate(ABC):
     """论文模板基类"""
 
     name: str = "base"
-    description: str = "基础模板"
+    description: str = "base"
+    # 是否为 CCF-A 顶会模板。CCF-A 模板会强制注入"严谨性检查清单"并触发
+    # ccf_a_rigor 维度的批判（见 CritiqueEngine），用以堵住常见拒稿点：
+    # 复现性、回测/OOS 验证、基线对比、消融、敏感性、因果识别、异质性、
+    # 网络传染、反馈环、定义形式化。
+    is_ccf_a: bool = False
 
     @abstractmethod
     def get_outline(self) -> List[ChapterSpec]:
@@ -55,6 +60,19 @@ class PaperTemplate(ABC):
     def get_system_prompt(self) -> str:
         """获取论文写作系统提示词"""
         pass
+
+    def get_rigor_checklist(self) -> List[str]:
+        """返回 CCF-A 严谨性硬性检查清单（注入到各章 prompt + critique）。
+
+        基类返回空列表；CCF-A 模板覆写。每条以"必须"开头，便于批判引擎核对。
+        """
+        return []
+
+    def requires_rigor_critique(self, chapter_id: str) -> bool:
+        """该章节是否需要走 ccf_a_rigor 批判（默认 method/experiments/appendix）。"""
+        return self.is_ccf_a and chapter_id in {
+            "method", "experiments", "appendix", "discussion", "evaluation",
+        }
 
     def get_relevance_context(
         self,
@@ -499,25 +517,52 @@ class NeurIPS2024Template(PaperTemplate):
     Abstract → Introduction → Related Work → Preliminaries →
     Method → Experiments → Discussion → Conclusion →
     References → Appendix
+
+    本模板在 ICML/NeurIPS 常见拒稿点（线性标定无因果识别、无回测、无基线、
+    代码不可复现、缺乏消融/敏感性、忽视异质性与网络传染）上强制注入严谨性清单。
     """
 
     name = "neurips_2024"
     description = "NeurIPS 2024 机器学习顶会论文（CCF-A，英文）"
+    is_ccf_a = True
 
     def get_system_prompt(self) -> str:
-        return """You are an expert ML researcher and writer targeting NeurIPS 2024.
+        return """You are an expert ML researcher and writer targeting NeurIPS 2024 / ICML / ICLR (CCF-A).
 
 Writing requirements:
 1. Write in formal academic English suitable for top-tier ML venues
 2. Use LaTeX notation for all mathematical formulations ($...$ or $$...$$)
 3. Provide rigorous theoretical justification with proofs in appendices when needed
-4. Include comprehensive ablation studies and statistical significance tests
-5. Compare against at least 5 recent baselines (2022-2024)
-6. Report all results with standard deviations across multiple runs
+4. Include comprehensive ablation studies (>=3 components) and statistical significance tests
+5. Compare against at least 5 recent baselines (2022-2024), including established systemic-risk / network baselines where relevant (e.g. DebtRank/SDECM, diffusion-spectral, ABM contagion)
+6. Report all results with standard deviations / confidence intervals across multiple seeds; release seeds
 7. Discuss limitations and broader impact honestly
 8. Total paper length: 8-10 pages (excluding references and appendix)
 9. Follow NeurIPS style guidelines (neurips_2024.sty)
-10. Ensure reproducibility: release code and describe all hyperparameters"""
+10. Reproducibility: release full code, parameter priors/covariances, distributions, correlations, and random seeds; describe all hyperparameters
+
+RIGOR MANDATES (reviewers will reject if missing):
+- Causal identification: do not rely on linear calibrated elasticities alone; identify causal effects or state explicitly what is identified vs assumed; address endogeneity / reverse causality.
+- Out-of-sample validation: backtest the model (e.g. fit on pre-treatment data, forecast held-out window) and report RMSE / MAE / CRPS. A scenario engine without predictive validation is insufficient.
+- Heterogeneity: if the phenomenon varies across units (regions/banks/firms), model it with a hierarchical / panel structure rather than national aggregates only; report dispersion.
+- Feedback loops: encode endogenous feedback (e.g. credit supply -> demand -> prices) rather than one-way chains; justify direction and magnitude, ideally with an SVAR or structural block.
+- Network/topology: when systemic risk is central, add a network loss-propagation layer (DebtRank / SDECM / diffusion-spectral PDE / TGNN) and benchmark it against the aggregate block.
+- Definitions: formalize every constructed quantity (e.g. "land net income", policy multipliers) with explicit reconciliation tables from raw inputs to the figure used.
+- Sensitivity: provide tornado charts / elasticity-of-outcome-to-priors; do not report only point paths."""
+
+    def get_rigor_checklist(self) -> List[str]:
+        return [
+            "必须提供因果识别或显式区分'已识别'与'假设'部分，处理内生性/反向因果",
+            "必须包含样本外回测/验证并报告 RMSE/MAE/CRPS（场景引擎无预测验证不予接收）",
+            "必须对比至少 5 个基线，含系统性风险/网络基线（DebtRank/SDECM、扩散谱、ABM）",
+            "必须做消融实验（>=3 个组件）与敏感性分析（tornado/结果对先验的弹性）",
+            "必须建模异质性（层级/面板结构），报告跨单元离散度，而非仅全国聚合",
+            "必须编码内生反馈环（如信贷供给->需求->价格），用 SVAR/结构块验证方向与量级",
+            "系统性风险为内核时必须加网络损失传染层（DebtRank/SDECM/扩散谱 PDE/TGNN）并与聚合块对比",
+            "必须形式化所有构造量（如'土地净收入'、政策乘数），给出原始输入到使用值的对账表",
+            "必须公开完整代码、参数先验/协方差、分布、相关性与随机种子",
+            "必须诚实陈述局限（recognition 实践、重组、表外渠道等未被建模的部分）",
+        ]
 
     def get_outline(self) -> List[ChapterSpec]:
         return [
@@ -529,67 +574,113 @@ Writing requirements:
                 target_chars=150,
                 max_chars=200,
                 relevance_keys=["problem_text", "method_summary", "key_results"],
+                prompt_template=(
+                    "Abstract must (a) state problem + gap, (b) state approach, "
+                    "(c) give one headline quantitative result with uncertainty, "
+                    "(d) state validation/backtest metric in one phrase. <=250 words, double-blind."
+                ),
             ),
             ChapterSpec(
                 id="introduction",
-                title="1. Introduction",
+                title="1 Introduction",
                 level=1,
                 min_chars=800,
                 target_chars=1200,
                 max_chars=1800,
                 relevance_keys=["problem_text", "analysis", "method_summary"],
+                prompt_template=(
+                    "Include: a concrete motivating example; explicit limitations of prior work "
+                    "('X is limited because...'); 3-4 numbered, verifiable contributions as bullets; "
+                    "paper organization. At least one contribution must mention causal identification, "
+                    "backtesting, or a network/contagion layer."
+                ),
             ),
             ChapterSpec(
                 id="related_work",
-                title="2. Related Work",
+                title="2 Related Work",
                 level=1,
                 min_chars=800,
                 target_chars=1200,
                 max_chars=1800,
                 relevance_keys=["problem_text", "analysis"],
+                prompt_template=(
+                    "Cluster by theme (not year). MUST engage with: systemic-risk network models "
+                    "(SDECM + DebtRank / NEVA), diffusion-spectral contagion, ABM/dynamic-graph "
+                    "contagion, system-dynamics housing models, and empirical identification around "
+                    "implicit guarantees / central supervision. For each cluster, position this paper "
+                    "relative to the state-of-the-art and state the incremental contribution."
+                ),
             ),
             ChapterSpec(
                 id="preliminaries",
-                title="3. Preliminaries",
+                title="3 Preliminaries",
                 level=1,
                 min_chars=500,
                 target_chars=800,
                 max_chars=1200,
                 relevance_keys=["problem_text", "modeling", "formulas"],
+                prompt_template=(
+                    "Provide a notation table for ALL symbols. Formalize every constructed quantity "
+                    "(e.g. 'land net income', policy multipliers) with an explicit reconciliation "
+                    "table from raw inputs to the figure used in analysis. State the problem formulation."
+                ),
             ),
             ChapterSpec(
                 id="method",
-                title="4. Method",
+                title="4 Method",
                 level=1,
                 min_chars=1500,
                 target_chars=2500,
                 max_chars=3500,
                 relevance_keys=["modeling", "algorithm", "formulas"],
                 requires_coding=True,
+                prompt_template=(
+                    "MUST cover: (i) causal identification strategy or explicit split of identified "
+                    "vs assumed elasticities; (ii) hierarchical/panel structure for regional/bank "
+                    "heterogeneity (not national aggregates only); (iii) endogenous feedback loop "
+                    "(credit supply -> demand -> prices) with direction/magnitude justification; "
+                    "(iv) a network loss-propagation layer (DebtRank / SDECM / diffusion-spectral PDE "
+                    "/ TGNN) when systemic risk is central; (v) full mathematical derivation + at least "
+                    "one algorithm box with complexity. Document all parameter priors, distributions, "
+                    "and correlations."
+                ),
             ),
             ChapterSpec(
                 id="experiments",
-                title="5. Experiments",
+                title="5 Experiments",
                 level=1,
                 min_chars=2000,
                 target_chars=3000,
                 max_chars=4500,
                 relevance_keys=["execution_result", "result_analysis", "charts"],
                 requires_coding=True,
+                prompt_template=(
+                    "MUST include: (1) Out-of-sample backtest (e.g. fit pre-2021, forecast 2021-2025) "
+                    "with RMSE/MAE/CRPS for land revenue, prices, NPLs; (2) comparison against >=5 "
+                    "baselines incl. established systemic-risk/network models; (3) ablation removing "
+                    "each policy lever / network layer / feedback block; (4) sensitivity tornado charts "
+                    "and elasticity of key outcomes to priors; (5) heterogeneity decomposition by "
+                    "region/portfolio. Report all numbers with std/CI over multiple seeds."
+                ),
             ),
             ChapterSpec(
                 id="discussion",
-                title="6. Discussion",
+                title="6 Discussion",
                 level=1,
                 min_chars=500,
                 target_chars=800,
                 max_chars=1200,
                 relevance_keys=["execution_result", "result_analysis"],
                 requires_coding=True,
+                prompt_template=(
+                    "Explicitly enumerate limitations (NPL recognition practices, restructuring, "
+                    "off-balance-sheet channels not modeled), broader impact (positive + negative), "
+                    "and a reproducibility statement (code/data release plan, seeds, priors)."
+                ),
             ),
             ChapterSpec(
                 id="conclusion",
-                title="7. Conclusion",
+                title="7 Conclusion",
                 level=1,
                 min_chars=300,
                 target_chars=500,
@@ -614,6 +705,12 @@ Writing requirements:
                 max_chars=2000,
                 relevance_keys=["code", "execution_result", "formulas"],
                 requires_coding=True,
+                prompt_template=(
+                    "MUST contain: full code listing (or repository URL), complete parameter priors / "
+                    "covariance matrix, distribution family for each random parameter, correlations, "
+                    "random seeds, proof sketches, extended tables, and the NeurIPS reproducibility "
+                    "checklist answers."
+                ),
             ),
         ]
 
@@ -626,25 +723,53 @@ class IEEEConferenceTemplate(PaperTemplate):
     Abstract → Introduction → Related Work → Background →
     Method → Experiments → Discussion → Conclusion →
     References → Appendix
+
+    注入 CCF-A 严谨性清单：复现性、回测/OOS、基线对比、消融、敏感性、
+    因果识别、异质性、网络传染、反馈环、定义形式化。
     """
 
     name = "ieee_conference"
     description = "IEEE 会议论文（系统/安全方向，CCF-A，英文）"
+    is_ccf_a = True
 
     def get_system_prompt(self) -> str:
-        return """You are an expert systems/security researcher writing for a top IEEE conference.
+        return """You are an expert systems/security/applied-quantitative researcher writing for a top IEEE conference (CCF-A).
 
 Writing requirements:
 1. Write in formal academic English following IEEE style
 2. Use IEEE citation format [1], [2], etc.
 3. Clearly state research questions and hypotheses upfront
-4. Provide detailed threat models for security papers
-5. Include formal security proofs or game-based reductions when applicable
-6. Benchmark on standard datasets with realistic threat models
-7. Discuss practical deployment considerations
+4. Provide detailed threat models (security) or structural identification (quantitative) for the studied channels
+5. Include formal security proofs or game-based reductions when applicable; for empirical models, provide causal identification or explicit identified-vs-assumed split
+6. Benchmark on standard datasets with realistic threat models; for systemic-risk models benchmark against established baselines (DebtRank/SDECM, diffusion-spectral, ABM)
+7. Discuss practical deployment considerations and threats to validity (internal/external/construct)
 8. Total paper length: 10-12 pages (IEEE two-column format)
 9. Follow IEEE conference template (IEEEtran.cls)
-10. Include a clear ethics statement for security/privacy work"""
+10. Include a clear ethics statement for security/privacy work
+11. Reproducibility: release full code, parameter priors/covariances, random seeds; backtest out-of-sample with RMSE/MAE/CRPS
+
+RIGOR MANDATES (common reject points):
+- No purely linear calibrated elasticities without causal identification; address endogeneity / reverse causality.
+- Out-of-sample backtest mandatory for any forecasting/scenario engine; report RMSE/MAE/CRPS.
+- Heterogeneity across units (regions/banks/firms) via hierarchical/panel modeling, not national aggregates only.
+- Endogenous feedback loops (credit supply -> demand -> prices) with direction/magnitude justification.
+- Network/topology loss propagation (DebtRank/SDECM/diffusion-spectral/TGNN) when systemic risk is central; benchmark vs aggregate block.
+- Formalize constructed quantities (e.g. 'land net income', policy multipliers) with reconciliation tables.
+- Ablation (>=3 components) + sensitivity tornado charts; do not report only point paths."""
+
+    def get_rigor_checklist(self) -> List[str]:
+        return [
+            "必须提供因果识别或显式区分'已识别'与'假设'部分，处理内生性/反向因果",
+            "必须包含样本外回测/验证并报告 RMSE/MAE/CRPS",
+            "必须对比基线，含系统性风险/网络基线（DebtRank/SDECM、扩散谱、ABM）",
+            "必须做消融实验（>=3 个组件）与敏感性分析（tornado）",
+            "必须建模异质性（层级/面板），报告跨单元离散度",
+            "必须编码内生反馈环，用 SVAR/结构块验证方向与量级",
+            "系统性风险为内核时必须加网络损失传染层并与聚合块对比",
+            "必须形式化所有构造量，给出对账表",
+            "必须公开完整代码、参数先验/协方差、随机种子",
+            "必须陈述 threats to validity（internal/external/construct）与局限",
+        ]
 
     def get_outline(self) -> List[ChapterSpec]:
         return [
@@ -656,6 +781,11 @@ Writing requirements:
                 target_chars=150,
                 max_chars=200,
                 relevance_keys=["problem_text", "method_summary", "key_results"],
+                prompt_template=(
+                    "150-250 words. State problem, prior-work gap, approach, and the strongest "
+                    "quantitative result with uncertainty. Mention the backtest/OOS metric in one phrase. "
+                    "No citations, no 'in this paper'."
+                ),
             ),
             ChapterSpec(
                 id="introduction",
@@ -665,6 +795,11 @@ Writing requirements:
                 target_chars=1200,
                 max_chars=1800,
                 relevance_keys=["problem_text", "analysis", "method_summary"],
+                prompt_template=(
+                    "Include: real-world pain point; explicit limitations of prior work ('X is limited because...'); "
+                    "approach overview; 3-5 concrete contributions as bullets (at least one must mention causal "
+                    "identification, backtesting, or a network/contagion layer); roadmap."
+                ),
             ),
             ChapterSpec(
                 id="related_work",
@@ -674,6 +809,12 @@ Writing requirements:
                 target_chars=1000,
                 max_chars=1500,
                 relevance_keys=["problem_text", "analysis"],
+                prompt_template=(
+                    "Group by theme. MUST engage with systemic-risk network models (SDECM + DebtRank/NEVA), "
+                    "diffusion-spectral contagion, ABM/dynamic-graph contagion, system-dynamics housing models, "
+                    "and empirical identification around implicit guarantees / central supervision. >=20 recent "
+                    "top-venue references."
+                ),
             ),
             ChapterSpec(
                 id="background",
@@ -683,6 +824,10 @@ Writing requirements:
                 target_chars=1000,
                 max_chars=1500,
                 relevance_keys=["problem_text", "modeling", "formulas"],
+                prompt_template=(
+                    "Notation table for ALL symbols. Formalize constructed quantities (e.g. 'land net income', "
+                    "policy multipliers) with reconciliation tables from raw inputs. Problem formulation."
+                ),
             ),
             ChapterSpec(
                 id="method",
@@ -693,6 +838,13 @@ Writing requirements:
                 max_chars=3500,
                 relevance_keys=["modeling", "algorithm", "formulas"],
                 requires_coding=True,
+                prompt_template=(
+                    "MUST cover: causal identification or identified-vs-assumed split; hierarchical/panel "
+                    "heterogeneity; endogenous feedback loop (credit supply -> demand -> prices); network "
+                    "loss-propagation layer (DebtRank/SDECM/diffusion-spectral/TGNN) when systemic risk is "
+                    "central; full derivation + complexity + correctness argument. Document all parameter "
+                    "priors, distributions, correlations."
+                ),
             ),
             ChapterSpec(
                 id="experiments",
@@ -703,6 +855,12 @@ Writing requirements:
                 max_chars=4500,
                 relevance_keys=["execution_result", "result_analysis", "charts"],
                 requires_coding=True,
+                prompt_template=(
+                    "MUST include: (1) out-of-sample backtest with RMSE/MAE/CRPS; (2) comparison against "
+                    ">=5 baselines incl. established systemic-risk/network models; (3) ablation (>=3 components); "
+                    "(4) sensitivity tornado + elasticity of outcomes to priors; (5) heterogeneity decomposition "
+                    "by region/portfolio; (6) statistical significance (p-values/CI) over multiple seeds."
+                ),
             ),
             ChapterSpec(
                 id="discussion",
@@ -713,6 +871,10 @@ Writing requirements:
                 max_chars=1200,
                 relevance_keys=["execution_result", "result_analysis"],
                 requires_coding=True,
+                prompt_template=(
+                    "Threats to validity (internal/external/construct); honest limitations (NPL recognition, "
+                    "restructuring, off-balance-sheet channels); ethical considerations; reproducibility statement."
+                ),
             ),
             ChapterSpec(
                 id="conclusion",
@@ -741,6 +903,10 @@ Writing requirements:
                 max_chars=2000,
                 relevance_keys=["code", "execution_result"],
                 requires_coding=True,
+                prompt_template=(
+                    "Full code listing / repository URL, complete parameter priors / covariance matrix, "
+                    "distribution families, correlations, random seeds, proof details, reproducibility checklist."
+                ),
             ),
         ]
 
@@ -753,25 +919,52 @@ class ACMSigConfTemplate(PaperTemplate):
     Abstract → Introduction → Related Work → Method →
     Implementation → Evaluation → Discussion → Conclusion →
     References → Appendix
+
+    注入 CCF-A 严谨性清单。
     """
 
     name = "acm_sigconf"
     description = "ACM SIGCONF 会议论文（图形/网络方向，CCF-A，英文）"
+    is_ccf_a = True
 
     def get_system_prompt(self) -> str:
-        return """You are an expert researcher writing for a top ACM conference (SIGGRAPH, SIGCOMM, etc.).
+        return """You are an expert researcher writing for a top ACM conference (SIGGRAPH, SIGCOMM, etc., CCF-A).
 
 Writing requirements:
 1. Write in formal academic English following ACM style
 2. Use ACM citation format (numeric [1] or author-year)
 3. Include detailed system/architecture diagrams description
 4. Provide algorithmic complexity analysis (time and space)
-5. Report experiments on standard benchmarks with multiple metrics
-6. Include qualitative and quantitative results
+5. Report experiments on standard benchmarks with multiple metrics; for systemic-risk models benchmark against established baselines (DebtRank/SDECM, diffusion-spectral, ABM)
+6. Include qualitative and quantitative results with ablations (>=3) and sensitivity analysis
 7. Discuss limitations and future work candidly
 8. Total paper length: 10-14 pages (ACM sigconf template)
 9. Follow ACM formatting guidelines (acmart.cls, sigconf option)
-10. Include artifact description for reproducibility"""
+10. Include artifact description for reproducibility (code, parameter priors/covariances, random seeds)
+11. For empirical/quantitative channels: causal identification or explicit identified-vs-assumed split; out-of-sample backtest with RMSE/MAE/CRPS
+
+RIGOR MANDATES (common reject points):
+- No purely linear calibrated elasticities without causal identification; address endogeneity.
+- Out-of-sample backtest mandatory for forecasting/scenario engines; report RMSE/MAE/CRPS.
+- Heterogeneity across units via hierarchical/panel modeling, not aggregates only.
+- Endogenous feedback loops with direction/magnitude justification.
+- Network/topology loss propagation when systemic risk is central; benchmark vs aggregate block.
+- Formalize constructed quantities with reconciliation tables.
+- Ablation (>=3 components) + sensitivity tornado charts."""
+
+    def get_rigor_checklist(self) -> List[str]:
+        return [
+            "必须提供因果识别或显式区分'已识别'与'假设'部分",
+            "必须包含样本外回测/验证并报告 RMSE/MAE/CRPS",
+            "必须对比基线，含系统性风险/网络基线（DebtRank/SDECM、扩散谱、ABM）",
+            "必须做消融实验（>=3 个组件）与敏感性分析（tornado）",
+            "必须建模异质性（层级/面板），报告跨单元离散度",
+            "必须编码内生反馈环，用 SVAR/结构块验证方向与量级",
+            "系统性风险为内核时必须加网络损失传染层并与聚合块对比",
+            "必须形式化所有构造量，给出对账表",
+            "必须公开完整代码、参数先验/协方差、随机种子（artifact description）",
+            "必须陈述局限与未来工作",
+        ]
 
     def get_outline(self) -> List[ChapterSpec]:
         return [
@@ -783,6 +976,10 @@ Writing requirements:
                 target_chars=150,
                 max_chars=200,
                 relevance_keys=["problem_text", "method_summary", "key_results"],
+                prompt_template=(
+                    "State problem, gap, approach, headline result with uncertainty, and backtest metric "
+                    "in one phrase. No citations."
+                ),
             ),
             ChapterSpec(
                 id="introduction",
@@ -792,6 +989,10 @@ Writing requirements:
                 target_chars=1200,
                 max_chars=1800,
                 relevance_keys=["problem_text", "analysis", "method_summary"],
+                prompt_template=(
+                    "Concrete motivating example; explicit prior-work limitations; approach overview; "
+                    "3-5 concrete contributions (>=1 on causal identification / backtesting / network layer); roadmap."
+                ),
             ),
             ChapterSpec(
                 id="related_work",
@@ -801,6 +1002,11 @@ Writing requirements:
                 target_chars=1000,
                 max_chars=1500,
                 relevance_keys=["problem_text", "analysis"],
+                prompt_template=(
+                    "Cluster by theme. MUST engage with systemic-risk network models (SDECM + DebtRank/NEVA), "
+                    "diffusion-spectral contagion, ABM/dynamic-graph contagion, system-dynamics housing models, "
+                    "and empirical identification around implicit guarantees / central supervision."
+                ),
             ),
             ChapterSpec(
                 id="method",
@@ -811,6 +1017,12 @@ Writing requirements:
                 max_chars=3500,
                 relevance_keys=["modeling", "algorithm", "formulas"],
                 requires_coding=True,
+                prompt_template=(
+                    "MUST cover: causal identification or identified-vs-assumed split; hierarchical/panel "
+                    "heterogeneity; endogenous feedback loop (credit supply -> demand -> prices); network "
+                    "loss-propagation layer (DebtRank/SDECM/diffusion-spectral/TGNN) when systemic risk is "
+                    "central; full derivation + complexity. Document all parameter priors, distributions, correlations."
+                ),
             ),
             ChapterSpec(
                 id="implementation",
@@ -821,6 +1033,10 @@ Writing requirements:
                 max_chars=1800,
                 relevance_keys=["code", "algorithm", "execution_result"],
                 requires_coding=True,
+                prompt_template=(
+                    "Architecture diagram description; engineering decisions; parameter priors / covariance "
+                    "matrix; distribution families; correlations; random seeds. State the code/release plan."
+                ),
             ),
             ChapterSpec(
                 id="evaluation",
@@ -831,6 +1047,12 @@ Writing requirements:
                 max_chars=4500,
                 relevance_keys=["execution_result", "result_analysis", "charts"],
                 requires_coding=True,
+                prompt_template=(
+                    "MUST include: (1) out-of-sample backtest with RMSE/MAE/CRPS; (2) comparison against >=5 "
+                    "baselines incl. established systemic-risk/network models; (3) ablation (>=3 components); "
+                    "(4) sensitivity tornado + elasticity of outcomes to priors; (5) heterogeneity decomposition "
+                    "by region/portfolio; (6) multiple metrics with std/CI over seeds."
+                ),
             ),
             ChapterSpec(
                 id="discussion",
@@ -841,6 +1063,10 @@ Writing requirements:
                 max_chars=1200,
                 relevance_keys=["execution_result", "result_analysis"],
                 requires_coding=True,
+                prompt_template=(
+                    "Honest limitations (NPL recognition, restructuring, off-balance-sheet channels); "
+                    "future work; artifact description / reproducibility statement."
+                ),
             ),
             ChapterSpec(
                 id="conclusion",
@@ -869,6 +1095,11 @@ Writing requirements:
                 max_chars=2000,
                 relevance_keys=["code", "execution_result"],
                 requires_coding=True,
+                prompt_template=(
+                    "Full code listing / repository URL, complete parameter priors / covariance matrix, "
+                    "distribution families, correlations, random seeds, proof details, extended tables, "
+                    "artifact description."
+                ),
             ),
         ]
 
@@ -1093,12 +1324,417 @@ class ResearchSurveyTemplate(PaperTemplate):
         ]
 
 
+# =============================================================================
+# CCF-A 三大 ML 顶会细分模板：ICLR / ICML / AAAI
+# =============================================================================
+# 三家风格差异（审稿人会在第一眼判断是否套错模板）：
+# - ICLR 2024: 无严格页限（推荐 8-10 页），OpenReview 双盲，强调理论+实证并重，
+#   iclr2024_conference.sty，单栏 11pt。评审重视"为什么 work"的可解释性与
+#   reproducibility checklist。
+# - ICML 2024: 8 页正文 + 无限附录/参考，icml_2024.sty，单栏 10pt。理论深度
+#   要求最高，必须有定理/收敛性/复杂度证明 sketch。
+# - AAAI 2024: 7 页正文 + 2 页附录，aaai24.sty，双栏 10pt。偏应用/AI 通用，
+#   评审更看 application value + 实验充分性，理论可略轻。
+# 三者共享 ML CCF-A 严谨性清单（因果识别/回测/基线/消融/敏感性/异质性/
+# 反馈环/网络传染/形式化/复现性），但在 system_prompt 与章节配比上有差异。
+
+
+class _MLCCFAMixin:
+    """三大 ML 顶会共享的严谨性清单（避免重复定义）。
+
+    每条直接对应 ICML/ICLR/AAAI 评审常见拒稿点。
+    """
+    _SHARED_RIGOR = [
+        "必须提供因果识别或显式区分'已识别'与'假设'部分，处理内生性/反向因果",
+        "必须包含样本外回测/验证并报告 RMSE/MAE/CRPS",
+        "必须对比至少 5 个基线，含系统性风险/网络基线（DebtRank/SDECM、扩散谱、ABM）",
+        "必须做消融实验（>=3 个组件）与敏感性分析（tornado/结果对先验的弹性）",
+        "必须建模异质性（层级/面板结构），报告跨单元离散度，而非仅聚合",
+        "必须编码内生反馈环（如信贷供给->需求->价格），用 SVAR/结构块验证方向与量级",
+        "系统性风险为内核时必须加网络损失传染层（DebtRank/SDECM/扩散谱 PDE/TGNN）并与聚合块对比",
+        "必须形式化所有构造量（如'土地净收入'、政策乘数），给出原始输入到使用值的对账表",
+        "必须公开完整代码、参数先验/协方差、分布、相关性与随机种子",
+        "必须诚实陈述局限与 broader impact（正面+负面）",
+    ]
+
+    def get_rigor_checklist(self) -> List[str]:
+        return list(self._SHARED_RIGOR)
+
+
+class ICLR2024Template(_MLCCFAMixin, PaperTemplate):
+    """ICLR 2024 论文模板 (CCF-A ML).
+
+    结构与 NeurIPS 相近但：(1) 无严格页限，重视可解释性与 reproducibility
+    checklist；(2) OpenReview 双盲；(3) 评审常追问"为什么 work"。
+    """
+
+    name = "iclr_2024"
+    description = "ICLR 2024 机器学习顶会论文（CCF-A，英文，OpenReview）"
+    is_ccf_a = True
+
+    def get_system_prompt(self) -> str:
+        return """You are an expert ML researcher writing for ICLR 2024 (CCF-A, OpenReview, double-blind).
+
+Writing requirements:
+1. Formal academic English; LaTeX notation for all math ($...$ or $$...$$)
+2. No strict page limit (target 8-10 main pages); references and appendix excluded
+3. Double-blind: no author names, affiliations, or self-identifying citations
+4. Sections: Abstract -> 1 Introduction -> 2 Related Work -> 3 Preliminaries ->
+   4 Method -> 5 Experiments -> 6 Discussion -> 7 Conclusion -> References -> Appendix
+5. Use iclr2024_conference.sty (letterpaper, 11pt, single-column)
+
+ICLR-SPECIFIC EMPHASIS (reviewers prize "why it works"):
+- Provide intuition for design choices; ablate to show each component's causal role.
+- Reproducibility checklist in appendix (seeds, code, data, compute).
+- Engage with theoretical AND empirical reviewers — give a proof sketch even if empirical.
+
+RIGOR MANDATES (reject points):
+- Causal identification or explicit identified-vs-assumed split; no pure linear calibration.
+- Out-of-sample backtest with RMSE/MAE/CRPS.
+- >=5 baselines incl. systemic-risk/network models (DebtRank/SDECM, diffusion-spectral, ABM) where relevant.
+- Ablation >=3 components; sensitivity tornado; heterogeneity (hierarchical/panel).
+- Endogenous feedback loops (credit supply -> demand -> prices) with SVAR/structural justification.
+- Network loss-propagation layer when systemic risk is central.
+- Formalize all constructed quantities with reconciliation tables.
+- Release full code, parameter priors/covariances, distributions, correlations, seeds."""
+
+    def get_outline(self) -> List[ChapterSpec]:
+        return [
+            ChapterSpec(
+                id="abstract", title="Abstract", level=1,
+                min_chars=100, target_chars=150, max_chars=200,
+                relevance_keys=["problem_text", "method_summary", "key_results"],
+                prompt_template=(
+                    "<=250 words. One sentence each: problem, gap, approach, headline result with uncertainty, "
+                    "validation metric. Double-blind."
+                ),
+            ),
+            ChapterSpec(
+                id="introduction", title="1 Introduction", level=1,
+                min_chars=800, target_chars=1200, max_chars=1800,
+                relevance_keys=["problem_text", "analysis", "method_summary"],
+                prompt_template=(
+                    "Concrete motivating example; explicit prior-work limitations; approach overview; "
+                    "3-4 numbered contributions (>=1 on causal identification/backtesting/network layer); roadmap."
+                ),
+            ),
+            ChapterSpec(
+                id="related_work", title="2 Related Work", level=1,
+                min_chars=800, target_chars=1200, max_chars=1800,
+                relevance_keys=["problem_text", "analysis"],
+                prompt_template=(
+                    "Cluster by theme. MUST engage systemic-risk network models (SDECM+DebtRank/NEVA), "
+                    "diffusion-spectral contagion, ABM/dynamic-graph contagion, system-dynamics housing models, "
+                    "empirical identification around implicit guarantees / central supervision."
+                ),
+            ),
+            ChapterSpec(
+                id="preliminaries", title="3 Preliminaries", level=1,
+                min_chars=500, target_chars=800, max_chars=1200,
+                relevance_keys=["problem_text", "modeling", "formulas"],
+                prompt_template=(
+                    "Notation table for ALL symbols. Formalize constructed quantities (e.g. 'land net income', "
+                    "policy multipliers) with reconciliation tables. Problem formulation."
+                ),
+            ),
+            ChapterSpec(
+                id="method", title="4 Method", level=1,
+                min_chars=1500, target_chars=2500, max_chars=3500,
+                relevance_keys=["modeling", "algorithm", "formulas"], requires_coding=True,
+                prompt_template=(
+                    "MUST cover: causal identification / identified-vs-assumed split; hierarchical/panel "
+                    "heterogeneity; endogenous feedback loop (credit supply -> demand -> prices); network "
+                    "loss-propagation layer (DebtRank/SDECM/diffusion-spectral/TGNN) when systemic risk is "
+                    "central; full derivation + algorithm box + complexity + proof sketch. Document all "
+                    "parameter priors, distributions, correlations."
+                ),
+            ),
+            ChapterSpec(
+                id="experiments", title="5 Experiments", level=1,
+                min_chars=2000, target_chars=3000, max_chars=4500,
+                relevance_keys=["execution_result", "result_analysis", "charts"], requires_coding=True,
+                prompt_template=(
+                    "MUST include: (1) out-of-sample backtest with RMSE/MAE/CRPS; (2) >=5 baselines incl. "
+                    "systemic-risk/network models; (3) ablation >=3 components; (4) sensitivity tornado + "
+                    "elasticity to priors; (5) heterogeneity decomposition; (6) std/CI over multiple seeds."
+                ),
+            ),
+            ChapterSpec(
+                id="discussion", title="6 Discussion", level=1,
+                min_chars=500, target_chars=800, max_chars=1200,
+                relevance_keys=["execution_result", "result_analysis"], requires_coding=True,
+                prompt_template=(
+                    "Limitations (NPL recognition, restructuring, off-balance-sheet); broader impact "
+                    "(positive+negative); reproducibility statement."
+                ),
+            ),
+            ChapterSpec(
+                id="conclusion", title="7 Conclusion", level=1,
+                min_chars=300, target_chars=500, max_chars=800,
+                relevance_keys=["result_analysis", "method_summary"],
+            ),
+            ChapterSpec(
+                id="references", title="References", level=1,
+                min_chars=300, target_chars=500, max_chars=1000,
+                relevance_keys=["problem_text", "modeling"],
+            ),
+            ChapterSpec(
+                id="appendix", title="Appendix", level=1,
+                min_chars=500, target_chars=1000, max_chars=2000,
+                relevance_keys=["code", "execution_result", "formulas"], requires_coding=True,
+                prompt_template=(
+                    "Full code/repository URL; complete parameter priors/covariance matrix; distribution "
+                    "families; correlations; seeds; proof details; ICLR reproducibility checklist answers."
+                ),
+            ),
+        ]
+
+
+class ICML2024Template(_MLCCFAMixin, PaperTemplate):
+    """ICML 2024 论文模板 (CCF-A ML).
+
+    与 NeurIPS/ICLR 的关键差异：8 页硬限 + 理论深度要求最高（必须有定理/
+    收敛性/复杂度证明 sketch）。评审最看重"方法的新颖性与理论贡献"。
+    """
+
+    name = "icml_2024"
+    description = "ICML 2024 机器学习顶会论文（CCF-A，英文，8页强理论）"
+    is_ccf_a = True
+
+    def get_system_prompt(self) -> str:
+        return """You are an expert ML researcher writing for ICML 2024 (CCF-A, double-blind).
+
+Writing requirements:
+1. Formal academic English; LaTeX notation for all math
+2. STRICT 8-page main limit (excluding references and appendix); be dense
+3. Double-blind; icml_2024.sty (letterpaper, 10pt, single-column)
+4. Sections: Abstract -> 1 Introduction -> 2 Related Work -> 3 Preliminaries ->
+   4 Method -> 5 Experiments -> 6 Discussion -> 7 Conclusion -> References -> Appendix
+
+ICML-SPECIFIC EMPHASIS (reviewers prize theoretical contribution):
+- At least one theorem/proposition with a proof sketch in main paper; full proof in appendix.
+- Convergence / generalization / sample complexity analysis for any iterative method.
+- Novelty of the methodological contribution must be stated crisply (not just "we apply X to Y").
+
+RIGOR MANDATES (reject points):
+- Causal identification or explicit identified-vs-assumed split; no pure linear calibration.
+- Out-of-sample backtest with RMSE/MAE/CRPS.
+- >=5 baselines incl. systemic-risk/network models (DebtRank/SDECM, diffusion-spectral, ABM) where relevant.
+- Ablation >=3 components; sensitivity tornado; heterogeneity (hierarchical/panel).
+- Endogenous feedback loops (credit supply -> demand -> prices) with SVAR/structural justification.
+- Network loss-propagation layer when systemic risk is central.
+- Formalize all constructed quantities with reconciliation tables.
+- Release full code, parameter priors/covariances, distributions, correlations, seeds."""
+
+    def get_outline(self) -> List[ChapterSpec]:
+        return [
+            ChapterSpec(
+                id="abstract", title="Abstract", level=1,
+                min_chars=100, target_chars=150, max_chars=200,
+                relevance_keys=["problem_text", "method_summary", "key_results"],
+                prompt_template="<=250 words. problem, gap, approach, headline result+uncertainty, validation metric. Double-blind.",
+            ),
+            ChapterSpec(
+                id="introduction", title="1 Introduction", level=1,
+                min_chars=800, target_chars=1100, max_chars=1600,
+                relevance_keys=["problem_text", "analysis", "method_summary"],
+                prompt_template=(
+                    "Concrete motivating example; prior-work limitations; approach; 3-4 numbered contributions "
+                    "(>=1 on causal identification/backtesting/network layer); roadmap. Be dense — 8-page limit."
+                ),
+            ),
+            ChapterSpec(
+                id="related_work", title="2 Related Work", level=1,
+                min_chars=600, target_chars=900, max_chars=1300,
+                relevance_keys=["problem_text", "analysis"],
+                prompt_template=(
+                    "Cluster by theme. MUST engage systemic-risk network models (SDECM+DebtRank/NEVA), "
+                    "diffusion-spectral contagion, ABM/dynamic-graph contagion, system-dynamics housing, "
+                    "empirical identification around implicit guarantees / central supervision."
+                ),
+            ),
+            ChapterSpec(
+                id="preliminaries", title="3 Preliminaries", level=1,
+                min_chars=400, target_chars=700, max_chars=1000,
+                relevance_keys=["problem_text", "modeling", "formulas"],
+                prompt_template="Notation table; formalize constructed quantities with reconciliation tables; problem formulation.",
+            ),
+            ChapterSpec(
+                id="method", title="4 Method", level=1,
+                min_chars=1500, target_chars=2200, max_chars=3000,
+                relevance_keys=["modeling", "algorithm", "formulas"], requires_coding=True,
+                prompt_template=(
+                    "MUST cover: causal identification / identified-vs-assumed split; hierarchical/panel "
+                    "heterogeneity; endogenous feedback loop; network loss-propagation layer when systemic "
+                    "risk is central; full derivation + algorithm box + complexity + >=1 theorem with proof "
+                    "sketch. Document all parameter priors, distributions, correlations."
+                ),
+            ),
+            ChapterSpec(
+                id="experiments", title="5 Experiments", level=1,
+                min_chars=1800, target_chars=2600, max_chars=3800,
+                relevance_keys=["execution_result", "result_analysis", "charts"], requires_coding=True,
+                prompt_template=(
+                    "MUST include: (1) out-of-sample backtest with RMSE/MAE/CRPS; (2) >=5 baselines incl. "
+                    "systemic-risk/network models; (3) ablation >=3 components; (4) sensitivity tornado + "
+                    "elasticity to priors; (5) heterogeneity decomposition; (6) std/CI over multiple seeds."
+                ),
+            ),
+            ChapterSpec(
+                id="discussion", title="6 Discussion", level=1,
+                min_chars=400, target_chars=600, max_chars=900,
+                relevance_keys=["execution_result", "result_analysis"], requires_coding=True,
+                prompt_template="Limitations; broader impact; reproducibility statement.",
+            ),
+            ChapterSpec(
+                id="conclusion", title="7 Conclusion", level=1,
+                min_chars=250, target_chars=400, max_chars=600,
+                relevance_keys=["result_analysis", "method_summary"],
+            ),
+            ChapterSpec(
+                id="references", title="References", level=1,
+                min_chars=300, target_chars=500, max_chars=1000,
+                relevance_keys=["problem_text", "modeling"],
+            ),
+            ChapterSpec(
+                id="appendix", title="Appendix", level=1,
+                min_chars=500, target_chars=1000, max_chars=2000,
+                relevance_keys=["code", "execution_result", "formulas"], requires_coding=True,
+                prompt_template=(
+                    "Full proofs; full code/repository URL; complete parameter priors/covariance matrix; "
+                    "distribution families; correlations; seeds; extended tables."
+                ),
+            ),
+        ]
+
+
+class AAAI2024Template(_MLCCFAMixin, PaperTemplate):
+    """AAAI 2024 论文模板 (CCF-A AI).
+
+    与 NeurIPS/ICML/ICLR 的关键差异：7+2 页硬限、双栏、偏应用/AI 通用。
+    评审更看 application value + 实验充分性，理论可略轻但严谨性清单不变。
+    """
+
+    name = "aaai_2024"
+    description = "AAAI 2024 人工智能顶会论文（CCF-A，英文，7+2页双栏应用导向）"
+    is_ccf_a = True
+
+    def get_system_prompt(self) -> str:
+        return """You are an expert AI researcher writing for AAAI 2024 (CCF-A).
+
+Writing requirements:
+1. Formal academic English; LaTeX notation for all math
+2. STRICT 7-page main limit + 2-page appendix (references excluded from 7); be concise
+3. aaai24.sty (letterpaper, 10pt, double-column)
+4. Sections: Abstract -> 1 Introduction -> 2 Related Work -> 3 Preliminaries ->
+   4 Method -> 5 Experiments -> 6 Discussion -> 7 Conclusion -> References -> Appendix
+
+AAAI-SPECIFIC EMPHASIS (reviewers prize application value + experimental thoroughness):
+- Motivate with a concrete real-world application scenario.
+- Experiments should be the strongest section: multiple datasets, baselines, ablations.
+- Theory welcome but can be lighter than ICML; rigor checklist still applies.
+
+RIGOR MANDATES (reject points):
+- Causal identification or explicit identified-vs-assumed split; no pure linear calibration.
+- Out-of-sample backtest with RMSE/MAE/CRPS.
+- >=5 baselines incl. systemic-risk/network models (DebtRank/SDECM, diffusion-spectral, ABM) where relevant.
+- Ablation >=3 components; sensitivity tornado; heterogeneity (hierarchical/panel).
+- Endogenous feedback loops (credit supply -> demand -> prices) with SVAR/structural justification.
+- Network loss-propagation layer when systemic risk is central.
+- Formalize all constructed quantities with reconciliation tables.
+- Release full code, parameter priors/covariances, distributions, correlations, seeds."""
+
+    def get_outline(self) -> List[ChapterSpec]:
+        return [
+            ChapterSpec(
+                id="abstract", title="Abstract", level=1,
+                min_chars=100, target_chars=150, max_chars=200,
+                relevance_keys=["problem_text", "method_summary", "key_results"],
+                prompt_template="150-250 words. problem, gap, approach, headline result+uncertainty, validation metric, application value.",
+            ),
+            ChapterSpec(
+                id="introduction", title="1 Introduction", level=1,
+                min_chars=700, target_chars=1000, max_chars=1400,
+                relevance_keys=["problem_text", "analysis", "method_summary"],
+                prompt_template=(
+                    "Concrete real-world application scenario; prior-work limitations; approach; 3-4 numbered "
+                    "contributions (>=1 on causal identification/backtesting/network layer); roadmap. Concise — 7-page limit."
+                ),
+            ),
+            ChapterSpec(
+                id="related_work", title="2 Related Work", level=1,
+                min_chars=500, target_chars=800, max_chars=1100,
+                relevance_keys=["problem_text", "analysis"],
+                prompt_template=(
+                    "Cluster by theme. MUST engage systemic-risk network models (SDECM+DebtRank/NEVA), "
+                    "diffusion-spectral contagion, ABM/dynamic-graph contagion, system-dynamics housing, "
+                    "empirical identification around implicit guarantees / central supervision."
+                ),
+            ),
+            ChapterSpec(
+                id="preliminaries", title="3 Preliminaries", level=1,
+                min_chars=400, target_chars=600, max_chars=900,
+                relevance_keys=["problem_text", "modeling", "formulas"],
+                prompt_template="Notation table; formalize constructed quantities with reconciliation tables; problem formulation.",
+            ),
+            ChapterSpec(
+                id="method", title="4 Method", level=1,
+                min_chars=1200, target_chars=1800, max_chars=2600,
+                relevance_keys=["modeling", "algorithm", "formulas"], requires_coding=True,
+                prompt_template=(
+                    "MUST cover: causal identification / identified-vs-assumed split; hierarchical/panel "
+                    "heterogeneity; endogenous feedback loop; network loss-propagation layer when systemic "
+                    "risk is central; derivation + algorithm box + complexity. Document all parameter priors."
+                ),
+            ),
+            ChapterSpec(
+                id="experiments", title="5 Experiments", level=1,
+                min_chars=1800, target_chars=2600, max_chars=3800,
+                relevance_keys=["execution_result", "result_analysis", "charts"], requires_coding=True,
+                prompt_template=(
+                    "STRONGEST section. MUST include: (1) out-of-sample backtest with RMSE/MAE/CRPS; "
+                    "(2) >=5 baselines incl. systemic-risk/network models; (3) ablation >=3 components; "
+                    "(4) sensitivity tornado + elasticity to priors; (5) heterogeneity decomposition; "
+                    "(6) multiple datasets; (7) std/CI over seeds."
+                ),
+            ),
+            ChapterSpec(
+                id="discussion", title="6 Discussion", level=1,
+                min_chars=300, target_chars=500, max_chars=700,
+                relevance_keys=["execution_result", "result_analysis"], requires_coding=True,
+                prompt_template="Limitations; broader impact; reproducibility statement.",
+            ),
+            ChapterSpec(
+                id="conclusion", title="7 Conclusion", level=1,
+                min_chars=250, target_chars=400, max_chars=600,
+                relevance_keys=["result_analysis", "method_summary"],
+            ),
+            ChapterSpec(
+                id="references", title="References", level=1,
+                min_chars=300, target_chars=500, max_chars=1000,
+                relevance_keys=["problem_text", "modeling"],
+            ),
+            ChapterSpec(
+                id="appendix", title="Appendix", level=1,
+                min_chars=500, target_chars=1000, max_chars=2000,
+                relevance_keys=["code", "execution_result", "formulas"], requires_coding=True,
+                prompt_template=(
+                    "Full code/repository URL; complete parameter priors/covariance matrix; distribution "
+                    "families; correlations; seeds; extended tables; proofs."
+                ),
+            ),
+        ]
+
+
 # 模板注册表
 _TEMPLATE_REGISTRY = {
     "math_modeling": MathModelingTemplate,
     "coursework": CourseworkTemplate,
     "financial_analysis": FinancialAnalysisTemplate,
     "neurips_2024": NeurIPS2024Template,
+    "iclr_2024": ICLR2024Template,
+    "icml_2024": ICML2024Template,
+    "aaai_2024": AAAI2024Template,
     "ieee_conference": IEEEConferenceTemplate,
     "acm_sigconf": ACMSigConfTemplate,
     "springer_lncs": SpringerLNCSWriterTemplate,

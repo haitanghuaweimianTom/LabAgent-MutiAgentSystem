@@ -526,6 +526,29 @@ class PaperGenerator:
             content = self._sanitize_chapter_content(content, chapter.title)
             content = self._ensure_length(content, chapter)
 
+        # 6b. CCF-A 严谨性批判（强制）：对 method/experiments/appendix 等章节
+        # 额外跑一遍 ccf_a_rigor 维度 + 模板 rigor_checklist 的硬性核对。
+        # 这一步直接对应审稿意见：线性标定无因果识别/无回测/无基线/无消融/
+        # 忽视异质性与网络传染/定义未形式化/代码不可复现。
+        if use_critique and self._needs_rigor_critique(chapter.id):
+            print(f"      [CCF-A] 启动严谨性批判 (ccf_a_rigor)...")
+            rigor_ctx = (
+                f"章节：{chapter.title}\n"
+                f"题目：{context.get('problem_text', '')[:600]}\n"
+                f"本章硬性要求：{chapter.prompt_template or '（见清单）'}"
+            )
+            content = self.critique_engine.critique_and_improve(
+                content=content,
+                content_type="ccf_a_rigor",
+                context=rigor_ctx,
+                max_iterations=1,
+                score_threshold=8.0,
+                min_chars=chapter.min_chars,
+                checklist=self._get_rigor_checklist(),
+            )
+            content = self._sanitize_chapter_content(content, chapter.title)
+            content = self._ensure_length(content, chapter)
+
         # 7. 硬截断：防止超过 max_chars
         content = self._cap_length(content, chapter)
 
@@ -557,6 +580,15 @@ class PaperGenerator:
 - 禁止空洞的套话和废话
 - 严格控制篇幅，不要过度展开
 """
+        # CCF-A 模板：注入章节级硬性要求（prompt_template）
+        if chapter.prompt_template:
+            prompt += f"\n【本章硬性要求 — 必须逐条满足，否则视为不合格】\n{chapter.prompt_template}\n"
+
+        # CCF-A 模板：注入整体严谨性检查清单（让生成阶段就内化拒稿点）
+        rigor_checklist = self._get_rigor_checklist()
+        if rigor_checklist:
+            checklist_items = "\n".join([f"  - {item}" for item in rigor_checklist])
+            prompt += f"\n【CCF-A 严谨性清单 — 本章相关的条目必须体现】\n{checklist_items}\n"
 
         if previous_summaries:
             prompt += f"\n【与前文的衔接 - 必须呼应以下内容】\n{previous_summaries}\n"
@@ -579,6 +611,20 @@ class PaperGenerator:
 7. 必须与本章大纲的每个要点对应
 """
         return prompt
+
+    def _get_rigor_checklist(self) -> List[str]:
+        """获取当前模板的 CCF-A 严谨性清单（非 CCF-A 模板返回空）。"""
+        try:
+            return list(self.template.get_rigor_checklist() or [])
+        except Exception:
+            return []
+
+    def _needs_rigor_critique(self, chapter_id: str) -> bool:
+        """该章节是否需要 ccf_a_rigor 批判（仅 CCF-A 模板的内核章节）。"""
+        try:
+            return bool(self.template.requires_rigor_critique(chapter_id))
+        except Exception:
+            return False
 
     def _get_previous_summaries(
         self,
@@ -645,6 +691,14 @@ class PaperGenerator:
         # 附录 -> 用 code
         if chapter_id == "appendix":
             parts.append("【代码说明】\n代码已附在附录中，请描述核心算法流程。")
+
+        # CCF-A 章节：补充回测/复现性摘要，使 method/experiments/appendix 能引用
+        if chapter_id in ["method", "experiments", "evaluation", "appendix", "discussion"]:
+            if memory_pool.get("validation_summary"):
+                parts.append(f"【回测/样本外验证摘要】\n{memory_pool['validation_summary'][:800]}")
+        if chapter_id in ["method", "implementation", "appendix"]:
+            if memory_pool.get("reproducibility_summary"):
+                parts.append(f"【复现性打包摘要】\n{memory_pool['reproducibility_summary'][:800]}")
 
         return "\n\n".join(parts)
 

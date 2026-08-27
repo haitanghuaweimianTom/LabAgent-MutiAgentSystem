@@ -389,7 +389,7 @@ class CodeExecutor:
         system_prompt: Optional[str] = None,
         data_files: Optional[Dict[str, str]] = None,
         filename: str = "solve.py",
-        use_claude_cli: bool = True,
+        use_claude_cli: bool = False,
     ) -> Dict[str, Any]:
         """
         一站式代码生成与执行
@@ -399,7 +399,7 @@ class CodeExecutor:
             system_prompt: 系统提示词
             data_files: 数据文件映射
             filename: 保存的代码文件名
-            use_claude_cli: 是否使用 Claude CLI（默认True）
+            use_claude_cli: 是否使用 Claude CLI（默认False，走 API Provider）
 
         Returns:
             Dict: {"code": str, "execution_result": dict, "success": bool}

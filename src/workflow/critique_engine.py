@@ -78,6 +78,24 @@ class CritiqueEngine:
             ("学术规范性", "公式编号、术语使用、引用格式是否规范"),
             ("深度分析", "是否超越表面描述，给出深入的分析和见解"),
         ],
+        # CCF-A 顶会专用的"严谨性"批判维度。
+        # 该维度直接对应 ICML/NeurIPS/IEEE/ACM 评审常见拒稿点（见审稿意见）：
+        # 线性标定无因果识别、无样本外回测、无基线对比、无消融/敏感性、
+        # 忽视异质性与网络传染、定义未形式化、代码不可复现。
+        # 由 PaperGenerator 在 CCF-A 模板的 method/experiments/appendix 等章节
+        # 生成后强制触发，并与模板的 rigor_checklist 联合打分。
+        "ccf_a_rigor": [
+            ("因果识别", "是否提供因果识别或显式区分'已识别'与'假设'部分，处理内生性/反向因果；而非仅线性标定弹性"),
+            ("样本外验证", "是否包含样本外回测/验证并报告 RMSE/MAE/CRPS；场景引擎若无预测验证应大幅扣分"),
+            ("基线对比", "是否对比至少 5 个基线，含系统性风险/网络基线（DebtRank/SDECM、扩散谱、ABM）；而非自说自话"),
+            ("消融与敏感性", "是否做消融实验(>=3 组件)与敏感性分析(tornado/结果对先验弹性)；而非仅报告点路径"),
+            ("异质性建模", "是否建模异质性(层级/面板)并报告跨单元离散度；而非仅全国/全局聚合"),
+            ("反馈环", "是否编码内生反馈环(如信贷供给->需求->价格)并验证方向与量级(SVAR/结构块)"),
+            ("网络传染层", "系统性风险为内核时是否加网络损失传染层(DebtRank/SDECM/扩散谱 PDE/TGNN)并与聚合块对比"),
+            ("定义形式化", "是否形式化所有构造量(如'土地净收入'、政策乘数)并给出原始输入到使用值的对账表"),
+            ("复现性", "是否公开完整代码、参数先验/协方差、分布、相关性、随机种子"),
+            ("局限陈述", "是否诚实陈述未被建模的渠道(recognition 实践、重组、表外等)与 threats to validity"),
+        ],
     }
 
     def __init__(self, call_llm: Callable[[str, Optional[str]], str]):
@@ -86,45 +104,6 @@ class CritiqueEngine:
             call_llm: LLM调用函数，签名 (prompt, system_prompt) -> str
         """
         self.call_llm = call_llm
-
-    def critique(
-        self,
-        content: str,
-        content_type: str,
-        context: Optional[str] = None,
-    ) -> CritiqueResult:
-        """
-        对内容进行多维度批判评估
-
-        Args:
-            content: 待评估的内容
-            content_type: 内容类型 (analysis/modeling/algorithm/paper_chapter)
-            context: 额外上下文（如题目描述）
-
-        Returns:
-            CritiqueResult: 批判结果
-        """
-        dimensions = self.DIMENSIONS.get(content_type, self.DIMENSIONS["paper_chapter"])
-
-        dim_text = "\n".join([f"{i+1}. {name}：{desc}" for i, (name, desc) in enumerate(dimensions)])
-
-        prompt = f"""请对以下内容进行严格的批判性评估。
-
-{context if context else ''}
-
-【待评估内容】
-{content[:4000]}
-
-【评估维度】
-{dim_text}
-
-要求：
-1. 对每个维度给出 1-10 分的评分（10分为完美）
-2. 给出具体的评论，指出具体的不足之处
-3. 给出 2-3 条可操作的改进建议
-
-输出严格的JSON格式，不要任何markdown代码块或其他文字：
-{{"overall_score": 7.5, "critiques": [{{"dimension": "思考深度", "score": 7, "comment": "...", "suggestions": ["...", "..."]}}]}}"""
 
     def _extract_json(self, text: str) -> dict:
         """从LLM响应中提取JSON对象。
@@ -219,14 +198,18 @@ class CritiqueEngine:
         content: str,
         content_type: str,
         context: Optional[str] = None,
+        checklist: Optional[List[str]] = None,
     ) -> CritiqueResult:
         """
         对内容进行多维度批判评估
 
         Args:
             content: 待评估的内容
-            content_type: 内容类型 (analysis/modeling/algorithm/paper_chapter)
+            content_type: 内容类型 (analysis/modeling/algorithm/paper_chapter/ccf_a_rigor)
             context: 额外上下文（如题目描述）
+            checklist: 可选的硬性检查清单（如 CCF-A 模板的 rigor_checklist）。
+                传入时，评审需逐条核对是否满足，未满足条目应给出低分与具体修改建议。
+                对 ccf_a_rigor 维度尤其重要——它把模板要求转化为可拒稿的硬约束。
 
         Returns:
             CritiqueResult: 批判结果
@@ -235,10 +218,20 @@ class CritiqueEngine:
 
         dim_text = "\n".join([f"{i+1}. {name}：{desc}" for i, (name, desc) in enumerate(dimensions)])
 
+        checklist_block = ""
+        if checklist:
+            checklist_items = "\n".join([f"  C{i+1}. {item}" for i, item in enumerate(checklist)])
+            checklist_block = f"""
+【硬性检查清单 — 逐条核对，未满足必须扣分并给出修改建议】
+{checklist_items}
+
+评分约束：若任一硬性条目未满足，对应维度不得超过 6 分；整体 overall_score 不得超过 7 分。
+"""
+
         prompt = f"""请对以下内容进行严格的批判性评估。
 
 {context if context else ''}
-
+{checklist_block}
 【待评估内容】
 {content[:4000]}
 
@@ -254,7 +247,16 @@ class CritiqueEngine:
 {{"overall_score": 7.5, "critiques": [{{"dimension": "思考深度", "score": 7, "comment": "...", "suggestions": ["...", "..."]}}]}}"""
 
         try:
-            response = self.call_llm(prompt, "你是一位严格的学术评审专家。你必须只输出JSON，不要任何其他文字。")
+            if content_type == "ccf_a_rigor":
+                sys_prompt = (
+                    "你是一位 CCF-A 顶会（ICML/NeurIPS/IEEE/ACM）资深领域主席。"
+                    "你以拒稿常见原因（线性标定无因果识别、无样本外回测、无基线对比、"
+                    "无消融/敏感性、忽视异质性与网络传染、定义未形式化、代码不可复现）"
+                    "为硬性审查标准。你必须只输出JSON，不要任何其他文字。"
+                )
+            else:
+                sys_prompt = "你是一位严格的学术评审专家。你必须只输出JSON，不要任何其他文字。"
+            response = self.call_llm(prompt, sys_prompt)
             data = self._extract_json(response)
 
             critiques = []
@@ -352,6 +354,7 @@ class CritiqueEngine:
         max_iterations: int = 2,
         score_threshold: float = 8.0,
         min_chars: int = 0,
+        checklist: Optional[List[str]] = None,
     ) -> str:
         """
         执行完整的 Critique-Improvement 循环
@@ -363,6 +366,7 @@ class CritiqueEngine:
             max_iterations: 最大迭代次数
             score_threshold: 评分阈值，超过则停止迭代
             min_chars: 最少字数要求
+            checklist: 硬性检查清单（CCF-A rigor_checklist），逐条核对
 
         Returns:
             str: 最终改进后的内容
@@ -371,7 +375,7 @@ class CritiqueEngine:
 
         for i in range(max_iterations):
             print(f"    [Critique] 第 {i+1}/{max_iterations} 轮评估...")
-            critique = self.critique(current, content_type, context)
+            critique = self.critique(current, content_type, context, checklist=checklist)
             print(f"    [Critique] 综合评分: {critique.overall_score:.1f}/10")
 
             # 打印各维度评分

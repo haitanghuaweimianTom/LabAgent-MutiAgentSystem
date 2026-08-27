@@ -31,11 +31,50 @@ except ImportError:
 _llm_provider_instance = None
 
 
+def _load_claude_settings_env() -> None:
+    """将 Claude Code 的 settings.json 中的 env 注入 os.environ。
+
+    覆盖顺序（低→高）：
+    1. 全局 ~/.claude/settings.json
+    2. 项目级 .claude/settings.json
+    3. 项目级 .claude/settings.local.json
+    已存在的环境变量不覆盖，方便用户显式指定。
+    """
+    if os.environ.get("DEFAULT_LLM_PROVIDER", "").lower() == "claude_cli":
+        return  # 用户显式要求 CLI，则不注入
+    candidates = [
+        Path.home() / ".claude" / "settings.json",
+        Path.cwd() / ".claude" / "settings.json",
+        Path.cwd() / ".claude" / "settings.local.json",
+    ]
+    for path in candidates:
+        try:
+            if not path.exists():
+                continue
+            data = json.loads(path.read_text(encoding="utf-8"))
+            env = data.get("env") or {}
+            for k, v in env.items():
+                if isinstance(v, str) and k not in os.environ:
+                    os.environ.setdefault(k, v)
+        except (OSError, ValueError, TypeError):
+            continue
+
+
 def _get_llm_provider():
-    """获取 LLM Provider 实例（惰性初始化）"""
+    """获取 LLM Provider 实例（惰性初始化）
+
+    默认优先使用 API Provider；只有显式配置 DEFAULT_LLM_PROVIDER=claude_cli
+    或完全没有任何可用 API 配置时才回退到 Claude CLI。
+    """
     global _llm_provider_instance
     if _llm_provider_instance is not None:
         return _llm_provider_instance
+
+    if not _LLM_PROVIDER_AVAILABLE:
+        return None
+
+    # 先注入 .claude/settings.json 的 env，使 API Provider 探测可用
+    _load_claude_settings_env()
 
     if not _LLM_PROVIDER_AVAILABLE:
         return None
@@ -77,11 +116,31 @@ def _get_llm_provider():
             manager.register(ProviderType.OLLAMA)
             _llm_provider_instance = manager
             print(f"[LLM] 使用 Ollama Provider (model={manager.get().config.model})")
-        else:
+        elif default_provider == "claude_cli" or (
+            not os.getenv("OPENAI_API_KEY")
+            and not os.getenv("ANTHROPIC_AUTH_TOKEN")
+            and not os.getenv("ANTHROPIC_API_KEY")
+            and not os.getenv("GEMINI_API_KEY")
+        ):
+            # 显式要求 CLI，或完全无可用的 API 配置时才走 Claude CLI
             manager = get_provider_manager()
             manager.register(ProviderType.CLAUDE_CLI)
             _llm_provider_instance = manager
             print(f"[LLM] 使用 Claude CLI Provider (model={manager.get().config.model})")
+        else:
+            # 默认优先走 Anthropic 兼容 API（如 litellm 代理）
+            manager = get_provider_manager()
+            config = ProviderConfig.from_env(ProviderType.ANTHROPIC)
+            if not config.api_key and os.getenv("ANTHROPIC_AUTH_TOKEN"):
+                config.api_key = os.getenv("ANTHROPIC_AUTH_TOKEN")
+            if os.getenv("ANTHROPIC_BASE_URL"):
+                config.api_host = os.getenv("ANTHROPIC_BASE_URL")
+                config.timeout = min(config.timeout, 300)
+            if os.getenv("ANTHROPIC_MODEL"):
+                config.model = os.getenv("ANTHROPIC_MODEL")
+            manager.register(ProviderType.ANTHROPIC, config)
+            _llm_provider_instance = manager
+            print(f"[LLM] 使用 Anthropic API Provider (model={manager.get().config.model})")
     except Exception as e:
         print(f"[LLM] Provider 初始化失败: {e}，将回退到 Claude CLI")
         _llm_provider_instance = None
@@ -338,6 +397,8 @@ class UnifiedWorkflow:
             "modeling_summary": "",      # 阶段2摘要
             "algorithm_summary": "",     # 阶段3算法摘要
             "results_summary": "",       # 阶段3结果摘要
+            "validation_summary": "",    # 阶段3b 回测/OOS 验证摘要（CCF-A）
+            "reproducibility_summary": "",# 阶段3c 复现性打包摘要（CCF-A）
             "chapter_summaries": {},     # 论文各章摘要，key=chapter_id
         }
 
@@ -416,6 +477,17 @@ class UnifiedWorkflow:
             self.memory_pool["results_summary"] = self._summarize_results(solving)
             self._save_text("stage_3_algorithm/algorithm_summary.md", self.memory_pool["algorithm_summary"])
             self._save_text("stage_6_result_analysis/results_summary.md", self.memory_pool["results_summary"])
+
+            # CCF-A: Stage 3b 样本外回测 + Stage 3c 复现性打包
+            if self._is_ccf_a_template():
+                print("  [CCF-A] 启动 Stage 3b 回测 + Stage 3c 复现性打包...")
+                validation = self._stage_validation_backtest(solving)
+                reproducibility = self._stage_reproducibility_packaging(solving, validation)
+                self.context["validation"] = validation
+                self.context["reproducibility"] = reproducibility
+                shared["validation"] = validation
+                shared["reproducibility"] = reproducibility
+
             if ms:
                 ms.save_agent_summary("求解工程师", self.memory_pool["algorithm_summary"])
                 ms.save_shared_summary("results_summary.md", self.memory_pool["results_summary"])
@@ -497,6 +569,24 @@ class UnifiedWorkflow:
         return paper
 
     # ========================================================================
+    # CCF-A 模板判定与严谨性清单
+    # ========================================================================
+
+    def _is_ccf_a_template(self) -> bool:
+        """当前模板是否为 CCF-A 顶会模板（决定是否触发 rigor 批判/回测/打包）。"""
+        try:
+            return bool(getattr(self.paper_generator.template, "is_ccf_a", False))
+        except Exception:
+            return False
+
+    def _get_rigor_checklist(self) -> list:
+        """获取当前模板的 CCF-A 严谨性清单（非 CCF-A 返回空）。"""
+        try:
+            return list(self.paper_generator.template.get_rigor_checklist() or [])
+        except Exception:
+            return []
+
+    # ========================================================================
     # Stage 1: 问题分析
     # ========================================================================
 
@@ -534,6 +624,7 @@ class UnifiedWorkflow:
                 self.problem_text,
                 data_descriptions=data_desc_text,
                 num_ideas=5,
+                force_structural=self._is_ccf_a_template(),
             )
             ideation_context = ideation.format_for_analysis(ideas)
             self.context["ideation_ideas"] = ideas
@@ -735,13 +826,26 @@ class UnifiedWorkflow:
             )
 
             # 2. 公式生成（Actor）
+            # CCF-A 模板：强制要求网络/反馈/异质性/因果识别结构，避免线性标定
+            ccf_a_block = ""
+            if self._is_ccf_a_template():
+                ccf_a_block = """
+【CCF-A 严谨性硬性要求 — 必须在模型中体现，缺失即拒稿】
+1. 因果识别：明确区分"已识别"与"假设"的弹性；处理内生性/反向因果（如信贷供给↔房价）
+2. 异质性：使用层级/面板结构刻画跨单元（省份/银行/企业）差异，禁止仅全国聚合
+3. 反馈环：编码内生反馈（如银行资本约束→信贷供给→住房需求→房价→地价→城投→银行）
+4. 网络传染：若涉及系统性风险，必须包含网络损失传染层（DebtRank / SDECM / 扩散谱 PDE / TGNN），并与聚合块对比
+5. 形式化：所有构造量（如"土地净收入"、政策乘数）必须给出从原始输入到使用值的对账公式
+6. 参数先验：列出所有参数的先验分布、取值范围、来源（用于后续复现性打包）
+"""
+
             formulas_prompt = f"""基于以下分析建立数学模型。
 
 任务分析:
 {task_analysis[:1200]}
 
 {algo_context}
-
+{ccf_a_block}
 要求：
 1. 定义变量和参数（表格形式）
 2. 建立核心数学公式（LaTeX格式，公式编号）
@@ -757,16 +861,30 @@ class UnifiedWorkflow:
             )
 
             # 3. Critique-Improvement
+            # CCF-A 模板：用 ccf_a_rigor 维度批判建模本身（而非仅 paper_chapter），
+            # 把"模型建错了"在 Stage 2 就拦截下来，避免论文阶段才暴露。
             if self.use_critique:
-                print(f"    对公式进行Critique-Improvement...")
-                formulas = self.critique_engine.critique_and_improve(
-                    content=formulas,
-                    content_type="modeling",
-                    context=f"任务: {task_node.description}\n{self.problem_text[:1000]}",
-                    max_iterations=1,
-                    score_threshold=8.0,
-                    min_chars=1500,
-                )
+                if self._is_ccf_a_template():
+                    print(f"    [CCF-A] 对建模进行 ccf_a_rigor 批判...")
+                    formulas = self.critique_engine.critique_and_improve(
+                        content=formulas,
+                        content_type="ccf_a_rigor",
+                        context=f"任务: {task_node.description}\n{self.problem_text[:1000]}",
+                        max_iterations=1,
+                        score_threshold=8.0,
+                        min_chars=1500,
+                        checklist=self._get_rigor_checklist(),
+                    )
+                else:
+                    print(f"    对公式进行Critique-Improvement...")
+                    formulas = self.critique_engine.critique_and_improve(
+                        content=formulas,
+                        content_type="modeling",
+                        context=f"任务: {task_node.description}\n{self.problem_text[:1000]}",
+                        max_iterations=1,
+                        score_threshold=8.0,
+                        min_chars=1500,
+                    )
 
             # 保存结果
             self.coordinator.save_task_result(
@@ -851,7 +969,7 @@ class UnifiedWorkflow:
             system_prompt="你是Python编程专家，只输出代码，不输出任何解释。",
             data_files=self.data_files,
             filename="solve.py",
-            use_claude_cli=True,
+            use_claude_cli=False,
         )
         print(f"  [Stage 3.2] 代码生成完成，success={result.get('success', False)}")
 
@@ -873,6 +991,258 @@ class UnifiedWorkflow:
             "interpretation": interpretation,
             "success": result.get("success", False),
         }
+
+    # ========================================================================
+    # Stage 3b: 样本外回测/验证（CCF-A 强制）
+    # ========================================================================
+    #
+    # 审稿意见核心拒稿点之一："No out-of-sample validation or backtesting is
+    # provided... no quantitative scoring (RMSE/CRPS) of the scenario engine is
+    # reported." 本阶段在 Stage 3 求解后，强制生成并运行一个回测脚本：
+    # 用前期数据估计参数、对后期做点预测+区间预测，输出 RMSE/MAE/CRPS，
+    # 结果写入 memory_pool["validation_summary"] 供论文 experiments 章引用。
+    # 非 CCF-A 模板跳过本阶段。
+
+    def _stage_validation_backtest(self, solving: Dict) -> Dict[str, Any]:
+        """样本外回测阶段：生成并运行回测脚本，产出 RMSE/MAE/CRPS。"""
+        if not self._is_ccf_a_template():
+            return {"skipped": True, "reason": "non-CCF-A template"}
+
+        print("  [Stage 3b] CCF-A 样本外回测/验证...")
+        code = solving.get("code", "")
+        execution_result = solving.get("execution_result", {})
+        formulas = self.context.get("formulas", "")
+
+        backtest_prompt = f"""请基于以下已运行的模型代码与结果，编写一个**样本外回测脚本** backtest.py。
+
+【已运行模型代码（参考其数据加载与模型结构）】
+{code[:2500]}
+
+【模型核心公式】
+{formulas[:1500]}
+
+【已有计算结果（含可用数据键名）】
+{json.dumps(execution_result, ensure_ascii=False, indent=2)[:1500]}
+
+【数据文件】
+{json.dumps(self.data_files, ensure_ascii=False, indent=2)}
+
+硬性要求：
+1. 必须切分 train/test（如时间序列用前期训练、后期验证；若无明确时间，用 K-fold）
+2. 在 train 上估计参数，在 test 上做点预测 + 区间预测
+3. 必须计算并输出 RMSE / MAE / CRPS（连续等级概率分数）三个指标
+4. 若模型本身是情景模拟而非预测，则做"历史回填"：用历史观测校验模型对历史期的复现精度，并报告复现误差
+5. 结果写入：
+   import os, json
+   output_dir = os.environ.get('OUTPUT_DIR', '.')
+   out_path = os.path.join(output_dir, 'execution', 'backtest_metrics.json')
+   os.makedirs(os.path.dirname(out_path), exist_ok=True)
+   with open(out_path, 'w') as f:
+       json.dump({{"rmse": ..., "mae": ..., "crps": ..., "train_period": ..., "test_period": ..., "per_metric": {{}}}}, f, indent=2)
+6. 代码精简（<=150 行），开头是 import，含 main()，60 秒内完成
+7. 若数据不足以做严格回测，输出 metrics 全为 None 并在 backtest_notes 字段说明原因
+
+输出纯 Python 代码，不要 markdown 代码块标记。"""
+
+        result = self.code_executor.generate_and_run(
+            prompt=backtest_prompt,
+            system_prompt="你是Python回测专家，只输出代码，不输出任何解释。",
+            data_files=self.data_files,
+            filename="backtest.py",
+            use_claude_cli=False,
+        )
+
+        backtest_metrics = result.get("execution_result", {})
+        backtest_code = result.get("code", "")
+
+        # 也尝试从 execution/backtest_metrics.json 读取（脚本约定的写入路径）
+        bt_path = self.output_dir / "execution" / "backtest_metrics.json"
+        if bt_path.exists():
+            try:
+                with open(bt_path, "r", encoding="utf-8") as f:
+                    backtest_metrics = json.load(f)
+            except Exception:
+                pass
+
+        self._save_text("stage_5_execution/backtest.py", backtest_code)
+        self._save_json("stage_5_execution/backtest_metrics.json", backtest_metrics)
+
+        # 生成结构化摘要供论文 experiments 章引用
+        summary = self._summarize_validation(backtest_metrics)
+        if hasattr(self, "memory_pool") and isinstance(self.memory_pool, dict):
+            self.memory_pool["validation_summary"] = summary
+        self._save_text("stage_5_execution/validation_summary.md", summary)
+        if self.memory_system:
+            self.memory_system.store_shared("validation_summary", summary, metadata={"stage": "3b"})
+
+        return {
+            "backtest_code": backtest_code,
+            "backtest_metrics": backtest_metrics,
+            "validation_summary": summary,
+            "success": result.get("success", False),
+        }
+
+    def _summarize_validation(self, metrics: Dict) -> str:
+        """把回测指标提炼成论文可直接引用的摘要。"""
+        if not metrics:
+            return "（回测未产出指标，请在论文中诚实说明数据不足以做严格样本外验证。）"
+        mtext = json.dumps(metrics, ensure_ascii=False, indent=2)[:1200]
+        prompt = f"""请对以下样本外回测指标进行结构化提炼，生成一份"回测验证摘要"（300-400字），供论文 Experiments 章节直接引用。
+
+【回测指标】
+{mtext}
+
+摘要要求：
+1. 训练/测试期划分（1句话）
+2. 三个核心指标数值：RMSE / MAE / CRPS（若有）
+3. 各分项指标的对比（如有多目标，列出每个目标的误差）
+4. 一句话结论：模型预测技能是否可接受（CRPS<0.3 或 RMSE<历史波动率一般可接受）
+5. 若指标为 None，说明数据不足的原因与拟采取的替代验证（历史回填/敏感性）
+
+输出纯文本，不要JSON。"""
+        try:
+            return _call_llm(prompt, "你是计量经济学与预测验证专家。")
+        except Exception:
+            return f"回测指标：{mtext}"
+
+    # ========================================================================
+    # Stage 3c: 复现性打包（CCF-A 强制）
+    # ========================================================================
+    #
+    # 审稿意见核心拒稿点："code is not available for reproducibility...
+    # Monte Carlo priors and parameter distributions are not fully documented
+    # (sources, ranges, correlations)." 本阶段聚合代码、参数先验、协方差、
+    # 随机种子、依赖快照、构造量对账表，落盘成 reproducibility_bundle/，
+    # 并生成 memory_pool["reproducibility_summary"] 供 appendix 引用。
+
+    def _stage_reproducibility_packaging(self, solving: Dict, validation: Dict) -> Dict[str, Any]:
+        """复现性打包：代码/参数/种子/依赖/对账表聚合落盘。"""
+        if not self._is_ccf_a_template():
+            return {"skipped": True, "reason": "non-CCF-A template"}
+
+        print("  [Stage 3c] CCF-A 复现性打包...")
+        bundle_dir = self.output_dir / "reproducibility_bundle"
+        bundle_dir.mkdir(parents=True, exist_ok=True)
+
+        code = solving.get("code", "")
+        execution_result = solving.get("execution_result", {})
+        backtest_code = validation.get("backtest_code", "") if validation else ""
+        formulas = self.context.get("formulas", "")
+
+        # 1. 复制求解代码与回测代码
+        (bundle_dir / "solve.py").write_text(code, encoding="utf-8")
+        if backtest_code:
+            (bundle_dir / "backtest.py").write_text(backtest_code, encoding="utf-8")
+
+        # 2. 让 LLM 从模型公式与代码中抽取参数先验表 + 构造量对账表 + 随机种子
+        repro_prompt = f"""请从以下模型公式与代码中抽取复现性所需的全部信息，输出严格 JSON。
+
+【模型公式】
+{formulas[:2500]}
+
+【求解代码】
+{code[:2500]}
+
+【已有计算结果（含数据键名）】
+{json.dumps(execution_result, ensure_ascii=False, indent=2)[:1500]}
+
+请输出 JSON，包含以下字段：
+{{
+  "parameter_priors": [
+    {{"name": "参数名", "symbol": "符号", "distribution": "分布族如 Normal/Uniform/LogNormal", "mean_or_range": "均值或范围", "source": "来源(文献/标定/假设)", "correlated_with": ["其他参数名"]}}
+  ],
+  "random_seeds": {{"main_seed": 42, "monte_carlo_seed": 123, "backtest_seed": 456}},
+  "constructed_quantities": [
+    {{"name": "如 土地净收入", "formula": "LaTeX公式", "raw_inputs": ["原始输入1","原始输入2"], "reconciliation": "从原始输入到使用值的对账步骤"}}
+  ],
+  "data_files": [{{"name": "文件名", "role": "训练/测试/校准", "preprocessing": "预处理步骤"}}],
+  "compute_environment": {{"python": "3.x", "key_packages": ["numpy","pandas","..."], "hardware": "CPU/GPU"}}
+}}
+
+只输出 JSON，不要任何其他文字。"""
+
+        try:
+            repro_json_text = _call_llm(repro_prompt, "你是机器学习复现性专家，只输出JSON。")
+            import re as _re
+            m = _re.search(r'\{.*\}', repro_json_text, _re.DOTALL)
+            repro_data = json.loads(m.group()) if m else {}
+        except Exception as e:
+            print(f"  [Stage 3c] 参数抽取失败: {e}")
+            repro_data = {"error": str(e)}
+
+        # 3. 固定随机种子声明
+        seeds = repro_data.get("random_seeds", {"main_seed": 42, "monte_carlo_seed": 123, "backtest_seed": 456})
+        (bundle_dir / "seeds.json").write_text(json.dumps(seeds, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        # 4. 参数先验表
+        (bundle_dir / "parameter_priors.json").write_text(
+            json.dumps(repro_data.get("parameter_priors", []), ensure_ascii=False, indent=2), encoding="utf-8")
+
+        # 5. 构造量对账表
+        (bundle_dir / "constructed_quantities.json").write_text(
+            json.dumps(repro_data.get("constructed_quantities", []), ensure_ascii=False, indent=2), encoding="utf-8")
+
+        # 6. 依赖快照
+        try:
+            import subprocess as _sp
+            req = _sp.run(["pip", "freeze"], capture_output=True, text=True, timeout=30)
+            (bundle_dir / "requirements_frozen.txt").write_text(req.stdout, encoding="utf-8")
+        except Exception:
+            (bundle_dir / "requirements_frozen.txt").write_text("# pip freeze 失败，请手动记录依赖", encoding="utf-8")
+
+        # 7. README
+        readme = f"""# Reproducibility Bundle (CCF-A)
+
+本目录由系统自动生成，对应审稿意见的复现性要求。
+
+## 文件清单
+- `solve.py` — 主求解代码
+- `backtest.py` — 样本外回测代码（若生成）
+- `seeds.json` — 随机种子声明
+- `parameter_priors.json` — 参数先验分布/范围/来源/相关性
+- `constructed_quantities.json` — 构造量对账表（如"土地净收入"从原始输入到使用值）
+- `requirements_frozen.txt` — 依赖快照
+
+## 随机种子
+{json.dumps(seeds, ensure_ascii=False, indent=2)}
+
+## 复现步骤
+1. 创建环境：`python -m venv venv && source venv/bin/activate && pip install -r requirements_frozen.txt`
+2. 设置 `OUTPUT_DIR` 环境变量指向输出目录
+3. 运行 `python solve.py`，结果写入 `$OUTPUT_DIR/execution/results.json`
+4. 运行 `python backtest.py`（若有），回测指标写入 `$OUTPUT_DIR/execution/backtest_metrics.json`
+"""
+        (bundle_dir / "README.md").write_text(readme, encoding="utf-8")
+
+        # 8. 生成结构化摘要供论文 appendix 引用
+        summary = self._summarize_reproducibility(repro_data, bundle_dir)
+        if hasattr(self, "memory_pool") and isinstance(self.memory_pool, dict):
+            self.memory_pool["reproducibility_summary"] = summary
+        self._save_text("reproducibility_bundle/reproducibility_summary.md", summary)
+        if self.memory_system:
+            self.memory_system.store_shared("reproducibility_summary", summary, metadata={"stage": "3c"})
+
+        return {
+            "bundle_dir": str(bundle_dir),
+            "repro_data": repro_data,
+            "reproducibility_summary": summary,
+        }
+
+    def _summarize_reproducibility(self, repro_data: Dict, bundle_dir: Path) -> str:
+        """复现性打包摘要，供论文 appendix 直接引用。"""
+        n_params = len(repro_data.get("parameter_priors", []))
+        n_quant = len(repro_data.get("constructed_quantities", []))
+        seeds = repro_data.get("random_seeds", {})
+        seeds_str = ", ".join(f"{k}={v}" for k, v in seeds.items()) if seeds else "未声明"
+        return (
+            f"复现性打包已完成，产物位于 `{bundle_dir.name}/`。\n"
+            f"- 参数先验表：{n_params} 个参数（分布/范围/来源/相关性）→ `parameter_priors.json`\n"
+            f"- 构造量对账表：{n_quant} 个构造量（如土地净收入、政策乘数）→ `constructed_quantities.json`\n"
+            f"- 随机种子：{seeds_str} → `seeds.json`\n"
+            f"- 依赖快照 → `requirements_frozen.txt`\n"
+            f"- 主代码 → `solve.py`，回测代码 → `backtest.py`\n"
+            f"- 复现步骤见 `README.md`。"
+        )
 
     def _design_algorithm(self, modeling: Dict) -> str:
         """设计求解算法"""
@@ -896,7 +1266,7 @@ class UnifiedWorkflow:
         return _call_llm(prompt, "你是算法设计专家。")
 
     def _design_algorithm_with_claude_cli(self, modeling: Dict) -> str:
-        """使用 Claude Code CLI 设计求解算法（默认方式）"""
+        """设计求解算法（默认走 API Provider，即 _call_llm）"""
         formulas = modeling.get("formulas", "")
 
         prompt = f"""基于以下数学模型，设计详细的求解算法。
@@ -916,22 +1286,23 @@ class UnifiedWorkflow:
 
 输出至少800字的算法设计文档。输出纯文本，不要包含 markdown 代码块标记。"""
 
-        if not self._claude_path:
-            print("    [Algorithm] Claude CLI 不可用，回退到 API...")
-            return _call_llm(prompt, "你是算法设计专家。")
-
-        full_prompt = f"你是算法设计专家，擅长为数学建模问题设计高效求解算法。\n\n{prompt}"
-
-        cmd = [
-            self._claude_path,
-            "-p",
-            "--model", "sonnet",
-            "--output-format", "json",
-            full_prompt,
-        ]
-
-        print("    [Algorithm] 调用 Claude CLI 设计算法...")
+        # 默认走 API Provider（_call_llm 已支持 API Provider，仅在无可用 API 时回退 CLI）
+        print("    [Algorithm] 调用 LLM 设计算法...")
         try:
+            return _call_llm(prompt, "你是算法设计专家。")
+        except Exception as e:
+            print(f"    [Algorithm] API 设计失败: {e}，回退到 Claude CLI...")
+            if not self._claude_path:
+                raise
+
+            full_prompt = f"你是算法设计专家，擅长为数学建模问题设计高效求解算法。\n\n{prompt}"
+            cmd = [
+                self._claude_path,
+                "-p",
+                "--model", "sonnet",
+                "--output-format", "json",
+                full_prompt,
+            ]
             proc = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
@@ -941,8 +1312,7 @@ class UnifiedWorkflow:
 
             if proc.returncode != 0:
                 error_msg = stderr.decode("utf-8", errors="replace")
-                print(f"    [Algorithm] Claude CLI 失败: {error_msg[:200]}，回退到 API")
-                return _call_llm(prompt, "你是算法设计专家。")
+                raise RuntimeError(f"Claude CLI 算法设计失败: {error_msg[:500]}")
 
             stdout_text = stdout.decode("utf-8", errors="replace").strip()
             try:
@@ -950,7 +1320,6 @@ class UnifiedWorkflow:
                 result = data.get("result", "")
                 if isinstance(result, str):
                     text = result.strip()
-                    # Strip markdown fences if present
                     if text.startswith("```"):
                         lines = text.splitlines()
                         if lines[0].startswith("```"):
@@ -961,9 +1330,7 @@ class UnifiedWorkflow:
                     return text
             except json.JSONDecodeError:
                 return stdout_text.strip()
-        except subprocess.TimeoutExpired:
-            print("    [Algorithm] Claude CLI 超时，回退到 API")
-            return _call_llm(prompt, "你是算法设计专家。")
+            return stdout_text.strip()
 
     def _interpret_results(self, execution_result: Dict, modeling: Dict) -> str:
         """解读计算结果"""
@@ -1009,6 +1376,8 @@ class UnifiedWorkflow:
             "modeling_summary": self.memory_pool.get("modeling_summary", ""),
             "algorithm_summary": self.memory_pool.get("algorithm_summary", ""),
             "results_summary": self.memory_pool.get("results_summary", ""),
+            "validation_summary": self.memory_pool.get("validation_summary", ""),
+            "reproducibility_summary": self.memory_pool.get("reproducibility_summary", ""),
         }
         paper = self.paper_generator.generate_paper_v2(
             context=self.context,
@@ -1263,10 +1632,14 @@ class UnifiedWorkflow:
             print(f"  Word导出失败: {e}")
 
     def _convert_to_tex(self, md_path: Path):
+        # CCF-A 等模板：用 template_name 作为 template_id，让 tex_exporter 从
+        # paper_templates 注册表取正确的 documentclass/cls_file/sty_files。
         template_dir = Path(__file__).parent.parent / "config" / "latex_templates" / "mcm"
         tex_path = md_path.parent / "MathModeling_Paper.tex"
         try:
-            converter = MarkdownToTexConverter(template_dir, md_path.parent)
+            converter = MarkdownToTexConverter(
+                template_dir, md_path.parent, template_id=self.template_name
+            )
             converter.export(md_path, tex_path)
             print(f"  论文已导出为LaTeX: {tex_path}")
         except Exception as e:

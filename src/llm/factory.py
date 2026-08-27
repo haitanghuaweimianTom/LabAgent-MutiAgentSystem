@@ -15,6 +15,7 @@ from .providers.anthropic_provider import AnthropicProvider
 from .providers.gemini_provider import GeminiProvider
 from .providers.ollama_provider import OllamaProvider
 from .providers.claude_cli_provider import ClaudeCLIProvider
+from .providers.minimax_provider import MiniMaxProvider
 
 
 class LLMProviderFactory:
@@ -26,6 +27,7 @@ class LLMProviderFactory:
         ProviderType.GEMINI: GeminiProvider,
         ProviderType.OLLAMA: OllamaProvider,
         ProviderType.CLAUDE_CLI: ClaudeCLIProvider,
+        ProviderType.MINIMAX: MiniMaxProvider,
     }
 
     @classmethod
@@ -50,6 +52,8 @@ class LLMProviderFactory:
     @classmethod
     def _detect_provider_from_env(cls) -> ProviderType:
         """根据环境变量自动检测 Provider 类型"""
+        if os.getenv("MINIMAX_API_KEY"):
+            return ProviderType.MINIMAX
         if os.getenv("OPENAI_API_KEY"):
             return ProviderType.OPENAI
         if os.getenv("ANTHROPIC_API_KEY"):
@@ -78,6 +82,7 @@ class LLMProviderFactory:
             ProviderType.GEMINI: "Google Gemini API",
             ProviderType.OLLAMA: "Ollama 本地模型",
             ProviderType.CLAUDE_CLI: "Claude Code CLI",
+            ProviderType.MINIMAX: "MiniMax-M3 (500K context, 90% auto-compress)",
         }
 
 

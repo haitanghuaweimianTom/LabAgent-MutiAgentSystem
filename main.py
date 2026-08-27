@@ -49,7 +49,8 @@ def main():
                        help='全自动生成论文（推荐）')
     parser.add_argument('--template', type=str, default='math_modeling',
                        choices=['math_modeling', 'coursework', 'financial_analysis',
-                                'neurips_2024', 'ieee_conference', 'acm_sigconf',
+                                'neurips_2024', 'iclr_2024', 'icml_2024', 'aaai_2024',
+                                'ieee_conference', 'acm_sigconf',
                                 'springer_lncs', 'research_survey'],
                        help='论文模板类型（默认: math_modeling）')
     parser.add_argument('--output-dir', type=str, default='work',
@@ -78,6 +79,9 @@ def main():
         print("  python main.py --auto --template coursework        # 生成课程作业论文")
         print("  python main.py --auto --template financial_analysis # 生成金融分析报告")
         print("  python main.py --auto --template neurips_2024      # 生成 NeurIPS 2024 论文")
+        print("  python main.py --auto --template iclr_2024         # 生成 ICLR 2024 论文")
+        print("  python main.py --auto --template icml_2024         # 生成 ICML 2024 论文")
+        print("  python main.py --auto --template aaai_2024         # 生成 AAAI 2024 论文")
         print("  python main.py --auto --template ieee_conference   # 生成 IEEE 会议论文")
         print("  python main.py --auto --template acm_sigconf       # 生成 ACM SIGCONF 论文")
         print("  python main.py --auto --template springer_lncs    # 生成 Springer LNCS 论文")
