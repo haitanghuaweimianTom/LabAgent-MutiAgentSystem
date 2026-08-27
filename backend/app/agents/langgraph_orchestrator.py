@@ -4036,7 +4036,19 @@ class LangGraphOrchestrator:
             #    PROTECTED_FIELDS(latex_code/numerical_results/key_findings/...) 永不裁剪。
             #    _fabrication_flags/_fabrication_score 不在 DROPPABLE_FIELDS，故下游
             #    fact_check 的防编造检测不受影响。
-            stats = compressor.maybe_compress(task_id, results, llm_caller=llm_caller)
+            #
+            # v8.5: 自定义上下文长度 + 自动压缩阈值（默认 500K / 推理 512K / 90%）。
+            # 读 LLM_MAX_CONTEXT_LENGTH / LLM_AUTO_COMPRESS_RATIO 环境变量。
+            import os as _os
+            _max_ctx = int(_os.getenv("LLM_MAX_CONTEXT_LENGTH", "500000"))
+            _ratio = float(_os.getenv("LLM_AUTO_COMPRESS_RATIO", "0.9"))
+            stats = compressor.maybe_compress(
+                task_id,
+                results,
+                llm_caller=llm_caller,
+                max_context_length=_max_ctx,
+                auto_compress_ratio=_ratio,
+            )
 
             # 6) 写回结果存储（resolve 出来的是副本，必须回写 store）
             ref_update: Dict[str, Any] = {}

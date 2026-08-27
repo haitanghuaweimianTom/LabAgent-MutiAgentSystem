@@ -42,6 +42,9 @@ MODEL_CONTEXT_WINDOWS = {
     "gpt-4o": 128_000,
     "gpt-4o-mini": 128_000,
     "kimi": 128_000,
+    "minimax": 500_000,
+    "minimax-m3": 500_000,
+    "MiniMax-M3": 500_000,
     "default": 128_000,
 }
 
@@ -99,11 +102,20 @@ class TokenBudgetManager:
         model_key: str = "default",
         allocation: Optional[Dict[str, float]] = None,
         safety_ratio: float = 0.85,
+        max_context_length: Optional[int] = None,
+        auto_compress_ratio: float = 0.9,
     ):
         if self._initialized:
             return
         self.model_key = model_key
-        self.total_budget = int(MODEL_CONTEXT_WINDOWS.get(model_key, MODEL_CONTEXT_WINDOWS["default"]) * safety_ratio)
+        if max_context_length is not None and max_context_length > 0:
+            base = max_context_length
+        else:
+            base = MODEL_CONTEXT_WINDOWS.get(model_key, MODEL_CONTEXT_WINDOWS["default"])
+        self.max_context_length = base
+        self.auto_compress_ratio = auto_compress_ratio
+        self.auto_compress_threshold = int(base * auto_compress_ratio)
+        self.total_budget = int(base * safety_ratio)
         self.allocation = allocation or DEFAULT_BUDGET_ALLOCATION
         self.budgets: Dict[str, TokenBudget] = {}
         self._build_budgets()
@@ -115,14 +127,30 @@ class TokenBudgetManager:
         for category, ratio in self.allocation.items():
             self.budgets[category] = TokenBudget(total=int(self.total_budget * ratio))
 
-    def reconfigure(self, model_key: str, allocation: Optional[Dict[str, float]] = None):
+    def reconfigure(
+        self,
+        model_key: str,
+        allocation: Optional[Dict[str, float]] = None,
+        max_context_length: Optional[int] = None,
+        auto_compress_ratio: float = 0.9,
+    ):
         """运行时重新配置（切换模型时调用）。"""
         self.model_key = model_key
-        self.total_budget = MODEL_CONTEXT_WINDOWS.get(model_key, MODEL_CONTEXT_WINDOWS["default"])
+        if max_context_length is not None and max_context_length > 0:
+            base = max_context_length
+        else:
+            base = MODEL_CONTEXT_WINDOWS.get(model_key, MODEL_CONTEXT_WINDOWS["default"])
+        self.max_context_length = base
+        self.auto_compress_ratio = auto_compress_ratio
+        self.auto_compress_threshold = int(base * auto_compress_ratio)
+        self.total_budget = base
         if allocation:
             self.allocation = allocation
         self._build_budgets()
-        logger.info(f"TokenBudgetManager 重新配置: model={model_key}, total={self.total_budget}")
+        logger.info(
+            f"TokenBudgetManager 重新配置: model={model_key}, total={self.total_budget}, "
+            f"auto_compress_at={self.auto_compress_threshold} ({auto_compress_ratio:.0%})"
+        )
 
     def reserve(self, category: str, tokens: int) -> bool:
         """为某个类别预留 tokens，成功返回 True。"""
@@ -178,6 +206,23 @@ class TokenBudgetManager:
         }
 
 
-def get_token_budget_manager(model_key: str = "default") -> TokenBudgetManager:
-    """获取全局单例。"""
-    return TokenBudgetManager(model_key=model_key)
+def get_token_budget_manager(
+    model_key: str = "default",
+    max_context_length: Optional[int] = None,
+    auto_compress_ratio: float = 0.9,
+) -> TokenBudgetManager:
+    """获取全局单例。
+
+    Args:
+        model_key: 模型 key（MODEL_CONTEXT_WINDOWS 中的键）。
+        max_context_length: 自定义上下文长度（覆盖默认值），如 MiniMax-M3 的 500_000。
+        auto_compress_ratio: 自动压缩阈值比例（0-1，默认 0.9）。
+    """
+    # Singleton: 在已经初始化的情况下，重新配置而不是新建实例。
+    mgr = TokenBudgetManager.__new__(TokenBudgetManager)
+    mgr.__init__(
+        model_key=model_key,
+        max_context_length=max_context_length,
+        auto_compress_ratio=auto_compress_ratio,
+    )
+    return mgr

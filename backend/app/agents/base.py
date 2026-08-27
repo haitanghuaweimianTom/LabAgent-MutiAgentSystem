@@ -753,6 +753,41 @@ class BaseAgent(ABC):
         """执行任务"""
         pass
 
+    def before_execute(
+        self,
+        task_id: str,
+        state: Optional[Dict[str, Any]] = None,
+    ) -> Any:
+        """执行前的自动压缩钩子（v8.5+）。
+
+        当累计上下文（state["results"]）≥ ``max_context_length × ratio`` 时
+        自动触发压缩。Orchestrator 应在调用 ``execute()`` 前调用此方法。
+
+        默认配置（M3）：500K 上下文（推理 Agent 512K），0.9 触发。
+        可通过环境变量 ``LLM_MAX_CONTEXT_LENGTH`` / ``LLM_AUTO_COMPRESS_RATIO`` 覆盖。
+
+        Returns:
+            :class:`CompressionStats`（level_used="none" 表示未触发压缩）
+        """
+        from ..core.auto_compress_hook import get_auto_compress_hook
+        from ..core.context_compressor import CompressionStats
+
+        hook = get_auto_compress_hook()
+        results = (state or {}).get("results") or {}
+        # 兜底：state 里没 results（早期调用）→ 空 stats
+        if not isinstance(results, dict):
+            return CompressionStats()
+        try:
+            return hook.before_agent(
+                task_id=task_id,
+                agent_name=self.name,
+                results=results,
+                llm_caller=getattr(self, "call_llm", None),
+            )
+        except Exception as e:
+            logger.debug(f"[{self.name}] before_execute auto-compress failed (non-fatal): {e}")
+            return CompressionStats()
+
     async def respond_to_user(
         self,
         user_message: str,

@@ -194,8 +194,21 @@ class CompressionStats:
 
 @dataclass
 class CompressorConfig:
-    """压缩器配置。"""
-    # 累计 token 超过此值触发压缩
+    """压缩器配置。
+
+    三层阈值（按优先级，从粗到细）：
+    1. ``max_context_length``：当前模型的绝对上限（默认 500_000，推理 Agent 512_000）。
+    2. ``auto_compress_ratio``：触发自动压缩的比例（默认 0.9 = 90%）。
+    3. ``auto_compress_threshold`` = ``max_context_length * ratio``：触发压缩的 token 数。
+
+    旧字段 ``threshold_tokens`` / ``per_agent_threshold_tokens`` 仍保留作
+    向后兼容的"绝对 token 兜底"——当模型上下文未知时使用。
+    """
+    # 自定义上下文长度（tokens）。None 时按 per_call 传入。
+    max_context_length: Optional[int] = None
+    # 自动压缩触发比例（0-1，默认 0.9）
+    auto_compress_ratio: float = 0.9
+    # 兜底绝对阈值（当 max_context_length 未指定时使用）
     threshold_tokens: int = 30_000
     # 单 Agent 输出超过此值优先压缩该 Agent
     per_agent_threshold_tokens: int = 8_000
@@ -205,6 +218,13 @@ class CompressorConfig:
     soft_truncate_chars: int = 5000
     # L2 截断时每个 Agent 摘要的最大字符
     hard_truncate_chars: int = 800
+
+    @property
+    def auto_compress_threshold(self) -> Optional[int]:
+        """自动压缩阈值 token 数。None 表示用绝对兜底。"""
+        if self.max_context_length is None or self.max_context_length <= 0:
+            return None
+        return int(self.max_context_length * self.auto_compress_ratio)
 
 
 class ContextCompressor:
@@ -227,8 +247,14 @@ class ContextCompressor:
         results: Dict[str, Dict[str, Any]],
         llm_caller: Optional[Any] = None,
         force: bool = False,
+        max_context_length: Optional[int] = None,
+        auto_compress_ratio: Optional[float] = None,
     ) -> CompressionStats:
         """检查是否需要压缩，是则执行。返回统计。
+
+        触发条件（任一满足即触发）：
+        1. ``max_context_length`` 已指定，且累计 token >= ``max_context_length × ratio``。
+        2. ``max_context_length`` 未指定，但累计 token >= ``threshold_tokens``（兜底）。
 
         Args:
             task_id: 任务 ID（用于去重 & 日志）
@@ -237,6 +263,8 @@ class ContextCompressor:
                         签名：async def call_llm(messages, ...) -> response
                         缺省时退化为 L2 截断。
             force: 强制压缩（测试用）
+            max_context_length: 覆盖配置中的 max_context_length（per-call 用）。
+            auto_compress_ratio: 覆盖配置中的 auto_compress_ratio（per-call 用）。
 
         Returns:
             :class:`CompressionStats`
@@ -245,25 +273,42 @@ class ContextCompressor:
         total_tokens = sum(estimate_tokens(out) for out in results.values())
         stats.original_tokens = total_tokens
 
-        if not force and total_tokens < self.config.threshold_tokens:
+        # 计算本次调用的有效阈值
+        ctx = max_context_length if max_context_length is not None else self.config.max_context_length
+        ratio = auto_compress_ratio if auto_compress_ratio is not None else self.config.auto_compress_ratio
+        if ctx and ctx > 0:
+            effective_threshold = int(ctx * ratio)
+        else:
+            effective_threshold = self.config.threshold_tokens
+
+        if not force and total_tokens < effective_threshold:
             logger.debug(
                 f"[Compressor] task {task_id}: {total_tokens} tokens < threshold "
-                f"{self.config.threshold_tokens}, skip compression"
+                f"{effective_threshold} (ctx={ctx}, ratio={ratio}), skip compression"
             )
             stats.compressed_tokens = total_tokens
             return stats
 
         logger.info(
             f"[Compressor] task {task_id}: {total_tokens} tokens >= threshold "
-            f"{self.config.threshold_tokens}, starting compression"
+            f"{effective_threshold} (ctx={ctx}, ratio={ratio:.0%}), starting compression"
         )
 
         # 第一步：对每个 Agent 先做 L0 软压缩
+        # per_agent 阈值 = 每个 Agent 的"公平份额"。
+        # 公式：min(绝对兜底, max(50, effective_threshold // n_agents))。
+        # - 500K 阈值 + 15 Agents → 30000 per agent（合理）
+        # - 100 阈值 + 1 Agent → 100 per agent（小上下文也能触发）
+        n_agents = max(1, len(results))
+        per_agent_cap = min(
+            self.config.per_agent_threshold_tokens,
+            max(50, effective_threshold // n_agents),
+        )
         for agent_name, output in list(results.items()):
             if not isinstance(output, dict):
                 continue
             per_agent_tokens = estimate_tokens(output)
-            if per_agent_tokens > self.config.per_agent_threshold_tokens or force:
+            if per_agent_tokens > per_agent_cap or force:
                 compressed, saved = soft_compress(output)
                 results[agent_name] = compressed
                 stats.saved_tokens += saved
@@ -271,25 +316,19 @@ class ContextCompressor:
 
         # 第二步：如果还超阈值 → 尝试 L1 摘要（仅对超大 Agent 输出）
         post_l0 = sum(estimate_tokens(out) for out in results.values())
-        if post_l0 > self.config.threshold_tokens and llm_caller is not None:
-            # 找出仍超 per_agent_threshold 的 Agent
+        if post_l0 > effective_threshold and llm_caller is not None:
             big_agents = [
                 (name, out) for name, out in results.items()
                 if isinstance(out, dict)
-                and estimate_tokens(out) > self.config.per_agent_threshold_tokens
+                and estimate_tokens(out) > per_agent_cap
             ]
-            # 摘要：保留 protected 字段原值，把非 protected 字段合并成 summary
             for agent_name, output in big_agents:
                 protected = {k: v for k, v in output.items() if k in PROTECTED_FIELDS}
                 droppable = {k: v for k, v in output.items() if k not in PROTECTED_FIELDS}
                 if not droppable:
                     continue
-                # 调用 LLM 摘要
-                summary = self._llm_summarize(
-                    agent_name, droppable, llm_caller
-                )
+                summary = self._llm_summarize(agent_name, droppable, llm_caller)
                 if summary:
-                    # 重写 output：protected + _summary 字段
                     new_output = dict(protected)
                     new_output["_summary"] = summary
                     new_output["_compressed"] = True
@@ -300,12 +339,11 @@ class ContextCompressor:
 
         # 第三步：如果还超阈值 → L2 硬截断
         post_l1 = sum(estimate_tokens(out) for out in results.values())
-        if post_l1 > self.config.threshold_tokens:
+        if post_l1 > effective_threshold:
             for agent_name, output in list(results.items()):
                 if not isinstance(output, dict):
                     continue
-                if estimate_tokens(output) > self.config.per_agent_threshold_tokens:
-                    # 保留 protected 字段，其它字段值截断
+                if estimate_tokens(output) > per_agent_cap:
                     new_output = {}
                     for k, v in output.items():
                         if k in PROTECTED_FIELDS:
@@ -313,7 +351,6 @@ class ContextCompressor:
                         elif isinstance(v, str) and len(v) > self.config.hard_truncate_chars:
                             new_output[k] = v[:self.config.hard_truncate_chars] + "...[L2]"
                         elif isinstance(v, (list, dict)):
-                            # 截断 list 到前 3 元素 / dict 到前 3 key
                             if isinstance(v, list):
                                 new_output[k] = v[:3]
                                 if len(v) > 3:
@@ -328,10 +365,9 @@ class ContextCompressor:
             stats.level_used = stats.level_used or "L2"
 
         stats.compressed_tokens = sum(estimate_tokens(out) for out in results.values())
-        # 决定 level_used 标签
         if stats.saved_tokens > 0:
             if not stats.level_used or stats.level_used == "none":
-                stats.level_used = "L0"  # 默认软压缩
+                stats.level_used = "L0"
         else:
             stats.level_used = "none"
 
@@ -394,11 +430,22 @@ class ContextCompressor:
 _global_compressor: Optional[ContextCompressor] = None
 
 
-def get_compressor() -> ContextCompressor:
-    """获取全局压缩器单例。"""
+def get_compressor(
+    max_context_length: Optional[int] = None,
+    auto_compress_ratio: float = 0.9,
+) -> ContextCompressor:
+    """获取全局压缩器单例。
+
+    第一次调用时按传入参数初始化；后续调用复用同一实例（per-process 单例）。
+    若需要切换上下文长度，调用 :func:`reset_compressor` 后重新获取。
+    """
     global _global_compressor
     if _global_compressor is None:
-        _global_compressor = ContextCompressor()
+        cfg = CompressorConfig(
+            max_context_length=max_context_length,
+            auto_compress_ratio=auto_compress_ratio,
+        )
+        _global_compressor = ContextCompressor(cfg)
     return _global_compressor
 
 
