@@ -1,519 +1,223 @@
-# LabAgent v8.2
+# MathModel-MutiAgentSystem
 
-> Fully automated multi-agent platform for generating academic papers (CCF-A conferences, math modeling competitions, coursework, and financial analysis reports).
+> **从想法到论文，一步到位。**  
+> 多智能体协作系统，自动生成学术论文 —— 数学建模竞赛、课程作业、科研论文，全覆盖。
 
-[中文文档](README_CN.md)
-
----
-
-## Table of Contents
-
-- [Overview](#overview)
-- [Quick Start](#quick-start)
-- [Features](#features)
-- [Architecture](#architecture)
-- [Anti-Death-Spiral Mechanisms](#anti-death-spiral-mechanisms)
-- [API Reference](#api-reference)
-- [Configuration](#configuration)
-- [Development](#development)
-- [Troubleshooting](#troubleshooting)
-- [Version History](#version-history)
+[![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://python.org)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Tests](https://img.shields.io/badge/Tests-68%20passed-brightgreen.svg)](tests/)
 
 ---
 
-## Overview
+## 为什么要做这个？
 
-LabAgent automates the entire academic paper production pipeline:
+写论文太慢？建模太累？代码跑不通？
 
-1. **Problem Analysis** — Decompose complex problems into sub-problems
-2. **Literature Review** — Search arXiv + Semantic Scholar for real papers
-3. **Mathematical Modeling** — Select appropriate models and algorithms
-4. **Code Generation & Execution** — Generate Python code, execute in sandbox, auto-fix errors
-5. **Experiment Execution** — Run experiments with GPU support, baseline comparison, ablation study
-6. **Paper Writing** — Generate LaTeX documents with consistent terminology
-7. **Peer Review** — 4-dimension scoring + reproducibility check
-8. **Fact Check** — Verify numbers against actual execution results
-9. **Compliance Check** — Filter investment advice language for financial reports
-10. **Camera-Ready Packaging** — Package into submittable ZIP
+**我们做了一个系统，把「想法 → 论文」的周期从几天压缩到几分钟。**
 
-### What's New in v8.2
-
-| Feature | Description |
-|---------|-------------|
-| **Component Injection** | Restricted mode Coder generates only nn.Module/Loss components, auto-injected into Base Templates |
-| **AST Safety Shell** | Auto-inject try-except + cuda.empty_cache() + gc.collect() to prevent sandbox crashes |
-| **Progressive Jailbreak Circuit Breaker** | Dynamic mode switching: restricted → jailbreak based on metrics trend |
-| **SHA-256 Data Provenance** | Full-chain hash tracking for tamper-proof results |
-| **AST Anti-Fabrication** | Detect hardcoded metrics (`accuracy = 0.95`), block fake outputs |
-| **Code Quality Fixes** | Fixed debug endpoint, unified versions, added CI/CD, rate limiting |
-| **Bug Finder Agent** | Qwen2.5-Coder-1.5B QLoRA fine-tuned, local inference code error diagnosis (14 types, 97.1% accuracy on a leakage-free 138-sample strict eval) |
-| **ML Training Pipeline** | Complete model training pipeline: data collection → augmentation → QLoRA training → evaluation |
+输入一个问题描述，系统自动完成：
+- 📚 文献调研（真实 arXiv 论文，不是编的）
+- 📐 数学建模（自动选择算法）
+- 💻 代码生成 + 执行（沙箱隔离，自动修 bug）
+- 📝 论文写作（LaTeX 排版，专业格式）
+- 🔍 同行评审（4 维度打分，自动修订）
+- 📊 图表生成（Nature 风格配色）
 
 ---
 
-## Quick Start
+## 核心亮点
 
-### Prerequisites
+### 🎯 三层保障，杜绝三大痛点
 
-- Python 3.11+
-- Node.js 20+ (for Web UI)
-- An LLM API key (OpenAI, Anthropic, Kimi, DeepSeek, or any compatible provider)
+| 痛点 | 解决方案 | 实现 |
+|------|---------|------|
+| **排版乱码** | LaTeX 智能转义 | 数学模式保护、CJK 支持、格式验证 |
+| **参考文献造假** | 多层验证 | arXiv API 校验 + 标题匹配 + 引用去重 |
+| **想法重复** | 历史指纹 | Jaccard 相似度检测，>70% 自动拦截 |
 
-### 1. Install Dependencies
+### 🛡️ 代码沙箱，安全执行
 
-```bash
-# Backend
-cd backend
-pip install -r requirements.txt
-
-# Frontend
-cd frontend
-npm install
+```
+生成代码 → AST 审计（检测硬编码） → 自动安装依赖 → 沙箱执行 → 失败自动修复
+    ↓              ↓                    ↓              ↓            ↓
+ LLM 生成      拒绝 accuracy=0.95    pip install     隔离环境    LLM 重写代码
 ```
 
-### 2. Configure LLM Provider
+- **AST 审计**：检测硬编码指标、input() 调用、语法错误
+- **依赖自愈**：检测缺失包，自动 pip install（复用 conda 环境）
+- **自动修复**：执行失败时，LLM 分析错误并重写代码（最多 2 次）
 
-Create `backend/.env`:
+### 🤖 多模型辩论，不是一个人说了算
 
-```bash
-# Option A: OpenAI
-OPENAI_API_KEY=sk-...
-
-# Option B: Anthropic
-ANTHROPIC_API_KEY=sk-ant-...
-
-# Option C: Kimi (Anthropic-compatible)
-ANTHROPIC_BASE_URL=https://api.kimi.com/coding/
-ANTHROPIC_AUTH_TOKEN=sk-kimi-...
-
-# Option D: Any provider via Web UI Settings tab
+```
+研究方向 → Practical（实用性） ─┐
+         → Rigor（严谨性）   ─┼→ 结构化综合 → 最终决策
+         → Narrative（叙事性）─┘
 ```
 
-### 3. Start the System
+参考 MSc counsel 协议，3 个角色从不同角度评估方案，避免单一模型盲区。
 
-```bash
-# Terminal 1: Backend
-cd backend
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8001
+### 📊 质量门禁，步步把关
 
-# Terminal 2: Frontend
-cd frontend
-npm run dev
-```
-
-### 4. Open Web UI
-
-Navigate to **http://localhost:3000**:
-
-1. Go to **Settings** tab → Add your LLM provider → Set as default
-2. Go to **Generate** tab → Select template → Enter problem description → Submit
-3. Watch real-time progress in the task list
-4. When complete, go to **PDF** tab → Generate Camera-Ready → Download ZIP
+| 阶段 | 门禁规则 | 不通过处理 |
+|------|---------|-----------|
+| 文献调研 | ≥3 真实引用、≥200 字内容 | 警告 |
+| 建模 | ≥1 子问题、≥3 符号 | 警告 |
+| 代码 | 语法有效、≥10 行、有 print | 自动修复 |
+| 写作 | ≥3 章节、≥100 字摘要、≥5 引用 | 警告 |
+| 评审 | ≥2.0 分 | 自动修订（最多 2 轮） |
 
 ---
 
-## Features
+## 支持 12 种模板
 
-### Paper Templates (8 Built-in + Extensible)
-
-| Template | Use Case | Level |
-|----------|----------|-------|
-| `math_modeling` | Math modeling competition (CUMCM) | — |
-| `neurips_2024` | NeurIPS 2024 | **CCF-A** |
-| `acm_sigconf` | ACM SIG Conference | **CCF-A** |
-| `ieee_conference` | IEEE Conference | **CCF-A** |
+| 模板 | 场景 | 级别 |
+|------|------|------|
+| `math_modeling` | 数学建模竞赛（CUMCM/MCM） | — |
+| `neurips_2024` | NeurIPS | **CCF-A** |
+| `iclr_2024` | ICLR | **CCF-A** |
+| `icml_2024` | ICML | **CCF-A** |
+| `aaai_2024` | AAAI | **CCF-A** |
+| `acm_sigconf` | ACM 会议 | **CCF-A** |
+| `ieee_conference` | IEEE 会议 | **CCF-A** |
 | `springer_lncs` | Springer LNCS | CCF-B |
-| `research_survey` | Literature survey/review | — |
-| `coursework` | Course assignments | — |
-| `financial_analysis` | Financial analysis report | — |
+| `research_survey` | 综述论文 | — |
+| `coursework` | 课程作业 | — |
+| `financial_analysis` | 金融分析报告 | — |
+| `presentation` | 演示文稿 | — |
 
-New templates: Add JSON + `.cls/.sty` files to `backend/app/core/paper_templates/templates/`.
+**每个模板都有：**
+- 风格指南（SKILL.md）
+- 真实参考文献池（references.md）
+- 检查清单（checklist）
 
-### Agent Team (15 Agents)
+---
 
-| Agent | Role | Key Capability |
-|-------|------|----------------|
-| analyzer | Analyst | Problem decomposition, type classification |
-| data | Data Analyst | File parsing, insight extraction |
-| research | Researcher | arXiv + Semantic Scholar search |
-| innovation | Innovation Expert | Research gap identification |
-| modeler | Modeler | Mathematical modeling |
-| algorithm_engineer | Algorithm Engineer | CCF-A algorithm design |
-| financial_analyst | Financial Analyst | Financial modeling, risk analysis |
-| solver | Solver | Real code execution, auto-fix retry |
-| writer | Writer | Chapter-by-chapter LaTeX generation |
-| peer_review | Peer Reviewer | 4-dimension scoring + reproducibility check |
-| experimentation | Experimenter | Experiment design + auto-iteration |
-| summary | Summarizer | Task summary + experience extraction |
-| debugger | Debugger | Intelligent error analysis |
-| compliance | Compliance | Financial report compliance check |
-| coordinator | Coordinator | Workflow orchestration |
+## 快速开始
 
-### Zero-Hallucination Architecture
-
-```
-Code Generation → AST Audit → Safety Shell → Sandbox Execution → Result Validation → Fact Check
-       ↓              ↓              ↓              ↓                  ↓               ↓
-   LLM writes    Detect fake    try-except +    Real Python       Verify ranges    Compare LaTeX
-     code       hardcoded metrics  cuda guard    execution        & sums          vs actual
-```
-
-### Anti-Death-Spiral Architecture (v8.2)
-
-All templates passing through `iterative_solver` are protected by AST safety shell + sandbox error statistics.
-
-| Template | Flow | Component Injection | Jailbreak |
-|----------|------|--------------------|-----------| 
-| math_modeling | iterative_solver → ast_audit → sandbox → figure | — | — |
-| coursework | iterative_solver → ast_audit → sandbox → figure | — | — |
-| financial_analysis | iterative_solver → ast_audit → sandbox → figure | — | — |
-| neurips_2024 | iterative_solver → coder → ast_audit → sandbox → reviewer → figure | Yes | Yes |
-| ieee_conference | iterative_solver → coder → ast_audit → sandbox → reviewer → figure | Yes | Yes |
-| acm_sigconf | iterative_solver → coder → ast_audit → sandbox → reviewer → figure | Yes | Yes |
-| springer_lncs | iterative_solver → coder → ast_audit → sandbox → reviewer → figure | Yes | Yes |
-| research_survey | Direct to writer (no code execution) | — | — |
-
-### Knowledge Base System
-
-- **Hybrid Search**: Semantic (sentence-transformers) + BM25 keyword search
-- **Scope Isolation**: Global (shared across projects) + Project-specific
-- **Source Tracking**: Every search result tagged with source document
-- **Auto-classification**: Resources classified by type/domain/method/quality
-
-### GPU Support (Optional)
-
-- **GPUExecutor**: Unified GPU training/inference lifecycle
-- **VRAMMonitor**: Real-time GPU memory monitoring (85% warning, 95% OOM protection)
-- **CheckpointManager**: Auto-save/restore training checkpoints
-- Falls back to CPU when GPU is unavailable
-
-### ML Training Module (v8.2 New)
-
-**Bug Finder Agent** — Local inference code error diagnosis, zero API cost
-
-| Capability | Description |
-|------------|-------------|
-| Error Classification | 11 error types: IndexError, KeyError, ValueError, ZeroDivisionError, TypeError, AttributeError, FileNotFoundError, ImportError, RuntimeError, LogicError, OOM |
-| Error Localization | Line-level localization, 100% accuracy |
-| Fix Suggestions | Structured JSON output with root_cause and fix_suggestion |
-| Inference Latency | ~560ms (RTX 4060), optimizable with INT4 quantization |
-
-**Training Pipeline**:
+### 安装
 
 ```bash
-# Data collection and augmentation
-python ml/collect_data.py --problems 20
-
-# QLoRA training (RTX 4060 8GB)
-python ml/train_bug_finder.py --config ml/configs/bug_finder_qlora.yaml
-
-# Evaluation
-python ml/evaluation/eval_bug_finder.py \
-    --model ml/checkpoints/bug_finder \
-    --data ml/collected_data/bug_finder_eval_v2.json
+git clone https://github.com/haitanghuaweimianTom/MathModel-MutiAgentSystem.git
+cd MathModel-MutiAgentSystem
+pip install -r requirements.txt
 ```
 
-**Collaboration with other modules**:
+### 配置
+
+```bash
+cp .env.example .env
+# 编辑 .env，填入 MiniMax API Key
+```
+
+### 运行
+
+```bash
+# 一行命令生成论文
+python scripts/generate_paper.py \
+  --template math_modeling \
+  --problem "求解某物流网络的最优路径" \
+  --project-name logistics_optimization \
+  --output-dir ./outputs
+```
+
+### 输出结构
 
 ```
-Solver(LLM) → Generate Code → Sandbox Execution → Failure
-    │
-    ▼
-Bug Finder Agent (Local inference, zero API cost)
-    ├── Error Classification (OOM/Syntax/Logic/...)
-    ├── Locate error code line
-    └── Generate fix suggestion
-    │
-    ▼
-Solver(LLM) applies structured diagnosis → Precise fix
+outputs/logistics_optimization/
+├── paper.pdf           # 编译后的 PDF
+├── paper.md            # Markdown 源
+├── paper.tex           # LaTeX 源
+├── code/model.py       # 可执行代码
+├── figures/            # 图表
+├── peer_review.md      # 同行评审
+├── guarantee_report.md # 输出保障报告
+├── references.bib      # 参考文献
+└── README.md           # 项目说明
 ```
 
 ---
 
-## Architecture
+## 架构设计
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  Web UI (Next.js 14 + Zustand)                                  │
-│  10 tabs: Generate / Data / PDF / History / Settings             │
-└──────────────────────┬──────────────────────────────────────────┘
-                       │ REST + SSE
-┌──────────────────────▼──────────────────────────────────────────┐
-│  FastAPI Backend (app.main)                                      │
-│  ├─ LangGraph Orchestrator (StateGraph)                          │
-│  │   requirement_decomposition → preflight → analyzer            │
-│  │   → parallel_analysis [data+research+innovation]              │
-│  │   → discuss → modeler → experiment → solver                   │
-│  │   → [v8.2] coder_agent → ast_audit → sandbox → reviewer      │
-│  │   → writer → peer_review → fact_check → compliance            │
-│  │   → summary → END                                             │
-│  ├─ Agent Layer (15 agents)                                      │
-│  ├─ Core Modules                                                 │
-│  │   ├─ code_audit.py        (AST analysis + anti-fabrication)   │
-│  │   ├─ safety_shell.py      (AST safety shell transformer)      │
-│  │   ├─ reference_verifier.py (DOI/arXiv verification)           │
-│  │   ├─ symbolic_auditor.py  (statistical validation)            │
-│  │   ├─ data_provenance.py   (SHA-256 tracking)                  │
-│  │   ├─ sandbox.py           (code execution)                    │
-│  │   ├─ gpu_executor.py      (GPU training)                      │
-│  │   └─ memory.py            (3-tier memory)                     │
-│  └─ Services                                                    │
-│      ├─ fact_checker.py      (number verification)               │
-│      ├─ camera_ready.py      (ZIP packaging)                     │
-│      ├─ preflight.py         (problem analysis)                  │
-│      └─ reference_verifier.py                                    │
+│                        Pipeline 7 步                            │
+├─────────────────────────────────────────────────────────────────┤
+│  Step 1: 文献调研 ──→ Step 1b: 多模型辩论                       │
+│      ↓                                                         │
+│  Step 2: 数学建模 ──→ 质量门禁                                  │
+│      ↓                                                         │
+│  Step 3: 代码生成 ──→ AST 审计 ──→ 沙箱执行 ──→ 自动修复        │
+│      ↓                                                         │
+│  Step 4: 论文写作 ──→ 反模式检测                                │
+│      ↓                                                         │
+│  Step 5: 同行评审 ──→ 评分低时自动修订                           │
+│      ↓                                                         │
+│  Step 6: PDF 编译 ──→ 图表生成                                  │
+│      ↓                                                         │
+│  Step 7: 输出保障 ──→ 排版/引用/Idea 三重检查                    │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### Data Flow
+### 核心模块
 
-1. User submits problem → Preflight analyzes problem type
-2. Analyzer decomposes into sub-problems
-3. Parallel: Data analysis + Literature review + Innovation discovery
-4. Agents discuss approach (voting system)
-5. Modeler creates mathematical models
-6. **[v8.2]** Coder Agent (restricted/jailbreak) → AST Audit → Sandbox → Reviewer
-7. Writer generates LaTeX chapter by chapter
-8. Peer reviewer scores and suggests revisions (auto-iterate up to 3 rounds)
-9. Fact checker verifies numbers against execution results
-10. Compliance agent filters financial advice (for financial reports)
-11. Camera-Ready packages everything into submittable ZIP
+| 模块 | 文件 | 功能 |
+|------|------|------|
+| Pipeline | `scripts/generate_paper.py` | 7 步主流程 |
+| 沙箱 | `scripts/sandbox_and_gates.py` | 代码执行 + 质量门禁 + 多模型辩论 |
+| 保障 | `scripts/output_guarantee.py` | 排版/引用/Idea 三重检查 |
+| 知识库 | `src/knowledge/template_skills/` | 12 模板 skill + 真实文献池 |
 
 ---
 
-## Anti-Death-Spiral Mechanisms
-
-### Mechanism 1: Component Injection
-
-**Problem**: Full training scripts generated by Coder contain multiple errors, causing repeated sandbox failures.
-
-**Solution**: In restricted mode, Coder only generates nn.Module and Loss components. The system auto-injects them into pre-validated Base Templates.
-
-```python
-# Restricted mode: Coder outputs only components
-# COMPONENT: nn.Module
-class MyModel(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.fc = nn.Linear(784, 10)
-
-# COMPONENT: loss
-def my_loss(pred, target):
-    return F.cross_entropy(pred, target)
-```
-
-### Mechanism 2: AST Safety Shell
-
-**Problem**: Uncaught exceptions (especially CUDA OOM) crash the entire pipeline.
-
-**Solution**: SafetyShellTransformer performs AST-level code transformation.
-
-```python
-# Before
-model = MyModel().cuda()
-output = model(data)
-
-# After safety shell injection
-try:
-    model = MyModel().cuda()
-    output = model(data)
-    torch.cuda.empty_cache()  # auto-injected
-except Exception as _safety_exc:
-    traceback.print_exc()
-finally:
-    gc.collect()  # auto-injected
-```
-
-### Mechanism 3: Progressive Jailbreak Circuit Breaker
-
-**Problem**: Restricted mode may hit "template bottleneck" — code runs but metrics don't improve.
-
-**Solution**: Reviewer Agent monitors metrics trend, dynamically adjusts execution mode.
-
-| State | Condition | Action |
-|-------|-----------|--------|
-| Normal | error_count < 3 | Keep current mode |
-| Death Spiral | error_count >= 3 | Degrade to restricted, threshold=3 |
-| Template Bottleneck | Metrics plateau 2+ rounds | Upgrade to jailbreak, threshold=1 |
-| Max Retries | Still failing in restricted | Proceed to paper generation (degraded) |
-
----
-
-## API Reference
-
-Base URL: `http://localhost:8001/api/v1`
-
-### Task Management
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/tasks/submit` | POST | Submit new task |
-| `/tasks/` | GET | List all tasks |
-| `/tasks/{id}/status` | GET | Get task status |
-| `/tasks/{id}/stream` | GET | SSE event stream |
-| `/tasks/{id}/result` | GET | Task results |
-| `/tasks/{id}/camera-ready` | POST | Generate Camera-Ready ZIP |
-| `/tasks/{id}/pause` | POST | Pause task |
-| `/tasks/{id}/resume` | POST | Resume task |
-| `/tasks/{id}/cancel` | POST | Cancel task |
-| `/tasks/{id}/rerun` | POST | Rerun task |
-
-### Submit Task Example
+## 测试
 
 ```bash
-curl -X POST http://localhost:8001/api/v1/tasks/submit \
-  -H "Content-Type: application/json" \
-  -d '{
-    "problem_text": "Predict GDP for 2030 based on 2024 data...",
-    "project_name": "my_project",
-    "options": {"template": "math_modeling"}
-  }'
-```
-
----
-
-## Configuration
-
-### Environment Variables
-
-```bash
-# LLM Provider (choose one)
-OPENAI_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-ant-...
-
-# Optional
-LABAGENT_API_KEY=your-secret-key    # Enable API authentication
-CUDA_VISIBLE_DEVICES=0               # GPU selection
-NEXT_PUBLIC_API_URL=http://localhost:8001  # Backend URL for frontend
-```
-
-### Runtime Configuration (`backend/app/config.py`)
-
-| Config | Default | Description |
-|--------|---------|-------------|
-| `auto_mode_enabled` | True | Full auto mode |
-| `max_concurrent_tasks` | 3 | Max concurrent tasks |
-| `task_timeout_seconds` | 7200 | Task timeout (2 hours) |
-| `experiment_max_iterations` | 3 | Experiment iteration limit |
-
-### Docker Deployment
-
-```bash
-docker compose up -d    # Start backend + Redis
-```
-
----
-
-## Development
-
-### Project Structure
-
-```
-├── backend/                 # FastAPI backend
-│   ├── app/
-│   │   ├── agents/          # Agent implementations
-│   │   │   ├── base.py      # BaseAgent class
-│   │   │   ├── claude_code.py # Claude Code CLI integration
-│   │   │   └── mcp_tools.py # MCP tool definitions
-│   │   ├── core/            # Core modules
-│   │   ├── routers/         # API routes
-│   │   └── services/        # Business logic
-│   └── tests/               # Backend tests
-├── frontend/                # Next.js frontend
-├── ml/                      # ML training module
-│   ├── train_bug_finder.py  # Bug Finder training script
-│   ├── configs/             # Training configs (QLoRA/DPO)
-│   ├── collected_data/      # Training data (v1-v7 iterations)
-│   ├── checkpoints/         # Model checkpoints
-│   ├── evaluation/          # Evaluation scripts
-│   └── models/              # Base models (Qwen2.5-Coder-1.5B)
-├── config/                  # Configuration files
-├── scripts/                 # Utility scripts
-├── .github/workflows/       # CI/CD pipeline
-├── CONTRIBUTING.md          # Contribution guidelines
-├── CHANGELOG.md             # Version history
-└── requirements-dev.txt     # Development dependencies
-```
-
-### Running Tests
-
-```bash
-# Backend
-cd backend
+# 运行全部测试
 python -m pytest tests/ -v
 
-# Frontend
-cd frontend
-npm test
+# 运行特定测试
+python -m pytest tests/test_sandbox_and_gates.py -v
+python -m pytest tests/test_output_guarantee.py -v
 ```
 
-### Code Quality
-
-```bash
-# Linting
-ruff check backend/
-ruff format backend/
-
-# Pre-commit hooks
-pre-commit install
-pre-commit run --all-files
-```
+**68 个测试，全部通过。**
 
 ---
 
-## Troubleshooting
+## 技术栈
 
-### Task Stuck on Solver
-
-- Solver generates code → executes in sandbox → auto-fixes errors (up to 3 retries)
-- **v8.2**: If stuck in death spiral, system auto-degrades to restricted mode
-- Check `backend/app.log` for error details
-
-### GPU OOM
-
-- **v8.2**: Safety shell auto-injects `torch.cuda.empty_cache()` after CUDA calls
-- System auto-estimates batch size, but LLM-generated code may ignore it
-- Check VRAMMonitor logs for memory usage
-
-### Task Interrupted
-
-- Tasks auto-save checkpoints to `backend/data/tasks/`
-- Resume via `POST /tasks/{id}/resume`
+- **LLM**: MiniMax-M3（500K 上下文 / 512K 推理）
+- **代码执行**: Python subprocess + AST 审计
+- **图表**: Matplotlib（Nature 风格配色）
+- **排版**: LaTeX + xelatex（支持 CJK）
+- **文献**: arXiv API + CrossRef 验证
 
 ---
 
-## Version History
+## 贡献
 
-### v8.2 (2026-07) — Anti-Death-Spiral Architecture + ML Training Module
-- Component injection: restricted mode Coder generates only nn.Module/Loss components
-- AST safety shell: auto-inject try-except + cuda.empty_cache() + gc.collect()
-- Progressive jailbreak circuit breaker: dynamic mode switching based on metrics trend
-- Dual-responsibility AST audit: anti-fabrication + anti-crash in single pass
-- **Bug Finder Agent**: Qwen2.5-Coder-1.5B QLoRA fine-tuned, 14-class error diagnosis with 97.1% accuracy (leakage-free 138-sample strict eval; see ml/results/COMPARISON.md)
-- **ML Training Pipeline**: Complete data collection → augmentation → QLoRA training → evaluation workflow
-- Project renamed to **LabAgent**
-- Code quality: fixed debug endpoint, unified versions, added CI/CD, rate limiting
-- Refactored BaseAgent: extracted claude_code.py and mcp_tools.py modules
+欢迎提交 Issue 和 Pull Request！
 
-### v8.0 (2026-07) — Zero-Hallucination Architecture
-- AST code audit for hardcoded metrics detection
-- Reference verification via CrossRef/arXiv APIs
-- Symbolic auditor for statistical validation
-- Debugger Agent for intelligent error analysis
-- Data provenance with SHA-256 tracking
-- Compliance Agent for financial report filtering
+1. Fork 本仓库
+2. 创建特性分支 (`git checkout -b feature/amazing-feature`)
+3. 提交更改 (`git commit -m 'Add amazing feature'`)
+4. 推送到分支 (`git push origin feature/amazing-feature`)
+5. 创建 Pull Request
 
-### v7.4 (2026-07) — Security Hardening
-- Input validation, path traversal prevention, prompt injection defense
+---
 
-### v7.0 (2026-07) — Full Auto AI Scientist
-- Requirement decomposition, innovation discovery, multi-agent discussion
+## 致谢
 
-### v6.0 (2026-06) — 5 Research Capabilities
-- NAS, auto loss function design, cross-paper gap identification, code evolution, AutoML
+本项目参考了以下开源项目的设计：
+- [MAARS](https://github.com/dozybot001/MAARS) - 多智能体研究系统
+- [PoggioAI/MSc](https://github.com/PoggioAI/PoggioAI_MSc) - 多模型 counsel 协议
+- [math_model](https://github.com/Linference/math_model) - 反模式检测设计
+- [MARS](https://github.com/HarryYangthu/MARS-Multi-Agent-Research-System) - 质量门禁设计
 
 ---
 
 ## License
 
-For academic research and educational use only. Please comply with target venue submission guidelines.
+MIT License
