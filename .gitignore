@@ -126,3 +126,5 @@ ml/models/
 *.gguf
 ml/results/
 rr_work
+.conda_env_cache
+.conda_mathmodel_req_hash

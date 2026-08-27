@@ -1,0 +1,4 @@
+{
+  "backend_port": 8001,
+  "frontend_port": 3001
+}
