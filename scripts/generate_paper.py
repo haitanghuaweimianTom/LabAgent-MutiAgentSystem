@@ -38,6 +38,14 @@ from typing import Dict, List, Optional
 from sandbox_and_gates import CodeSandbox, QualityGate, MultiModelDebate, FigureGenerator, AntiPatternDetector, CodeAutoFixer
 from output_guarantee import OutputGuarantee, LaTeXFormatter, ReferenceVerifier, IdeaDeduplicator
 
+# 导入新增模块
+from self_evolution import EvolutionStore, extract_lessons, build_overlay
+from memory_store import MemoryStore
+from hitl_manager import HITLManager, InterventionMode
+from enhanced_debate import EnhancedDebate
+from self_healer import SelfHealer
+from iterative_quality_gate import IterativeQualityGate, QualityMetric
+
 # 让脚本能找到 src/ 和 backend/
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -494,8 +502,21 @@ async def run_pipeline(
     problem: str,
     project_name: str,
     output_dir: Path,
+    *,
+    auto_hitl: bool = True,
+    enable_evolution: bool = True,
+    enable_memory: bool = True,
 ) -> PaperArtifact:
-    """完整 pipeline：研究 → 建模 → 代码 → 写作 → 评审。"""
+    """完整 pipeline：研究 → 建模 → 代码 → 写作 → 评审。
+
+    Features:
+    - Self-Evolution: Records lessons from each run for future improvement
+    - Memory Store: Persistent knowledge base across projects
+    - HITL: Human intervention at critical decision points (6 modes)
+    - Enhanced Debate: 6-persona multi-perspective evaluation
+    - Self-Healer: Auto-detect and fix runtime errors
+    - Iterative Quality Gate: Adaptive quality thresholds
+    """
     artifact = PaperArtifact(
         project_name=project_name,
         template_id=template_id,
@@ -509,30 +530,96 @@ async def run_pipeline(
     (artifact.folder / "figures").mkdir(exist_ok=True)
     (artifact.folder / "code").mkdir(exist_ok=True)
 
+    # 初始化新模块
+    workspace_dir = artifact.folder
+    evolution_dir = workspace_dir / "evolution"
+    memory_dir = workspace_dir / "memory"
+
+    # Self-Evolution Store
+    evolution_store = None
+    if enable_evolution:
+        evolution_store = EvolutionStore(evolution_dir)
+        logger.info(f"[{project_name}] Self-Evolution initialized: {evolution_store.count()} lessons loaded")
+
+    # Memory Store
+    memory_store = None
+    if enable_memory:
+        memory_store = MemoryStore(memory_dir)
+        logger.info(f"[{project_name}] Memory Store initialized: {memory_store.count()} memories loaded")
+
+    # HITL Manager (auto_mode by default)
+    hitl = HITLManager(workspace_dir / "hitl", auto_mode=auto_hitl)
+
+    # Self-Healer
+    healer = SelfHealer(workspace_dir / "healer")
+
+    # Iterative Quality Gate
+    quality_gate = IterativeQualityGate(workspace_dir / "quality_gate")
+
+    # Load evolution overlay for first step
+    evo_overlay = ""
+    if evolution_store:
+        evo_overlay = evolution_store.build_overlay("step1_research")
+        if evo_overlay:
+            logger.info(f"[{project_name}] Evolution overlay loaded for research step")
+
     logger.info(f"[{project_name}] === Step 1: 文献调研 ===")
     research = await step1_research(problem, template_id)
     artifact.total_tokens_used += research.get("usage", {}).get("total_tokens", 0)
     
-    # 质量门禁：research
-    research_gate = QualityGate.validate("research", {
-        "references": artifact.references,
-        "content": research.get("content", "")
-    })
-    if research_gate["severity"] == "FAIL":
-        logger.warning(f"Research 门禁未通过: {research_gate['checks']}")
+    # 质量门禁：research (using iterative quality gate)
+    research_metrics = [
+        QualityMetric("has_content", 1.0 if research.get("content", "") else 0.0, weight=1.0),
+        QualityMetric("has_references", 1.0 if artifact.references else 0.0, weight=0.8),
+    ]
+    research_decision = quality_gate.evaluate("research", research_metrics)
+    if research_decision.action.value == "terminate":
+        logger.warning(f"Research 门禁终止: {research_decision.reasoning}")
+        # Record lesson
+        if evolution_store:
+            from self_evolution import LessonEntry
+            evolution_store.append(LessonEntry(
+                stage_name="research",
+                category="pipeline",
+                severity="error",
+                description=f"Research quality gate terminated: {research_decision.reasoning}",
+                run_id=project_name,
+            ))
+    else:
+        logger.info(f"Research 门禁通过: score={research_decision.weighted_score:.2f}")
     
-    # 多模型辩论评估研究方向
-    logger.info(f"[{project_name}] === Step 1b: 多模型辩论 ===")
-    debate_result = await step1b_debate_research(research, problem, template_id)
+    # HITL: 方向选择
+    hitl_response = hitl.request_direction_choice(
+        stage="research",
+        directions=["继续建模", "调整方向", "补充文献"],
+        context={"research": research.get("content", "")[:1000]},
+    )
+    logger.info(f"HITL Research decision: {hitl_response}")
+    
+    # 多模型辩论评估研究方向 (使用6人辩论)
+    logger.info(f"[{project_name}] === Step 1b: 6人多视角辩论 ===")
+    enhanced_debate = EnhancedDebate(call_minimax, rounds=2)
+    debate_result = await enhanced_debate.debate(
+        topic=f"评估研究方向: {problem}",
+        context=f"研究结果: {research.get('content', '')[:2000]}"
+    )
+    logger.info(f"Debate consensus score: {debate_result.consensus_score:.2f}")
+    logger.info(f"Key issues: {len(debate_result.key_issues)}")
+    logger.info(f"Recommendations: {len(debate_result.recommendations)}")
 
     logger.info(f"[{project_name}] === Step 2: 建模 ===")
     modeling = await step2_model(problem, template_id)
     artifact.total_tokens_used += modeling.get("usage", {}).get("total_tokens", 0)
     
     # 质量门禁：modeling
-    modeling_gate = QualityGate.validate("modeling", modeling)
-    if modeling_gate["severity"] == "FAIL":
-        logger.warning(f"Modeling 门禁未通过: {modeling_gate['checks']}")
+    modeling_metrics = [
+        QualityMetric("has_model", 1.0 if modeling.get("content", "") else 0.0, weight=1.0),
+    ]
+    modeling_decision = quality_gate.evaluate("modeling", modeling_metrics)
+    if modeling_decision.action.value == "terminate":
+        logger.warning(f"Modeling 门禁终止: {modeling_decision.reasoning}")
+    else:
+        logger.info(f"Modeling 门禁通过: score={modeling_decision.weighted_score:.2f}")
 
     logger.info(f"[{project_name}] === Step 3: 代码生成+执行 ===")
     code_result = await step3_code(modeling, problem, artifact.folder / "code")
@@ -541,12 +628,23 @@ async def run_pipeline(
         artifact.code_files.append(code_result["code_path"])
     
     # 质量门禁：code
-    code_gate = QualityGate.validate("code", {
-        "code": code_result["code"],
-        "execution": code_result["execution"]
-    })
-    if code_gate["severity"] == "FAIL":
-        logger.warning(f"Code 门禁未通过: {code_gate['checks']}")
+    code_metrics = [
+        QualityMetric("execution_success", 1.0 if code_result["execution"]["success"] else 0.0, weight=1.0),
+        QualityMetric("has_output", 1.0 if code_result["execution"]["stdout"] else 0.0, weight=0.8),
+    ]
+    code_decision = quality_gate.evaluate("code", code_metrics)
+    if code_decision.action.value == "terminate":
+        logger.warning(f"Code 门禁终止: {code_decision.reasoning}")
+    else:
+        logger.info(f"Code 门禁通过: score={code_decision.weighted_score:.2f}")
+
+    # Self-Healer: 记录代码执行错误
+    if not code_result["execution"]["success"] and code_result["execution"]["stderr"]:
+        healer.handle_error(
+            "code_execution",
+            code_result["execution"]["stderr"],
+            context={"code": code_result["code"][:1000]},
+        )
 
     logger.info(f"[{project_name}] === Step 4: 写论文 ===")
     paper = await step4_write(problem, template_id, research, modeling, code_result)
@@ -925,6 +1023,81 @@ async def run_pipeline(
     compile_result = await step6_compile(artifact.folder)
     artifact.pdf_generated = compile_result["pdf_ok"]
     artifact.figures_generated = compile_result["figures"]
+
+    # Record lessons for self-evolution
+    if enable_evolution and evolution_store:
+        logger.info(f"[{project_name}] === Recording lessons for self-evolution ===")
+        stage_results = {
+            "research": {
+                "status": "completed" if research.get("content") else "failed",
+                "score": research_decision.weighted_score,
+                "duration": 0,
+            },
+            "modeling": {
+                "status": "completed" if modeling.get("content") else "failed",
+                "score": modeling_decision.weighted_score,
+                "duration": 0,
+            },
+            "code": {
+                "status": "completed" if code_result["execution"]["success"] else "failed",
+                "score": code_decision.weighted_score,
+                "duration": 0,
+            },
+            "review": {
+                "status": "completed",
+                "score": review_data.get("overall_score", 0) / 5.0 if review_data else 0,
+                "duration": 0,
+            },
+        }
+        lessons = extract_lessons(stage_results, run_id=project_name)
+        evolution_store.append_many(lessons)
+        logger.info(f"  Recorded {len(lessons)} lessons")
+
+    # Store memory for future recall
+    if enable_memory and memory_store:
+        logger.info(f"[{project_name}] === Storing memories ===")
+        memory_store.add(
+            content=f"Project {project_name}: {problem[:200]}",
+            category="ideation",
+            metadata={"template": template_id, "tokens": artifact.total_tokens_used},
+            source="pipeline",
+            tags=[template_id, project_name],
+        )
+        if code_result["execution"]["success"]:
+            memory_store.add(
+                content=f"Successful code for {template_id}: {code_result['execution']['stdout'][:500]}",
+                category="experiment",
+                metadata={"template": template_id},
+                source="pipeline",
+                tags=[template_id, "success"],
+            )
+        logger.info(f"  Stored {memory_store.count()} total memories")
+
+    # Generate self-evolution report
+    if enable_evolution and evolution_store:
+        evo_report = f"""# Self-Evolution Report — {project_name}
+
+**Generated**: {time.strftime('%Y-%m-%d %H:%M:%S')}
+
+## Lessons Recorded
+
+"""
+        for lesson in lessons:
+            evo_report += f"- [{lesson.severity.upper()}] {lesson.category}: {lesson.description[:200]}\n"
+        
+        evo_report += f"""
+## Quality Gate Decisions
+
+- Research: {research_decision.action.value} (score: {research_decision.weighted_score:.2f})
+- Modeling: {modeling_decision.action.value} (score: {modeling_decision.weighted_score:.2f})
+- Code: {code_decision.action.value} (score: {code_decision.weighted_score:.2f})
+
+## Evolution Store Stats
+
+- Total lessons: {evolution_store.count()}
+- Memory entries: {memory_store.count() if memory_store else 'N/A'}
+"""
+        (artifact.folder / "evolution_report.md").write_text(evo_report, encoding="utf-8")
 
     return artifact
 
