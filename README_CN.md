@@ -121,7 +121,55 @@ python scripts/generate_paper.py \
   --output-dir ./outputs
 ```
 
-### 输出结构
+### 4. 打开 Web UI
+
+访问 http://localhost:3000
+
+1. 进入 **设置** 页 → 添加 LLM Provider → 设为默认
+2. 进入 **任务执行** 页 → 选择模板 → 输入问题描述 → 提交
+3. 实时查看任务进度
+4. 完成后进入 **PDF** 页 → 生成 Camera-Ready → 下载 ZIP
+
+---
+
+## 功能特性
+
+### 论文模板（8 个内置 + 可扩展）
+
+| 模板 | 用途 | 级别 |
+|------|------|------|
+| `math_modeling` | 数学建模竞赛（CUMCM） | — |
+| `neurips_2024` | NeurIPS 2024 | **CCF-A** |
+| `acm_sigconf` | ACM SIG Conference | **CCF-A** |
+| `ieee_conference` | IEEE Conference | **CCF-A** |
+| `springer_lncs` | Springer LNCS | CCF-B |
+| `research_survey` | 文献综述/调研报告 | — |
+| `coursework` | 课程作业 | — |
+| `financial_analysis` | 金融分析报告 | — |
+
+新增模板：将 JSON + `.cls/.sty` 文件放入 `backend/app/core/paper_templates/templates/`。
+
+### Agent 团队（15 个 Agent）
+
+| Agent | 角色 | 核心能力 |
+|-------|------|---------|
+| analyzer | 分析师 | 问题分解、类型识别 |
+| data | 数据分析师 | 文件解析、特征提取 |
+| research | 研究员 | arXiv + Semantic Scholar 搜索 |
+| innovation | 创新发现专家 | 研究空白识别 |
+| modeler | 建模师 | 数学建模 |
+| algorithm_engineer | 算法工程师 | CCF-A 算法设计 |
+| financial_analyst | 金融分析师 | 金融建模、风险分析 |
+| solver | 求解器 | 真实代码执行、自动修复 |
+| writer | 写作专家 | 逐章 LaTeX 生成 |
+| peer_review | 审稿人 | 4 维评分 + 可复现性检查 |
+| experimentation | 实验设计专家 | 实验设计 + 自动迭代 |
+| summary | 总结专家 | 任务总结 + 经验提取 |
+| debugger | 调试专家 | 智能错误分析 |
+| compliance | 合规审查 | 金融报告合规检查 |
+| coordinator | 协调者 | 工作流编排 |
+
+### 零幻觉架构
 
 ```
 outputs/logistics_optimization/
