@@ -56,6 +56,8 @@ from iterative_quality_gate import IterativeQualityGate, QualityMetric
 from reflection_agent import ReflectionAgent
 from global_evolution import GlobalEvolutionStore
 from context_overlay import build_context_overlay
+from skill_library import SkillLibrary
+from self_check import SelfChecker
 
 # 让脚本能找到 src/ 和 backend/
 ROOT = Path(__file__).resolve().parent.parent
@@ -581,6 +583,12 @@ async def run_pipeline(
     # Reflection Agent (LLM-based lesson extraction with rule-gate fallback)
     reflection_agent = ReflectionAgent(llm_fn=call_minimax)
 
+    # Skill Library (Voyager-style verified solutions)
+    skill_lib = SkillLibrary(workspace_dir / "skills")
+
+    # Self-Check diagnostics + quality trend
+    self_checker = SelfChecker(workspace_dir / "self_check")
+
     # Global Evolution Store: snapshot global lessons into this project (isolation)
     global_store = GlobalEvolutionStore() if enable_evolution else None
     snapshot_lessons: list = []
@@ -610,6 +618,15 @@ async def run_pipeline(
             step_name, snapshot_lessons, topic=problem, max_lessons=8, return_keys=True
         )
         injected_keys.extend(k for k in keys if k not in injected_keys)
+        # Inject retrieved verified skills (code/writing/prompt) as an extra section.
+        skills = skill_lib.retrieve(problem, top_k=3, threshold=0.05)
+        if skills:
+            skill_parts = ["## 可用技能 (检索自历史库)"]
+            for sk in skills[:2]:
+                snippet = sk.content.strip()[:800]
+                skill_parts.append(f"- [{sk.kind}] {sk.name} (v{sk.version}): {snippet}")
+                skill_lib.record_use(sk.skill_id)
+            overlay = (overlay + "\n\n" + "\n".join(skill_parts)) if overlay else "\n".join(skill_parts)
         return overlay
 
     logger.info(f"[{project_name}] === Step 1: 文献调研 ===")
@@ -694,6 +711,28 @@ async def run_pipeline(
             code_result["execution"]["stderr"],
             context={"code": code_result["code"][:1000]},
         )
+
+    # Skill Library: auto-ingest a verified code skill when execution + quality pass
+    if (
+        code_result["execution"]["success"]
+        and code_decision.weighted_score >= 0.7
+        and code_result.get("code", "").strip()
+    ):
+        try:
+            skill = skill_lib.add_code_skill(
+                problem=problem,
+                code=code_result["code"][:4000],
+                template_id=template_id,
+                evidence={
+                    "exec_success": True,
+                    "quality_score": code_decision.weighted_score,
+                    "run": project_name,
+                },
+                run_id=project_name,
+            )
+            logger.info(f"  [Skill] 已入库代码技能: {skill.name} v{skill.version}")
+        except Exception as e:
+            logger.warning(f"  [Skill] 代码技能入库失败: {e}")
 
     logger.info(f"[{project_name}] === Step 4: 写论文 ===")
     paper = await step4_write(
@@ -1181,6 +1220,22 @@ async def run_pipeline(
                 tags=[template_id, "success"],
             )
         logger.info(f"  Stored {memory_store.count()} total memories")
+
+    # Self-Check diagnostics + quality trend (based on this run's gate scores)
+    if enable_evolution:
+        stage_scores = [
+            {"score": research_decision.weighted_score, "category": "research"},
+            {"score": modeling_decision.weighted_score, "category": "modeling"},
+            {"score": code_decision.weighted_score, "category": "code"},
+        ]
+        if review_data and review_data.get("overall_score"):
+            stage_scores.append(
+                {"score": review_data["overall_score"] / 5.0, "category": "review"}
+            )
+        dig = build_digest(evolution_store.load_all()) if evolution_store else {}
+        self_checker.diagnose_and_report(stage_scores, dig)
+        self_checker.write_quality_trend([s["score"] for s in stage_scores])
+        logger.info("[%s] Self-check diagnostics updated", project_name)
 
     # Generate self-evolution report
     if enable_evolution and evolution_store:

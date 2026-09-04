@@ -24,5 +24,9 @@ nltk>=3.8.0               # 自然语言处理工具
 # GPU 检查
 torch>=2.0.0              # PyTorch（应已安装）
 
+# 自进化：本地 embedding（可选，缺失时自动回退到词法相似度）
+# 用于技能库检索（EmbeddingClient）。fastembed 基于 ONNX 推理，无需 torch。
+fastembed>=0.3.0
+
 # 安装命令：
 # pip install -r requirements-ml.txt
