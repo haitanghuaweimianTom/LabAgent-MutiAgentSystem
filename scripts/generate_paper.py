@@ -54,6 +54,8 @@ from enhanced_debate import EnhancedDebate
 from self_healer import SelfHealer
 from iterative_quality_gate import IterativeQualityGate, QualityMetric
 from reflection_agent import ReflectionAgent
+from global_evolution import GlobalEvolutionStore
+from context_overlay import build_context_overlay
 
 # 让脚本能找到 src/ 和 backend/
 ROOT = Path(__file__).resolve().parent.parent
@@ -232,7 +234,7 @@ def filter_fake_references(
 # ==================== Pipeline ====================
 
 
-async def step1_research(problem: str, template_id: str) -> Dict:
+async def step1_research(problem: str, template_id: str, overlay: str = "") -> Dict:
     """Step 1: 文献调研 + 提取真实参考。"""
     from src.knowledge.template_skills import get_real_references
 
@@ -264,6 +266,8 @@ async def step1_research(problem: str, template_id: str) -> Dict:
 }}
 
 **硬约束**：每条 arxiv_id 必须严格出现在我提供的列表里。"""
+    if overlay:
+        user_prompt += f"\n\n{overlay}"
     resp = await call_minimax(system_prompt, user_prompt, max_tokens=8000)
     return resp
 
@@ -283,7 +287,7 @@ async def step1b_debate_research(research: Dict, problem: str, template_id: str)
     }
 
 
-async def step2_model(problem: str, template_id: str) -> Dict:
+async def step2_model(problem: str, template_id: str, overlay: str = "") -> Dict:
     """Step 2: 建模方案。"""
     from src.knowledge.template_skills import get_template_skill
 
@@ -311,10 +315,12 @@ async def step2_model(problem: str, template_id: str) -> Dict:
   "assumptions": ["假设1", "假设2"],
   "notation": {{"x": "变量x的含义", "y": "变量y的含义"}}
 }}"""
+    if overlay:
+        user_prompt += f"\n\n{overlay}"
     return await call_minimax(system_prompt, user_prompt, max_tokens=32000)
 
 
-async def step3_code(modeling: Dict, problem: str, code_dir: Path) -> Dict:
+async def step3_code(modeling: Dict, problem: str, code_dir: Path, overlay: str = "") -> Dict:
     """Step 3: 生成代码并执行。"""
     code_dir.mkdir(parents=True, exist_ok=True)
 
@@ -338,6 +344,8 @@ async def step3_code(modeling: Dict, problem: str, code_dir: Path) -> Dict:
 ```python
 # 完整代码
 ```"""
+    if overlay:
+        user_prompt += f"\n\n{overlay}"
     resp = await call_minimax(system_prompt, user_prompt, max_tokens=32000)
     content = resp["content"]
 
@@ -418,6 +426,7 @@ async def step4_write(
     research: Dict,
     modeling: Dict,
     code_result: Dict,
+    overlay: str = "",
 ) -> Dict:
     """Step 4: 写论文正文（Markdown + LaTeX）。"""
     from src.knowledge.template_skills import get_template_skill
@@ -465,11 +474,13 @@ stderr: {code_result['execution']['stderr'][:500]}
 3. references 必须是真实的 arxiv ID（只能从以下池子选）：{real_refs[:15]}
 4. 不要照抄问题原文，要重述
 """
+    if overlay:
+        user_prompt += f"\n\n{overlay}"
     resp = await call_minimax(system_prompt, user_prompt, max_tokens=64000)
     return resp
 
 
-async def step5_peer_review(paper_md: str, template_id: str) -> Dict:
+async def step5_peer_review(paper_md: str, template_id: str, overlay: str = "") -> Dict:
     """Step 5: 同行评审（self-review via 4-dimension scoring）。"""
     from src.knowledge.template_skills import get_template_skill
 
@@ -500,6 +511,8 @@ async def step5_peer_review(paper_md: str, template_id: str) -> Dict:
   "minor_issues": ["问题1"],
   "suggested_edits": ["建议1"]
 }}"""
+    if overlay:
+        user_prompt += f"\n\n{overlay}"
     return await call_minimax(system_prompt, user_prompt, max_tokens=16000)
 
 
@@ -568,15 +581,39 @@ async def run_pipeline(
     # Reflection Agent (LLM-based lesson extraction with rule-gate fallback)
     reflection_agent = ReflectionAgent(llm_fn=call_minimax)
 
-    # Load evolution overlay for first step
-    evo_overlay = ""
-    if evolution_store:
-        evo_overlay = evolution_store.build_overlay("step1_research")
-        if evo_overlay:
-            logger.info(f"[{project_name}] Evolution overlay loaded for research step")
+    # Global Evolution Store: snapshot global lessons into this project (isolation)
+    global_store = GlobalEvolutionStore() if enable_evolution else None
+    snapshot_lessons: list = []
+    if global_store:
+        global_store.snapshot_to(artifact.folder)
+        snapshot_p = artifact.folder / ".evolution_snapshot" / "lessons.jsonl"
+        if snapshot_p.exists():
+            from self_evolution import LessonV2  # noqa
+            import json as _json
+            for line in snapshot_p.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    snapshot_lessons.append(LessonV2.from_dict(_json.loads(line)))
+                except (json.JSONDecodeError, TypeError):
+                    continue
+        logger.info(
+            f"[{project_name}] Global evolution snapshot loaded: {len(snapshot_lessons)} lessons"
+        )
+
+    # Track which issue-keys were surfaced to each step (for effectiveness).
+    injected_keys: list[str] = []
+
+    def _step_overlay(step_name: str) -> str:
+        overlay, keys = build_context_overlay(
+            step_name, snapshot_lessons, topic=problem, max_lessons=8, return_keys=True
+        )
+        injected_keys.extend(k for k in keys if k not in injected_keys)
+        return overlay
 
     logger.info(f"[{project_name}] === Step 1: 文献调研 ===")
-    research = await step1_research(problem, template_id)
+    research = await step1_research(problem, template_id, overlay=_step_overlay("step1"))
     artifact.total_tokens_used += research.get("usage", {}).get("total_tokens", 0)
     
     # 质量门禁：research (using iterative quality gate)
@@ -620,7 +657,7 @@ async def run_pipeline(
     logger.info(f"Recommendations: {len(debate_result.recommendations)}")
 
     logger.info(f"[{project_name}] === Step 2: 建模 ===")
-    modeling = await step2_model(problem, template_id)
+    modeling = await step2_model(problem, template_id, overlay=_step_overlay("step2"))
     artifact.total_tokens_used += modeling.get("usage", {}).get("total_tokens", 0)
     
     # 质量门禁：modeling
@@ -634,7 +671,7 @@ async def run_pipeline(
         logger.info(f"Modeling 门禁通过: score={modeling_decision.weighted_score:.2f}")
 
     logger.info(f"[{project_name}] === Step 3: 代码生成+执行 ===")
-    code_result = await step3_code(modeling, problem, artifact.folder / "code")
+    code_result = await step3_code(modeling, problem, artifact.folder / "code", overlay=_step_overlay("step3"))
     artifact.total_tokens_used += code_result.get("raw", {}).get("usage", {}).get("total_tokens", 0)
     if code_result["code_path"]:
         artifact.code_files.append(code_result["code_path"])
@@ -659,7 +696,9 @@ async def run_pipeline(
         )
 
     logger.info(f"[{project_name}] === Step 4: 写论文 ===")
-    paper = await step4_write(problem, template_id, research, modeling, code_result)
+    paper = await step4_write(
+        problem, template_id, research, modeling, code_result, overlay=_step_overlay("step4")
+    )
     artifact.total_tokens_used += paper.get("usage", {}).get("total_tokens", 0)
     
     # 反模式检测：写作内容
@@ -917,7 +956,7 @@ async def run_pipeline(
                     (artifact.folder / "paper.md").write_text(artifact.paper_md, encoding="utf-8")
                     
                     # 重新评审
-                    review = await step5_peer_review(artifact.paper_md, template_id)
+                    review = await step5_peer_review(artifact.paper_md, template_id, overlay=_step_overlay("step5"))
                     artifact.total_tokens_used += review.get("usage", {}).get("total_tokens", 0)
                     
                     # 重新解析评审结果
@@ -1112,6 +1151,16 @@ async def run_pipeline(
             f"  Recorded {len(lessons)} lessons "
             f"(reflection={'yes' if not report.fallback_used else 'fallback-rule'})"
         )
+
+        # Write this run's lessons into the project's snapshot file too, then
+        # fold them (deduped) back into the global cross-project store.
+        if global_store is not None:
+            snap_lessons = artifact.folder / ".evolution_snapshot" / "lessons.jsonl"
+            with snap_lessons.open("a", encoding="utf-8") as f:
+                for lesson in lessons:
+                    f.write(json.dumps(lesson.to_dict(), ensure_ascii=False) + "\n")
+            merged = global_store.merge_from_project(artifact.folder)
+            logger.info(f"  Merged {merged} new lessons into global store (total {global_store.count()})")
 
     # Store memory for future recall
     if enable_memory and memory_store:
