@@ -199,8 +199,8 @@ python scripts/generate_paper.py \
 # 验证自进化是否有效：evolution ON vs OFF 对比（mock 干跑，无需 API key）
 python scripts/ab_benchmark.py --mock --n-runs 4 --output ab_report.md
 
-# 真实 A/B（需 API，先接 run_pipeline 后手动触发）
-python scripts/ab_benchmark.py --real --output ab_report_real.md
+# 真实 A/B（已接 run_pipeline：3 问题 × on/off = 6 次完整 run，需配置 MINIMAX_API_KEY）
+MINIMAX_API_KEY=sk-xxx python scripts/ab_benchmark.py --real --output ab_report_real.md
 ```
 
 ### 输出结构

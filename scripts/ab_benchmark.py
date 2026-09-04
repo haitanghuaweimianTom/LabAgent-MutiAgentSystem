@@ -134,7 +134,11 @@ def run_mock_benchmark(
     return results
 
 
-def render_report(on: dict[str, float], off: dict[str, float]) -> str:
+def render_report(
+    on: dict[str, float],
+    off: dict[str, float],
+    mode: str = "mock 干跑，无 API 成本",
+) -> str:
     """Render a markdown comparison of evolution-on vs off metrics."""
     lines = [
         "# A/B Benchmark Report",
@@ -147,27 +151,143 @@ def render_report(on: dict[str, float], off: dict[str, float]) -> str:
         f"| 总 token | {on['total_tokens']} | {off['total_tokens']} |",
         f"| 教训注入率 | {on['injection_rate']*100:.1f}% | {off['injection_rate']*100:.1f}% |",
         "",
-        f"生成时间: {time.strftime('%Y-%m-%d %H:%M:%S')} (mock 干跑，无 API 成本)",
+        f"生成时间: {time.strftime('%Y-%m-%d %H:%M:%S')} ({mode})",
     ]
     return "\n".join(lines)
+
+
+def metrics_from_result(result: dict[str, Any], injected: bool = False) -> dict[str, Any]:
+    """Translate a run_pipeline result/artifact into per-run metrics.
+
+    - score: peer_review.overall_score / 5.0 (0 if unavailable)
+    - retry : 0 if recommendation == 'accept', else 1 (revise/reject/missing)
+    - tokens: total_tokens_used
+    - injected: whether a learned lesson was surfaced to this run
+    """
+    review = result.get("peer_review") or {}
+    score = 0.0
+    if review.get("overall_score"):
+        try:
+            score = float(review["overall_score"]) / 5.0
+        except (TypeError, ValueError):
+            score = 0.0
+    rec = (review.get("recommendation") or "unknown")
+    retry = 0 if rec == "accept" else 1
+    tokens = int(result.get("total_tokens_used", 0) or 0)
+    return {"retry": retry, "score": score, "tokens": tokens, "injected": bool(injected)}
+
+
+def _real_pipeline_runner():
+    """Build the production runner that calls generate_paper.run_pipeline.
+
+    Isolates each arm's global evolution store via LABAGENT_EVOLUTION_DIR.
+    """
+    async def runner(problem, template, enable_evolution, output_dir, evo_dir):
+        import os as _os
+
+        _os.environ["LABAGENT_EVOLUTION_DIR"] = str(evo_dir)
+        from generate_paper import run_pipeline  # lazy, avoid heavy import for --mock
+
+        artifact = await run_pipeline(
+            template_id=template,
+            problem=problem,
+            project_name=f"ab_{'on' if enable_evolution else 'off'}_{template}",
+            output_dir=output_dir,
+            enable_evolution=enable_evolution,
+            enable_memory=False,
+            auto_hitl=True,
+        )
+        snapshot = False
+        try:
+            snap_p = artifact.folder / ".evolution_snapshot" / "lessons.jsonl"
+            snapshot = snap_p.exists() and bool(snap_p.read_text(encoding="utf-8").splitlines())
+        except Exception:
+            snapshot = False
+        return {
+            "total_tokens_used": artifact.total_tokens_used,
+            "peer_review": artifact.peer_review or {},
+            "folder": str(artifact.folder),
+        }, snapshot
+
+    return runner
+
+
+def run_real_ab(
+    pipeline_runner=None,
+    *,
+    output_root: Path | str | None = None,
+    n_evolution: bool = True,
+) -> tuple[dict[str, float], dict[str, float], str]:
+    """Run 3 standard problems x evolution{ON,OFF}, aggregate metrics.
+
+    Args:
+        pipeline_runner: async callable `(problem, template, enable_evolution,
+            output_dir, evo_dir) -> (result_dict, injected_bool)`.
+            Defaults to the real generate_paper.run_pipeline wrapper.
+        output_root: base dir for arm dirs & project outputs.
+        n_evolution: include the ON arm (True) or not.
+
+    Returns:
+        (on_metrics, off_metrics, report_markdown)
+    """
+    output_root = Path(output_root or Path.cwd() / "ab_real_out")
+    output_root.mkdir(parents=True, exist_ok=True)
+    runner = pipeline_runner or _real_pipeline_runner()
+
+    on_runs: list[dict[str, Any]] = []
+    off_runs: list[dict[str, Any]] = []
+
+    for entry in STANDARD_PROBLEMS:
+        template = entry["template"]
+        problem = entry["problem"]
+        for arm in ([True, False] if n_evolution else [False]):
+            evo_dir = output_root / ("evo_on" if arm else "evo_off")
+            evo_dir.mkdir(parents=True, exist_ok=True)
+            out_dir = output_root / "projects"
+            result, injected = _sync_runner(runner, problem, template, arm, out_dir, evo_dir)
+            metric = metrics_from_result(result, injected)
+            if arm:
+                on_runs.append(metric)
+            else:
+                off_runs.append(metric)
+
+    on_metrics = compute_metrics(on_runs)
+    off_metrics = compute_metrics(off_runs)
+    report = render_report(on_metrics, off_metrics, mode="真实 API A/B")
+    return on_metrics, off_metrics, report
+
+
+def _sync_runner(runner, problem, template, arm, out_dir, evo_dir):
+    """Run an async runner inside an event loop."""
+
+    async def _go():
+        return await runner(problem, template, arm, out_dir, evo_dir)
+
+    import asyncio
+    return asyncio.run(_go())
+
 
 def main() -> None:
     """CLI entry point. Default: mock dry-run (zero API cost)."""
     import argparse
+    import asyncio
     import sys
     from pathlib import Path as _P
 
     parser = argparse.ArgumentParser(description="自进化 A/B 对比")
     parser.add_argument("--mock", action="store_true", help="mock 干跑（默认，零 API）")
-    parser.add_argument("--real", action="store_true", help="真实 A/B（需 API，暂未接入 run_pipeline）")
+    parser.add_argument("--real", action="store_true", help="真实 A/B（调用 run_pipeline，需 API）")
     parser.add_argument("--n-runs", type=int, default=4, help="mock 每档运行次数")
     parser.add_argument("--output", type=_P, default=_P("ab_report.md"), help="报告输出路径")
+    parser.add_argument("--output-root", type=_P, default=_P("ab_real_out"), help="真实 A/B 输出目录")
     args = parser.parse_args()
 
     if args.real:
-        print("--real 未实现：请手动触发 generate_paper.py 的 run_pipeline（3 问题 × on/off）。")
-        print("当前仅支持 --mock 干跑。")
-        sys.exit(1)
+        print("== 真实 A/B：3 问题 × evolution{ON,OFF} = 6 次完整 run_pipeline（真实 LLM 调用） ==")
+        on, off, report = run_real_ab()
+        args.output.write_text(report + "\n", encoding="utf-8")
+        print(report)
+        return
 
     on = compute_metrics(run_mock_benchmark(use_evolution=True, n_runs=args.n_runs))
     off = compute_metrics(run_mock_benchmark(use_evolution=False, n_runs=args.n_runs))
