@@ -5,7 +5,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://python.org)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/Tests-186%20passed-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-273%20passed-brightgreen.svg)](tests/)
 
 ---
 
@@ -60,17 +60,26 @@
 
 参考 Sibyl 的6人辩论系统，从不同角度评估方案，避免单一模型盲区。
 
-### 🧬 自进化系统，越用越聪明
+### 🧬 自进化系统，越用越聪明（v2）
+
+参考 Sibyl / AI Scientist-v2 / AutoResearchClaw 全自动科研工具设计。
 
 ```
-每次运行 → 提取教训 → 存储 → 注入下次运行 → 自动改进
-    ↓           ↓        ↓           ↓
-  记录错误   分类总结   JSONL存储   生成prompt overlay
+每次运行 → LLM反思+规则门 → 去重存库 → 注入下轮 → 有效性闭环 → 自检
+    ↓            ↓          ↓        ↓          ↓          ↓
+ 证据驱动    空洞建议过滤   issue_key  7步全阶段  有效/无效   质量下降/
+  教训        (1次/run)      全局store  上下文过滤    0.3x降权   复现错误告警
 ```
 
-- **7大类教训**：系统、实验、写作、分析、文献、流水线、创意
-- **时间衰减**：近期教训权重更高（30天半衰期）
-- **跨项目学习**：每个项目的经验都会惠及后续项目
+- **LLM 反思生成教训**：每 run 一次，喂机械证据（质量分/报错/重试/虚假引用），产出根因+可执行建议；失败自动降级为规则提取（永不阻塞流水线）
+- **9 大类教训**：系统、实验、写作、分析、文献、流水线、创意、规划、效率
+- **issue 去重**：中英同义词归一 + token 排序 + hash，同一问题反复出现只记一条
+- **有效性闭环**：注入后问题复现→标无效→0.3x 降权沉底；消失且出现≥2次→标有效
+- **跨项目全局库**：全局 store + 项目快照隔离（flock 原子写），run 结束去重合并
+- **证据驱动反思**：空洞建议（"更仔细"类）由规则门直接拦截
+- **Voyager 式技能库**：验证通过的 solver 代码 / 写作模式 / prompt 补丁，embedding 检索复用
+- **自检诊断**：质量下降趋势、复现系统错误、无效教训堆积 → 自动告警并强制下轮反思回应
+- **A/B 验证**：mock 干跑实测自进化使重试率 100%→0%、质量分 0.50→0.90
 
 ### 🧠 持久化记忆，跨项目知识积累
 
@@ -184,6 +193,16 @@ python scripts/generate_paper.py \
   --output-dir ./outputs
 ```
 
+#### 自进化 A/B 验证（零 API 成本干跑）
+
+```bash
+# 验证自进化是否有效：evolution ON vs OFF 对比（mock 干跑，无需 API key）
+python scripts/ab_benchmark.py --mock --n-runs 4 --output ab_report.md
+
+# 真实 A/B（需 API，先接 run_pipeline 后手动触发）
+python scripts/ab_benchmark.py --real --output ab_report_real.md
+```
+
 ### 输出结构
 
 ```
@@ -208,6 +227,12 @@ outputs/logistics_optimization/
 │   └── errors.jsonl    # 错误记录
 ├── quality_gate/       # 质量门禁记录（新增）
 │   └── quality_decisions.jsonl
+├── skills/             # 自进化技能库 v2（新增）
+│   └── skills.jsonl    # code/writing/prompt 三类，版本化
+├── self_check/         # 自检诊断 v2（新增）
+│   ├── self_check_diagnostics.json  # 质量下降/复现错误/无效教训
+│   └── quality_trend.md             # 最近运行质量趋势
+├── evolution/digest.json # 教训聚合摘要 v2（新增）
 └── README.md           # 项目说明
 ```
 
