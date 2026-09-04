@@ -13,6 +13,21 @@ from .discovery import (
     discover_directories,
     load_plugin_instance,
 )
+from .session_log import (
+    SessionLog,
+    SessionEvent,
+    EventKind,
+    derive_session_id,
+    CURRENT_VERSION,
+)
+from .bundle import (
+    Profile,
+    Bundle,
+    load_profile,
+    load_bundle,
+    discover_bundles,
+    collect_bundle_plugins,
+)
 
 __all__ = [
     "Context",
@@ -24,4 +39,15 @@ __all__ = [
     "discover_entry_points",
     "discover_directories",
     "load_plugin_instance",
+    "SessionLog",
+    "SessionEvent",
+    "EventKind",
+    "derive_session_id",
+    "CURRENT_VERSION",
+    "Profile",
+    "Bundle",
+    "load_profile",
+    "load_bundle",
+    "discover_bundles",
+    "collect_bundle_plugins",
 ]
