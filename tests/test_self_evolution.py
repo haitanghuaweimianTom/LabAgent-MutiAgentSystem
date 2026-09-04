@@ -25,9 +25,11 @@ class TestLessonCategory:
         assert LessonCategory.LITERATURE == "literature"
         assert LessonCategory.PIPELINE == "pipeline"
         assert LessonCategory.IDEATION == "ideation"
+        assert LessonCategory.PLANNING == "planning"
+        assert LessonCategory.EFFICIENCY == "efficiency"
 
-    def test_all_seven_categories(self):
-        assert len(LessonCategory) == 7
+    def test_all_nine_categories(self):
+        assert len(LessonCategory) == 9
 
 
 class TestLessonEntry:

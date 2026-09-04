@@ -39,12 +39,21 @@ from sandbox_and_gates import CodeSandbox, QualityGate, MultiModelDebate, Figure
 from output_guarantee import OutputGuarantee, LaTeXFormatter, ReferenceVerifier, IdeaDeduplicator
 
 # 导入新增模块
-from self_evolution import EvolutionStore, extract_lessons, build_overlay
+from self_evolution import (
+    EvolutionStore,
+    LessonEntry,
+    LessonV2,
+    extract_lessons,
+    build_overlay,
+    update_effectiveness,
+    build_digest,
+)
 from memory_store import MemoryStore
 from hitl_manager import HITLManager, InterventionMode
 from enhanced_debate import EnhancedDebate
 from self_healer import SelfHealer
 from iterative_quality_gate import IterativeQualityGate, QualityMetric
+from reflection_agent import ReflectionAgent
 
 # 让脚本能找到 src/ 和 backend/
 ROOT = Path(__file__).resolve().parent.parent
@@ -556,6 +565,9 @@ async def run_pipeline(
     # Iterative Quality Gate
     quality_gate = IterativeQualityGate(workspace_dir / "quality_gate")
 
+    # Reflection Agent (LLM-based lesson extraction with rule-gate fallback)
+    reflection_agent = ReflectionAgent(llm_fn=call_minimax)
+
     # Load evolution overlay for first step
     evo_overlay = ""
     if evolution_store:
@@ -1025,33 +1037,81 @@ async def run_pipeline(
     artifact.figures_generated = compile_result["figures"]
 
     # Record lessons for self-evolution
+    evolution_lessons: list = []
     if enable_evolution and evolution_store:
         logger.info(f"[{project_name}] === Recording lessons for self-evolution ===")
+        # Mechanical evidence for the reflection agent (evidence-driven reflection).
         stage_results = {
             "research": {
                 "status": "completed" if research.get("content") else "failed",
                 "score": research_decision.weighted_score,
-                "duration": 0,
+                "decision": research_decision.action.value,
             },
             "modeling": {
                 "status": "completed" if modeling.get("content") else "failed",
                 "score": modeling_decision.weighted_score,
-                "duration": 0,
+                "decision": modeling_decision.action.value,
             },
             "code": {
                 "status": "completed" if code_result["execution"]["success"] else "failed",
                 "score": code_decision.weighted_score,
-                "duration": 0,
+                "decision": code_decision.action.value,
+                "exec_errors": code_result["execution"].get("errors", []),
             },
             "review": {
                 "status": "completed",
                 "score": review_data.get("overall_score", 0) / 5.0 if review_data else 0,
-                "duration": 0,
             },
         }
-        lessons = extract_lessons(stage_results, run_id=project_name)
+        # include guarantee findings as evidence
+        if "guarantee_result" in locals():
+            stage_results["guarantee"] = {
+                "overall_pass": guarantee_result.get("overall_pass"),
+                "format_valid": guarantee_result.get("format_valid"),
+                "reference_valid": guarantee_result.get("reference_valid"),
+                "fake_refs": guarantee_result.get("reference_result", {}).get("fake"),
+                "idea_unique": guarantee_result.get("idea_unique"),
+            }
+
+        # LLM reflection with deterministic fallback; never blocks the pipeline.
+        report = await reflection_agent.reflect(stage_results, run_id=project_name)
+        lessons = [
+            LessonV2(
+                stage_name=(i.affected_stages[0] if i.affected_stages else "unknown"),
+                category=i.category,
+                severity="error",
+                description=i.description,
+                root_cause=i.root_cause,
+                suggestion=i.suggestion,
+                affected_stages=i.affected_stages,
+                specificity=i.specificity,
+                testability=i.testability,
+                source=i.source,
+                run_id=project_name,
+            )
+            for i in report.issues
+        ]
         evolution_store.append_many(lessons)
-        logger.info(f"  Recorded {len(lessons)} lessons")
+        evolution_lessons = lessons
+
+        # Update effectiveness against previously stored lessons (dedup via issue_key).
+        prior = evolution_store.load_all()
+        current_keys = [l.issue_key for l in lessons]
+        update_effectiveness(current_keys, prior)
+        # Persist effectiveness changes and digest.
+        # (Rewrite lessons file with updated effectiveness.)
+        _rewrite_lessons_with_effectiveness(evolution_store, prior)
+
+        digest = build_digest(prior)
+        digest_report = {k: v.to_dict() for k, v in digest.items()}
+        (evolution_store.lessons_path.parent / "digest.json").write_text(
+            json.dumps(digest_report, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+
+        logger.info(
+            f"  Recorded {len(lessons)} lessons "
+            f"(reflection={'yes' if not report.fallback_used else 'fallback-rule'})"
+        )
 
     # Store memory for future recall
     if enable_memory and memory_store:
@@ -1082,9 +1142,13 @@ async def run_pipeline(
 ## Lessons Recorded
 
 """
-        for lesson in lessons:
-            evo_report += f"- [{lesson.severity.upper()}] {lesson.category}: {lesson.description[:200]}\n"
-        
+        for lesson in evolution_lessons:
+            eff = getattr(lesson, "effectiveness", "unverified")
+            evo_report += (
+                f"- [{lesson.severity.upper()}][{lesson.category.upper()}][{eff}] "
+                f"{lesson.description[:200]}\n"
+            )
+
         evo_report += f"""
 ## Quality Gate Decisions
 
@@ -1100,6 +1164,16 @@ async def run_pipeline(
         (artifact.folder / "evolution_report.md").write_text(evo_report, encoding="utf-8")
 
     return artifact
+
+
+def _rewrite_lessons_with_effectiveness(
+    evolution_store: EvolutionStore, lessons: list[LessonV2]
+) -> None:
+    """Rewrite lessons.jsonl so effectiveness updates persist to disk."""
+    path = evolution_store.lessons_path
+    with path.open("w", encoding="utf-8") as f:
+        for lesson in lessons:
+            f.write(json.dumps(lesson.to_dict(), ensure_ascii=False) + "\n")
 
 
 def latex_escape(text: str) -> str:

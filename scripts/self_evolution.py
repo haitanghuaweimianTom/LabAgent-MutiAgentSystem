@@ -23,17 +23,23 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
 
+from issue_signature import build_issue_key, normalize_text
+
 __all__ = [
     "LessonCategory",
     "LessonEntry",
+    "LessonV2",
+    "DigestEntry",
     "EvolutionStore",
     "extract_lessons",
     "build_overlay",
+    "update_effectiveness",
+    "build_digest",
 ]
 
 
 class LessonCategory(str, Enum):
-    """7 issue categories for classifying lessons."""
+    """9 issue categories for classifying lessons."""
 
     SYSTEM = "system"
     EXPERIMENT = "experiment"
@@ -42,6 +48,8 @@ class LessonCategory(str, Enum):
     LITERATURE = "literature"
     PIPELINE = "pipeline"
     IDEATION = "ideation"
+    PLANNING = "planning"
+    EFFICIENCY = "efficiency"
 
 
 @dataclass
@@ -110,6 +118,14 @@ _CATEGORY_KEYWORDS: dict[str, list[str]] = {
         "hypothesis", "idea", "novel", "contribution", "research question",
         "approach", "method", "innovation", "gap",
     ],
+    LessonCategory.PLANNING: [
+        "scope", "estimate", "feasib", "plan", "resource", "schedule",
+        "budget", "milestone", "deadline", "overrun",
+    ],
+    LessonCategory.EFFICIENCY: [
+        "gpu idle", "throughput", "bottleneck", "batch size", "parallel",
+        "slow", "duration", "latency", "redundant", "waste",
+    ],
 }
 
 
@@ -141,6 +157,164 @@ def _time_weight(timestamp: float, half_life_days: float = 30.0) -> float:
     return math.exp(-0.693 * (now - timestamp) / half_life_seconds)
 
 
+@dataclass
+class LessonV2(LessonEntry):
+    """Lesson enriched with issue-key dedup, effectiveness, and semantics.
+
+    Subclasses LessonEntry for backward compatibility with existing stores.
+    """
+
+    issue_key: str = ""
+    root_cause: str = ""
+    suggestion: str = ""
+    specificity: int = 0          # 1-5
+    testability: int = 0          # 1-5
+    effectiveness: str = "unverified"  # effective | ineffective | unverified
+    total_occurrences: int = 1
+    weighted_frequency: float = 1.0
+    affected_stages: list[str] = field(default_factory=list)
+    source: str = "reflection"    # reflection | rule
+
+    def __post_init__(self) -> None:
+        if not self.issue_key:
+            self.issue_key = build_issue_key(self.description, self.category)
+
+    def to_dict(self) -> dict[str, Any]:
+        d = super().to_dict()
+        d.update({
+            "issue_key": self.issue_key,
+            "root_cause": self.root_cause,
+            "suggestion": self.suggestion,
+            "specificity": self.specificity,
+            "testability": self.testability,
+            "effectiveness": self.effectiveness,
+            "total_occurrences": self.total_occurrences,
+            "weighted_frequency": self.weighted_frequency,
+            "affected_stages": self.affected_stages,
+            "source": self.source,
+        })
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> LessonV2:
+        obj = cls(
+            stage_name=data.get("stage_name", "unknown"),
+            category=data.get("category", "pipeline"),
+            severity=data.get("severity", "info"),
+            description=data.get("description", ""),
+            timestamp=data.get("timestamp", 0.0),
+            run_id=data.get("run_id", ""),
+            metadata=data.get("metadata", {}),
+            issue_key=data.get("issue_key", ""),
+            root_cause=data.get("root_cause", ""),
+            suggestion=data.get("suggestion", ""),
+            specificity=int(data.get("specificity", 0) or 0),
+            testability=int(data.get("testability", 0) or 0),
+            effectiveness=data.get("effectiveness", "unverified"),
+            total_occurrences=int(data.get("total_occurrences", 1) or 1),
+            weighted_frequency=float(data.get("weighted_frequency", 1.0) or 1.0),
+            affected_stages=data.get("affected_stages", []),
+            source=data.get("source", "reflection"),
+        )
+        if not obj.issue_key:
+            obj.issue_key = build_issue_key(obj.description, obj.category)
+        return obj
+
+
+@dataclass
+class DigestEntry:
+    """Aggregated view of all lessons sharing one issue_key."""
+
+    issue_key: str
+    category: str
+    pattern_summary: str          # shortest description among aggregated lessons
+    total_occurrences: int = 0
+    weighted_frequency: float = 0.0
+    avg_score_when_seen: float = 0.0
+    affected_stages: list[str] = field(default_factory=list)
+    effectiveness: str = "unverified"
+    severity: str = "info"        # info | warning | high
+    last_updated: float = 0.0
+
+    def to_dict(self) -> dict[str, Any]:
+        return {k: v for k, v in self.__dict__.items()}
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> DigestEntry:
+        return cls(**{k: data.get(k, v) for k, v in cls().to_dict().items() if k in data} or data)
+
+
+def update_effectiveness(
+    current_issue_keys: list[str],
+    lessons: list[LessonV2],
+) -> dict[str, str]:
+    """Update lesson effectiveness based on whether their issue recurred.
+
+    Sibyl rule:
+    - key still present this run  -> "ineffective"
+    - key gone and occurred >= 2  -> "effective"
+    - otherwise keep "unverified"
+
+    Mutates lessons' effectiveness in place and returns {issue_key: status}.
+    """
+    current = set(current_issue_keys)
+    status: dict[str, str] = {}
+    for lesson in lessons:
+        if not lesson.issue_key:
+            continue
+        if lesson.issue_key in current:
+            lesson.effectiveness = "ineffective"
+        elif lesson.total_occurrences >= 2 and lesson.issue_key not in current:
+            lesson.effectiveness = "effective"
+        else:
+            lesson.effectiveness = "unverified"
+        status[lesson.issue_key] = lesson.effectiveness
+    return status
+
+
+def build_digest(lessons: list[LessonV2]) -> dict[str, DigestEntry]:
+    """Aggregate lessons by issue_key into a digest with weighted frequency.
+
+    - representative description = shortest (resistant to drift)
+    - weighted_frequency = sum of time-decay weights
+    - insight gating: occurrences >= 2 and weighted_frequency >= 1.0 -> severity warning
+      weighted_frequency >= 2.5 -> severity high
+    """
+    groups: dict[str, DigestEntry] = {}
+    for lesson in lessons:
+        if not lesson.issue_key:
+            lesson.issue_key = build_issue_key(lesson.description, lesson.category)
+        weight = _time_weight(lesson.timestamp)
+        entry = groups.setdefault(
+            lesson.issue_key,
+            DigestEntry(
+                issue_key=lesson.issue_key,
+                category=lesson.category,
+                pattern_summary=lesson.description,
+            ),
+        )
+        # shortest representative description
+        if len(lesson.description) < len(entry.pattern_summary):
+            entry.pattern_summary = lesson.description
+        entry.total_occurrences += 1
+        entry.weighted_frequency += weight
+        entry.last_updated = max(entry.last_updated, lesson.timestamp)
+        # affected stages union
+        for s in lesson.affected_stages or [lesson.stage_name]:
+            if s not in entry.affected_stages:
+                entry.affected_stages.append(s)
+        # severity escalation
+        eff = lesson.effectiveness
+        if eff != "unverified":
+            entry.effectiveness = eff
+    for entry in groups.values():
+        if entry.weighted_frequency >= 2.5:
+            entry.severity = "high"
+        elif entry.total_occurrences >= 2 and entry.weighted_frequency >= 1.0:
+            entry.severity = "warning"
+    return groups
+
+
 class EvolutionStore:
     """JSONL-backed store for pipeline lessons with time-weighted retrieval."""
 
@@ -166,18 +340,18 @@ class EvolutionStore:
             for lesson in lessons:
                 f.write(json.dumps(lesson.to_dict(), ensure_ascii=False) + "\n")
 
-    def load_all(self) -> list[LessonEntry]:
-        """Load all lessons from disk."""
+    def load_all(self) -> list[LessonV2]:
+        """Load all lessons from disk (v1 entries are upgraded to LessonV2)."""
         if not self._lessons_path.exists():
             return []
-        lessons: list[LessonEntry] = []
+        lessons: list[LessonV2] = []
         for line in self._lessons_path.read_text(encoding="utf-8").splitlines():
             line = line.strip()
             if not line:
                 continue
             try:
                 data = json.loads(line)
-                lessons.append(LessonEntry.from_dict(data))
+                lessons.append(LessonV2.from_dict(data))
             except (json.JSONDecodeError, TypeError):
                 continue
         return lessons
@@ -187,8 +361,7 @@ class EvolutionStore:
     ) -> list[LessonEntry]:
         """Return the most relevant lessons for a stage, weighted by recency.
 
-        Includes lessons that directly match the stage, plus high-severity
-        lessons from related stages.
+        Ineffective lessons are downweighted (0.3x) so they sink to the bottom.
         """
         all_lessons = self.load_all()
         scored: list[tuple[float, LessonEntry]] = []
@@ -202,6 +375,9 @@ class EvolutionStore:
             # Boost errors over warnings/info
             if lesson.severity == "error":
                 weight *= 1.5
+            # Downweight ineffective lessons (Sibyl 0.3x)
+            if getattr(lesson, "effectiveness", "unverified") == "ineffective":
+                weight *= 0.3
             scored.append((weight, lesson))
         scored.sort(key=lambda x: x[0], reverse=True)
         return [entry for _, entry in scored[:max_lessons]]
