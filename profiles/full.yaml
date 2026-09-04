@@ -1,0 +1,13 @@
+name: full
+description: "Default 7-step paper generation pipeline."
+steps:
+  - research
+  - debate
+  - modeling
+  - code
+  - writing
+  - review
+  - compile
+config:
+  log_level: INFO
+  max_tokens_budget: 500000

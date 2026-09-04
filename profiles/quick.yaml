@@ -1,0 +1,11 @@
+name: quick
+description: "Fastest path: skip debate and review, just research/code/writing."
+steps:
+  - research
+  - modeling
+  - code
+  - writing
+  - compile
+config:
+  log_level: INFO
+  max_tokens_budget: 200000

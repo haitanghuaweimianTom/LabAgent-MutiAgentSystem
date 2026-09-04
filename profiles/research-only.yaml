@@ -1,0 +1,8 @@
+name: research-only
+description: "Just literature review and code generation. Skip debate/writing/review."
+steps:
+  - research
+  - code
+config:
+  log_level: INFO
+  max_tokens_budget: 50000
